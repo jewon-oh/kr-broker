@@ -1,0 +1,343 @@
+{
+  "schemaVersion": 1,
+  "checkedOn": "2026-09-21",
+  "brokers": ["kis", "toss", "kbsec"],
+  "features": [
+    {
+      "id": "fetchTicker",
+      "name": "현재가",
+      "group": "시세",
+      "hasKeys": ["fetchTicker"],
+      "methods": ["fetchTicker"],
+      "cells": {
+        "kis": {"status": "지원", "constraint": "미국은 `masterData`가 필요합니다", "apis": ["examples_llm/domestic_stock/inquire_price", "examples_llm/overseas_stock/price"]},
+        "toss": {"status": "지원", "constraint": "`last`와 `close`만 채웁니다", "apis": ["GET /prices"]},
+        "kbsec": {"status": "지원", "apis": ["IVU10140", "GSS10030"]}
+      }
+    },
+    {
+      "id": "fetchTickers",
+      "name": "여러 종목 현재가",
+      "group": "시세",
+      "hasKeys": ["fetchTickers"],
+      "methods": ["fetchTickers"],
+      "cells": {
+        "kis": {"status": "미구현", "constraint": "관심종목 멀티종목 시세 API가 있습니다", "apis": ["examples_llm/domestic_stock/intstock_multprice"]},
+        "toss": {"status": "지원", "constraint": "종목 지정이 필요합니다. 200건씩 나누어 호출합니다", "apis": ["GET /prices"]},
+        "kbsec": {"status": "증권사 없음", "constraint": "여러 종목을 한 번에 조회하는 API가 없습니다"}
+      }
+    },
+    {
+      "id": "fetchOrderBook",
+      "name": "호가",
+      "group": "시세",
+      "hasKeys": ["fetchOrderBook"],
+      "methods": ["fetchOrderBook"],
+      "cells": {
+        "kis": {"status": "부분", "constraint": "국내만 지원합니다. 미국 호가 API는 미구현입니다", "apis": ["examples_llm/domestic_stock/inquire_asking_price_exp_ccn"]},
+        "toss": {"status": "지원", "constraint": "무효 호가를 거르고 `limit`은 클라이언트에서 자릅니다", "apis": ["GET /orderbook"]},
+        "kbsec": {"status": "지원", "apis": ["IVU10070", "GSS10040"]}
+      }
+    },
+    {
+      "id": "fetchOHLCV",
+      "name": "캔들",
+      "group": "시세",
+      "hasKeys": ["fetchOHLCV"],
+      "methods": ["fetchOHLCV"],
+      "cells": {
+        "kis": {"status": "지원", "constraint": "야후 파이낸스에서 받습니다. 미국 일봉이 비면 한국투자증권 API로 받습니다", "apis": ["examples_llm/overseas_stock/dailyprice"]},
+        "toss": {"status": "부분", "constraint": "1분봉과 일봉만 받습니다. 미국은 확인하지 못했습니다", "apis": ["GET /candles"]},
+        "kbsec": {"status": "부분", "constraint": "국내만 지원합니다. 코스닥은 `params.mkt_clsf`를 지정합니다", "apis": ["IVS11560"]}
+      }
+    },
+    {
+      "id": "fetchMarkets",
+      "name": "종목 목록",
+      "group": "시세",
+      "hasKeys": ["fetchMarkets"],
+      "methods": ["fetchMarkets"],
+      "cells": {
+        "kis": {"status": "지원", "constraint": "`masterData`가 필요합니다"},
+        "toss": {"status": "지원", "constraint": "`taker`와 `maker`는 시장별 기본 위탁수수료율입니다", "apis": ["GET /stocks/all"]},
+        "kbsec": {"status": "미구현", "constraint": "해외 종목 목록 API(`SIAM4983`)가 있습니다. 국내 종목 목록 API는 확인 불가입니다", "note": "`loadMarkets()`가 요청 없이 끝나고 심볼 형식으로 종목을 판별합니다. 해외 종목 목록 API `SIAM4983`을 아직 쓰지 않아 미구현으로 적었습니다.", "apis": ["SIAM4983"]}
+      }
+    },
+    {
+      "id": "createPriceStream",
+      "name": "실시간 시세",
+      "group": "시세",
+      "hasKeys": [],
+      "methods": ["createPriceStream"],
+      "cells": {
+        "kis": {"status": "부분", "constraint": "미국은 지연 체결만 받습니다", "apis": ["examples_llm/domestic_stock/asking_price_krx", "examples_llm/domestic_stock/ccnl_krx", "examples_llm/overseas_stock/delayed_ccnl"]},
+        "toss": {"status": "미구현", "constraint": "웹소켓 채널 3개가 있습니다", "apis": ["WS trade", "WS orderbook"]},
+        "kbsec": {"status": "증권사 없음", "constraint": "웹소켓 API가 없습니다"}
+      }
+    },
+    {
+      "id": "fetchBalance",
+      "name": "잔고",
+      "group": "계좌",
+      "hasKeys": ["fetchBalance"],
+      "methods": ["fetchBalance"],
+      "cells": {
+        "kis": {"status": "지원", "apis": ["examples_llm/domestic_stock/inquire_balance", "examples_llm/domestic_stock/inquire_psbl_order", "examples_llm/overseas_stock/inquire_balance", "examples_llm/overseas_stock/inquire_present_balance"]},
+        "toss": {"status": "지원", "apis": ["GET /holdings", "GET /buying-power"]},
+        "kbsec": {"status": "지원", "apis": ["SSQM0004", "SSQM2952", "SPQM2226"]}
+      }
+    },
+    {
+      "id": "fetchTradingFee",
+      "name": "수수료율",
+      "group": "계좌",
+      "hasKeys": ["fetchTradingFee"],
+      "methods": ["fetchTradingFee"],
+      "cells": {
+        "kis": {"status": "지원", "constraint": "고정 요율표를 사용합니다"},
+        "toss": {"status": "지원", "constraint": "조회한 뒤 24시간 캐시합니다", "apis": ["GET /commissions"]},
+        "kbsec": {"status": "대체", "constraint": "공시 요율로 추정합니다"}
+      }
+    },
+    {
+      "id": "buyableAmount",
+      "name": "매수 가능 금액",
+      "group": "계좌",
+      "hasKeys": [],
+      "methods": [],
+      "cells": {
+        "kis": {"status": "부분", "constraint": "국내 주문 가능 현금만 `fetchBalance`에 담습니다", "methods": ["fetchBalance"], "apis": ["examples_llm/domestic_stock/inquire_psbl_order"]},
+        "toss": {"status": "지원", "constraint": "`fetchBalance`에 담습니다", "methods": ["fetchBalance"], "apis": ["GET /buying-power"]},
+        "kbsec": {"status": "지원", "constraint": "`fetchBuyableAmount`와 `fetchOverseasBuyableAmount`로 조회합니다", "methods": ["fetchBuyableAmount", "fetchOverseasBuyableAmount"], "apis": ["SSQM1802", "SKQM2106"]}
+      }
+    },
+    {
+      "id": "settlements",
+      "name": "청구된 수수료와 거래세",
+      "group": "계좌",
+      "hasKeys": [],
+      "methods": [],
+      "cells": {
+        "kis": {"status": "미구현", "constraint": "기간 손익과 수수료 API가 있습니다", "apis": ["examples_llm/domestic_stock/inquire_period_trade_profit", "examples_llm/domestic_stock/inquire_period_profit", "examples_llm/domestic_stock/inquire_balance_rlz_pl", "examples_llm/overseas_stock/inquire_period_profit"]},
+        "toss": {"status": "증권사 없음", "constraint": "정산 조회 API가 없습니다. 주문 상세에 수수료와 세금이 있습니다"},
+        "kbsec": {"status": "지원", "constraint": "`fetchDomesticSettlements`와 `fetchOverseasSettlements`로 조회합니다", "methods": ["fetchDomesticSettlements", "fetchOverseasSettlements"], "apis": ["SSQM2121", "SPQM2205"]}
+      }
+    },
+    {
+      "id": "createOrder",
+      "name": "지정가와 시장가",
+      "group": "주문",
+      "hasKeys": ["createOrder", "createLimitOrder", "createMarketOrder"],
+      "methods": ["createOrder"],
+      "cells": {
+        "kis": {"status": "부분", "constraint": "미국은 지정가만 받습니다. 실전 시장가는 장마감지정가로 나갑니다", "note": "알려진 한계에 미국 시장가 주문이 장마감지정가(LOC) 주문으로 나간다고 적혀 있어 지원이 아니라 부분으로 적었습니다.", "apis": ["examples_llm/domestic_stock/order_cash", "examples_llm/overseas_stock/order"]},
+        "toss": {"status": "지원", "apis": ["POST /orders"]},
+        "kbsec": {"status": "지원", "apis": ["SSAM1801", "SSAM1802", "SSAM5762", "SSAM5763", "SKAM2101"]}
+      }
+    },
+    {
+      "id": "fractionalOrder",
+      "name": "소수점 주문",
+      "group": "주문",
+      "hasKeys": [],
+      "methods": ["createOrder"],
+      "cells": {
+        "kis": {"status": "증권사 없음", "constraint": "공식 API 목록에 소수점 주문이 없습니다", "note": "공식 예제 저장소의 examples_llm 334개에서 소수점 주문을 찾지 못했습니다. 포털 원문은 로그인 없이 읽지 못해 확인 불가입니다."},
+        "toss": {"status": "부분", "constraint": "미국만 지원합니다", "apis": ["POST /orders"]},
+        "kbsec": {"status": "부분", "constraint": "국내만 지원합니다. 취소와 조회는 없습니다", "apis": ["SSAM5762", "SSAM5763"]}
+      }
+    },
+    {
+      "id": "createMarketBuyOrderWithCost",
+      "name": "금액 기준 매수",
+      "group": "주문",
+      "hasKeys": ["createMarketBuyOrderWithCost"],
+      "methods": ["createMarketBuyOrderWithCost"],
+      "cells": {
+        "kis": {"status": "증권사 없음", "constraint": "공식 API 목록에 금액 주문이 없습니다", "note": "공식 예제 저장소의 examples_llm 334개에서 금액으로 주문하는 API를 찾지 못했습니다. 포털 원문은 로그인 없이 읽지 못해 확인 불가입니다."},
+        "toss": {"status": "부분", "constraint": "미국 시장가 매수만 지원합니다", "apis": ["POST /orders"]},
+        "kbsec": {"status": "미구현", "constraint": "미국 소수점 주문 API가 있습니다. 금액 지정 여부는 확인 불가입니다", "note": "미국 소수점 주문 API `SKAM2201`의 명세에서 금액으로 주문하는 필드가 있는지 확인하지 못했습니다. API는 있으므로 증권사 없음이 아니라 미구현으로 적었습니다.", "apis": ["SKAM2201"]}
+      }
+    },
+    {
+      "id": "createTriggerOrder",
+      "name": "조건과 트리거 주문",
+      "group": "주문",
+      "hasKeys": ["createTriggerOrder"],
+      "methods": ["createOrder"],
+      "cells": {
+        "kis": {"status": "미구현", "constraint": "스탑지정가 인자 `CNDT_PRIC`을 보내지 않습니다. `createTriggerOrder`는 `NotSupported`를 던집니다", "apis": ["examples_llm/overseas_stock/order"]},
+        "toss": {"status": "미검증", "constraint": "`createTriggerOrder`나 `createOrder`의 `triggerPrice`로 냅니다. 국내 종목은 테스트로 확인했고 미국은 확인하지 못했습니다", "methods": ["createTriggerOrder", "createOrder"], "apis": ["POST /conditional-orders"]},
+        "kbsec": {"status": "미구현", "constraint": "주문 TR은 스톱지정가를 받습니다. 조건 주문 인자(`triggerPrice`, `stopPrice` 등)는 요청 전에 `NotSupported`로 거절합니다", "apis": ["SSAM1802", "SKAM2101"]}
+      }
+    },
+    {
+      "id": "editOrder",
+      "name": "정정",
+      "group": "주문",
+      "hasKeys": ["editOrder"],
+      "methods": ["editOrder"],
+      "cells": {
+        "kis": {"status": "미구현", "constraint": "정정 구분 `RVSE_CNCL_DVSN_CD=01`을 보내지 않습니다. `editOrder`는 `NotSupported`를 던집니다", "apis": ["examples_llm/domestic_stock/order_rvsecncl", "examples_llm/overseas_stock/order_rvsecncl"]},
+        "toss": {"status": "미구현", "constraint": "국내는 수량과 가격, 미국은 가격만 정정하는 API가 있습니다. `editOrder`는 `NotSupported`를 던집니다", "apis": ["POST /orders/{orderId}/modify", "POST /conditional-orders/{conditionalOrderId}/modify"]},
+        "kbsec": {"status": "부분", "constraint": "미국은 가격만 정정합니다. `price`가 없으면 요청 전에 `ArgumentsRequired`를 던집니다", "apis": ["SSAM1805", "SKAM2102"]}
+      }
+    },
+    {
+      "id": "cancelOrder",
+      "name": "취소",
+      "group": "주문",
+      "hasKeys": ["cancelOrder"],
+      "methods": ["cancelOrder"],
+      "cells": {
+        "kis": {"status": "지원", "apis": ["examples_llm/domestic_stock/order_rvsecncl", "examples_llm/overseas_stock/order_rvsecncl"]},
+        "toss": {"status": "지원", "constraint": "조건 주문은 `params.trigger`로 취소합니다", "apis": ["POST /orders/{orderId}/cancel", "DELETE /conditional-orders/{conditionalOrderId}"]},
+        "kbsec": {"status": "지원", "constraint": "전량 취소만 씁니다", "apis": ["SSAM1806"]}
+      }
+    },
+    {
+      "id": "cancelAllOrders",
+      "name": "전체 취소",
+      "group": "주문",
+      "hasKeys": ["cancelAllOrders"],
+      "methods": ["cancelAllOrders"],
+      "cells": {
+        "kis": {"status": "대체", "constraint": "미국은 실전만 지원합니다"},
+        "toss": {"status": "대체"},
+        "kbsec": {"status": "대체", "constraint": "국내만 지원합니다"}
+      }
+    },
+    {
+      "id": "extendedHoursOrder",
+      "name": "정규장 밖 주문",
+      "group": "주문",
+      "hasKeys": [],
+      "methods": ["createOrder"],
+      "cells": {
+        "kis": {"status": "부분", "constraint": "국내만 지원합니다. `options.nxtRouting`이 필요합니다", "apis": ["examples_llm/domestic_stock/order_cash", "examples_llm/overseas_stock/order"]},
+        "toss": {"status": "지원", "constraint": "정수 지정가만 받습니다. 국내는 `options.nxtRouting`이 필요합니다", "apis": ["POST /orders"]},
+        "kbsec": {"status": "미구현", "constraint": "주문 TR이 시간외 시장을 받지만 세션 검사가 정규장 밖 주문을 막습니다", "apis": ["SSAM1801", "SSAM1802"]}
+      }
+    },
+    {
+      "id": "fetchOrder",
+      "name": "주문 조회",
+      "group": "주문 조회",
+      "hasKeys": ["fetchOrder"],
+      "methods": ["fetchOrder"],
+      "cells": {
+        "kis": {"status": "지원"},
+        "toss": {"status": "지원", "apis": ["GET /conditional-orders/{conditionalOrderId}", "GET /orders/{orderId}"]},
+        "kbsec": {"status": "부분", "constraint": "미국은 체결 내역만 조회합니다"}
+      }
+    },
+    {
+      "id": "fetchOrders",
+      "name": "주문 목록",
+      "group": "주문 조회",
+      "hasKeys": ["fetchOrders"],
+      "methods": ["fetchOrders"],
+      "cells": {
+        "kis": {"status": "지원", "apis": ["examples_llm/domestic_stock/inquire_daily_ccld", "examples_llm/overseas_stock/inquire_ccnl"]},
+        "toss": {"status": "증권사 없음", "constraint": "주문 목록 API는 상태(OPEN, CLOSED)를 지정해야 합니다", "note": "주문 목록 API `GET /orders`는 `status`가 필수입니다. 상태를 나누지 않는 전체 목록 API가 없다고 판단해 증권사 없음으로 적었습니다. 라이브러리는 `fetchOpenOrders`와 `fetchClosedOrders`로 나눠 제공합니다."},
+        "kbsec": {"status": "미구현", "constraint": "`SSQM2341`의 체결구분 전체로 만들 수 있습니다", "apis": ["SSQM2341", "SSQM5475", "SPQM2204"]}
+      }
+    },
+    {
+      "id": "fetchOpenOrders",
+      "name": "미체결",
+      "group": "주문 조회",
+      "hasKeys": ["fetchOpenOrders"],
+      "methods": ["fetchOpenOrders"],
+      "cells": {
+        "kis": {"status": "부분", "constraint": "미국은 실전만 지원합니다", "apis": ["examples_llm/domestic_stock/inquire_psbl_rvsecncl", "examples_llm/overseas_stock/inquire_nccs"]},
+        "toss": {"status": "지원", "constraint": "미체결 조건 주문은 100건씩 최대 10쪽(1,000건)까지 받습니다", "apis": ["GET /conditional-orders", "GET /orders"]},
+        "kbsec": {"status": "부분", "constraint": "국내만 지원합니다. `since`는 적용하지 않습니다"}
+      }
+    },
+    {
+      "id": "fetchClosedOrders",
+      "name": "종료 주문",
+      "group": "주문 조회",
+      "hasKeys": ["fetchClosedOrders"],
+      "methods": ["fetchClosedOrders"],
+      "cells": {
+        "kis": {"status": "대체", "constraint": "`fetchOrders` 결과에서 체결 완료만 고릅니다", "apis": ["examples_llm/domestic_stock/inquire_daily_ccld", "examples_llm/overseas_stock/inquire_ccnl"]},
+        "toss": {"status": "지원", "constraint": "100건씩 최대 10쪽을 받습니다", "apis": ["GET /orders"]},
+        "kbsec": {"status": "미구현", "constraint": "`SSQM2341`로 만들 수 있습니다. 체결은 `fetchMyTrades`로 봅니다", "apis": ["SSQM2341"]}
+      }
+    },
+    {
+      "id": "fetchMyTrades",
+      "name": "체결 내역",
+      "group": "주문 조회",
+      "hasKeys": ["fetchMyTrades"],
+      "methods": ["fetchMyTrades"],
+      "cells": {
+        "kis": {"status": "지원", "constraint": "`fee`가 비어 있습니다"},
+        "toss": {"status": "대체", "constraint": "주문 목록 API로 만듭니다", "apis": ["GET /orders"]},
+        "kbsec": {"status": "지원", "apis": ["SSQM2341", "SPQM2103"]}
+      }
+    },
+    {
+      "id": "fetchMarketCalendar",
+      "name": "휴장일",
+      "group": "시장 정보",
+      "hasKeys": ["fetchMarketCalendar"],
+      "methods": ["fetchMarketCalendar"],
+      "cells": {
+        "kis": {"status": "부분", "constraint": "국내만, 실전만 지원합니다", "apis": ["examples_llm/domestic_stock/chk_holiday"]},
+        "toss": {"status": "지원", "constraint": "세션 시각 원본을 반환합니다", "apis": ["GET /market-calendar/KR", "GET /market-calendar/US"]},
+        "kbsec": {"status": "부분", "constraint": "국내만 지원합니다", "apis": ["SZQM0771"]}
+      }
+    },
+    {
+      "id": "fetchStocks",
+      "name": "종목 정보",
+      "group": "시장 정보",
+      "hasKeys": [],
+      "methods": ["fetchStocks"],
+      "cells": {
+        "kis": {"status": "미구현", "constraint": "종목 상세 API `search-stock-info`를 암묵 API로만 호출합니다", "apis": ["examples_llm/domestic_stock/search_stock_info"]},
+        "toss": {"status": "지원", "constraint": "200종목을 초과해도 나누어 호출하지 않습니다", "apis": ["GET /stocks"]},
+        "kbsec": {"status": "미구현", "constraint": "종목기본정보 API `SIQM4900`이 있습니다", "apis": ["SIQM4900"]}
+      }
+    },
+    {
+      "id": "fetchStockWarnings",
+      "name": "거래정지와 경고",
+      "group": "시장 정보",
+      "hasKeys": ["fetchStockWarnings"],
+      "methods": ["fetchStockWarnings"],
+      "cells": {
+        "kis": {"status": "미구현", "constraint": "VI 현황 API `inquire-vi-status`가 있습니다", "apis": ["examples_llm/domestic_stock/inquire_vi_status"]},
+        "toss": {"status": "지원", "apis": ["GET /stocks/{symbol}/warnings"]},
+        "kbsec": {"status": "미구현", "constraint": "`SIQM4900`이 매매제한과 위험등급을 줍니다", "apis": ["SIQM4900"]}
+      }
+    },
+    {
+      "id": "fetchInvestorTrading",
+      "name": "투자자별 매매동향",
+      "group": "시장 정보",
+      "hasKeys": ["fetchInvestorTrading"],
+      "methods": ["fetchInvestorTrading"],
+      "cells": {
+        "kis": {"status": "미구현", "constraint": "`inquire-investor`를 암묵 API로만 호출합니다", "apis": ["examples_llm/domestic_stock/inquire_investor"]},
+        "toss": {"status": "부분", "constraint": "국내 시장 단위만 지원합니다", "apis": ["GET /market-indicators/{symbol}/investor-trading"]},
+        "kbsec": {"status": "미구현", "constraint": "종목별 투자자 API `IVU10430`이 있습니다", "apis": ["IVU10430"]}
+      }
+    },
+    {
+      "id": "fetchRankings",
+      "name": "종목 랭킹",
+      "group": "시장 정보",
+      "hasKeys": ["fetchRankings"],
+      "methods": ["fetchRankings"],
+      "cells": {
+        "kis": {"status": "미구현", "constraint": "순위 API가 있습니다", "apis": ["examples_llm/domestic_stock/after_hour_balance", "examples_llm/domestic_stock/bulk_trans_num", "examples_llm/domestic_stock/credit_balance", "examples_llm/domestic_stock/disparity", "examples_llm/domestic_stock/dividend_rate", "examples_llm/domestic_stock/exp_trans_updown", "examples_llm/domestic_stock/finance_ratio", "examples_llm/domestic_stock/fluctuation", "examples_llm/domestic_stock/hts_top_view", "examples_llm/domestic_stock/market_cap", "examples_llm/domestic_stock/market_value", "examples_llm/domestic_stock/near_new_highlow", "examples_llm/domestic_stock/overtime_exp_trans_fluct", "examples_llm/domestic_stock/overtime_fluctuation", "examples_llm/domestic_stock/overtime_volume", "examples_llm/domestic_stock/prefer_disparate_ratio", "examples_llm/domestic_stock/profit_asset_index", "examples_llm/domestic_stock/quote_balance", "examples_llm/domestic_stock/short_sale", "examples_llm/domestic_stock/top_interest_stock", "examples_llm/domestic_stock/traded_by_company", "examples_llm/domestic_stock/volume_power", "examples_llm/overseas_stock/market_cap", "examples_llm/overseas_stock/new_highlow", "examples_llm/overseas_stock/price_fluct", "examples_llm/overseas_stock/trade_growth", "examples_llm/overseas_stock/trade_pbmn", "examples_llm/overseas_stock/trade_turnover", "examples_llm/overseas_stock/trade_vol", "examples_llm/overseas_stock/updown_rate", "examples_llm/overseas_stock/volume_power", "examples_llm/overseas_stock/volume_surge"]},
+        "toss": {"status": "지원", "apis": ["GET /rankings"]},
+        "kbsec": {"status": "미구현", "constraint": "순위 API가 있습니다", "apis": ["IVU10020", "IVS10920", "IVU10280", "IVU10270", "IVU10210", "IVU10240", "IVS10910", "IVS11190", "IVM30010"]}
+      }
+    }
+  ]
+}

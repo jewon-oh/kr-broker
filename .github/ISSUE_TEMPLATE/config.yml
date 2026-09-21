@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 보안 취약점 신고
+    url: https://github.com/jewon-oh/kr-broker/security/advisories/new
+    about: 앱키 유출, 주문 오발송, 로그에 비밀 노출은 공개 이슈로 올리지 말고 비공개로 신고하십시오.
+  - name: 자주 묻는 질문
+    url: https://github.com/jewon-oh/kr-broker/blob/main/docs/faq.md
+    about: 앱키 발급, 모의 서버, OrderOutcomeUnknown, masterData, nxtRouting, 호가단위를 설명합니다.
+  - name: 안전 가이드
+    url: https://github.com/jewon-oh/kr-broker/blob/main/docs/SAFETY.md
+    about: 실주문 기본 동작, 소액 시험 절차, 로그에 비밀이 남지 않게 하는 방법을 설명합니다.

@@ -1,0 +1,84 @@
+name: 버그 신고
+description: 라이브러리가 기대와 다르게 동작합니다
+title: "[버그] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        이슈는 공개됩니다. 앱키, 시크릿, 접근 토큰, 계좌번호를 올리지 마십시오.
+        앱키 유출, 주문 오발송, 로그에 비밀 노출은 [비공개 신고](https://github.com/jewon-oh/kr-broker/security/advisories/new)로 알려 주십시오.
+  - type: dropdown
+    id: broker
+    attributes:
+      label: 증권사
+      options:
+        - 한국투자증권(kis)
+        - 토스증권(toss)
+        - KB증권(kbsec)
+        - 증권사와 관계없음
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: 모의투자 또는 실전
+      description: 모의 서버는 한국투자증권에만 있습니다. 토스증권과 KB증권은 실전을 고릅니다.
+      options:
+        - 실전
+        - 모의투자(sandbox 켬)
+        - 관계없음
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 라이브러리 버전
+      description: package.json의 version이나 커밋 해시를 적습니다.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 실행 환경
+      description: 언어와 버전, 운영체제를 적습니다.
+      placeholder: TypeScript, Node.js 22.11, Linux
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: 오류 클래스와 detail
+      description: |
+        던져진 오류의 클래스 이름, `detail`, 메시지를 붙여 넣습니다. 앱키와 계좌번호는 지웁니다.
+        오류 없이 값이 틀렸다면 "오류 없음"이라고 적습니다.
+        `OrderOutcomeUnknown`이면 주문이 실제로 접수됐는지 증권사 앱으로 확인해서 함께 적습니다.
+      placeholder: |
+        클래스: InvalidOrder
+        detail: PRICE_INVALID
+        메시지: ...
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 재현 코드
+      description: 가장 짧은 코드를 코드 블록(```)으로 감싸 붙여 넣습니다. 자격증명은 환경 변수로 읽고 값을 적지 않습니다.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 기대한 결과와 실제 결과
+    validations:
+      required: true
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 확인
+      options:
+        - label: 앱키, 시크릿, 토큰, 계좌번호를 이 이슈의 모든 곳에서 지웠습니다.
+          required: true
+        - label: 취약점이 아닙니다. 보안 문제는 비공개 신고로 보냅니다.
+          required: true

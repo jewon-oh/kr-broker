@@ -1,0 +1,67 @@
+{
+  "name": "kr-broker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "한국 증권사(KB증권·한국투자증권·토스증권) API 를 ccxt 처럼 쓰는 TypeScript 라이브러리",
+  "license": "MIT",
+  "keywords": [
+    "ccxt",
+    "korea",
+    "korean-stock",
+    "broker",
+    "trading",
+    "typescript",
+    "kis",
+    "toss",
+    "kbsec",
+    "koreainvestment",
+    "tossinvest"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jewon-oh/kr-broker.git"
+  },
+  "homepage": "https://github.com/jewon-oh/kr-broker#readme",
+  "bugs": {
+    "url": "https://github.com/jewon-oh/kr-broker/issues"
+  },
+  "author": "jewon-oh",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "src",
+    "docs",
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "test": "vitest run",
+    "docs:gen": "node scripts/gen-broker-docs.mjs",
+    "docs:check": "node scripts/gen-broker-docs.mjs --check"
+  },
+  "dependencies": {
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@11.18.0"
+}

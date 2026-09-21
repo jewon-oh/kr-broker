@@ -1,0 +1,58 @@
+# ccxt와 다른 점
+
+`kr-broker` 라이브러리는 [ccxt](https://github.com/ccxt/ccxt)의 사용법을 따릅니다. ccxt 사용자는 같은 메서드 이름과 같은 인자 순서로 시작합니다. 같은 것과 다른 것을 나눠서 적었습니다.
+
+현재 구현을 기준으로 적었습니다. ccxt 설명 중 확인하지 못한 것은 "확인 불가"로 적었습니다.
+
+## ccxt와 같은 것
+
+| 항목 | 내용 |
+|---|---|
+| 선언 구조 | `describe()`가 `id`, `name`, `urls`, `api`, `has`, `requiredCredentials`, `exceptions`, `precisionMode`를 선언합니다 |
+| `has` | 메서드 이름을 키로 하고 값은 `true`, `false`, `'emulated'` 중 하나입니다 |
+| 메서드 이름 | `loadMarkets`, `fetchMarkets`, `fetchTicker`, `fetchTickers`, `fetchOrderBook`, `fetchOHLCV`, `fetchBalance`, `createOrder`, `cancelOrder`, `cancelAllOrders`, `fetchOrder`, `fetchOrders`, `fetchOpenOrders`, `fetchClosedOrders`, `fetchMyTrades`, `fetchTradingFee`, `setSandboxMode` |
+| 인자 순서 | `createOrder(symbol, type, side, amount, price, params)`, `fetchOHLCV(symbol, timeframe, since, limit, params)`, `fetchMyTrades(symbol, since, limit, params)`, `cancelOrder(id, symbol, params)` |
+| 자료 구조 | `Market`, `Ticker`, `OrderBook`, `Order`, `Trade`, `Balances`, `OHLCV` |
+| 오류 계층 | `BaseError` 아래에 `ExchangeError`와 `OperationFailed` 두 갈래가 있고 클래스 이름이 같습니다 |
+| `MarketClosed` | ccxt의 `OperationRejected` 아래에 있습니다 |
+| 자격증명 | `apiKey`, `secret`, `uid` 필드와 `requiredCredentials`로 검사합니다 |
+| 인스턴스 옵션 | `enableRateLimit`, `rateLimit`, `timeout`, `verbose`, `options.maxRetriesOnFailure`, `options.maxRetriesOnFailureDelay` |
+| 정밀도 | `precisionMode`의 기본이 `TICK_SIZE`입니다. `decimalToPrecision`과 `Precise`를 ccxt에서 옮겨 왔습니다 |
+| 마지막 요청 기록 | `last_request_url`, `last_request_headers`, `last_request_body`, `last_http_response` |
+
+ccxt에 있는 오류 클래스 중 주식 거래에 필요한 것만 옮겼습니다. 전체 목록은 `src/base/errors.ts`에 있습니다.
+
+## ccxt와 다른 것
+
+| 항목 | ccxt | `kr-broker` |
+|---|---|---|
+| 주문 재시도 | `maxRetriesOnFailure`로 재시도 횟수를 정합니다. 주문을 재시도에서 빼는 규칙이 있는지는 확인 불가입니다 | 주문 요청은 시간 초과나 연결 끊김 뒤에 `maxRetriesOnFailure`와 관계없이 다시 보내지 않습니다. 증권사가 처리 전에 거절한 두 경우만 예외입니다 |
+| 접수 여부를 모르는 주문 | 대응하는 오류 클래스가 없습니다 | `OrderOutcomeUnknown`을 던집니다. `RequestTimeout`의 하위 클래스이고 `retryable`이 `false`입니다 |
+| 심볼 형식 | 대부분 암호화폐 쌍(`BTC/USDT`)입니다 | 국내는 `005930/KRW`, 미국은 `AAPL/USD`입니다. `BASE`는 종목코드나 티커입니다 |
+| 호가단위 | 종목마다 `precision.price` 하나입니다 | 국내는 가격대별 호가단위라 `precision.price`를 비웁니다. 한국투자증권은 표로 반올림합니다 |
+| 잔고 키 | 통화 코드를 키로 합니다 | 현금은 통화(`KRW`, `USD`)를, 보유 종목은 종목코드를 키로 합니다 |
+| 실주문 | `createOrder()`가 곧바로 주문을 냅니다 | 같습니다. 모의 서버가 있는 증권사는 한국투자증권 하나뿐입니다 |
+| 휴장일 | 없습니다 | 증권사 캘린더 API로 판정합니다. `fetchMarketCalendar`가 있습니다 |
+| 오류 필드 | 오류 클래스와 메시지입니다 | `detail`(증권사 오류 코드)과 `retryable`이 더 있습니다 |
+| 토큰 | 거래소 클래스마다 인증 방식이 다릅니다 | 토큰 발급에 잠금을 걸고 `options.tokenStore`로 프로세스 사이에서 공유합니다 |
+| 실시간 시세 | ccxt Pro의 `watch*` 메서드입니다 | 한국투자증권만 `createPriceStream`으로 콜백을 받습니다. `has`에 `watch*` 키가 없습니다 |
+| 추가 메서드 | 통합 메서드에 없습니다 | `fetchMarketCalendar`, `fetchStockWarnings`, `fetchInvestorTrading`, `fetchRankings`, `fetchBuyableAmount` 등 증권사 고유 메서드가 있습니다 |
+| 소스 문법 | ccxt는 TypeScript 소스를 다른 언어로 변환하므로 문법에 제한이 있습니다 | 변환하지 않으므로 옵셔널 체이닝, `??`, `private`, `override`, `declare`, `Map`, `Set`을 씁니다 |
+
+### 주문 재시도
+
+접수 여부를 모르는 주문을 다시 보내면 같은 주문이 두 번 접수될 수 있습니다. 이유와 예외는 [FAQ](faq.md)에 있습니다. 확인 절차는 [안전 가이드](SAFETY.md)에 있습니다.
+
+### 실주문
+
+ccxt와 마찬가지로 `createOrder()`는 확인 없이 주문을 냅니다. `has.sandbox`가 `true`인 증권사는 `kis` 하나입니다. 토스증권과 KB증권 인스턴스에서는 `setSandboxMode(true)`가 `NotSupported`를 던집니다.
+
+### 호가단위
+
+국내 호가단위 표와 예외는 [FAQ](faq.md)에 있습니다. 미국 종목은 0.01달러 단위입니다.
+
+### 실시간 시세
+
+`kis` 인스턴스의 `createPriceStream({ onTrade, onOrderbook })`이 `KisPriceWs`를 반환합니다. 구독은 `start(subs)`로 시작하고 `updateSubs(subs)`로 바꾸며 `stop()`으로 끝냅니다. 체결가와 호가만 받습니다.
+
+접속 키는 `getApprovalKey()`가 발급합니다. 토스증권과 KB증권 클래스에는 실시간 시세 기능이 없습니다.

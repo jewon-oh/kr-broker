@@ -1,0 +1,90 @@
+name: 증권사 API 변경
+description: 증권사 API 명세가 바뀐 것을 알립니다
+title: "[API 변경] "
+labels: ["broker-api-change"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        증권사가 API 명세, 인증, 오류 코드, 호출 한도, 약관을 바꿨을 때 쓰는 양식입니다.
+        라이브러리가 이미 오작동한다면 "버그 신고" 양식을 쓰십시오.
+        대응 절차는 [기여 안내](https://github.com/jewon-oh/kr-broker/blob/main/CONTRIBUTING.md)에 있습니다.
+  - type: dropdown
+    id: broker
+    attributes:
+      label: 증권사
+      options:
+        - 한국투자증권(kis)
+        - 토스증권(toss)
+        - KB증권(kbsec)
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: 변경 종류
+      multiple: true
+      options:
+        - 엔드포인트 추가
+        - 엔드포인트 삭제나 중단
+        - 요청 필드 변경
+        - 응답 필드 변경
+        - 오류 코드 변경
+        - 인증이나 토큰 방식 변경
+        - 호출 한도 변경
+        - 장 시간이나 휴장일 규칙 변경
+        - 약관 변경
+        - 기타
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: 공식 근거의 주소
+      description: 공지, 명세, 변경 이력의 주소를 적습니다. 공식 근거가 없으면 "없음"이라고 적습니다.
+    validations:
+      required: true
+  - type: input
+    id: date
+    attributes:
+      label: 변경 시점
+      description: 증권사가 밝힌 적용일이나 처음 확인한 날짜를 적습니다.
+      placeholder: "2026-10-01"
+    validations:
+      required: true
+  - type: input
+    id: methods
+    attributes:
+      label: 영향받는 메서드
+      description: 아는 범위에서 적습니다.
+      placeholder: createOrder, fetchOpenOrders
+  - type: textarea
+    id: change
+    attributes:
+      label: 변경 전과 변경 후
+      description: 무엇이 어떻게 바뀌었는지 적습니다. 바뀐 필드 이름, 코드, 값이 있으면 그대로 적습니다.
+    validations:
+      required: true
+  - type: dropdown
+    id: verified
+    attributes:
+      label: 확인 방법
+      options:
+        - 실계좌 요청으로 확인했습니다
+        - 모의투자 요청으로 확인했습니다
+        - 공식 문서만 읽었습니다
+        - 확인하지 못했습니다
+    validations:
+      required: true
+  - type: textarea
+    id: sample
+    attributes:
+      label: 응답 예
+      description: 바뀐 응답의 원문을 코드 블록(```)으로 붙여 넣습니다. 계좌번호, 주문번호, 토큰, 이름은 지웁니다.
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 확인
+      options:
+        - label: 앱키, 시크릿, 토큰, 계좌번호를 이 이슈의 모든 곳에서 지웠습니다.
+          required: true
