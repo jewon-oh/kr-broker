@@ -395,3 +395,26 @@ def test_market_session_block_reason() -> None:
     tokyo = dict(MASTER, amex=[{'code': '7203', 'name': 'TOYOTA', 'market': 'TSE', 'currency': 'JPY'}])
     assert market_session_block_reason('kis', '7203', us_open, tokyo) == '세션 표에 없는 거래소 — venue=TSE (7203)'
     assert market_session_block_reason('upbit', '005930', us_open, MASTER) is None
+
+
+# ============ 주문 도우미 ============
+
+def test_account_params_default_suffix() -> None:
+    assert kr_broker.kis({'uid': '12345678'})._account_params() == {'CANO': '12345678', 'ACNT_PRDT_CD': '01'}
+    assert kr_broker.kis({'uid': '12345678-22'})._account_params() == {'CANO': '12345678', 'ACNT_PRDT_CD': '22'}
+    assert kr_broker.kis({})._account_params() == {'CANO': '', 'ACNT_PRDT_CD': '01'}
+
+
+@pytest.mark.parametrize('amount', [0, -1, float('nan'), float('inf'), '3', True])
+def test_create_order_rejects_invalid_quantity_before_request(amount: Any) -> None:
+    broker = kr_broker.kis({'apiKey': 'k', 'secret': 's', 'uid': '12345678-01'})
+    with pytest.raises(kr_broker.InvalidOrder):
+        broker.create_order('005930/KRW', 'limit', 'buy', amount, 70000)
+
+
+def test_order_status_of() -> None:
+    broker = kr_broker.kis({})
+    assert broker._order_status_of('3', '7', 'Y') == 'canceled'
+    assert broker._order_status_of('3', '7', 'N') == 'open'
+    assert broker._order_status_of('10', '0', None) == 'closed'
+    assert broker._order_status_of('0', '0', None) is None

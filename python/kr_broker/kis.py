@@ -1,11 +1,13 @@
 """한국투자증권 Open API(`class kis(Exchange, ImplicitAPI)`). TypeScript 판 `ts/src/kis.ts` 를 옮겼다. 국내와 미국 주식 현물의 시세와 종목,
-휴장일 캘린더, 순위 같은 고유 조회를 ccxt 와 같은 모양으로 다룬다. 웹소켓(`watch_*`)은 옮기지 않았다.
+잔고, 주문, 주문과 체결 조회, 휴장일 캘린더와 순위 같은 고유 조회를 ccxt 와 같은 모양으로 다룬다. 웹소켓(`watch_*`)과 통합 메서드가 부르지
+않는 고유 메서드(채권, 선물옵션 등)는 옮기지 않았다.
 
 .. code-block:: python
 
     import kr_broker
     broker = kr_broker.kis({'apiKey': APP_KEY, 'secret': APP_SECRET, 'uid': '12345678-01'})
     ticker = broker.fetch_ticker('005930/KRW')
+    order = broker.create_order('005930/KRW', 'limit', 'buy', 1, 70000)
     price = broker.private_get_uapi_domestic_stock_v1_quotations_inquire_price({
         'tr_id': 'FHKST01010100', 'FID_COND_MRKT_DIV_CODE': 'J', 'FID_INPUT_ISCD': '005930',
     })
@@ -17,19 +19,26 @@
 심볼
     국내는 `005930/KRW`, 미국은 `AAPL/USD` 다. 슬래시가 든 티커(`BRK/B`)는 `BRK.B/USD` 로 쓰고 `market['id']` 에 KIS 표기를 둔다.
     접미사를 뺀 `005930`, `AAPL` 도 받는다. 국내 종목은 종목코드 모양(6자리)만으로 가르고, 해외 종목의 거래소는 종목 마스터
-    (`options['masterData']`, `kis_master_data` 참고)에서 찾는다. `load_markets()` 는 마스터 데이터로 종목 목록을 만들 뿐이고 시세 호출에는 필요 없다.
+    (`options['masterData']`, `kis_master_data` 참고)에서 찾는다. `load_markets()` 는 마스터 데이터로 종목 목록을 만들 뿐이고 주문과 시세 호출에는 필요 없다.
+
+주문
+    수량은 정수 주로 내린다. 국내 정규장 주문은 휴장일 캘린더(`chk-holiday`)를 받아 거래시간을 확인하고, 거래시간 밖이면 요청을 보내지 않고
+    `MarketClosed` 를 던진다. `options['nxtRouting']` 을 켜면 NXT 확장세션(프리 08:00~08:50, 애프터 15:30~20:00)에 SOR 로 내고, 시장가는
+    현재가 지정가로 바꾼다. 미국은 지정가만 받아 `price` 가 필요하고, 실전에서 시장가를 주면 장마감지정가(LOC)로 낸다. 접수 응답에는 체결이
+    없어 `filled` 가 비어 있다. 체결은 `fetch_order` 와 `fetch_my_trades` 로 본다.
 
 요청
     모든 REST 호출에 접근 토큰이 필요하다. TR ID 는 `params['tr_id']` 로 넘기면 `sign()` 이 헤더로 옮긴다. 조회가 `EGW00201`·`EGW00215`
     (초당 거래건수 초과)로 실패하면 `RateLimitExceeded` 를 던지고 조회에 한해 몇 번 다시 보낸다. 시간 초과는 다시 보내지 않는다.
+    주문은 재시도하지 않고, 시간 초과나 연결 끊김이면 접수 여부를 모르므로 `OrderOutcomeUnknown` 을 던진다.
 
 옵션
-    `tokenStore`(토큰 저장소), `nxtRouting`(정규장 밖 NXT 시세, 불리언이거나 불리언을 돌려주는 함수), `masterData`(종목 마스터),
-    `stockDirectory`(코스피·코스닥 구분을 알려 주는 `find_kr_market(code)` 객체)다.
+    `tokenStore`(토큰 저장소), `nxtRouting`(정규장 밖 NXT 주문과 시세, 불리언이거나 불리언을 돌려주는 함수), `masterData`(종목 마스터),
+    `stockDirectory`(코스피·코스닥 구분을 알려 주는 `find_kr_market(code)` 객체), `orderableProbeCode`(주문가능현금 조회에 쓰는 종목)다.
 
 한계
-    `fetch_ohlcv` 는 야후 파이낸스에서 받는다(국내는 항상, 미국 일·주·월봉은 야후가 비면 KIS 로 다시 받는다). `fetch_order_book` 은 국내만,
-    `fetch_tickers` 는 국내 30종목까지다.
+    잔고와 체결 조회는 연속 조회를 하지 않아 실전 기준 잔고 종목 50건, 체결 100건을 넘으면 뒤가 잘린다. `fetch_ohlcv` 는 야후 파이낸스에서
+    받는다(국내는 항상, 미국 일·주·월봉은 야후가 비면 KIS 로 다시 받는다). `fetch_order_book` 은 국내만, `fetch_tickers` 는 국내 30종목까지다.
 """
 
 import json
@@ -44,14 +53,15 @@ from kr_broker.abstract.kis import ImplicitAPI
 from kr_broker.base import functions as fn
 from kr_broker.base.decimal_to_precision import NO_PADDING, ROUND, TICK_SIZE, decimal_to_precision
 from kr_broker.base.errors import (
-    ArgumentsRequired, AuthenticationError, BadRequest, BadSymbol, ExchangeError, NotSupported, NullResponse, RateLimitExceeded,
-    RequestTimeout,
+    ArgumentsRequired, AuthenticationError, BadRequest, BadSymbol, ExchangeError, InvalidOrder, MarketClosed, NotSupported, NullResponse,
+    OrderNotFound, RateLimitExceeded, RequestTimeout,
 )
 from kr_broker.base.exchange import Exchange
 from kr_broker.base.precise import Precise
 from kr_broker.base.token_store import BrokerTokenStore, refresh_token_with_lock
 from kr_broker.base.types import ApiName, Int, Num, Str, Strings
 from kr_broker.broker_krx_code import is_krx_domestic_code
+from kr_broker.extended_session_limit import build_extended_session_limit
 from kr_broker.kis_candle_service import KISCandleService
 from kr_broker.kis_kr_market import resolve_kr_market
 from kr_broker.kis_master_data import master_data_of
@@ -60,13 +70,14 @@ from kr_broker.kis_overseas_master import (
 )
 from kr_broker.kis_stock_master import get_krx_stock_by_code, get_stock_master_count, search_krx_stocks
 from kr_broker.kis_types import (
-    KIS_API_DOMAINS, KIS_BROKERAGE_FEE, KIS_CUSTOMER_TYPE, KIS_OVERSEAS_DEFAULT_FEE_RATE, KIS_WS_DOMAINS, get_tick_size,
+    KIS_API_DOMAINS, KIS_BROKERAGE_FEE, KIS_CUSTOMER_TYPE, KIS_DEFAULT_ACCOUNT_SUFFIX, KIS_ORDER_TYPE, KIS_OVERSEAS_DEFAULT_FEE_RATE,
+    KIS_OVERSEAS_ORD_DVSN, KIS_PRESENT_BALANCE_PARAMS, KIS_WS_DOMAINS, get_tick_size,
 )
 from kr_broker.kis_yahoo_candles import fetch_yahoo_candles
 from kr_broker.krx_sell_tax import krx_sell_tax_rate
-from kr_broker.krx_trading_hours import is_nxt_extended_tradable
+from kr_broker.krx_trading_hours import check_krx_trading_hours, get_krx_market_phase, is_nxt_extended_tradable
 from kr_broker.market_calendar import refresh_market_calendar as refresh_shared_market_calendar
-from kr_broker.us_market_hours import et_wall_clock
+from kr_broker.us_market_hours import et_wall_clock, format_et_wall_clock, get_us_market_phase
 
 logger = logging.getLogger('kr_broker')
 
@@ -80,6 +91,10 @@ READ_RETRIES = 3
 READ_RETRY_DELAY_MS = 500
 # 관심종목(멀티종목) 시세 한 번에 담을 수 있는 종목 수.
 MULTI_TICKER_LIMIT = 30
+# 종목의 NXT 거래 가능 여부를 캐시하는 시간. NXT 거래 대상은 자주 바뀌지 않는다.
+NXT_ELIGIBILITY_TTL_MS = 6 * 60 * 60 * 1000
+# 종목정보 조회의 상품유형: 주식·ETF·ETN·ELW.
+STOCK_INFO_PRODUCT_TYPE = '300'
 # VI 발동 현황 조회의 고정 화면 분류 코드. 공식 예제가 이 값 하나만 쓴다.
 VI_STATUS_SCREEN_CODE = '20139'
 
@@ -89,6 +104,32 @@ DAY_MS = 24 * 60 * 60 * 1000
 HOLIDAY_LOOKBACK_MS = 30 * DAY_MS
 # 휴장일 캘린더를 신선하게 보는 시간. KIS 는 하루 한 번 호출을 권하므로 하루에 두 번까지만 부른다.
 CALENDAR_TTL_MS = 12 * 60 * 60 * 1000
+
+# 매도매수구분코드: 체결·미체결 조회 응답에서 `01` 이 매도, `02` 가 매수다.
+SIDE_CODE_SELL = '01'
+SIDE_CODE_BUY = '02'
+
+# 국내 주문 TR ID(실전, 모의). 확장세션(NXT)은 거래소 구분(`EXCG_ID_DVSN_CD`)을 받는 신형을 쓴다.
+DOMESTIC_ORDER_TR = {
+    'regular': {'buy': ('TTTC0802U', 'VTTC0802U'), 'sell': ('TTTC0801U', 'VTTC0801U')},
+    'extended': {'buy': ('TTTC0012U', 'VTTC0012U'), 'sell': ('TTTC0011U', 'VTTC0011U')},
+}
+
+# 해외 주문 TR ID. 앞에 실전 접두사 `T` 를 붙여 쓰고 모의는 첫 글자를 `V` 로 바꾼다. 거래소마다 다르다.
+OVERSEAS_ORDER_TR = {
+    'NASD': {'buy': 'TTT1002U', 'sell': 'TTT1006U'},
+    'NYSE': {'buy': 'TTT1002U', 'sell': 'TTT1006U'},
+    'AMEX': {'buy': 'TTT1002U', 'sell': 'TTT1006U'},
+    'SEHK': {'buy': 'TTS1002U', 'sell': 'TTS1001U'},
+    'SHAA': {'buy': 'TTS0202U', 'sell': 'TTS1005U'},
+    'SZAA': {'buy': 'TTS0305U', 'sell': 'TTS0304U'},
+    'TKSE': {'buy': 'TTS0308U', 'sell': 'TTS0307U'},
+    'HASE': {'buy': 'TTS0311U', 'sell': 'TTS0310U'},
+    'VNSE': {'buy': 'TTS0311U', 'sell': 'TTS0310U'},
+}
+
+# 미국 거래소. 이 거래소의 주문에는 미국장 세션 게이트를 건다.
+US_ORDER_EXCHANGES = frozenset(['NASD', 'NYSE', 'AMEX'])
 
 KIS_EXCEPTIONS_EXACT = {
     # 초당 거래건수 초과. 조회는 다시 보내도 되므로 백오프 뒤 재시도한다.
@@ -184,6 +225,11 @@ def to_number(value: Any) -> float:
 
 def _js_sign(n: float) -> int:
     return (n > 0) - (n < 0)
+
+
+def _js_max0(n: float) -> float:
+    """JavaScript 의 `Math.max(0, n)`. NaN 이면 NaN 이다."""
+    return n if math.isnan(n) else max(0, n)
 
 
 def _field(response: Any, key: str) -> Any:
@@ -728,6 +774,8 @@ class kis(Exchange, ImplicitAPI):
         self._auth: Optional[KISAuth] = None
         self._auth_app_key: Str = None
         self._candle_service: Optional[KISCandleService] = None
+        # 종목별 NXT 거래 가능 여부. `blockedReason` 이 None 이면 거래할 수 있다.
+        self._nxt_eligibility: Dict[str, Dict[str, Any]] = {}
         super().__init__(config)
 
     def describe(self) -> Dict[str, Any]:
@@ -752,26 +800,27 @@ class kis(Exchange, ImplicitAPI):
                 'future': False,
                 'option': False,
                 'sandbox': True,
-                'createOrder': False,
-                'createLimitOrder': False,
-                'createMarketOrder': False,
-                'cancelOrder': False,
-                'cancelAllOrders': False,
-                'editOrder': False,
-                'createTriggerOrder': False,
-                'fetchBalance': False,
+                'createOrder': True,
+                'createLimitOrder': True,
+                'createMarketOrder': True,
+                'cancelOrder': True,
+                'cancelAllOrders': 'emulated',
+                'editOrder': True,
+                'createTriggerOrder': True,
+                'fetchBalance': True,
                 'fetchMarkets': True,
                 'fetchCurrencies': False,
                 'fetchTicker': True,
                 'fetchTickers': True,
                 'fetchOrderBook': True,
                 'fetchOHLCV': True,
-                'fetchOrder': False,
-                'fetchOrders': False,
-                'fetchOpenOrders': False,
-                'fetchClosedOrders': False,
+                'fetchOrder': True,
+                'fetchOrders': True,
+                'fetchOpenOrders': True,
+                # 부모 클래스가 `fetch_orders` 결과에서 체결 완료만 거른다.
+                'fetchClosedOrders': 'emulated',
                 'fetchCanceledOrders': False,
-                'fetchMyTrades': False,
+                'fetchMyTrades': True,
                 'fetchTradingFee': True,
                 'fetchStatus': False,
                 'fetchTime': False,
@@ -1452,3 +1501,692 @@ class kis(Exchange, ImplicitAPI):
             return False
         return refresh_shared_market_calendar(
             'KR', lambda: [{'date': day['date'], 'open': day['open']} for day in self.fetch_market_calendar()], CALENDAR_TTL_MS)
+
+    # ============ 잔고 ============
+
+    def _account_params(self) -> Dict[str, str]:
+        parts = (self.uid if self.uid is not None else '').split('-')
+        suffix = parts[1] if len(parts) > 1 else None
+        return {'CANO': parts[0], 'ACNT_PRDT_CD': suffix if suffix else KIS_DEFAULT_ACCOUNT_SUFFIX}
+
+    def fetch_balance(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """잔고. 현금은 통화 키(`KRW`, `USD`), 보유 종목은 종목코드(국내 `005930`, 미국 `AAPL`) 키이고 종목의 `total` 이 보유 수량이다.
+        평가금액·평균단가 같은 KIS 고유 값은 각 항목의 `info` 에 있다. 조회가 하나라도 실패하면 던진다(빈 잔고와 구분한다).
+
+        `params['scope']` 로 읽을 범위를 좁힌다. 기본은 전부(`'all'`)이고 목록으로 골라도 된다.
+        `'kr'` 는 국내 잔고(`KRW` 와 국내 보유 종목), `'us'` 는 미국 보유 종목(실전은 `NASD` 한 번이 미국 전체이고 모의는 거래소마다 부른다),
+        `'usd'` 는 달러 예수금과 평가금액(`USD`)이다. `params['orderable']` 이 `False` 가 아니면 국내 주문가능현금을 한 번 더 조회해
+        `KRW` 의 `free` 로 쓴다. 원본 응답은 `info` 에 `{'domestic', 'overseas', 'usd'}` 로 담는다.
+        """
+        scope = self.safe_value(params, 'scope', 'all')
+
+        def wants(name: str) -> bool:
+            return scope == 'all' or scope == name or (isinstance(scope, list) and name in scope)
+
+        orderable = self.safe_bool(params, 'orderable', True)
+        raw: Dict[str, Any] = {}
+        if wants('kr'):
+            raw['domestic'] = self._fetch_domestic_balance_raw(orderable)
+        if wants('us'):
+            raw['overseas'] = self._fetch_overseas_holdings_raw()
+        if wants('usd'):
+            raw['usd'] = self._fetch_present_balance_raw()
+        return self.parse_balance(raw)
+
+    def _fetch_domestic_balance_raw(self, orderable: bool) -> Dict[str, Any]:
+        response = self.private_get_uapi_domestic_stock_v1_trading_inquire_balance(self.extend(self._account_params(), {
+            'AFHR_FLPR_YN': 'N',
+            'OFL_YN': '',
+            'INQR_DVSN': '02',
+            'UNPR_DVSN': '01',
+            'FUND_STTL_ICLD_YN': 'N',
+            'FNCG_AMT_AUTO_RDPT_YN': 'N',
+            'PRCS_DVSN': '01',
+            'CTX_AREA_FK100': '',
+            'CTX_AREA_NK100': '',
+            'tr_id': self.tr('TTTC8434R'),
+        }))
+        raw: Dict[str, Any] = {'holdings': rows_of(_field(response, 'output1')), 'summary': first_row(_field(response, 'output2'))}
+        if orderable:
+            # 주문가능금액은 잔고 응답이 아니라 매수가능조회의 `ord_psbl_cash` 를 쓴다. 시장가(`01`)로 물으면 종목 증거금율이 반영된다.
+            psbl = self.private_get_uapi_domestic_stock_v1_trading_inquire_psbl_order(self.extend(self._account_params(), {
+                'PDNO': self.safe_string(self.options, 'orderableProbeCode', '005930'),
+                'ORD_UNPR': '0',
+                'ORD_DVSN': KIS_ORDER_TYPE['MARKET'],
+                'CMA_EVLU_AMT_ICLD_YN': 'N',
+                'OVRS_ICLD_YN': 'N',
+                'tr_id': self.tr('TTTC8908R'),
+            }))
+            raw['orderable'] = first_row(_field(psbl, 'output'))
+        return raw
+
+    def _fetch_overseas_holdings_raw(self) -> Dict[str, Any]:
+        """미국 보유 종목. 실전은 `NASD` 가 미국 전체라 한 번만 부르고, 모의는 `NASD`·`NYSE`·`AMEX` 를 차례로 부른다."""
+        exchanges = ['NASD', 'NYSE', 'AMEX'] if self.isSandboxModeEnabled else ['NASD']
+        holdings: List[Dict[str, Any]] = []
+        for exchange in exchanges:
+            response = self.private_get_uapi_overseas_stock_v1_trading_inquire_balance(self.extend(self._account_params(), {
+                'OVRS_EXCG_CD': exchange,
+                'TR_CRCY_CD': 'USD',
+                'CTX_AREA_FK200': '',
+                'CTX_AREA_NK200': '',
+                'tr_id': self.tr('TTTS3012R'),
+            }))
+            holdings.extend(rows_of(_field(response, 'output1')))
+        return {'holdings': holdings}
+
+    def _fetch_present_balance_raw(self) -> Dict[str, Any]:
+        response = self.private_get_uapi_overseas_stock_v1_trading_inquire_present_balance(self.extend(self._account_params(), {
+            'WCRC_FRCR_DVSN_CD': KIS_PRESENT_BALANCE_PARAMS['WCRC_FRCR_DVSN_FOREIGN'],
+            'NATN_CD': KIS_PRESENT_BALANCE_PARAMS['NATN_US'],
+            'TR_MKET_CD': KIS_PRESENT_BALANCE_PARAMS['TR_MKET_ALL'],
+            'INQR_DVSN_CD': KIS_PRESENT_BALANCE_PARAMS['INQR_DVSN_ALL'],
+            'tr_id': self.tr('CTRP6504R'),
+        }))
+        return {'stocks': rows_of(_field(response, 'output1')), 'currencies': rows_of(_field(response, 'output2'))}
+
+    def parse_balance(self, response: Any) -> Dict[str, Any]:
+        """`fetch_balance` 가 모은 원본(`{'domestic', 'overseas', 'usd'}`)을 통합 잔고로 옮긴다.
+
+        `KRW` 는 `total` 이 예수금총액(`dnca_tot_amt`), `free` 가 주문가능현금(`ord_psbl_cash`), `used` 가 둘의 차이(0 밑으로 내려가지 않는다)다.
+        `USD` 는 `total` 이 예수금, `free` 가 예수금에서 미결제 매수증거금을 뺀 값이고, 종목 평가금액 합계는 `info['stockValue']` 에 있다.
+        종목은 `total` 이 보유수량, `free` 가 주문가능수량(없으면 보유수량)이다.
+        """
+        result: Dict[str, Any] = {'info': response, 'timestamp': None, 'datetime': None}
+        domestic = self.safe_dict(response, 'domestic')
+        if domestic is not None:
+            summary = self.safe_dict(domestic, 'summary', {})
+            orderable = self.safe_dict(domestic, 'orderable')
+            total = self.safe_string(summary, 'dnca_tot_amt')
+            free = None if orderable is None else self.safe_string(orderable, 'ord_psbl_cash')
+            used = None
+            if free is not None and total is not None:
+                used = self.number_to_string(_js_max0(fn.js_number(total) - fn.js_number(free)))
+            result['KRW'] = {'free': free, 'used': used, 'total': total, 'info': {'summary': summary, 'orderable': orderable}}
+            for item in rows_of(domestic.get('holdings')):
+                self._add_holding(result, item, 'pdno', 'hldg_qty')
+        overseas = self.safe_dict(response, 'overseas')
+        if overseas is not None:
+            for item in rows_of(overseas.get('holdings')):
+                self._add_holding(result, item, 'ovrs_pdno', 'ovrs_cblc_qty')
+        usd = self.safe_dict(response, 'usd')
+        if usd is not None:
+            cash = next((row for row in rows_of(usd.get('currencies')) if self.safe_string(row, 'crcy_cd', '').upper() == 'USD'), None)
+            cash = {} if cash is None else cash
+            deposit = to_number(self.safe_string(cash, 'frcr_dncl_amt_2'))
+            buy_margin = to_number(self.safe_string(cash, 'frcr_buy_mgn_amt'))
+            stock_value = 0
+            for row in rows_of(usd.get('stocks')):
+                if self.safe_string(row, 'buy_crcy_cd', 'USD').upper() == 'USD':
+                    stock_value += to_number(self.safe_string(row, 'frcr_evlu_amt2'))
+            free_usd = max(0, deposit - buy_margin)
+            result['USD'] = {
+                'free': self.number_to_string(free_usd),
+                'used': self.number_to_string(max(0, deposit - free_usd)),
+                'total': self.number_to_string(deposit),
+                'info': {'deposit': deposit, 'buyMargin': buy_margin, 'stockValue': stock_value, 'currencies': usd.get('currencies'),
+                         'stocks': usd.get('stocks')},
+            }
+        return self.safe_balance(result)
+
+    def _add_holding(self, result: Dict[str, Any], item: Dict[str, Any], code_key: str, quantity_key: str) -> None:
+        code = self.safe_string(item, code_key)
+        quantity = self.safe_string(item, quantity_key)
+        if code is None or quantity is None or not fn.js_number(quantity) > 0:
+            return
+        result[code] = {'free': self.safe_string(item, 'ord_psbl_qty', quantity), 'used': None, 'total': quantity, 'info': item}
+
+    # ============ 주문 ============
+
+    def create_order(self, symbol: str, type: str, side: str, amount: float, price: Num = None,
+                     params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """주문. 수량은 정수 주로 내린다(소수점 매수는 받지 않는다). 거래시간 밖은 주문을 보내지 않고 `MarketClosed` 를 던진다.
+
+        `params['session']` 은 `'regular'` 이나 `'nxt'` 다. 생략하면 `options['nxtRouting']` 과 NXT 확장세션 시각으로 정한다(국내).
+        확장세션이면 종목이 NXT 에서 거래되는지 먼저 확인하고(실전만), 아니면 `MarketClosed` 를 던진다. 그 밖의 키는 요청 본문에 합친다.
+
+        국내 시장가는 `ORD_DVSN=01`, 지정가는 `00` 이다. 미국은 지정가만 낼 수 있고 실전에서 `market` 을 주면 장마감지정가(LOC)로 낸다.
+        두 경우 모두 미국은 `price` 가 필요하다. 응답은 접수 결과라 체결은 알 수 없다(`filled` 가 비어 있다). 체결은 `fetch_order`·`fetch_my_trades` 로 본다.
+        """
+        instrument = self._instrument_of(symbol)
+        quantity = self._normalize_quantity(instrument, side, amount)
+        if instrument.overseas:
+            # 지정가·LOC 모두 단가가 필요하다. 시장가를 의도했다면 호출하는 쪽이 현재가로 지정가를 넣는다.
+            if price is None or not price > 0:
+                raise ArgumentsRequired('해외 지정가/LOC 주문은 price 필수 (시장가 의도면 현재가 기반 지정가 필요)')
+            self.check_order_arguments(None, type, side, quantity, price, params)
+            return self._create_overseas_order(instrument, type, side, quantity, price, params)
+        self.check_order_arguments(None, type, side, quantity, price, params)
+        return self._create_domestic_order(instrument, type, side, quantity, price, params)
+
+    def _normalize_quantity(self, instrument: KisInstrument, side: str, requested: Any) -> int:
+        """주문 수량을 정수 주로 맞춘다. 0 이하나 비정상은 던지고 소수는 내린다(내려서 0 이 되면 던진다). 소수 주문이 몰래 잘리면
+        호출하는 쪽의 수량 계산이 어긋나므로 내린 사실을 경고로 남긴다."""
+        if not fn.is_number(requested) or requested <= 0:
+            raise InvalidOrder(f'{self.id} 주문 수량 비정상: {_tpl(requested)} ({instrument.symbol} {side})')
+        floored = math.floor(requested)
+        if floored <= 0:
+            raise InvalidOrder(f'{self.id} 주문 수량 floor 후 0: {_tpl(requested)} → {floored} ({instrument.symbol} {side})')
+        if floored != requested:
+            logger.warning('[kis] 분수 주문을 내림한다 (단주 거래) requested=%s floored=%s symbol=%s side=%s', requested, floored,
+                           instrument.symbol, side)
+        return floored
+
+    def _create_domestic_order(self, instrument: KisInstrument, type: str, side: str, quantity: int, price: Num,
+                               params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        session = self.safe_string(params, 'session')
+        params = self.omit(params, 'session')
+        # 확장세션(NXT 프리 08:00~08:50, 애프터 15:30~20:00)은 정규장 게이트를 건너뛰고 SOR 로 낸다. `nxtRouting` 이 꺼져 있으면 정규장 규칙이다.
+        extended = session == 'nxt' or (session is None and self.is_option_enabled('nxtRouting') and is_nxt_extended_tradable())
+        if extended:
+            self._assert_nxt_tradable(instrument)
+        limit_price = price if type == 'limit' else None
+        if not extended:
+            self._assert_domestic_session_open(side)
+        elif limit_price is None:
+            limit_price = self._extended_session_limit_price(instrument.symbol, side)
+        buy = side == 'buy'
+        real_tr, demo_tr = DOMESTIC_ORDER_TR['extended' if extended else 'regular']['buy' if buy else 'sell']
+        request = self.extend(self._account_params(), {
+            'PDNO': instrument.code,
+            'ORD_DVSN': KIS_ORDER_TYPE['LIMIT'] if limit_price is not None else KIS_ORDER_TYPE['MARKET'],
+            'ORD_QTY': fn.js_string(quantity),
+            'ORD_UNPR': fn.js_string(limit_price) if limit_price is not None else '0',
+            'tr_id': self.tr(real_tr, demo_tr),
+        })
+        if extended:
+            request['EXCG_ID_DVSN_CD'] = 'SOR'  # KIS 최선집행 라우팅. NXT 에서 체결될 수 있다
+            request['SLL_TYPE'] = '' if buy else '01'  # 매도유형: 01 일반매도(매수는 공란)
+            request['CNDT_PRIC'] = ''  # 조건가격(스톱지정가)은 쓰지 않는다
+        response = self.private_post_uapi_domestic_stock_v1_trading_order_cash(self.extend(request, params))
+        return self._accepted_order(response, self._market_of(instrument), 'limit' if limit_price is not None else 'market', side, quantity,
+                                    limit_price)
+
+    def create_trigger_order(self, symbol: str, type: str, side: str, amount: float, price: Num = None, trigger_price: Num = None,
+                             params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """스탑지정가(국내만). 같은 주문 엔드포인트(`order-cash`)에 조건가격(`CNDT_PRIC`)을 실어 보내면 KIS 가 스탑지정가로 처리한다.
+        지정가만 받고 정규장 시간에만 낼 수 있다. 해외는 대응하는 API 를 찾지 못해 `NotSupported` 다."""
+        if trigger_price is None:
+            raise ArgumentsRequired(f'{self.id} createTriggerOrder() 는 triggerPrice 인자가 필요하다')
+        if price is None:
+            raise ArgumentsRequired(f'{self.id} createTriggerOrder() 는 price 인자가 필요하다(스탑지정가는 지정가만 지원한다)')
+        instrument = self._instrument_of(symbol)
+        if instrument.overseas:
+            raise NotSupported(f'{self.id} createTriggerOrder() 은 국내 종목만 지원한다: {symbol}')
+        quantity = self._normalize_quantity(instrument, side, amount)
+        self.check_order_arguments(None, type, side, quantity, price, params)
+        self._assert_domestic_session_open(side)
+        buy = side == 'buy'
+        real_tr, demo_tr = DOMESTIC_ORDER_TR['extended']['buy' if buy else 'sell']
+        request = self.extend(self._account_params(), {
+            'PDNO': instrument.code,
+            'ORD_DVSN': KIS_ORDER_TYPE['LIMIT'],
+            'ORD_QTY': fn.js_string(quantity),
+            'ORD_UNPR': fn.js_string(price),
+            'EXCG_ID_DVSN_CD': 'KRX',
+            'SLL_TYPE': '' if buy else '01',
+            'CNDT_PRIC': fn.js_string(trigger_price),
+            'tr_id': self.tr(real_tr, demo_tr),
+        })
+        response = self.private_post_uapi_domestic_stock_v1_trading_order_cash(self.extend(request, params))
+        return self._accepted_order(response, self._market_of(instrument), 'limit', side, quantity, price)
+
+    def _assert_nxt_tradable(self, instrument: KisInstrument) -> None:
+        """확장세션(NXT) 주문 전에 종목정보(`search-stock-info`)로 이 종목이 NXT 에서 거래되는지 본다. NXT 거래 대상이 아니거나 NXT 에서
+        거래정지면 KIS 가 거절하므로 보내지 않고 `MarketClosed` 를 던진다. 조회에 실패하거나 두 필드가 모두 없으면 막지 않는다(주문 응답이
+        최종 판단이다). 종목정보 조회는 모의투자를 지원하지 않아 모의에서는 보지 않는다. 결과는 종목별로 캐시하고 실패는 캐시하지 않는다."""
+        if self.isSandboxModeEnabled:
+            return
+        now = self.milliseconds()
+        entry = self._nxt_eligibility.get(instrument.code)
+        if entry is None or now - entry['at'] >= NXT_ELIGIBILITY_TTL_MS:
+            try:
+                response = self.private_get_uapi_domestic_stock_v1_quotations_search_stock_info({
+                    'PRDT_TYPE_CD': STOCK_INFO_PRODUCT_TYPE,
+                    'PDNO': instrument.code,
+                    'tr_id': 'CTPF1002R',
+                })
+                output = self.safe_dict(response, 'output', {})
+            except Exception:
+                logger.warning('[kis] NXT 거래 가능 여부를 확인하지 못했다. 주문은 그대로 보낸다 (symbol=%s)', instrument.symbol, exc_info=True)
+                return
+            eligible = self.safe_string(output, 'cptt_trad_tr_psbl_yn')
+            stopped = self.safe_string(output, 'nxt_tr_stop_yn')
+            if eligible is None and stopped is None:
+                logger.warning('[kis] 종목정보에 NXT 거래 여부 필드가 없다. 주문은 그대로 보낸다 (symbol=%s)', instrument.symbol)
+                return
+            blocked_reason = None
+            if eligible == 'N':
+                blocked_reason = 'NXT 거래 대상 종목이 아니다'
+            elif stopped == 'Y':
+                blocked_reason = 'NXT 거래정지 종목이다'
+            entry = {'blockedReason': blocked_reason, 'at': now}
+            self._nxt_eligibility[instrument.code] = entry
+        if entry['blockedReason'] is not None:
+            raise MarketClosed(f"NXT 확장시간 주문 불가: {entry['blockedReason']} ({instrument.symbol})")
+
+    def _assert_domestic_session_open(self, side: str) -> None:
+        """국내 정규장 게이트. 휴장일은 KIS 캘린더로 알아야 해서 먼저 받는다. 종가 동시호가(15:20~15:30)의 신규 매수는 막는다."""
+        self.refresh_market_calendar()
+        hours = check_krx_trading_hours()
+        if not hours['tradable']:
+            raise MarketClosed(f"거래시간 외: {_tpl(hours.get('reason'))}")
+        # 동시호가는 체결가가 예상과 크게 다를 수 있다. 청산(매도)은 진입보다 우선이라 막지 않는다.
+        if get_krx_market_phase() == 'closing-auction' and side == 'buy':
+            raise MarketClosed('종가 동시호가 (15:20-15:30) — 신규 매수 진입 금지')
+
+    def _extended_session_limit_price(self, symbol: str, side: str) -> float:
+        """확장세션 시장가를 지정가로 바꾸는 가격. 확장세션은 지정가만 받는다. 같은 방향 미체결이 있거나 기준가를 못 구하면 던진다.
+        지정가를 지어내거나 호가를 겹쳐 쌓지 않기 위해서다."""
+        conversion = build_extended_session_limit(
+            self, {'symbol': symbol, 'side': side}, '[kis]',
+            lambda err, message: logger.warning('%s (symbol=%s)', message, symbol, exc_info=err))
+        error = conversion.get('error')
+        if error is not None or conversion.get('price') is None:
+            raise InvalidOrder(error if error is not None else 'NXT 확장시간: 지정가 산출 실패')
+        logger.info('[kis] NXT 확장시간 — 시장가를 지정가로 전환 (symbol=%s, side=%s, price=%s)', symbol, side, conversion['price'])
+        return conversion['price']
+
+    def _create_overseas_order(self, instrument: KisInstrument, type: str, side: str, quantity: int, price: float,
+                               params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        exchange = instrument.order_exchange
+        if exchange is None:
+            raise BadSymbol(f'해외 마스터에 없는 ticker: {instrument.symbol}')
+        slot = OVERSEAS_ORDER_TR.get(exchange)
+        if slot is None:
+            raise NotSupported(f'미지원 거래소: {exchange}')
+        # 미국장 세션 게이트. 완전 마감은 양방향 모두 막고(닫힌 시장의 매도도 체결될 수 없다) 종가 동시호가의 신규 매수도 막는다.
+        # 홍콩·일본·베트남 같은 다른 해외 시장은 이 게이트의 대상이 아니다.
+        if exchange in US_ORDER_EXCHANGES:
+            phase = get_us_market_phase()
+            if phase == 'closed':
+                raise MarketClosed(f'미국장 정규장 외 ({format_et_wall_clock()}, phase=closed)')
+            if phase == 'closing-auction' and side == 'buy':
+                raise MarketClosed(f'종가 동시호가 (15:50-16:00 ET, {format_et_wall_clock()}) — 신규 매수 진입 금지')
+        # 모의투자는 지정가만 받는다. 실전은 시장가 의도를 장마감지정가(LOC)로 낸다.
+        ord_dvsn = KIS_OVERSEAS_ORD_DVSN['LOC'] if type == 'market' and not self.isSandboxModeEnabled else KIS_OVERSEAS_ORD_DVSN['LIMIT']
+        buy = side == 'buy'
+        request = self.extend(self._account_params(), {
+            'OVRS_EXCG_CD': exchange,
+            'PDNO': instrument.code,
+            'ORD_QTY': fn.js_string(quantity),
+            'OVRS_ORD_UNPR': fn.js_string(price),
+            'CTAC_TLNO': '',
+            'MGCO_APTM_ODNO': '',
+            'SLL_TYPE': '' if buy else '00',
+            'ORD_SVR_DVSN_CD': '0',
+            'ORD_DVSN': ord_dvsn,
+            'tr_id': self.tr('T' + (slot['buy'] if buy else slot['sell'])),
+        })
+        response = self.private_post_uapi_overseas_stock_v1_trading_order(self.extend(request, params))
+        order_type = 'limit' if ord_dvsn == KIS_OVERSEAS_ORD_DVSN['LIMIT'] else 'market'
+        return self._accepted_order(response, self._market_of(instrument), order_type, side, quantity, price)
+
+    def _accepted_order(self, response: Any, market: Dict[str, Any], type: str, side: str, amount: float, price: Num) -> Dict[str, Any]:
+        """주문 접수 응답을 주문으로 옮긴다. 접수 응답에는 체결 정보가 없어 요청값을 싣고 `filled` 는 비워 둔다."""
+        output = self.safe_dict(response, 'output', {})
+        if self.safe_string(output, 'ODNO') is None:
+            logger.warning('[kis] 주문은 접수됐으나 응답에 주문번호(ODNO)가 없다 (response=%s)', response)
+        parsed = self.parse_order(output, market)
+        return self.safe_order(self.extend(parsed, {
+            'symbol': market['symbol'],
+            'type': type,
+            'side': side,
+            'price': price,
+            'amount': amount,
+            'status': 'open',
+            'info': response,
+        }), market)
+
+    def cancel_order(self, id: str, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """주문 취소. 국내는 남은 수량 전체를 취소한다. 미국은 취소 수량이 필요해 미체결 조회에서 찾고, 모의투자처럼 조회할 수 없으면
+        `params['amount']` 로 넘긴다. 이미 체결되거나 취소된 주문은 KIS 가 오류로 거절한다."""
+        instrument = None if symbol is None else self._instrument_of(symbol)
+        if instrument is not None and instrument.overseas:
+            return self._cancel_overseas_order(id, instrument, params)
+        response = self.private_post_uapi_domestic_stock_v1_trading_order_rvsecncl(self.extend(self.extend(self._account_params(), {
+            'KRX_FWDG_ORD_ORGNO': self.safe_string(params, 'orderOrgNo', ''),
+            'ORGN_ODNO': id,
+            'ORD_DVSN': KIS_ORDER_TYPE['LIMIT'],
+            'RVSE_CNCL_DVSN_CD': '02',  # 취소
+            'ORD_QTY': '0',  # 전량
+            'ORD_UNPR': '0',
+            'QTY_ALL_ORD_YN': 'Y',
+            'tr_id': self.tr('TTTC0803U'),
+        }), self.omit(params, 'orderOrgNo')))
+        logger.info('[kis] 주문 취소 성공 (orderId=%s, symbol=%s)', id, symbol)
+        return self.safe_order({'id': id, 'symbol': None if instrument is None else instrument.symbol, 'status': 'canceled', 'info': response},
+                               None if instrument is None else self._market_of(instrument))
+
+    def _open_quantity(self, id: str, instrument: KisInstrument) -> str:
+        """미체결 조회에서 찾은 주문의 남은 수량."""
+        open_order = next((order for order in self.fetch_open_orders(instrument.symbol) if order.get('id') == id), None)
+        if open_order is None:
+            raise OrderNotFound(f'{self.id} 미체결 해외 주문을 찾지 못했다: {id}')
+        quantity = open_order.get('remaining')
+        if quantity is None:
+            quantity = open_order.get('amount')
+        return self.number_to_string(0 if quantity is None else quantity)
+
+    def _cancel_overseas_order(self, id: str, instrument: KisInstrument, params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        exchange = instrument.order_exchange
+        if exchange is None:
+            raise BadSymbol(f'해외 마스터에 없는 ticker: {instrument.symbol}')
+        remaining = self.safe_string(params, 'amount')
+        if remaining is None:
+            if self.isSandboxModeEnabled:
+                raise ArgumentsRequired(f'{self.id} 모의투자의 해외 주문 취소에는 params.amount(취소 수량)가 필요하다')
+            remaining = self._open_quantity(id, instrument)
+        response = self.private_post_uapi_overseas_stock_v1_trading_order_rvsecncl(self.extend(self.extend(self._account_params(), {
+            'OVRS_EXCG_CD': exchange,
+            'PDNO': instrument.code,
+            'ORGN_ODNO': id,
+            'RVSE_CNCL_DVSN_CD': '02',  # 취소
+            'ORD_QTY': remaining,
+            'OVRS_ORD_UNPR': '0',
+            'MGCO_APTM_ODNO': '',
+            'ORD_SVR_DVSN_CD': '0',
+            'tr_id': self.tr('TTTT1004U'),
+        }), self.omit(params, 'amount')))
+        logger.info('[kis] 해외 주문 취소 성공 (orderId=%s, symbol=%s)', id, instrument.symbol)
+        return self.safe_order({'id': id, 'symbol': instrument.symbol, 'status': 'canceled', 'info': response}, self._market_of(instrument))
+
+    def edit_order(self, id: str, symbol: str, type: str, side: str, amount: Num = None, price: Num = None,
+                   params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """정정. 취소와 같은 엔드포인트(`order-rvsecncl`)를 `RVSE_CNCL_DVSN_CD` 로 나눈다(`01` 정정, `02` 취소). `price` 가 필요하다.
+        `amount` 를 주면 그 수량으로 일부 정정(`QTY_ALL_ORD_YN: 'N'`)하고, 주지 않으면 국내는 전량(`'Y'`)을 정정한다."""
+        if price is None:
+            raise ArgumentsRequired(f'{self.id} editOrder() requires a price argument')
+        instrument = self._instrument_of(symbol)
+        if instrument.overseas:
+            return self._edit_overseas_order(id, instrument, price, amount, params)
+        response = self.private_post_uapi_domestic_stock_v1_trading_order_rvsecncl(self.extend(self.extend(self._account_params(), {
+            'KRX_FWDG_ORD_ORGNO': self.safe_string(params, 'orderOrgNo', ''),
+            'ORGN_ODNO': id,
+            'ORD_DVSN': KIS_ORDER_TYPE['LIMIT'],
+            'RVSE_CNCL_DVSN_CD': '01',  # 정정
+            'ORD_QTY': '0' if amount is None else fn.js_string(amount),
+            'ORD_UNPR': fn.js_string(price),
+            'QTY_ALL_ORD_YN': 'Y' if amount is None else 'N',
+            'tr_id': self.tr('TTTC0803U'),
+        }), self.omit(params, 'orderOrgNo')))
+        new_id = self.safe_string(self.safe_dict(response, 'output', {}), 'ODNO', id)
+        logger.info('[kis] 주문 정정 성공 (orderId=%s, newOrderId=%s, symbol=%s, price=%s, amount=%s)', id, new_id, symbol, price, amount)
+        return self.safe_order({
+            'id': new_id, 'symbol': instrument.symbol, 'type': 'limit', 'price': price, 'amount': amount, 'status': 'open', 'info': response,
+        }, self._market_of(instrument))
+
+    def _edit_overseas_order(self, id: str, instrument: KisInstrument, price: float, amount: Num,
+                             params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """해외 정정. 수량(`amount` 나 `params['amount']`)이 없으면 미체결 조회에서 잔량을 찾는다. 모의투자는 미체결 조회가 없어 반드시 넘긴다.
+        공식 예제처럼 정정 요청에 실제 수량과 단가를 싣는다."""
+        exchange = instrument.order_exchange
+        if exchange is None:
+            raise BadSymbol(f'해외 마스터에 없는 ticker: {instrument.symbol}')
+        quantity = self.safe_string(params, 'amount')
+        if quantity is None and amount is not None:
+            quantity = self.number_to_string(amount)
+        if quantity is None:
+            if self.isSandboxModeEnabled:
+                raise ArgumentsRequired(f'{self.id} 모의투자의 해외 주문 정정에는 amount나 params.amount(정정 수량)가 필요하다')
+            quantity = self._open_quantity(id, instrument)
+        response = self.private_post_uapi_overseas_stock_v1_trading_order_rvsecncl(self.extend(self.extend(self._account_params(), {
+            'OVRS_EXCG_CD': exchange,
+            'PDNO': instrument.code,
+            'ORGN_ODNO': id,
+            'RVSE_CNCL_DVSN_CD': '01',  # 정정
+            'ORD_QTY': quantity,
+            'OVRS_ORD_UNPR': fn.js_string(price),
+            'MGCO_APTM_ODNO': '',
+            'ORD_SVR_DVSN_CD': '0',
+            'tr_id': self.tr('TTTT1004U'),
+        }), self.omit(params, 'amount')))
+        new_id = self.safe_string(self.safe_dict(response, 'output', {}), 'ODNO', id)
+        logger.info('[kis] 해외 주문 정정 성공 (orderId=%s, newOrderId=%s, symbol=%s, price=%s, quantity=%s)', id, new_id, instrument.symbol,
+                    price, quantity)
+        return self.safe_order({
+            'id': new_id, 'symbol': instrument.symbol, 'type': 'limit', 'price': price, 'amount': fn.js_number(quantity), 'status': 'open',
+            'info': response,
+        }, self._market_of(instrument))
+
+    def cancel_all_orders(self, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """미체결 주문을 모두 취소한다. 종목을 주면 그 종목만이다. 하나라도 취소하지 못하면 나머지를 다 시도한 뒤 첫 실패를 던진다.
+        살아 있을 수 있는 주문을 성공으로 돌려주지 않기 위해서다. TypeScript 판은 동시에 보내고 이 판은 같은 순서로 차례로 보낸다."""
+        open_orders = self.fetch_open_orders(symbol, None, None, params)
+        results: List[Dict[str, Any]] = []
+        first_error: Optional[BaseException] = None
+        for order in open_orders:
+            try:
+                results.append(self.cancel_order(order['id'], order.get('symbol'), {}))
+            except Exception as error:
+                if first_error is None:
+                    first_error = error
+        if first_error is not None:
+            raise first_error
+        return results
+
+    # ============ 주문·체결 조회 ============
+
+    def fetch_open_orders(self, symbol: Str = None, since: Int = None, limit: Int = None,
+                          params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """미체결 주문. 국내는 정정취소가능 주문 조회(`inquire-psbl-rvsecncl`), 미국은 미체결 내역(`inquire-nccs`)이다. 종목을 주면 그 시장만,
+        주지 않으면 국내와 미국을 모두 본다(`params['market']` 이 `'domestic'` 이면 국내만). 모의투자는 미국 미체결 조회가 없어 국내만 본다."""
+        instrument = None if symbol is None else self._instrument_of(symbol)
+        which = self.safe_string(params, 'market', 'all')
+        want_domestic = which != 'overseas' if instrument is None else not instrument.overseas
+        # 모의투자에는 미국 미체결 조회(TR)가 없다.
+        want_overseas = which != 'domestic' and not self.isSandboxModeEnabled if instrument is None else instrument.overseas
+        orders: List[Dict[str, Any]] = []
+        if want_domestic:
+            response = self.private_get_uapi_domestic_stock_v1_trading_inquire_psbl_rvsecncl(self.extend(self._account_params(), {
+                'CTX_AREA_FK100': '',
+                'CTX_AREA_NK100': '',
+                'INQR_DVSN_1': '0',
+                'INQR_DVSN_2': '0',
+                # 실전만 신형 TR 이 있다. 모의는 종전 TR 을 그대로 쓴다.
+                'tr_id': self.tr('TTTC0084R', 'VTTC8036R'),
+            }))
+            market = None if instrument is None else self._market_of(instrument)
+            orders.extend(self._mark_open(order) for order in self.parse_orders(rows_of(_field(response, 'output')), market))
+        if want_overseas:
+            response = self.private_get_uapi_overseas_stock_v1_trading_inquire_nccs(self.extend(self._account_params(), {
+                'OVRS_EXCG_CD': 'NASD',
+                'SORT_SQN': 'DS',
+                'CTX_AREA_FK200': '',
+                'CTX_AREA_NK200': '',
+                'tr_id': self.tr('TTTS3018R', None),
+            }))
+            orders.extend(self._mark_open(order) for order in self.parse_orders(rows_of(_field(response, 'output'))))
+        filtered = orders if instrument is None else [order for order in orders if order.get('symbol') == instrument.symbol]
+        return self.filter_by_since_limit(filtered, since, limit)
+
+    def _mark_open(self, order: Dict[str, Any]) -> Dict[str, Any]:
+        """미체결 조회의 행은 모두 살아 있는 주문이다. 응답에 취소 여부가 없어 상태를 정하지 못했으면 `open` 으로 둔다."""
+        return self.extend(order, {'status': 'open'}) if order.get('status') is None else order
+
+    def fetch_orders(self, symbol: Str = None, since: Int = None, limit: Int = None,
+                     params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """당일(또는 `since` 일부터)의 주문 전체(체결·미체결·취소). 국내는 일별주문체결조회(`inquire-daily-ccld`), 미국은 주문체결내역(`inquire-ccnl`)이다.
+        종목을 주면 그 시장만, 주지 않으면 국내와 미국을 모두 조회한다(`params['market']` 으로 좁힌다)."""
+        instrument = None if symbol is None else self._instrument_of(symbol)
+        which = self.safe_string(params, 'market', 'all')
+        orders: List[Dict[str, Any]] = []
+        if (which != 'overseas') if instrument is None else not instrument.overseas:
+            code = None if instrument is None else instrument.code
+            orders.extend(self.parse_orders(self._fetch_domestic_ccld_rows(code, since, '00', self.safe_string(params, 'orderId'))))
+        if (which != 'domestic') if instrument is None else instrument.overseas:
+            orders.extend(self.parse_orders(self._fetch_overseas_ccld_rows(since, '00')))
+        filtered = orders if instrument is None else [order for order in orders if order.get('symbol') == instrument.symbol]
+        return self.filter_by_since_limit(filtered, since, limit)
+
+    def fetch_order(self, id: str, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """주문 하나. 오늘(또는 `params['since']` 일부터)의 주문 목록에서 찾고 없으면 `OrderNotFound` 다. 국내는 주문번호로 좁혀 조회한다."""
+        orders = self.fetch_orders(symbol, self.safe_integer(params, 'since'), None, self.extend(params, {'orderId': id}))
+        order = next((candidate for candidate in orders if candidate.get('id') == id), None)
+        if order is None:
+            raise OrderNotFound(f'{self.id} 주문을 찾지 못했다: {id}')
+        return order
+
+    def fetch_my_trades(self, symbol: Str = None, since: Int = None, limit: Int = None,
+                        params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """내 체결 내역. 종목을 주면 그 시장만, 주지 않으면 국내와 미국을 모두 조회한다(`params['market']` 으로 좁힌다). 체결별 수수료는
+        응답에 없어 비어 있다. 일자는 국내가 한국 날짜, 미국이 현지(ET) 날짜다. `since` 를 주지 않으면 오늘이다."""
+        instrument = None if symbol is None else self._instrument_of(symbol)
+        which = self.safe_string(params, 'market', 'all')
+        trades: List[Dict[str, Any]] = []
+        if (which != 'overseas') if instrument is None else not instrument.overseas:
+            code = None if instrument is None else instrument.code
+            trades.extend(self.parse_trades(self._fetch_domestic_ccld_rows(code, since, '01'), None, since, limit))
+        if (which != 'domestic') if instrument is None else instrument.overseas:
+            trades.extend(self.parse_trades(self._fetch_overseas_ccld_rows(since, '01'), None, since, limit))
+        filtered = trades if instrument is None else [trade for trade in trades if trade.get('symbol') == instrument.symbol]
+        return self.filter_by_since_limit(filtered, since, limit)
+
+    def _fetch_domestic_ccld_rows(self, code: Str, since: Int, ccld: str, order_id: Str = None) -> List[Dict[str, Any]]:
+        """국내 일별주문체결 행. `ccld` 는 `'00'` 전체, `'01'` 체결, `'02'` 미체결이다. 조회일은 한국 달력 날짜다(UTC 로 잡으면 한국 0~9시에
+        전날을 조회한다). 거래소 구분은 `ALL` 로 KRX·NXT·SOR 체결을 모두 본다."""
+        now = self.milliseconds()
+        response = self.private_get_uapi_domestic_stock_v1_trading_inquire_daily_ccld(self.extend(self._account_params(), {
+            'INQR_STRT_DT': kst_ymd(since if since is not None else now),
+            'INQR_END_DT': kst_ymd(now),
+            'SLL_BUY_DVSN_CD': '00',
+            'INQR_DVSN': '00',
+            'PDNO': code if code is not None else '',
+            'CCLD_DVSN': ccld,
+            'ORD_GNO_BRNO': '',
+            'ODNO': order_id if order_id is not None else '',
+            'INQR_DVSN_3': '00',
+            'INQR_DVSN_1': '',
+            'CTX_AREA_FK100': '',
+            'CTX_AREA_NK100': '',
+            'EXCG_ID_DVSN_CD': 'ALL',
+            'tr_id': self.tr('TTTC0081R'),
+        }))
+        rows = rows_of(_field(response, 'output1'))
+        if ccld != '01':
+            return rows
+        return [row for row in rows if to_number(row.get('tot_ccld_qty') if row.get('tot_ccld_qty') is not None else row.get('cntg_qty')) > 0]
+
+    def _fetch_overseas_ccld_rows(self, since: Int, ccld: str) -> List[Dict[str, Any]]:
+        """미국 주문체결내역 행(`TTTS3035R`, 모의 `VTTS3035R`). 실전은 `NASD` 한 번이 미국 전체다. 모의투자는 종목·구분·거래소를 비워
+        전체 조회만 되므로 체결 여부는 응답의 체결수량으로 거른다. 일자는 현지(ET) 날짜다. 주문번호로는 찾을 수 없어 호출하는 쪽이 거른다."""
+        now = self.milliseconds()
+        sandbox = self.isSandboxModeEnabled
+        response = self.private_get_uapi_overseas_stock_v1_trading_inquire_ccnl(self.extend(self._account_params(), {
+            'PDNO': '' if sandbox else '%',
+            'ORD_STRT_DT': et_ymd(since if since is not None else now),
+            'ORD_END_DT': et_ymd(now),
+            'SLL_BUY_DVSN': '00',
+            'CCLD_NCCS_DVSN': '00' if sandbox else ccld,
+            'OVRS_EXCG_CD': '' if sandbox else 'NASD',
+            'SORT_SQN': 'DS',
+            'ORD_DT': '',
+            'ORD_GNO_BRNO': '',
+            'ODNO': '',
+            'CTX_AREA_NK200': '',
+            'CTX_AREA_FK200': '',
+            'tr_id': self.tr('TTTS3035R'),
+        }))
+        rows = rows_of(_field(response, 'output'))
+        return [row for row in rows if to_number(row.get('ft_ccld_qty')) > 0] if ccld == '01' else rows
+
+    def parse_order(self, order: Dict[str, Any], market: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """주문 행(접수 응답, 정정취소가능·일별체결·해외 체결·미체결 조회)을 주문으로 옮긴다. 접수 응답은 대문자 키(`ODNO`)이고 조회 행은
+        소문자 키(`odno`)다. 해외 행은 `ft_` 접두 필드를 쓴다."""
+        order_id = self.safe_string_2(order, 'ODNO', 'odno')
+        overseas = 'ft_ord_qty' in order or (market is not None and market.get('quote') == 'USD')
+        code = self.safe_string_2(order, 'pdno', 'ovrs_pdno')
+        if code is not None and (market is None or market.get('id') != code):
+            market = self._market_of(self._instrument_of(code))
+        side_code = self.safe_string(order, 'sll_buy_dvsn_cd')
+        dvsn = self.safe_string(order, 'ord_dvsn_cd')
+        amount = filled = remaining = price = average = cost = status = None
+        timestamp: Int = None
+        if 'ODNO' in order:
+            # 접수 응답은 주문번호와 접수 시각(한국 시각)만 있다. 나머지는 호출한 쪽이 요청값으로 채운다.
+            timestamp = kst_timestamp(kst_ymd(self.milliseconds()), self.safe_string(order, 'ORD_TMD'))
+            status = 'open'
+        elif overseas:
+            amount = self.safe_string(order, 'ft_ord_qty')
+            filled = self.safe_string(order, 'ft_ccld_qty')
+            remaining = self.safe_string(order, 'nccs_qty')
+            price = self.safe_string(order, 'ft_ord_unpr3')
+            average = self.safe_string(order, 'ft_ccld_unpr3')
+            cost = self.safe_string(order, 'ft_ccld_amt3')
+            timestamp = kst_timestamp(self.safe_string(order, 'dmst_ord_dt'), self.safe_string(order, 'thco_ord_tmd'))
+            if timestamp is None:
+                timestamp = kst_timestamp(self.safe_string(order, 'ord_dt'), self.safe_string(order, 'ord_tmd'))
+            status = self._order_status_of(filled, remaining, None)
+        else:
+            amount = self.safe_string(order, 'ord_qty')
+            filled = self.safe_string(order, 'tot_ccld_qty')
+            # 일별체결 조회는 잔여수량(`rmn_qty`), 정정취소가능 조회는 가능수량(`psbl_qty`)을 준다.
+            remaining = self.safe_string_2(order, 'rmn_qty', 'psbl_qty')
+            price = self.safe_string(order, 'ord_unpr')
+            average = self.safe_string(order, 'avg_prvs')
+            cost = self.safe_string(order, 'tot_ccld_amt')
+            order_date = self.safe_string(order, 'ord_dt')
+            timestamp = kst_timestamp(order_date if order_date is not None else kst_ymd(self.milliseconds()), self.safe_string(order, 'ord_tmd'))
+            status = self._order_status_of(filled, remaining, self.safe_string(order, 'cncl_yn'))
+        return self.safe_order({
+            'info': order,
+            'id': order_id,
+            'clientOrderId': None,
+            'timestamp': timestamp,
+            'datetime': self.iso8601(timestamp),
+            'symbol': None if market is None else market.get('symbol'),
+            'type': None if dvsn is None else 'market' if dvsn == KIS_ORDER_TYPE['MARKET'] else 'limit',
+            'side': 'sell' if side_code == SIDE_CODE_SELL else 'buy' if side_code == SIDE_CODE_BUY else None,
+            'price': price,
+            'average': average,
+            'amount': amount,
+            'filled': filled,
+            'remaining': remaining,
+            'cost': cost,
+            'status': status,
+            'fee': None,
+            'trades': [],
+        }, market)
+
+    def _order_status_of(self, filled: Str, remaining: Str, cancel_flag: Str) -> Str:
+        """체결·잔여 수량과 취소 여부로 주문 상태를 정한다. 판단할 근거가 없으면 None 이다."""
+        if cancel_flag == 'Y':
+            return 'canceled'
+        if remaining is not None and fn.js_number(remaining) > 0:
+            return 'open'
+        if filled is not None and fn.js_number(filled) > 0:
+            return 'closed'
+        return None
+
+    def parse_trade(self, trade: Dict[str, Any], market: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """체결 행 하나를 체결로 옮긴다. 체결 id 는 주문일자·주문번호·종목(·해외 거래소)의 조합이라 다시 조회해도 같다."""
+        overseas = 'ft_ccld_qty' in trade or (market is not None and market.get('quote') == 'USD')
+        code = self.safe_string_2(trade, 'pdno', 'ovrs_pdno')
+        if code is not None and (market is None or market.get('id') != code):
+            market = self._market_of(self._instrument_of(code))
+        order_id = self.safe_string(trade, 'odno')
+        if overseas:
+            order_date = self.safe_string_2(trade, 'ord_dt', 'dmst_ord_dt', '')
+            timestamp = kst_timestamp(self.safe_string(trade, 'dmst_ord_dt'), self.safe_string(trade, 'thco_ord_tmd'))
+            if timestamp is None:
+                timestamp = kst_timestamp(order_date, self.safe_string(trade, 'ord_tmd'))
+        else:
+            order_date = self.safe_string(trade, 'ord_dt', '')
+            timestamp = kst_timestamp(order_date, self.safe_string(trade, 'ord_tmd'))
+        side_code = self.safe_string(trade, 'sll_buy_dvsn_cd')
+        suffix = f":{self.safe_string(trade, 'ovrs_excg_cd', '')}" if overseas else ''
+        return self.safe_trade({
+            'info': trade,
+            'id': f'{order_date}:{_tpl(order_id)}:{_tpl(code)}{suffix}',
+            'order': order_id,
+            'timestamp': timestamp,
+            'datetime': self.iso8601(timestamp),
+            'symbol': None if market is None else market.get('symbol'),
+            'type': None,
+            'side': 'sell' if side_code == SIDE_CODE_SELL else 'buy' if side_code == SIDE_CODE_BUY else None,
+            'takerOrMaker': None,
+            'price': self.safe_string(trade, 'ft_ccld_unpr3') if overseas else self.safe_string_2(trade, 'avg_prvs', 'cntg_unpr'),
+            'amount': self.safe_string(trade, 'ft_ccld_qty') if overseas else self.safe_string_2(trade, 'tot_ccld_qty', 'cntg_qty'),
+            'cost': self.safe_string(trade, 'ft_ccld_amt3') if overseas else self.safe_string(trade, 'tot_ccld_amt'),
+            'fee': None,
+        }, market)

@@ -45,3 +45,5 @@ TypeScript 판이 실계좌로 확인한 기준 구현이므로, 새 케이스�
 - `args`의 `null`은 TypeScript 판에서 `undefined`로 넘긴다. Python 판에서 인자의 기본값이 `None`인 것과 맞춘다.
 - 요청 본문은 문자열 그대로 비교한다. 두 판 모두 JavaScript의 `JSON.stringify`와 같은 모양(공백 없음, 한글 그대로, 정수 값의 실수는 소수점 없이)으로 보낸다.
 - `http` 목록보다 요청이 많거나 적으면 실패한다.
+- 증권사 API 가 아닌 요청도 같은 `http` 목록이 응답한다. 한국투자증권 `fetchOHLCV` 의 야후 파이낸스 캔들 요청이 그렇다. 이 요청은 서명과 공통 헤더 없이
+  `User-Agent` 만 싣는다.
