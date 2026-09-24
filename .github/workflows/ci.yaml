@@ -56,6 +56,8 @@ jobs:
       - run: pnpm test
       - run: pnpm docs:check
       - run: pnpm build
+      - name: dist 를 Node.js 로 불러올 수 있는지
+        run: node scripts/check-dist-imports.mjs
 
   # Python 판. 암묵 API 선언이 엔드포인트 표(ts/src/spec)와 같은지 보고, TypeScript 판과 같은 요청 픽스처(ts/src/test/static/request)를 돌린다.
   python:
