@@ -253,7 +253,8 @@
     "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && tsc-alias -p tsconfig.json -f",
+    "prepare": "npm run build",
     "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run",
     "docs:gen": "node scripts/gen-broker-docs.mjs",
@@ -265,6 +266,7 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/ws": "^8.18.1",
+    "tsc-alias": "1.8.17",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },

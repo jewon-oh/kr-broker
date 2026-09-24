@@ -102,14 +102,15 @@ new kis({}).has.fetchOHLCV; // true, false, 'emulated' 중 하나
 
 ## 설치
 
-npm에는 아직 게시하지 않았습니다. 저장소를 받아 빌드합니다.
+npm에는 아직 게시하지 않았습니다. GitHub 주소로 설치하면 설치 중에 `prepare`가 `dist/`를 빌드합니다.
 
 ```bash
-git clone https://github.com/jewon-oh/kr-broker.git
-cd kr-broker
-pnpm install
-pnpm build
+npm install github:jewon-oh/kr-broker
+# 또는
+pnpm add github:jewon-oh/kr-broker
 ```
+
+pnpm은 의존성의 빌드 스크립트를 기본으로 막습니다. pnpm 10은 `pnpm-workspace.yaml`의 `onlyBuiltDependencies`에 `kr-broker`를 넣고, pnpm 11은 설치 때 안내하는 `allowBuilds` 항목을 넣습니다. 특정 버전에 고정하려면 주소 뒤에 `#<커밋 또는 태그>`를 붙입니다.
 
 Node.js 22 이상이 필요합니다.
 
