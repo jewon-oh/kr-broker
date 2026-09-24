@@ -5,10 +5,10 @@
  * 만드는 파일은 사람이 손으로 고치지 않는다. 고치려면 `docs/coverage/` 의 자료를 고치고 `docs:gen` 을 다시 돌린다.
  *
  * 사용:
- *   node scripts/gen-broker-docs.mjs            # docs/brokers/ 를 다시 쓴다
+ *   node scripts/gen-broker-docs.mjs            # docs/brokers/ 와 README 의 기능 표 구간을 다시 쓴다
  *   node scripts/gen-broker-docs.mjs --check    # 커밋된 문서가 자료와 같은지 검사한다. 다르면 종료 코드 1
  *
- * 같은 모듈이 README 에 끼우는 조각(`renderFeatureMatrix`, `renderCoverageSummary`)도 내보낸다.
+ * README 는 `<!-- coverage:start -->` 와 `<!-- coverage:end -->` 사이(지원 비율 요약, 범례, 기능 표)만 다시 쓴다.
  * 외부 의존성이 없는 순수 Node 스크립트다.
  *
  * ## 언어 중립
@@ -466,6 +466,32 @@ export function renderStatusLegend() {
     ].join('\n');
 }
 
+/** README 에서 생성기가 다시 쓰는 구간의 표시 주석. */
+export const README_FILE = 'README.md';
+export const README_START = '<!-- coverage:start -->';
+export const README_END = '<!-- coverage:end -->';
+
+/** README 의 표시 주석 사이에 들어갈 내용. 지원 비율 요약, 범례, 기능 표다. */
+export function renderReadmeCoverage(data) {
+    return [
+        '<!-- 이 구간은 `docs/coverage/` 자료로 만든 생성물입니다. 손으로 고치지 않고, 자료를 고친 뒤 `pnpm docs:gen`을 실행합니다. -->',
+        renderCoverageSummary(data),
+        renderStatusLegend(),
+        renderFeatureMatrix(data.features),
+    ].join('\n\n');
+}
+
+/** README 의 표시 주석 사이를 `block` 으로 바꾼 전문. 두 표시 주석이 차례로 한 번씩 나오지 않으면 던진다. */
+export function spliceReadme(text, block) {
+    const start = text.indexOf(README_START);
+    const end = text.indexOf(README_END);
+    const once = (marker, at) => at >= 0 && text.indexOf(marker, at + marker.length) < 0;
+    if (!once(README_START, start) || !once(README_END, end) || end < start) {
+        throw new Error(`${README_FILE}에 ${README_START}와 ${README_END}가 차례로 한 번씩 있어야 합니다`);
+    }
+    return `${text.slice(0, start + README_START.length)}\n${block}\n${text.slice(end)}`;
+}
+
 function renderNotation() {
     return [
         '### 기능 표의 값',
@@ -647,6 +673,17 @@ export async function checkGenerated(root = PACKAGE_ROOT) {
         else if (actual !== text) diffs.push(`${rel}: 자료로 만든 내용과 다릅니다`);
     }
     for (const rel of await listGenerated(root)) if (!expected.has(rel)) diffs.push(`${rel}: 생성기가 만들지 않는 파일입니다`);
+    let readme = null;
+    try { readme = await readFile(path.join(root, README_FILE), 'utf8'); } catch { /* 없다 */ }
+    if (readme === null) {
+        diffs.push(`${README_FILE}: 파일이 없습니다`);
+    } else {
+        try {
+            if (spliceReadme(readme, renderReadmeCoverage(data)) !== readme) diffs.push(`${README_FILE}: 표시 주석 사이가 자료로 만든 내용과 다릅니다`);
+        } catch (error) {
+            diffs.push(error instanceof Error ? error.message : String(error));
+        }
+    }
     return diffs;
 }
 
@@ -659,7 +696,11 @@ export async function writeGenerated(root = PACKAGE_ROOT) {
         await mkdir(path.dirname(path.join(root, rel)), { recursive: true });
         await writeFile(path.join(root, rel), text);
     }
-    return [...files.keys()];
+    const readmePath = path.join(root, README_FILE);
+    const readme = await readFile(readmePath, 'utf8');
+    const spliced = spliceReadme(readme, renderReadmeCoverage(data));
+    if (spliced !== readme) await writeFile(readmePath, spliced);
+    return [...files.keys(), README_FILE];
 }
 
 async function main() {
