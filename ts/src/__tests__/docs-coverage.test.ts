@@ -75,6 +75,10 @@ interface Generator {
     validateCoverage(data: Coverage): string[];
     checkGenerated(root: string): Promise<string[]>;
     checkEvidence(data: Coverage, root: string): Promise<string[]>;
+    renderReadmeCoverage(data: Coverage): string;
+    spliceReadme(text: string, block: string): string;
+    README_START: string;
+    README_END: string;
 }
 
 // 생성기는 타입 선언이 없는 .mjs 다. 경로를 변수로 만들어 불러오면 경계 검사와 타입 검사가 파일 안쪽으로 따라가지 않는다.
@@ -360,6 +364,27 @@ describe('생성물', () => {
         expect(noted.length).toBeGreaterThan(0);
         expect(text).toContain('### 판단 근거');
         for (const c of noted) expect(text).toContain(c.note as string);
+    });
+
+    it('★README 의 표시 주석 사이가 자료로 만든 기능 표와 같다', () => {
+        const readme = readFileSync(path.join(ROOT, 'README.md'), 'utf8');
+
+        expect(generator.spliceReadme(readme, generator.renderReadmeCoverage(coverage))).toBe(readme);
+        expect(generator.renderReadmeCoverage(coverage)).toContain('| 기능 | `kis` | `toss` | `kbsec` | 제약 |');
+    });
+
+    it('README 는 표시 주석 사이만 바뀐다', () => {
+        const { README_START: start, README_END: end } = generator;
+
+        expect(generator.spliceReadme(`앞\n${start}\n옛 표\n${end}\n뒤`, '새 표')).toBe(`앞\n${start}\n새 표\n${end}\n뒤`);
+    });
+
+    it.each([
+        ['끝 표시가 없음', (s: string, _e: string) => `${s}\n표`],
+        ['시작 표시가 두 번', (s: string, e: string) => `${s}\n${s}\n${e}`],
+        ['순서가 뒤집힘', (s: string, e: string) => `${e}\n표\n${s}`],
+    ])('표시 주석이 어긋나면 던진다: %s', (_label, make) => {
+        expect(() => generator.spliceReadme(make(generator.README_START, generator.README_END), '표')).toThrow('차례로 한 번씩');
     });
 
     it('`--check` 가 종료 코드 0 으로 끝난다', () => {
