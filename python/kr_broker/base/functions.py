@@ -89,6 +89,25 @@ def js_string(x: Any) -> str:
     return str(x)
 
 
+def js_number(raw: Any) -> float:
+    """JavaScript `Number(raw)` 과 같은 변환. `None` 은 0, 읽지 못하면 NaN 이다."""
+    if raw is None:
+        return 0.0
+    if isinstance(raw, bool):
+        return 1.0 if raw else 0.0
+    if isinstance(raw, (int, float)):
+        return float(raw)
+    if isinstance(raw, str):
+        text = raw.strip()
+        if text == '':
+            return 0.0
+        try:
+            return float(text)
+        except ValueError:
+            return math.nan
+    return math.nan
+
+
 def encode_uri_component(value: str) -> str:
     """JavaScript `encodeURIComponent` 와 같다."""
     return quote(value, safe="-_.!~*'()")
@@ -551,11 +570,12 @@ def urlencode(params: Dict[str, Any]) -> str:
 
 
 def milliseconds() -> int:
+    """지금 시각(UTC 밀리초). 패키지는 현재 시각을 모두 이 함수로 읽는다. 테스트는 이 함수를 바꿔 끼워 시각을 고정한다."""
     return int(time.time() * 1000)
 
 
 def seconds() -> int:
-    return int(time.time())
+    return milliseconds() // 1000
 
 
 def iso8601(timestamp: Any) -> Optional[str]:

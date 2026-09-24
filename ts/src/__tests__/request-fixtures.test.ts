@@ -2,7 +2,8 @@
  * @fileoverview `ts/src/test/static/request/*.json` 을 TypeScript 판으로 돌린다. Python 판(`python/<패키지>/test/test_request_fixtures.py`)도 같은 파일을 돌리므로,
  * 둘 다 통과하면 두 판이 같은 요청(URL·헤더·본문)을 만들고 같은 응답을 같은 결과와 오류로 바꾼다는 뜻이다.
  *
- * 케이스마다 새 인스턴스를 만들고, 가짜 `fetch` 가 `http` 목록을 순서대로 응답한다. 형식은 `ts/src/test/static/README.md` 에 있다.
+ * 케이스마다 새 인스턴스를 만들고, 가짜 `fetch` 가 `http` 목록을 순서대로 응답한다. 케이스에 `now` 가 있으면 `Date` 만 그 시각으로 고정한다
+ * (호출 간격 조절기가 쓰는 `performance.now` 와 타이머는 그대로 둔다). 형식은 `ts/src/test/static/README.md` 에 있다.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -12,6 +13,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { deepExtend } from '../base/functions/generic';
 import type { Dict } from '../base/types';
 import { kis } from '../kis';
+import { resetMarketCalendar } from '../market-calendar';
 import type { BrokerTokenStore } from '../options';
 import { toss } from '../toss';
 
@@ -28,6 +30,8 @@ interface FixtureCase {
     description: string;
     config?: Dict;
     tokenStore?: Record<string, unknown>;
+    /** 현재 시각(UTC epoch ms). 있으면 `Date` 를 이 시각으로 고정한다. */
+    now?: number;
     method: string;
     args: unknown[];
     http: FixtureExchange[];
@@ -75,6 +79,20 @@ function dropNulls(config: Dict): Dict {
     return Object.fromEntries(Object.entries(config).filter(([, value]) => value !== null));
 }
 
+/**
+ * 결과를 비교할 모양으로 바꾼다. 객체에서 값이 `null`·`undefined` 인 키를 뺀다. JSON 에는 `undefined` 가 없고 Python 판에는 둘의 구분이 없어서
+ * 두 판 모두 "키 없음"으로 본다. 배열의 `undefined` 는 `null` 로 둔다.
+ */
+function comparable(value: unknown): unknown {
+    if (Array.isArray(value)) return value.map((item) => (item === undefined ? null : comparable(item)));
+    if (value !== null && typeof value === 'object') {
+        return Object.fromEntries(Object.entries(value)
+            .filter(([, item]) => item !== undefined && item !== null)
+            .map(([key, item]) => [key, comparable(item)]));
+    }
+    return value;
+}
+
 function fakeFetch(exchanges: FixtureExchange[], seen: FixtureRequest[]) {
     let index = 0;
     return vi.fn(async (url: string, init: { method?: string; headers?: Record<string, string>; body?: string } = {}) => {
@@ -93,6 +111,9 @@ const files = readdirSync(FIXTURES).filter((name) => name.endsWith('.json')).sor
 
 afterEach(() => {
     vi.unstubAllGlobals();
+    vi.useRealTimers();
+    // 휴장일 캘린더는 모듈 전역이라 앞 케이스가 받은 캘린더가 다음 케이스의 세션 판정에 섞이지 않게 비운다.
+    resetMarketCalendar();
 });
 
 describe.each(files)('test/static/request/%s', (file) => {
@@ -104,12 +125,18 @@ describe.each(files)('test/static/request/%s', (file) => {
         const config = dropNulls(deepExtend(fixture.config, c.config ?? {}, { options: { tokenStore: store } }) as Dict);
         const seen: FixtureRequest[] = [];
         vi.stubGlobal('fetch', fakeFetch(c.http, seen));
+        if (c.now !== undefined) {
+            vi.useFakeTimers({ toFake: ['Date'] });
+            vi.setSystemTime(c.now);
+        }
         const broker = new Broker(config);
+        // 인자의 `null` 은 "주지 않음"(`undefined`)이다. Python 판의 `None` 기본값과 맞춘다.
+        const args = c.args.map((arg) => (arg === null ? undefined : arg));
 
         let result: unknown;
         let error: unknown;
         try {
-            result = await (broker[c.method] as (...args: unknown[]) => Promise<unknown>)(...c.args);
+            result = await (broker[c.method] as (...args: unknown[]) => Promise<unknown>)(...args);
         } catch (e) {
             error = e;
         }
@@ -121,7 +148,7 @@ describe.each(files)('test/static/request/%s', (file) => {
             if (c.error.detail !== undefined) expect((error as { detail?: string }).detail).toBe(c.error.detail);
         } else {
             if (error !== undefined) throw error;
-            expect(result).toEqual(c.output);
+            expect(comparable(result)).toEqual(comparable(c.output));
         }
         for (const [key, state] of Object.entries(c.tokenStoreAfter ?? {})) {
             expect(store.values.has(key), `${key} 는 ${state} 여야 한다`).toBe(state === 'present');

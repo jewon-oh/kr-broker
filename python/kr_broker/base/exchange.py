@@ -41,6 +41,7 @@ from kr_broker.base.precise import Precise
 from kr_broker.base.throttler import Throttler
 from kr_broker.base.token_store import BrokerTokenStore, resolve_token_store
 from kr_broker.base.types import ApiName, Int, Num, Str, Strings
+from kr_broker.execution_confirm import resolve_confirm_budget
 
 logger = logging.getLogger('kr_broker')
 
@@ -168,8 +169,6 @@ class Exchange:
     iso8601 = staticmethod(fn.iso8601)
     parse8601 = staticmethod(fn.parse8601)
     parse_timeframe = staticmethod(fn.parse_timeframe)
-    milliseconds = staticmethod(fn.milliseconds)
-    seconds = staticmethod(fn.seconds)
     extend = staticmethod(fn.extend)
     deep_extend = staticmethod(fn.deep_extend)
     clone = staticmethod(fn.clone)
@@ -188,6 +187,15 @@ class Exchange:
     implode_params = staticmethod(fn.implode_params)
     urlencode = staticmethod(fn.urlencode)
     json = staticmethod(fn.json_stringify)
+
+    @staticmethod
+    def milliseconds() -> int:
+        # 부를 때마다 `fn.milliseconds` 를 찾는다. 테스트가 바꿔 끼운 시계를 따르게 하려는 것이다.
+        return fn.milliseconds()
+
+    @staticmethod
+    def seconds() -> int:
+        return fn.seconds()
 
     @staticmethod
     def sleep(milliseconds: float) -> None:
@@ -550,6 +558,12 @@ class Exchange:
         if callable(option):
             option = option()
         return option is True
+
+    def get_confirm_budget(self, defaults: Optional[Dict[str, Any]] = None) -> Dict[str, int]:
+        """접수 뒤 체결을 확정할 때 쓰는 조회 예산. `options['confirmBudget']`(사전이거나 사전을 돌려주는 함수)이 증권사가 정한 기본값
+        `defaults` 를 이긴다. 범위를 벗어난 값은 무시하고 아래 층의 값을 쓴다."""
+        option = self.options.get('confirmBudget')
+        return resolve_confirm_budget(defaults, option() if callable(option) else option)
 
     # ============ 종목 ============
 

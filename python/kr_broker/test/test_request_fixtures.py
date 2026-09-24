@@ -1,7 +1,8 @@
 """`ts/src/test/static/request/*.json` 을 Python 판으로 돌린다. TypeScript 판(`ts/src/__tests__/request-fixtures.test.ts`)도 같은 파일을 돌리므로,
 둘 다 통과하면 두 판이 같은 요청(URL·헤더·본문)을 만들고 같은 응답을 같은 결과와 오류로 바꾼다는 뜻이다.
 
-케이스마다 새 인스턴스를 만들고, 가짜 HTTP 세션이 `http` 목록을 순서대로 응답한다. 형식은 `ts/src/test/static/README.md` 에 있다.
+케이스마다 새 인스턴스를 만들고, 가짜 HTTP 세션이 `http` 목록을 순서대로 응답한다. 케이스에 `now` 가 있으면 패키지의 시계
+(`kr_broker.base.functions.milliseconds`)를 그 시각으로 바꿔 끼운다. 형식은 `ts/src/test/static/README.md` 에 있다.
 """
 
 import json
@@ -12,7 +13,9 @@ import pytest
 import requests
 
 import kr_broker
+from kr_broker.base import functions as fn
 from kr_broker.base.functions import deep_extend
+from kr_broker.market_calendar import reset_market_calendar
 
 FIXTURES = Path(__file__).resolve().parents[3] / 'ts' / 'src' / 'test' / 'static' / 'request'
 
@@ -97,6 +100,23 @@ class FakeSession:
         pass
 
 
+def comparable(value: Any) -> Any:
+    """결과를 비교할 모양으로 바꾼다. 사전에서 값이 `None` 인 키를 뺀다(TypeScript 판의 `null`·`undefined` 와 맞춘다)."""
+    if isinstance(value, dict):
+        return {key: comparable(item) for key, item in value.items() if item is not None}
+    if isinstance(value, (list, tuple)):
+        return [comparable(item) for item in value]
+    return value
+
+
+@pytest.fixture(autouse=True)
+def _fresh_market_calendar() -> Any:
+    # 휴장일 캘린더는 모듈 전역이라 앞 케이스가 받은 캘린더가 다음 케이스의 세션 판정에 섞이지 않게 비운다.
+    reset_market_calendar()
+    yield
+    reset_market_calendar()
+
+
 def _load_cases() -> List[Any]:
     params = []
     for file in sorted(FIXTURES.glob('*.json')):
@@ -107,7 +127,9 @@ def _load_cases() -> List[Any]:
 
 
 @pytest.mark.parametrize('fixture,case', _load_cases())
-def test_request_fixture(fixture: Dict[str, Any], case: Dict[str, Any]) -> None:
+def test_request_fixture(fixture: Dict[str, Any], case: Dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
+    if 'now' in case:
+        monkeypatch.setattr(fn, 'milliseconds', lambda: case['now'])
     store = MemoryTokenStore(case.get('tokenStore', fixture.get('tokenStore', {})))
     config = deep_extend(fixture['config'], case.get('config', {}), {'options': {'tokenStore': store}})
     broker = getattr(kr_broker, fixture['broker'])(config)
@@ -131,6 +153,6 @@ def test_request_fixture(fixture: Dict[str, Any], case: Dict[str, Any]) -> None:
     else:
         if error is not None:
             raise error
-        assert result == case['output']
+        assert comparable(result) == comparable(case['output'])
     for key, state in case.get('tokenStoreAfter', {}).items():
         assert (key in store.values) == (state == 'present'), f'{key} 는 {state} 여야 한다'

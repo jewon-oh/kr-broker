@@ -13,6 +13,8 @@ import os
 import time
 from typing import Any, Callable, Optional, Protocol, TypeVar, runtime_checkable
 
+from kr_broker.base import functions as fn
+
 logger = logging.getLogger('kr_broker')
 
 T = TypeVar('T')
@@ -62,7 +64,7 @@ def refresh_token_with_lock(label: str, store: Optional[BrokerTokenStore], store
     if store is None:
         return issue_and_cache()
     lock_key = f'{store_key}:lock'
-    lock_value = f'{os.getpid()}:{int(time.time() * 1000)}'
+    lock_value = f'{os.getpid()}:{fn.milliseconds()}'
     # 락 획득만 감싼다. 발급이 실패하면 그 실패를 그대로 던져야 발급 횟수 제한이 있는 증권사에 실패한 요청을 또 보내지 않는다.
     acquired = False
     try:
