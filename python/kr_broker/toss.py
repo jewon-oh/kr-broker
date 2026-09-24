@@ -1,33 +1,68 @@
-"""토스증권 Open API. TypeScript 판 `ts/src/toss.ts` 의 선언·인증·서명·오류 처리를 옮겼다.
-
-지금은 암묵 메서드(`private_market_get_prices` 등)로 모든 엔드포인트를 부를 수 있다. 통합 메서드(`fetch_ticker` 등)는 차례로 옮기며,
-옮긴 것만 `has` 에서 `True` 가 된다.
+"""토스증권 Open API(`class toss(Exchange, ImplicitAPI)`). TypeScript 판 `ts/src/toss.ts` 를 옮겼다. 국내와 미국 주식 현물의 시세·잔고·주문·조회를
+ccxt 와 같은 모양으로 다룬다. 웹소켓(`watch*`)은 옮기지 않았다.
 
 .. code-block:: python
 
     import kr_broker
-    broker = kr_broker.toss({'apiKey': CLIENT_ID, 'secret': CLIENT_SECRET})
-    rate = broker.private_market_get_exchange_rate({'baseCurrency': 'USD', 'quoteCurrency': 'KRW'})
+    broker = kr_broker.toss({'apiKey': CLIENT_ID, 'secret': CLIENT_SECRET, 'uid': ACCOUNT_SEQ})
+    ticker = broker.fetch_ticker('005930/KRW')
+    order = broker.create_order('005930/KRW', 'limit', 'buy', 1, 70000)
+
+자격증명
+    `apiKey` 는 클라이언트 ID, `secret` 은 클라이언트 시크릿, `uid` 는 계좌 순번(`accountSeq`)이다. `uid` 를 비워 두면 처음 계좌 API 를 부를 때
+    `GET /accounts` 의 첫 계좌로 채운다. 토스에는 모의투자 환경이 없다.
+
+심볼
+    국내는 `005930/KRW`, 미국은 `AAPL/USD` 다. `load_markets()` 없이도 코드의 모양으로 시장을 판별한다. `load_markets()` 를 부르면
+    토스가 거래할 수 있는 종목 전체(`GET /stocks/all`)가 `markets` 에 들어가고, 종목 유형(`ETF` 등)이 `market['options']` 에 실린다.
+
+주문
+    `create_order(symbol, type, side, amount, price, params)` 의 `params` 는 `clientOrderId`(멱등키), `cost`(미국 시장가 매수 금액),
+    `timeInForce`(`DAY`·`CLS`·`OPG`), `triggerPrice`(있으면 조건주문), `conditionalType`(`SINGLE`·`OCO`·`OTO`), `second`(둘째 조건),
+    `expireDate`(조건주문 만료일), `confirmExecution`(`False` 면 체결 조회를 하지 않는다)를 읽는다. 접수 뒤에는 주문 상세를 짧게 조회해
+    체결 수량·평균가·수수료를 확정하고, 확정하지 못하면 `filled` 를 비워 둔다. 확정한 값은 `order['info']['execution']` 에도 있다.
+
+옵션
+    `tokenStore`(토큰 저장소), `nxtRouting`(국내 확장세션 주문), `usExtendedLimit`(미국 확장세션 시장가를 지정가로),
+    `krwIntegratedMargin`(달러 예수금에 원화 예수금 환산 합산, 환율 폴백은 `usdKrwRate`), `confirmBudget`(체결 확정 조회 예산).
+    켜고 끄는 옵션은 불리언이거나 불리언을 돌려주는 함수이고 기본은 꺼짐이다.
+
+오류
+    토스의 오류 코드는 ccxt 오류 계층으로 옮기고 원래 코드는 `error.detail` 에 둔다. 장 시간 밖은 `MarketClosed`, 주문 요청이 시간 초과로 끝나
+    접수 여부를 모르면 `OrderOutcomeUnknown`(다시 보내지 않는다), 이미 체결·취소된 주문의 취소는 `OrderNotFound` 다.
 """
 
-import datetime
 import json
 import logging
+import math
 import threading
-import time
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from kr_broker.abstract.toss import ImplicitAPI
 from kr_broker.base import functions as fn
 from kr_broker.base.decimal_to_precision import TICK_SIZE
 from kr_broker.base.errors import (
-    AccountNotEnabled, AuthenticationError, BadRequest, BadSymbol, DuplicateOrderId, ExchangeError, ExchangeNotAvailable,
-    InsufficientFunds, InvalidOrder, ManualInteractionNeeded, MarketClosed, NullResponse, OnMaintenance, OperationRejected,
-    OrderNotFound, OrderOutcomeUnknown, PermissionDenied, RateLimitExceeded, TossRateLimited, TossTokenRejected,
+    AccountNotEnabled, ArgumentsRequired, AuthenticationError, BadRequest, BadSymbol, DuplicateOrderId, ExchangeError,
+    ExchangeNotAvailable, InsufficientFunds, InvalidOrder, ManualInteractionNeeded, MarketClosed, NotSupported, NullResponse,
+    OnMaintenance, OperationRejected, OrderNotFound, OrderNotSent, OrderOutcomeUnknown, PermissionDenied, RateLimitExceeded,
+    TossRateLimited, TossTokenRejected,
 )
 from kr_broker.base.exchange import Exchange
+from kr_broker.base.precise import Precise
 from kr_broker.base.token_store import BrokerTokenStore, refresh_token_with_lock
-from kr_broker.base.types import ApiName, Num, Str
+from kr_broker.base.types import ApiName, Int, Num, Str, Strings
+from kr_broker.execution_confirm import confirm_execution
+from kr_broker.extended_session_limit import build_extended_session_limit
+from kr_broker.market_calendar import apply_market_calendar
+from kr_broker.toss_fee import pick_commission_rate
+from kr_broker.toss_trading_hours import (
+    find_kr_session, find_us_regular_close_ms, find_us_session, is_toss_orderable, kr_session_order_restriction,
+    toss_kr_calendar_days, toss_us_calendar_days, us_session_order_restriction,
+)
+from kr_broker.toss_types import (
+    TOSS_BROKERAGE_FEE, TOSS_HIGH_VALUE_THRESHOLD_KRW, TOSS_HIGH_VALUE_THRESHOLD_USD, TOSS_US_BROKERAGE_FEE,
+    get_toss_effective_fee_rate, toss_market_country,
+)
 
 logger = logging.getLogger('kr_broker')
 
@@ -35,8 +70,32 @@ GLOBAL_RATE_LIMIT_MS = 100
 READ_TIMEOUT_MS = 20_000
 ORDER_TIMEOUT_MS = 25_000
 AUTH_TIMEOUT_MS = 10_000
-TOSS_BROKERAGE_FEE = 0.00015
+# 장 운영 캘린더(30분), 수수료율(24시간), 참고 환율(5분) 캐시의 유효 시간.
+CALENDAR_TTL_MS = 30 * 60 * 1000
+COMMISSIONS_TTL_MS = 24 * 60 * 60 * 1000
+FX_RATE_TTL_MS = 5 * 60 * 1000
+# 체결 완료 주문과 미체결 조건주문의 페이지 크기(토스가 받는 최대값)와 페이지 수 상한.
+CLOSED_ORDER_PAGE_LIMIT = 100
+MAX_CLOSED_ORDER_PAGES = 10
+CONDITIONAL_ORDER_PAGE_LIMIT = 100
+MAX_CONDITIONAL_ORDER_PAGES = 10
+# 캔들의 페이지당 봉 수와 페이지 수 상한, `limit` 이 없을 때의 봉 수.
+CANDLE_PAGE_LIMIT = 200
+MAX_CANDLE_PAGES = 10
+DEFAULT_CANDLE_LIMIT = 100
+# 조건주문 목록에 조건(leg)이 통째로 없을 때 상세 조회로 채우는 건수의 상한.
+MAX_CONDITIONAL_DETAIL_FETCH = 20
 LISTED_MARKETS = ['KOSPI', 'KOSDAQ', 'KR_ETC', 'NYSE', 'NASDAQ', 'AMEX', 'US_ETC']
+KR_LISTED_MARKETS = frozenset(['KOSPI', 'KOSDAQ', 'KR_ETC'])
+# 더 이상 체결이 늘지 않는 주문 상태. `REPLACED` 는 체결 정보가 대체 주문으로 옮겨 간다.
+TERMINAL_ORDER_STATUSES = frozenset(['FILLED', 'CANCELED', 'REJECTED', 'CANCEL_REJECTED', 'REPLACE_REJECTED', 'REPLACED'])
+# 미국 소수점 수량의 최대 자릿수.
+US_FRACTION_DIGITS = 6
+US_FRACTION_SCALE = 10 ** US_FRACTION_DIGITS
+# 미국 주문 금액이 이 값(달러) 미만이면 환율이 아무리 높아도 고액주문 기준에 못 미친다. 환율 조회를 건너뛰는 선이다.
+HIGH_VALUE_USD_LOOKUP_FLOOR = 30_000
+# 서버가 쓰는 환율을 알 수 없으므로 고액주문 기준을 조금 낮춰 잡는다.
+HIGH_VALUE_MARGIN = 0.95
 # 개장 직후(09:00~09:10 KST)에는 주문 정보 그룹의 한도가 줄어 비용을 두 배로 센다.
 PEAK_WINDOW_START_MIN = 9 * 60
 PEAK_WINDOW_END_MIN = 9 * 60 + 10
@@ -44,6 +103,9 @@ PEAK_COST_FACTOR = 2
 # 429 를 받은 그룹을 쉬게 하는 시간(Retry-After 가 없을 때)과 상한.
 DEFAULT_BACKOFF_MS = 1_000
 MAX_BACKOFF_MS = 30_000
+KST_OFFSET_MS = 9 * 60 * 60 * 1000
+DAY_MS = 24 * 60 * 60 * 1000
+ORDER_TIME_IN_FORCE = ('DAY', 'CLS', 'OPG')
 
 # ---- 토큰 캐시 ----
 TOKEN_KEY_PREFIX = 'toss:token:'
@@ -54,13 +116,85 @@ TOKEN_FETCH_LOCK_TTL_MS = 90_000
 
 
 def _now_ms() -> int:
-    return int(time.time() * 1000)
+    return fn.milliseconds()
 
 
-def is_order_info_peak_window(now: Optional[datetime.datetime] = None) -> bool:
-    now = datetime.datetime.now(datetime.timezone.utc) if now is None else now
-    kst_minutes = (now.hour * 60 + now.minute + 9 * 60) % (24 * 60)
+def kst_date(ms: int) -> str:
+    """UTC 밀리초의 한국 날짜(`YYYY-MM-DD`)."""
+    return fn.iso8601(ms + KST_OFFSET_MS)[:10]
+
+
+def is_order_info_peak_window(now_ms: Optional[int] = None) -> bool:
+    """지금이 개장 직후 09:00~09:10(한국 시각)인가."""
+    now = _now_ms() if now_ms is None else now_ms
+    kst_minutes = ((now // 60_000) % (24 * 60) + 9 * 60) % (24 * 60)
     return PEAK_WINDOW_START_MIN <= kst_minutes < PEAK_WINDOW_END_MIN
+
+
+def _is_finite_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def _is_integer(value: Any) -> bool:
+    return _is_finite_number(value) and float(value).is_integer()
+
+
+def _positive(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    n = fn.js_number(value)
+    return n if math.isfinite(n) and n > 0 else None
+
+
+def to_execution_snapshot(order: Any, country: str) -> Optional[Dict[str, Any]]:
+    """주문 상세의 `execution` 을 체결 확정 폴링이 쓰는 스냅샷으로 옮긴다. 체결이 0 이면 `None`(기록할 사실이 없다)."""
+    execution = fn.safe_dict(order, 'execution', {}) if isinstance(order, dict) else {}
+    n = fn.js_number(execution.get('filledQuantity'))
+    filled = n if n == n and n != 0 else 0  # JavaScript 의 `Number(x) || 0`
+    if not filled > 0:
+        return None
+    amount = _positive(execution.get('filledAmount'))
+    # 평균 체결가가 비어 있어도 체결 금액이 있으면 단가를 거꾸로 구할 수 있다.
+    average = _positive(execution.get('averageFilledPrice'))
+    if average is None and amount is not None:
+        average = amount / filled
+    # 수수료와 세금은 한쪽만 오는 경우가 있어(미국은 세금이 없다) 있는 것만 더한다.
+    commission = _positive(execution.get('commission'))
+    tax = _positive(execution.get('tax'))
+    fee = None
+    if commission is not None or tax is not None:
+        fee = (commission if commission is not None else 0) + (tax if tax is not None else 0)
+    return {'filled': filled, 'average': average, 'amount': amount, 'fee': fee, 'feeCurrency': 'USD' if country == 'US' else 'KRW'}
+
+
+def _side_from_leg(leg: Any) -> Optional[str]:
+    """`BUY`·`SELL` 값을 leg 안에서 찾는다. 문서의 키(`orderSide`)를 먼저 보고, 없으면 값으로 찾는다."""
+    if not isinstance(leg, dict):
+        return None
+
+    def normalize(value: Any) -> Optional[str]:
+        if not isinstance(value, str):
+            return None
+        upper = value.strip().upper()
+        return 'sell' if upper == 'SELL' else 'buy' if upper == 'BUY' else None
+
+    documented = normalize(leg.get('orderSide'))
+    if documented is not None:
+        return documented
+    for value in leg.values():
+        hit = normalize(value)
+        if hit is not None:
+            return hit
+    return None
+
+
+def conditional_side(conditional: Dict[str, Any]) -> str:
+    """조건주문의 대표 방향. 조회 응답의 leg 에는 방향이 없어서, 실려 오면 그 값을 쓰고 없으면 종류로 유추한다.
+    OCO 는 익절·손절 브래킷이라 매도, 그 밖(OTO 의 매수 진입, 근거가 없는 SINGLE)은 매수다."""
+    from_leg = _side_from_leg(conditional.get('first'))
+    if from_leg is not None:
+        return from_leg
+    return 'sell' if conditional.get('type') == 'OCO' else 'buy'
 
 
 class TossAuth:
@@ -179,6 +313,11 @@ class toss(Exchange, ImplicitAPI):
         self._token_auth_client_id: Str = None
         self._blocked_until: Dict[str, int] = {}
         self._account_seq_lock = threading.Lock()
+        # 실행 중에 쌓이는 캐시: 장 운영 캘린더(시장별 `{'value', 'fetchedAt'}`), 시장별 수수료율, 참고 환율.
+        self._calendars: Dict[str, Dict[str, Any]] = {}
+        self._commission_rates: Dict[str, float] = {}
+        self._commissions_fetched_at = 0
+        self._fx_rate: Optional[Dict[str, Any]] = None
         super().__init__(config)
 
     def describe(self) -> Dict[str, Any]:
@@ -191,7 +330,7 @@ class toss(Exchange, ImplicitAPI):
             'rateLimit': GLOBAL_RATE_LIMIT_MS,
             'timeout': READ_TIMEOUT_MS,
             'orderTimeout': ORDER_TIMEOUT_MS,
-            # 옮긴 통합 메서드만 True 다. 나머지는 TypeScript 판에 있고 Python 판에는 아직 없다.
+            # TypeScript 판과 같은 값이다. 웹소켓(`ws`, `watch*`)만 옮기지 않아 False 다.
             'has': {
                 'CORS': None,
                 'spot': True,
@@ -201,10 +340,35 @@ class toss(Exchange, ImplicitAPI):
                 'option': False,
                 'sandbox': False,
                 'ws': False,
-                'createLimitOrder': False,
-                'createMarketOrder': False,
-                'fetchMarkets': False,
+                'watchTicker': False,
+                'watchTrades': False,
+                'watchOrderBook': False,
+                'watchOrders': False,
+                'fetchMarkets': True,
                 'fetchCurrencies': False,
+                'fetchTicker': True,
+                'fetchTickers': True,
+                'fetchOrderBook': True,
+                'fetchOHLCV': True,
+                'fetchBalance': True,
+                'fetchTradingFee': True,
+                'fetchTradingFees': False,
+                'createOrder': True,
+                'createMarketBuyOrderWithCost': True,
+                'createTriggerOrder': True,
+                'cancelOrder': True,
+                'cancelAllOrders': 'emulated',
+                'editOrder': True,
+                'fetchOrder': True,
+                'fetchOrders': False,
+                'fetchOpenOrders': True,
+                'fetchClosedOrders': True,
+                'fetchCanceledOrders': False,
+                'fetchMyTrades': 'emulated',
+                'fetchMarketCalendar': True,
+                'fetchStockWarnings': True,
+                'fetchInvestorTrading': True,
+                'fetchRankings': True,
             },
             'urls': {
                 'logo': None,
@@ -309,9 +473,27 @@ class toss(Exchange, ImplicitAPI):
             },
             'precisionMode': TICK_SIZE,
             'options': {
+                # 켜고 끄는 옵션은 불리언이거나 불리언을 돌려주는 함수(값이 바뀔 수 있을 때)다. 기본은 꺼짐이다.
+                # 미국 달러 예수금이 모자랄 때 원화 예수금을 환산해 합산한다(`fetch_balance({'currency': 'USD'})` 에만 적용).
+                'krwIntegratedMargin': None,
+                # 국내 확장세션(프리·애프터) 주문을 연다.
+                'nxtRouting': None,
+                # 미국 확장세션에서 시장가를 지정가로 바꿔 낸다.
+                'usExtendedLimit': None,
                 # 토큰과 발급 락을 여러 프로세스가 나눠 쓰는 저장소(BrokerTokenStore). 없으면 프로세스 메모리 캐시만 쓴다.
                 'tokenStore': None,
+                # 토스의 환율 조회가 실패했을 때 쓰는 환율 함수. 1달러당 원화를 돌려준다.
+                'usdKrwRate': None,
+                # 접수 뒤 체결 확정 조회의 예산 `{'attempts', 'intervalMs'}`. 사전이거나 사전을 돌려주는 함수다.
+                'confirmBudget': None,
+                # 접수 뒤 체결이 확정될 때까지 주문 상세를 짧게 조회한다.
+                'confirmExecution': True,
                 'authTimeout': AUTH_TIMEOUT_MS,
+                'calendarTtl': CALENDAR_TTL_MS,
+                'commissionsTtl': COMMISSIONS_TTL_MS,
+                'fxRateTtl': FX_RATE_TTL_MS,
+                'closedOrdersMaxPages': MAX_CLOSED_ORDER_PAGES,
+                'conditionalOrdersMaxPages': MAX_CONDITIONAL_ORDER_PAGES,
                 'listedMarkets': LISTED_MARKETS,
             },
         })
@@ -472,3 +654,1133 @@ class toss(Exchange, ImplicitAPI):
         if isinstance(response, dict) and 'result' in response:
             return response['result']
         return None if response == '' else response
+
+    # ============ 종목 ============
+
+    def _market_from_symbol(self, symbol: str) -> Dict[str, Any]:
+        """심볼(`005930`, `005930/KRW`, `AAPL`)에서 종목을 만든다. 종목을 불러오지 않았을 때 코드의 모양으로 시장을 판별한다."""
+        code = symbol.split('/')[0]
+        country = toss_market_country(code)
+        quote = 'KRW' if country == 'KR' else 'USD'
+        return self.safe_market_structure({
+            'id': code,
+            'symbol': f'{code}/{quote}',
+            'base': code,
+            'quote': quote,
+            'baseId': code,
+            'quoteId': quote,
+            'type': 'spot',
+            'spot': True,
+            'margin': False,
+            'active': None,
+            'precision': {'amount': 1 if country == 'KR' else 1 / US_FRACTION_SCALE, 'price': None},
+            'info': None,
+            'options': {'country': country},
+        })
+
+    def market(self, symbol: Str) -> Dict[str, Any]:
+        """통합 심볼(또는 종목 id)로 종목을 찾는다. 불러온 종목이 있으면 그것을, 없으면 심볼의 모양으로 만든다.
+        토스에 없는 종목도 여기서는 막지 않는다. 주문을 보내면 토스가 `stock-not-found`(`BadSymbol`)로 알려 준다."""
+        if symbol is None:
+            raise ArgumentsRequired(f'{self.id} market() requires a symbol argument')
+        loaded = (self.markets or {}).get(symbol)
+        if loaded is None:
+            candidates = (self.markets_by_id or {}).get(symbol)
+            loaded = candidates[0] if candidates else None
+        return loaded if loaded is not None else self._market_from_symbol(symbol)
+
+    def safe_market(self, market_id: Str = None, market: Optional[Dict[str, Any]] = None, delimiter: Str = None,
+                    market_type: Str = None) -> Dict[str, Any]:
+        if market_id is not None:
+            candidates = (self.markets_by_id or {}).get(market_id)
+            if candidates:
+                return candidates[0]
+            if market is not None and market.get('id') == market_id:
+                return market
+            return self._market_from_symbol(market_id)
+        return market if market is not None else self.safe_market_structure({'symbol': None})
+
+    def fetch_markets(self, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """토스가 거래할 수 있는 종목 전체를 마켓별로 받는다(`GET /stocks/all`, 마켓당 한 번). `params['markets']` 로 마켓을 좁힌다."""
+        params = {} if params is None else params
+        markets = self.safe_list(params, 'markets')
+        if markets is None:
+            markets = self.safe_list(self.options, 'listedMarkets', list(LISTED_MARKETS))
+        query = self.omit(params, 'markets')
+        result = []
+        for market in markets:
+            response = self.private_market_get_stocks_all(self.extend({'market': market}, query))
+            for row in self.to_array(self.unwrap(response)):
+                result.append(self.parse_market(self.extend(row, {'market': market})))
+        return result
+
+    def parse_market(self, market: Dict[str, Any]) -> Dict[str, Any]:
+        """`GET /stocks/all` 의 한 행(요청한 `market` 을 더한 것)을 종목으로 옮긴다."""
+        market_id = self.safe_string(market, 'symbol')
+        if market_id is None:
+            raise ExchangeError(f'{self.id} parseMarket() missing symbol')
+        listed_market = self.safe_string(market, 'market')
+        country = 'KR' if listed_market is not None and listed_market in KR_LISTED_MARKETS else 'US'
+        quote = 'KRW' if country == 'KR' else 'USD'
+        # 시장별 기본 위탁수수료율이다. 실제 요율은 `fetch_trading_fee`(`GET /commissions`)가 정한다.
+        brokerage = TOSS_BROKERAGE_FEE if country == 'KR' else TOSS_US_BROKERAGE_FEE
+        return self.safe_market_structure({
+            'id': market_id,
+            'symbol': f'{market_id}/{quote}',
+            'base': market_id,
+            'quote': quote,
+            'baseId': market_id,
+            'quoteId': quote,
+            'type': 'spot',
+            'spot': True,
+            'margin': False,
+            'active': True,
+            'taker': brokerage,
+            'maker': brokerage,
+            'precision': {'amount': 1 if country == 'KR' else 1 / US_FRACTION_SCALE, 'price': None},
+            'info': market,
+            'options': {
+                'country': country,
+                'market': listed_market,
+                'name': self.safe_string(market, 'name'),
+                'securityType': self.safe_string(market, 'securityType'),
+                'isCommonShare': self.safe_bool(market, 'isCommonShare'),
+                'isinCode': self.safe_string(market, 'isinCode'),
+            },
+        })
+
+    @staticmethod
+    def _country_of(market: Dict[str, Any]) -> str:
+        return 'KR' if market.get('quote') == 'KRW' else 'US'
+
+    def fetch_stock_warnings(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """종목 유의사항(정리매매·투자경고·투자위험·단기과열·VI·신주인수권) 원본(`GET /stocks/{symbol}/warnings`)."""
+        response = self.private_market_get_stocks_symbol_warnings(self.extend({'symbol': self.market(symbol)['id']}, params))
+        return self.to_array(self.unwrap(response))
+
+    def fetch_investor_trading(self, market: str, interval: str = '1d', limit: int = 5,
+                               params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """투자자별 매매대금(개인·외국인·기관·기타법인의 매수·매도 대금). 종목이 아니라 시장(`KOSPI`·`KOSDAQ`) 단위다."""
+        response = self.private_market_get_market_indicators_symbol_investor_trading(
+            self.extend({'symbol': market, 'interval': interval, 'count': limit}, params))
+        return self.safe_list(self.unwrap(response), 'records', [])
+
+    def fetch_rankings(self, type: str, market_country: str = 'KR', duration: str = '1d', count: int = 100,
+                       params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """랭킹 상위 행. `TOSS_SECURITIES_*` 는 토스증권 사용자의 체결 집중도이고 나머지는 시장 전체 기준이다."""
+        response = self.private_market_get_rankings(
+            self.extend({'type': type, 'marketCountry': market_country, 'duration': duration, 'count': count}, params))
+        return self.safe_list(self.unwrap(response), 'rankings', [])
+
+    # ============ 장 운영 캘린더와 세션 ============
+
+    def fetch_market_calendar(self, market: str, params: Optional[Dict[str, Any]] = None) -> Any:
+        """장 운영 캘린더(전일·당일·익일 영업일의 세션 시각) 원본. 30분 안에 받은 것은 다시 부르지 않는다(`params['refresh']` 로 강제).
+        받은 날짜별 개장 여부는 공용 휴장일 캘린더에도 넣는다."""
+        cached = self._calendars.get(market)
+        ttl = self.safe_integer(self.options, 'calendarTtl', CALENDAR_TTL_MS)
+        if cached is not None and self.safe_bool(params, 'refresh', False) is not True and _now_ms() - cached['fetchedAt'] < ttl:
+            return cached['value']
+        if market == 'KR':
+            value = self.unwrap(self.private_market_get_market_calendar_kr({}))
+            self._calendars['KR'] = {'value': value, 'fetchedAt': _now_ms()}
+            apply_market_calendar('KR', toss_kr_calendar_days(value))
+            return value
+        value = self.unwrap(self.private_market_get_market_calendar_us({}))
+        self._calendars['US'] = {'value': value, 'fetchedAt': _now_ms()}
+        apply_market_calendar('US', toss_us_calendar_days(value))
+        return value
+
+    def current_kr_session(self, now_ms: Optional[int] = None) -> Optional[str]:
+        """국내 캘린더로 본 지금의 세션. `'closed'` 는 열린 세션이 없다는 뜻이고, `None` 은 캘린더를 받지 못했다는 뜻이다."""
+        try:
+            session = find_kr_session(self.fetch_market_calendar('KR'), now_ms)
+            return session if session is not None else 'closed'
+        except Exception:
+            logger.warning('[toss] 국내 장 운영 캘린더를 받지 못했다. 정적 시간표로 판정한다', exc_info=True)
+            return None
+
+    def current_us_session(self, now_ms: Optional[int] = None) -> Optional[str]:
+        """미국 캘린더로 본 지금의 세션. `'closed'` 와 `None` 의 뜻은 `current_kr_session` 과 같다."""
+        try:
+            session = find_us_session(self.fetch_market_calendar('US'), now_ms)
+            return session if session is not None else 'closed'
+        except Exception:
+            logger.warning('[toss] 미국 장 운영 캘린더를 받지 못했다. 정규장 기준으로 판정한다', exc_info=True)
+            return None
+
+    def _us_calendar_value(self) -> Any:
+        cached = self._calendars.get('US')
+        return cached['value'] if cached is not None else None
+
+    # ============ 시세 ============
+
+    def parse_ticker(self, ticker: Dict[str, Any], market: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        market = self.safe_market(self.safe_string(ticker, 'symbol'), market)
+        timestamp = self.parse8601(self.safe_string(ticker, 'timestamp'))
+        last = self.safe_string(ticker, 'lastPrice')
+        # 토스의 현재가 응답에는 최종가만 있다. 호가와 거래량은 비워 둔다.
+        return self.safe_ticker({
+            'symbol': market['symbol'],
+            'timestamp': timestamp,
+            'datetime': self.iso8601(timestamp),
+            'close': last,
+            'last': last,
+            'info': ticker,
+        }, market)
+
+    def fetch_ticker(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        market = self.market(symbol)
+        rows = self.to_array(self.unwrap(self.private_market_get_prices(self.extend({'symbols': market['id']}, params))))
+        row = next((candidate for candidate in rows if self.safe_string(candidate, 'symbol') == market['id']), None)
+        if row is None:
+            row = rows[0] if rows else None
+        if row is None:
+            raise NullResponse(f"{self.id} fetchTicker() 응답에 {market['id']} 가 없다")
+        return self.parse_ticker(row, market)
+
+    def fetch_tickers(self, symbols: Strings = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """여러 종목의 현재가. 토스는 한 번에 200종목까지 받는다. 종목을 주지 않으면 `ArgumentsRequired`(전 종목 시세는 없다)."""
+        if not symbols:
+            raise ArgumentsRequired(f'{self.id} fetchTickers() requires a list of symbols')
+        unified = self.market_symbols(symbols)
+        ids = [self.market(symbol)['id'] for symbol in unified]
+        rows: List[Any] = []
+        batch = 200
+        for i in range(0, len(ids), batch):
+            response = self.private_market_get_prices(self.extend({'symbols': ','.join(ids[i:i + batch])}, params))
+            rows.extend(self.to_array(self.unwrap(response)))
+        return self.parse_tickers(rows, unified)
+
+    def fetch_order_book(self, symbol: str, limit: Int = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        market = self.market(symbol)
+        response = self.unwrap(self.private_market_get_orderbook(self.extend({'symbol': market['id']}, params)))
+        timestamp = self.parse8601(self.safe_string(response, 'timestamp'))
+        orderbook = self.parse_order_book(response, market['symbol'], timestamp, 'bids', 'asks', 'price', 'volume')
+
+        def valid(level: List[Any]) -> bool:
+            return _is_finite_number(level[0]) and level[0] > 0
+
+        orderbook['bids'] = [level for level in orderbook['bids'] if valid(level)]
+        orderbook['asks'] = [level for level in orderbook['asks'] if valid(level)]
+        if limit is not None:
+            orderbook['bids'] = orderbook['bids'][:limit]
+            orderbook['asks'] = orderbook['asks'][:limit]
+        return orderbook
+
+    def fetch_ohlcv(self, symbol: str, timeframe: str = '1m', since: Int = None, limit: Int = None,
+                    params: Optional[Dict[str, Any]] = None) -> List[List[Any]]:
+        """봉. 토스는 `1m` 과 `1d` 만 준다. 다른 주기를 가까운 주기로 몰래 바꾸면 1분봉이 다른 주기 이름으로 저장되므로 던진다.
+        봉의 시각은 시작 시각이다(토스의 1분봉은 종료 시각으로 오므로 1분을 뺀다). `params['until']`(ms)은 이 시각 이전의 봉만 받는다."""
+        params = {} if params is None else params
+        interval = self.safe_string(self.timeframes, timeframe)
+        if interval is None:
+            raise NotSupported(f"{self.id} 미지원 타임프레임 '{timeframe}'. 토스 API 는 1m·1d 만 제공한다. "
+                               '가까운 주기로 몰래 바꾸면 1분봉이 다른 주기 이름으로 저장되므로 던진다.')
+        market = self.market(symbol)
+        target = max(1, DEFAULT_CANDLE_LIMIT if limit is None else limit)
+        until = self.safe_integer(params, 'until')
+        query = self.omit(params, 'until')
+        bar_start_shift = int(self.parse_timeframe('1m') * 1000) if timeframe == '1m' else 0
+        before = self.iso8601(until) if until is not None else None
+        rows: List[List[Any]] = []
+        page = 0
+        while page < MAX_CANDLE_PAGES and len(rows) < target:
+            page += 1
+            count = min(CANDLE_PAGE_LIMIT, target - len(rows))
+            request = {'symbol': market['id'], 'interval': interval, 'count': count, 'before': before, 'adjusted': 'true'}
+            response = self.unwrap(self.private_market_get_candles(self.extend(request, query)))
+            candles = self.safe_list(response, 'candles', [])
+            if not candles:
+                break
+            all_before_since = since is not None
+            for candle in candles:
+                row = self.parse_ohlcv(candle, market)
+                start = row[0]
+                if start is None:
+                    continue
+                shifted = start - bar_start_shift
+                if since is not None and shifted < since:
+                    continue
+                all_before_since = False
+                rows.append([shifted, row[1], row[2], row[3], row[4], row[5]])
+            next_before = self.safe_string(response, 'nextBefore')
+            if next_before is None or all_before_since:
+                break
+            before = next_before
+        seen = set()
+        result = []
+        for row in rows:
+            if not (row[0] > 0 and _is_finite_number(row[4]) and row[4] > 0) or row[0] in seen:
+                continue
+            seen.add(row[0])
+            result.append(row)
+        result.sort(key=lambda row: row[0])
+        return result[-target:]
+
+    def parse_ohlcv(self, ohlcv: Any, market: Optional[Dict[str, Any]] = None) -> List[Any]:
+        return [
+            self.parse8601(self.safe_string(ohlcv, 'timestamp')),
+            self.safe_number(ohlcv, 'openPrice'),
+            self.safe_number(ohlcv, 'highPrice'),
+            self.safe_number(ohlcv, 'lowPrice'),
+            self.safe_number(ohlcv, 'closePrice'),
+            self.safe_number(ohlcv, 'volume'),
+        ]
+
+    # ============ 잔고 ============
+
+    def fetch_balance(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """잔고. 현금은 통화 키(`KRW`·`USD`)이고 값은 현금 매수 가능 금액이며, 보유 종목은 종목코드 키이고 `total` 이 보유 수량이다.
+
+        `params['symbol']` 을 주면 그 종목의 보유만, `params['currency']`(`KRW`·`USD`)를 주면 그 현금만 받는다. 달러만 받을 때
+        `options['krwIntegratedMargin']` 이 켜져 있으면 원화 예수금을 참고 환율로 환산해 더한다(전체 잔고에는 이중 계상이라 더하지 않는다).
+        """
+        symbol = self.safe_string(params, 'symbol')
+        currency = self.safe_string_upper(params, 'currency')
+        if currency is not None and currency not in ('KRW', 'USD'):
+            raise ArgumentsRequired(f"{self.id} fetchBalance() currency must be 'KRW' or 'USD'")
+        holdings = None
+        if currency is None:
+            query = {'symbol': self.market(symbol)['id']} if symbol is not None else {}
+            holdings = self.unwrap(self.private_account_get_holdings(query))
+        buying_power: Dict[str, Any] = {}
+        if symbol is None:
+            for code in ([currency] if currency is not None else ['KRW', 'USD']):
+                buying_power[code] = self.unwrap(self.private_account_get_buying_power({'currency': code}))
+        integrated = None
+        if currency == 'USD' and self.is_option_enabled('krwIntegratedMargin'):
+            integrated = self._krw_as_usd()
+        return self.parse_balance({'holdings': holdings, 'buyingPower': buying_power, 'integrated': integrated})
+
+    def _krw_as_usd(self) -> Optional[Dict[str, float]]:
+        """원화 매수 여력을 참고 환율로 달러로 환산한다. 원화가 없거나 환율을 모르면 `None`."""
+        krw = self._parse_cash(self.unwrap(self.private_account_get_buying_power({'currency': 'KRW'})))
+        if not krw > 0:
+            return None
+        usd_krw = self._usd_krw_rate()
+        if not usd_krw > 0:
+            return None
+        return {'krw': krw, 'usdKrw': usd_krw, 'krwAsUsd': krw / usd_krw}
+
+    @staticmethod
+    def _parse_cash(buying_power: Any) -> float:
+        raw = buying_power.get('cashBuyingPower') if isinstance(buying_power, dict) else None
+        cash = fn.js_number(0 if raw is None else raw)
+        return cash if math.isfinite(cash) and cash > 0 else 0
+
+    def parse_balance(self, response: Any) -> Dict[str, Any]:
+        """`fetch_balance` 가 모은 응답(`{'holdings', 'buyingPower', 'integrated'}`)을 잔고 구조로 옮긴다."""
+        holdings = response.get('holdings')
+        buying_power = response.get('buyingPower')
+        integrated = response.get('integrated')
+        result: Dict[str, Any] = {'info': response, 'timestamp': None, 'datetime': None}
+        for item in self.safe_list(holdings, 'items', []) or []:
+            quantity = self.safe_number(item, 'quantity')
+            if quantity is None or not quantity > 0:
+                continue
+            result[item.get('symbol')] = {'free': quantity, 'used': 0, 'total': quantity, 'info': item}
+        for code, power in (buying_power or {}).items():
+            cash = self._parse_cash(power)
+            info = dict(power) if isinstance(power, dict) else {}
+            if code == 'USD' and integrated is not None:
+                logger.info('[toss] 통합증거금: 원화 매수 여력을 달러로 환산해 합산한다(달러 %s, %s)', cash, integrated)
+                cash += integrated['krwAsUsd']
+                info['integratedMargin'] = integrated
+            result[code] = {'free': cash, 'used': 0, 'total': cash, 'info': info}
+        return self.safe_balance(result)
+
+    # ============ 수수료 ============
+
+    def fetch_commissions(self, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """수수료율 조회(`GET /commissions`) 원본."""
+        return self.to_array(self.unwrap(self.private_account_get_commissions({} if params is None else params)))
+
+    def refresh_commissions(self) -> None:
+        """시장별 위탁수수료율을 받아 캐시한다(24시간). 캐시가 신선하면 부르지 않는다. 실패하면 던진다."""
+        ttl = self.safe_integer(self.options, 'commissionsTtl', COMMISSIONS_TTL_MS)
+        if self._commission_rates and _now_ms() - self._commissions_fetched_at < ttl:
+            return
+        rows = self.fetch_commissions()
+        today = kst_date(_now_ms())
+        for country in ('KR', 'US'):
+            rate = pick_commission_rate(rows, country, today)
+            if rate is not None:
+                self._commission_rates[country] = rate
+        self._commissions_fetched_at = _now_ms()
+        logger.info('[toss] 수수료율을 갱신했다: %s', self._commission_rates)
+
+    def fetch_trading_fee(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """위탁수수료율. `maker` 와 `taker` 는 같다. 국내 매도에 붙는 증권거래세는 별도다."""
+        self.refresh_commissions()
+        market = self.market(symbol)
+        country = self._country_of(market)
+        brokerage = self._commission_rates.get(country)
+        if brokerage is None:
+            brokerage = self._default_brokerage(country)
+        return {'info': dict(self._commission_rates), 'symbol': market['symbol'], 'maker': brokerage, 'taker': brokerage,
+                'percentage': True, 'tierBased': False}
+
+    @staticmethod
+    def _default_brokerage(country: str) -> float:
+        return get_toss_effective_fee_rate(country, 'buy')
+
+    # ============ 환율과 고액주문 ============
+
+    def _usd_krw_rate(self) -> float:
+        """참고 환율(1달러당 원화). 토스의 환율 조회를 먼저 쓰고, 실패하면 `options['usdKrwRate']` 로 폴백한다. 5분 캐시. 모르면 0."""
+        ttl = self.safe_integer(self.options, 'fxRateTtl', FX_RATE_TTL_MS)
+        if self._fx_rate is not None and _now_ms() - self._fx_rate['fetchedAt'] < ttl:
+            return self._fx_rate['rate']
+        rate: Any = 0
+        try:
+            response = self.unwrap(self.private_market_get_exchange_rate({'baseCurrency': 'USD', 'quoteCurrency': 'KRW'}))
+            parsed = self.safe_number(response, 'rate')
+            if parsed is not None and parsed > 0:
+                rate = parsed
+        except Exception:
+            logger.debug('[toss] 환율 조회에 실패해 환율 소스로 폴백한다', exc_info=True)
+        fallback = self.options.get('usdKrwRate')
+        if rate <= 0 and fallback is not None:
+            try:
+                rate = fallback()
+            except Exception:
+                rate = 0
+        if _is_finite_number(rate) and rate > 0:
+            self._fx_rate = {'rate': rate, 'fetchedAt': _now_ms()}
+            return rate
+        return 0
+
+    def _is_high_value(self, notional: Any, country: str) -> bool:
+        """고액주문 확인 기준을 넘는가. 국내는 1억원, 미국은 1억원을 환율로 나눈 달러 금액이다(환율을 모르면 7만 달러)."""
+        if not _is_finite_number(notional) or not notional > 0:
+            return False
+        if country == 'KR':
+            return notional >= TOSS_HIGH_VALUE_THRESHOLD_KRW
+        if notional >= TOSS_HIGH_VALUE_THRESHOLD_USD:
+            return True
+        if notional < HIGH_VALUE_USD_LOOKUP_FLOOR:
+            return False
+        rate = self._usd_krw_rate()
+        return rate > 0 and notional >= (TOSS_HIGH_VALUE_THRESHOLD_KRW / rate) * HIGH_VALUE_MARGIN
+
+    # ============ 주문 ============
+
+    def normalize_quantity(self, symbol: str, type: str, side: str, amount: Any) -> float:
+        """주문 수량을 토스의 규칙에 맞춘다. 국내는 정수 주(소수점은 내린다), 미국 시장가 매도만 소수점 6자리까지 허용하고,
+        그 밖의 미국 주문은 정수 주다. 내린 뒤 0 이면 `InvalidOrder`, 수량이 유한하지 않거나 0 이하이면 `ArgumentsRequired` 다."""
+        if not _is_finite_number(amount) or amount <= 0:
+            raise ArgumentsRequired(f'{self.id} 주문 수량 비정상: {fn.js_string(amount)} ({symbol} {side})')
+        country = self._country_of(self.market(symbol))
+        if country == 'US' and type == 'market' and side == 'sell':
+            return math.floor(amount * US_FRACTION_SCALE) / US_FRACTION_SCALE
+        floored = math.floor(amount)
+        if floored <= 0:
+            hint = ' — US 소수점 매수는 금액(cost) 주문을 사용할 것' if country == 'US' and side == 'buy' else ''
+            raise InvalidOrder(f'{self.id} 주문 수량 floor 후 0: {fn.js_string(amount)} → {floored} ({symbol} {side}){hint}')
+        if floored != amount:
+            logger.warning('[toss] 분수 주문을 정수로 내린다(%s): %s → %s (%s %s %s)',
+                           '국내 단주' if country == 'KR' else '미국 소수점은 시장가 매도 전용', amount, floored, symbol, side, type)
+        return floored
+
+    def create_order(self, symbol: str, type: str, side: str, amount: float, price: Num = None,
+                     params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """주문을 낸다. `params['triggerPrice']` 가 있으면 조건주문이다. 인자의 뜻은 모듈 설명을 본다.
+
+        확장세션(프리·애프터, 미국 주간거래)에서 시장가로 낸 청산은 지정가로 바꿔 낸다(옵션 `nxtRouting`·`usExtendedLimit` 이 켜져 있을 때만).
+        이때 지정가가 아직 체결되지 않았으면 미체결 주문(`status: 'open'`, `info['extendedSession']` 에 세션 이름)을 돌려준다.
+        """
+        params = {} if params is None else params
+        if side not in ('buy', 'sell'):
+            raise InvalidOrder(f"{self.id} createOrder() side must be 'buy' or 'sell'")
+        if type not in ('limit', 'market'):
+            raise InvalidOrder(f"{self.id} createOrder() type must be 'limit' or 'market'")
+        market = self.market(symbol)
+        country = self._country_of(market)
+        if self.safe_value(params, 'triggerPrice') is not None:
+            return self._create_conditional_order(market, type, side, amount, price, params)
+
+        is_market = type == 'market'
+        cost = self.safe_number(params, 'cost')
+        # 미국 시장가 매수에 금액이 있으면 금액 기준 주문이다(소수점으로 체결된다). 그 밖에는 수량 기준이다.
+        use_amount_based = is_market and side == 'buy' and country == 'US' and cost is not None and cost > 0
+        if not use_amount_based and type == 'limit' and price is None:
+            raise ArgumentsRequired(f'{self.id} createOrder() requires a price argument for a limit order')
+        quantity = 0 if use_amount_based else self.normalize_quantity(symbol, type, side, amount)
+        client_order_id = self.safe_string(params, 'clientOrderId')
+        time_in_force = self._parse_time_in_force(params)
+
+        # 확장세션 시장가는 지정가로 바꿔 낸다. 바꾸지 않으면 세션 게이트를 열어도 주문 형태에서 막혀 청산할 수 없다.
+        effective_type = type
+        effective_price = price
+        extended_session = None
+        if is_market and not use_amount_based:
+            if country == 'US':
+                conversion = self._us_extended_session_conversion(symbol, side, quantity)
+            else:
+                conversion = self._kr_extended_session_conversion(symbol, side)
+            if conversion is not None:
+                if conversion.get('error') is not None:
+                    logger.warning('[toss] 확장세션 지정가 전환을 보류한다(%s %s %s): %s', symbol, side, conversion['session'], conversion['error'])
+                    raise OrderNotSent(conversion['error'], detail='extended-session-limit-unavailable')
+                effective_type = 'limit'
+                effective_price = conversion.get('price')
+                extended_session = conversion['session']
+                logger.info('[toss] 확장세션이라 시장가를 지정가로 바꿔 낸다(%s %s %s, %s)', symbol, side, extended_session, effective_price)
+
+        # 거래시간 검사: 국내는 캘린더의 세션, 미국은 캘린더의 네 세션으로 판정한다. 실주문 직전의 마지막 방어선이다.
+        gate = self._check_orderable_session(symbol, country, {
+            'isMarket': effective_type == 'market', 'useAmountBased': use_amount_based, 'quantity': quantity,
+        })
+        if gate is not None:
+            logger.info('[toss] 거래시간 밖이라 주문을 보내지 않는다(%s %s): %s', symbol, side, gate)
+            raise MarketClosed(gate)
+
+        body: Dict[str, Any] = {
+            'symbol': market['id'],
+            'side': 'SELL' if side == 'sell' else 'BUY',
+            'orderType': 'MARKET' if effective_type == 'market' else 'LIMIT',
+        }
+        if client_order_id is not None:
+            body['clientOrderId'] = client_order_id
+        if time_in_force is not None:
+            body['timeInForce'] = time_in_force
+        if use_amount_based:
+            body['orderAmount'] = self.number_to_string(cost)
+        else:
+            body['quantity'] = self.number_to_string(quantity)
+        if effective_type == 'limit':
+            body['price'] = self.price_to_precision(symbol, effective_price)
+
+        # 고액주문 확인 표시. 명목가를 알 수 있을 때만 붙인다(수량 기준 시장가는 서버의 400 이 마지막 방어선이다).
+        if use_amount_based:
+            notional = cost
+        else:
+            notional = quantity * effective_price if effective_price is not None else 0
+        if self._is_high_value(notional, country):
+            body['confirmHighValueOrder'] = True
+            logger.warning('[toss] 고액주문이라 confirmHighValueOrder 를 켠다(%s %s %s)', symbol, notional, country)
+
+        response = self.unwrap(self.private_account_post_orders(body))
+        order_id = self.safe_string(response, 'orderId')
+        if order_id is None:
+            raise OrderOutcomeUnknown(f'{self.id} 주문 접수 응답에 orderId 가 없다. 접수 여부를 주문 조회로 확인해야 한다')
+        draft = {
+            'market': market, 'type': effective_type, 'side': side, 'price': effective_price, 'quantity': quantity,
+            'useAmountBased': use_amount_based, 'orderId': order_id, 'clientOrderId': client_order_id,
+            'timeInForce': time_in_force, 'response': response, 'extendedSession': extended_session,
+        }
+
+        # 확장세션 지정가는 체결을 가정하지 않는다. 접수 직후 미체결 장부에 남아 있으면 미체결 주문으로 돌려준다.
+        if extended_session is not None:
+            try:
+                still_open = any(open_order.get('id') == order_id for open_order in self.fetch_open_orders(symbol))
+            except Exception:
+                still_open = True
+            if still_open:
+                logger.info('[toss] 확장세션 지정가가 접수됐고 아직 체결되지 않았다(%s %s %s)', order_id, symbol, effective_price)
+                return self._build_created_order(draft, 'open', still_open=True)
+
+        logger.info('[toss] 주문이 접수됐다(%s %s %s %s)', order_id, symbol, side, effective_type)
+        if self.safe_bool(params, 'confirmExecution', self.options.get('confirmExecution') is not False) is False:
+            return self._build_created_order(draft, 'open')
+        snapshot, last = self._confirm_order_execution(order_id, country)
+        status = self.parse_order_status(self.safe_string(last, 'status')) if last is not None else 'open'
+        return self._build_created_order(draft, status, snapshot=snapshot, raw=last)
+
+    def edit_order(self, id: str, symbol: str, type: str, side: str, amount: Num = None, price: Num = None,
+                   params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """주문을 정정한다. 국내는 가격과 수량을 함께(`amount` 필수), 미국은 가격만 정정한다(`amount` 를 주면 `NotSupported`).
+        정정하면 새 주문번호가 나온다. `params['trigger']` 가 `True` 면 조건주문 정정이고, 조건 전체를 등록과 같은 인자로 다시 선언한다."""
+        params = {} if params is None else params
+        if self.safe_bool_2(params, 'trigger', 'stop', False) is True:
+            if amount is None:
+                raise ArgumentsRequired(f'{self.id} editOrder() 는 조건주문 정정에 amount 인자가 필요하다')
+            return self._modify_conditional_order(id, self.market(symbol), type, side, amount, price, params)
+        if type not in ('limit', 'market'):
+            raise InvalidOrder(f"{self.id} editOrder() type must be 'limit' or 'market'")
+        market = self.market(symbol)
+        country = self._country_of(market)
+        if type == 'limit' and price is None:
+            raise ArgumentsRequired(f'{self.id} editOrder() requires a price argument for a limit order')
+        if country == 'US' and amount is not None:
+            raise NotSupported(f'{self.id} editOrder() 는 미국 종목의 수량 정정을 지원하지 않는다(가격만 가능)')
+        if country == 'KR' and amount is None:
+            raise ArgumentsRequired(f'{self.id} editOrder() 는 국내 종목의 수량 정정에 amount 인자가 필요하다')
+
+        body: Dict[str, Any] = {'orderId': id, 'orderType': 'MARKET' if type == 'market' else 'LIMIT'}
+        if country == 'KR':
+            body['quantity'] = self.number_to_string(self.normalize_quantity(symbol, type, side, amount))
+        if type == 'limit':
+            body['price'] = self.price_to_precision(symbol, price)
+        notional = (amount if amount is not None else 0) * (price if price is not None else 0)
+        if self._is_high_value(notional, country):
+            body['confirmHighValueOrder'] = True
+
+        response = self.unwrap(self.private_account_post_orders_orderid_modify(body))
+        new_order_id = self.safe_string(response, 'orderId')
+        if new_order_id is None:
+            raise OrderOutcomeUnknown(f'{self.id} 정정 응답에 orderId 가 없다. 정정 여부를 주문 조회로 확인해야 한다')
+        logger.info('[toss] 정정주문으로 주문번호가 바뀌었다(%s → %s, %s)', id, new_order_id, symbol)
+        timestamp = self.milliseconds()
+        return self.safe_order({
+            'info': response,
+            'id': new_order_id,
+            'timestamp': timestamp,
+            'datetime': self.iso8601(timestamp),
+            'symbol': market['symbol'],
+            'type': type,
+            'side': side,
+            'price': price,
+            'amount': amount,
+            'status': 'open',
+            'trades': [],
+        }, market)
+
+    def create_trigger_order(self, symbol: str, type: str, side: str, amount: float, price: Num = None, trigger_price: Num = None,
+                             params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """조건주문을 낸다. `create_order(..., {'triggerPrice': ...})` 와 같다. `trigger_price` 가 없으면 요청 없이 `ArgumentsRequired` 다."""
+        if trigger_price is None:
+            raise ArgumentsRequired(f'{self.id} createTriggerOrder() requires a triggerPrice argument')
+        return self.create_order(symbol, type, side, amount, price, self.extend(params, {'triggerPrice': trigger_price}))
+
+    def create_market_buy_order_with_cost(self, symbol: str, cost: float, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """미국 주식 시장가 매수를 금액으로 낸다(`create_order` 의 `params['cost']`)."""
+        return self.create_order(symbol, 'market', 'buy', 0, None, self.extend(params, {'cost': cost}))
+
+    def _parse_time_in_force(self, params: Dict[str, Any]) -> Str:
+        """`params['timeInForce']` 를 토스의 값(`DAY`·`CLS`·`OPG`)으로 확인한다. 없으면 `None`(서버 기본 `DAY`)."""
+        value = self.safe_string_upper(params, 'timeInForce')
+        if value is None:
+            return None
+        if value not in ORDER_TIME_IN_FORCE:
+            raise InvalidOrder(f"{self.id} createOrder() timeInForce must be one of {', '.join(ORDER_TIME_IN_FORCE)}")
+        return value
+
+    def _check_orderable_session(self, symbol: str, country: str, form: Dict[str, Any]) -> Optional[str]:
+        """주문 접수 가능 시간과 형태를 검사한다. 막는 사유(한국어)이고, 접수할 수 있으면 `None`.
+        캘린더를 받지 못하면 정적 시간표(`is_toss_orderable`)로 판정한다. 그 폴백은 열어 주는 쪽이 아니라 좁히는 쪽으로 어긋난다."""
+        now = _now_ms()
+        if country == 'KR':
+            session = self.current_kr_session(now)
+            if session is None:
+                return None if is_toss_orderable(symbol) else 'KRX 거래시간 외 (09:00-15:30 KST 평일, 캘린더 조회 실패)'
+            if session == 'closed':
+                return 'KRX 휴장·정규장 외'
+            if session != 'regularMarket':
+                # 확장세션은 옵션으로 연다. 옵션을 보지 않고 막으면 켜 놓아도 확장세션 청산이 안 된다.
+                if not self.is_option_enabled('nxtRouting'):
+                    return f'KRX {session} 세션 — 확장세션 주문은 nxtRouting 옵션이 켜져 있어야 한다'
+                return kr_session_order_restriction(session, form)
+            return None
+        session = self.current_us_session(now)
+        if session is None:
+            return None if is_toss_orderable(symbol) else '미국 정규장 외 (장 운영 캘린더 조회 실패)'
+        if session == 'closed':
+            return '미국장 휴장·세션 외'
+        regular_close_ms = find_us_regular_close_ms(self._us_calendar_value(), now)
+        cutoff = {'nowMs': now, 'regularCloseMs': regular_close_ms} if regular_close_ms is not None else None
+        restriction = us_session_order_restriction(session, form, cutoff)
+        if restriction is not None:
+            return restriction
+        logger.info('[toss] 미국 세션을 확인했다. 주문을 접수할 수 있다(%s %s)', symbol, session)
+        return None
+
+    def _extended_session_limit(self, symbol: str, side: str) -> Dict[str, Any]:
+        """확장세션 지정가. 같은 방향 미체결이 있거나 기준가(최종가)를 구하지 못하면 `{'error': 사유}` 다."""
+        def on_warn(err: BaseException, message: str) -> None:
+            logger.warning('%s (%s): %s', message, symbol, err)
+        return build_extended_session_limit(self, {'symbol': symbol, 'side': side}, '[toss]', on_warn)
+
+    def _kr_extended_session_conversion(self, symbol: str, side: str) -> Optional[Dict[str, Any]]:
+        """국내 확장세션(프리·애프터) 전환 판정. 전환 대상이 아니면 `None`(정규장·휴장·옵션 꺼짐)."""
+        if not self.is_option_enabled('nxtRouting'):
+            return None
+        session = self.current_kr_session()
+        if session not in ('preMarket', 'afterMarket'):
+            return None
+        return self.extend({'session': session}, self._extended_session_limit(symbol, side))
+
+    def _us_extended_session_conversion(self, symbol: str, side: str, quantity: float) -> Optional[Dict[str, Any]]:
+        """미국 확장세션(주간거래·프리·애프터) 전환 판정. 소수점 수량은 정규장 전용이라 전환하지 않고 세션 검사가 막게 둔다."""
+        if not self.is_option_enabled('usExtendedLimit'):
+            return None
+        session = self.current_us_session()
+        if session not in ('dayMarket', 'preMarket', 'afterMarket'):
+            return None
+        if not _is_integer(quantity):
+            logger.warning('[toss] 미국 확장세션의 소수점 수량은 정규장 전용이라 지정가로 바꿀 수 없다(%s %s %s %s)', symbol, side, session, quantity)
+            return None
+        return self.extend({'session': session}, self._extended_session_limit(symbol, side))
+
+    def _confirm_order_execution(self, order_id: str, country: str) -> Tuple[Optional[Dict[str, Any]], Any]:
+        """접수한 주문의 체결을 확정한다. 주문 상세를 예산 안에서 조회하고, 마지막으로 본 주문 원본도 함께 돌려준다."""
+        last: Dict[str, Any] = {'raw': None}
+
+        def probe(attempt: int) -> Dict[str, Any]:
+            raw = self.unwrap(self.private_account_get_orders_orderid({'orderId': order_id}))
+            last['raw'] = raw
+            status = self.safe_value(raw, 'status')
+            return {
+                'snapshot': to_execution_snapshot(raw, country),
+                'terminal': isinstance(status, str) and status in TERMINAL_ORDER_STATUSES,
+            }
+
+        snapshot = confirm_execution('[toss]', order_id, 'toss', probe, budget=self.get_confirm_budget())
+        return snapshot, last['raw']
+
+    def _build_created_order(self, draft: Dict[str, Any], status: Str, still_open: Optional[bool] = None,
+                             snapshot: Optional[Dict[str, Any]] = None, raw: Any = None) -> Dict[str, Any]:
+        """접수 결과로 주문 구조를 만든다. 체결을 확정하지 못했으면 `filled` 를 비운다(요청값으로 추정해 채우지 않는다)."""
+        timestamp = self.parse8601(self.safe_value(raw, 'orderedAt'))
+        if timestamp is None:
+            timestamp = self.milliseconds()
+        fee = None
+        if snapshot is not None and snapshot.get('fee') is not None:
+            fee = {'currency': snapshot['feeCurrency'], 'cost': snapshot['fee']}
+        response = draft['response']
+        info = self.extend(response if isinstance(response, dict) else {}, {
+            'execution': snapshot,
+            'order': raw,
+            'extendedSession': draft['extendedSession'],
+            'stillOpen': still_open,
+        })
+        return self.safe_order({
+            'info': info,
+            'id': draft['orderId'],
+            'clientOrderId': draft['clientOrderId'],
+            'timestamp': timestamp,
+            'datetime': self.iso8601(timestamp),
+            'lastTradeTimestamp': self.parse8601(self.safe_value(self.safe_value(raw, 'execution'), 'filledAt')),
+            'symbol': draft['market']['symbol'],
+            'type': draft['type'],
+            'timeInForce': draft['timeInForce'],
+            'side': draft['side'],
+            'price': draft['price'] if draft['type'] == 'limit' else None,
+            'amount': None if draft['useAmountBased'] else draft['quantity'],
+            'filled': snapshot['filled'] if snapshot is not None else None,
+            'average': snapshot['average'] if snapshot is not None else None,
+            'cost': snapshot['amount'] if snapshot is not None else None,
+            'status': status,
+            'fee': fee,
+            'trades': [],
+        }, draft['market'])
+
+    # ============ 조건주문 ============
+
+    def _plan_conditional_order(self, type: str, side: str, price: Num, params: Dict[str, Any]) -> Dict[str, Any]:
+        """조건주문 인자를 검사하고 등록할 모양으로 정리한다. 요청은 보내지 않는다. 브로커가 거절할 조합은 `OrderNotSent` 로 막는다.
+
+        `SINGLE` 은 트리거 하나(`type: 'market'` 이면 시장가, `'limit'` 이면 `price` 가 트리거 뒤의 지정가), `OCO` 는 양쪽 매도 지정가
+        브래킷(하나가 체결되면 반대편이 취소된다), `OTO` 는 첫 조건이 체결된 뒤 둘째 조건을 감시하는 지정가다.
+        """
+        conditional_type = self.safe_string_upper(params, 'conditionalType')
+        if conditional_type is None:
+            conditional_type = 'SINGLE'
+        if conditional_type not in ('SINGLE', 'OCO', 'OTO'):
+            raise InvalidOrder(f'{self.id} createOrder() conditionalType must be SINGLE, OCO or OTO')
+        order_type = 'MARKET' if type == 'market' else 'LIMIT'
+        expire_date = self.safe_string(params, 'expireDate')
+        if expire_date is None:
+            raise ArgumentsRequired(f'{self.id} 조건주문에는 expireDate(YYYY-MM-DD)가 필요하다')
+        first = {'side': side, 'triggerPrice': self.safe_number(params, 'triggerPrice'), 'orderPrice': price}
+        second_params = self.safe_dict(params, 'second')
+        second = None
+        if second_params is not None:
+            second_side = self.safe_string_lower(second_params, 'side')
+            if second_side is None:
+                second_side = ('sell' if side == 'buy' else 'buy') if conditional_type == 'OTO' else side
+            second = {
+                'side': second_side,
+                'triggerPrice': self.safe_number(second_params, 'triggerPrice'),
+                'orderPrice': self.safe_number(second_params, 'price'),
+            }
+        if conditional_type in ('OCO', 'OTO') and second is None:
+            raise OrderNotSent(f'{self.id} {conditional_type} 조건주문은 second leg 필수')
+        if conditional_type == 'OCO' and (first['side'] != 'sell' or second is None or second['side'] != 'sell'):
+            raise OrderNotSent(f'{self.id} OCO 는 양쪽 SELL(익절/손절 브래킷)만 지원')
+        if order_type == 'MARKET' and conditional_type != 'SINGLE':
+            raise OrderNotSent(f'{self.id} MARKET 조건주문은 SINGLE 만 지원(브래킷은 LIMIT)')
+        if order_type == 'LIMIT' and (first['orderPrice'] is None or (second is not None and second['orderPrice'] is None)):
+            raise OrderNotSent(f'{self.id} LIMIT 조건주문은 각 leg 의 orderPrice 필수')
+        return {
+            'conditionalType': conditional_type, 'orderType': order_type, 'expireDate': expire_date,
+            'first': first, 'second': second, 'clientOrderId': self.safe_string(params, 'clientOrderId'),
+        }
+
+    def _conditional_leg(self, leg: Dict[str, Any], order_type: str) -> Dict[str, Any]:
+        """조건주문 요청의 leg. `orderPrice` 는 지정가일 때만 보낸다."""
+        result = {'orderSide': 'SELL' if leg['side'] == 'sell' else 'BUY', 'triggerPrice': self.number_to_string(leg['triggerPrice'])}
+        if order_type == 'LIMIT' and leg['orderPrice'] is not None:
+            result['orderPrice'] = self.number_to_string(leg['orderPrice'])
+        return result
+
+    def _conditional_notional(self, amount: Any, first: Dict[str, Any]) -> float:
+        """고액주문 확인에 쓰는 첫 조건의 명목가(지정가는 주문가, 시장가는 트리거 가격 기준)."""
+        unit = first['orderPrice'] if first['orderPrice'] is not None else first['triggerPrice']
+        return amount * unit if _is_finite_number(amount) and _is_finite_number(unit) else math.nan
+
+    def _create_conditional_order(self, market: Dict[str, Any], type: str, side: str, amount: float, price: Num,
+                                  params: Dict[str, Any]) -> Dict[str, Any]:
+        """조건주문을 등록한다(`create_order` 가 `params['triggerPrice']` 를 보고 부른다)."""
+        plan = self._plan_conditional_order(type, side, price, params)
+        order_type = plan['orderType']
+        first = plan['first']
+        body: Dict[str, Any] = {
+            'symbol': market['id'],
+            'type': plan['conditionalType'],
+            'quantity': self.number_to_string(amount),
+            'orderType': order_type,
+            'expireDate': plan['expireDate'],
+            'first': self._conditional_leg(first, order_type),
+        }
+        if plan['second'] is not None:
+            body['second'] = self._conditional_leg(plan['second'], order_type)
+        if plan['clientOrderId'] is not None:
+            body['clientOrderId'] = plan['clientOrderId']
+        if self._is_high_value(self._conditional_notional(amount, first), self._country_of(market)):
+            body['confirmHighValueOrder'] = True
+
+        response = self.unwrap(self.private_account_post_conditional_orders(body))
+        conditional_order_id = self.safe_string(response, 'conditionalOrderId')
+        if conditional_order_id is None:
+            raise OrderOutcomeUnknown(f'{self.id} 조건주문 접수 응답에 conditionalOrderId 가 없다. 등록 여부를 조회로 확인해야 한다')
+        logger.info('[toss] 조건주문을 등록했다(%s %s %s)', conditional_order_id, market['symbol'], plan['conditionalType'])
+        timestamp = self.milliseconds()
+        return self.safe_order({
+            'info': self.extend(response if isinstance(response, dict) else {}, {'type': plan['conditionalType']}),
+            'id': conditional_order_id,
+            'clientOrderId': plan['clientOrderId'],
+            'timestamp': timestamp,
+            'datetime': self.iso8601(timestamp),
+            'symbol': market['symbol'],
+            'type': type,
+            'side': side,
+            'price': first['orderPrice'] if order_type == 'LIMIT' else None,
+            'amount': amount,
+            'filled': 0,
+            'triggerPrice': first['triggerPrice'],
+            'status': 'open',
+            'trades': [],
+        }, market)
+
+    def _modify_conditional_order(self, id: str, market: Dict[str, Any], type: str, side: str, amount: float, price: Num,
+                                  params: Dict[str, Any]) -> Dict[str, Any]:
+        """조건주문을 정정한다(`edit_order` 가 `params['trigger']` 로 부른다). 등록과 같은 필드 전체를 다시 보낸다.
+        정정하면 새 조건주문 번호가 나오고 옛 번호는 무효가 된다."""
+        plan = self._plan_conditional_order(type, side, price, params)
+        order_type = plan['orderType']
+        first = plan['first']
+        body: Dict[str, Any] = {
+            'conditionalOrderId': id,
+            'type': plan['conditionalType'],
+            'quantity': self.number_to_string(amount),
+            'orderType': order_type,
+            'expireDate': plan['expireDate'],
+            'first': self._conditional_leg(first, order_type),
+        }
+        if plan['second'] is not None:
+            body['second'] = self._conditional_leg(plan['second'], order_type)
+        if self._is_high_value(self._conditional_notional(amount, first), self._country_of(market)):
+            body['confirmHighValueOrder'] = True
+
+        response = self.unwrap(self.private_account_post_conditional_orders_conditionalorderid_modify(body))
+        new_id = self.safe_string(response, 'conditionalOrderId')
+        if new_id is None:
+            raise OrderOutcomeUnknown(f'{self.id} 조건주문 정정 응답에 conditionalOrderId 가 없다. 정정 여부를 조회로 확인해야 한다')
+        logger.info('[toss] 조건주문을 정정해 새 번호가 나왔다(%s → %s, %s %s)', id, new_id, market['symbol'], plan['conditionalType'])
+        timestamp = self.milliseconds()
+        return self.safe_order({
+            'info': self.extend(response if isinstance(response, dict) else {}, {'type': plan['conditionalType']}),
+            'id': new_id,
+            'timestamp': timestamp,
+            'datetime': self.iso8601(timestamp),
+            'symbol': market['symbol'],
+            'type': type,
+            'side': side,
+            'price': first['orderPrice'] if order_type == 'LIMIT' else None,
+            'amount': amount,
+            'triggerPrice': first['triggerPrice'],
+            'status': 'open',
+            'trades': [],
+        }, market)
+
+    def _hydrate_conditional_legs(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """조건(leg)이 통째로 없는 조건주문만 상세로 채운다. 보강은 부가 정보라 실패해도 목록 값으로 진행한다
+        (던지면 조건주문이 목록에서 사라지는데, 스톱이 안 보이는 것이 방향이 틀리게 보이는 것보다 위험하다)."""
+        needs_detail = [row for row in rows if row.get('first') is None]
+        if not needs_detail:
+            return rows
+        try:
+            targets = needs_detail[:MAX_CONDITIONAL_DETAIL_FETCH]
+            if len(needs_detail) > len(targets):
+                logger.warning('[toss] 조건주문 상세 조회 상한을 넘어 나머지는 목록 값을 쓴다(%d 중 %d)', len(needs_detail), len(targets))
+            detailed: Dict[Any, Dict[str, Any]] = {}
+            for row in targets:
+                conditional_order_id = row.get('conditionalOrderId')
+                try:
+                    detail = self.unwrap(self.private_account_get_conditional_orders_conditionalorderid({'conditionalOrderId': conditional_order_id}))
+                    if isinstance(detail, dict) and detail.get('first') is not None:
+                        detailed[conditional_order_id] = detail
+                except Exception:
+                    logger.debug('[toss] 조건주문 상세 조회에 실패해 목록 값을 유지한다(%s)', conditional_order_id, exc_info=True)
+            if len(detailed) < len(targets):
+                sample = next((row for row in targets if row.get('conditionalOrderId') not in detailed), None)
+                logger.warning('[toss] 조건주문의 조건을 확인하지 못했다. 방향과 트리거 가격 표시가 부정확할 수 있다(%d건, 키 %s)',
+                               len(targets) - len(detailed), list(sample.keys()) if sample is not None else [])
+            return [detailed.get(row.get('conditionalOrderId'), row) for row in rows]
+        except Exception:
+            logger.warning('[toss] 조건주문 상세 보강에 실패해 목록 값으로 진행한다', exc_info=True)
+            return rows
+
+    @staticmethod
+    def _parse_conditional_status(status: Str) -> str:
+        """조건주문 상태를 통합 상태로 옮긴다. 감시·대기 중은 `open`, 발동해 끝났으면 `closed`, 만료는 `expired` 다."""
+        if status == 'COMPLETED':
+            return 'closed'
+        if status == 'EXPIRED':
+            return 'expired'
+        return 'open'
+
+    def _parse_conditional_order(self, conditional: Dict[str, Any], market: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """조건주문 조회 응답을 주문 구조로 옮긴다. 첫 조건(leg)이 대표이고 `triggerPrice` 에 트리거 가격이 실린다.
+        방향은 응답에 실려 오면 그 값을, 없으면 종류로 유추한 값을 쓴다. 종류는 `info['type']` 이다."""
+        market = self.safe_market(self.safe_string(conditional, 'symbol'), market)
+        leg = conditional.get('first') or {}
+        timestamp = self.parse8601(self.safe_value(conditional, 'createdAt'))
+        if timestamp is None:
+            timestamp = self.milliseconds()
+        quantity = self.safe_number(conditional, 'quantity')
+        order_type = self.safe_string_lower(conditional, 'orderType')
+        return self.safe_order({
+            'info': conditional,
+            'id': conditional.get('conditionalOrderId'),
+            'timestamp': timestamp,
+            'datetime': self.iso8601(timestamp),
+            'symbol': market['symbol'],
+            'type': order_type if order_type is not None else 'limit',
+            'side': conditional_side(conditional),
+            'price': self.safe_number(leg, 'orderPrice'),
+            'amount': quantity,
+            'filled': 0,
+            'remaining': quantity,
+            'cost': 0,
+            'triggerPrice': self.safe_number(leg, 'triggerPrice'),
+            'status': self._parse_conditional_status(conditional.get('status')),
+            'trades': [],
+        }, market)
+
+    # ============ 주문 조회와 취소 ============
+
+    def parse_order_status(self, status: Str) -> Str:
+        """주문의 세부 상태를 통합 상태로 옮긴다. 모르는 값은 원문 그대로 둔다."""
+        statuses = {
+            'PENDING': 'open',
+            'PENDING_CANCEL': 'open',
+            'PENDING_REPLACE': 'open',
+            'PARTIAL_FILLED': 'open',
+            'FILLED': 'closed',
+            'CANCELED': 'canceled',
+            'REPLACED': 'canceled',
+            'REJECTED': 'rejected',
+            'CANCEL_REJECTED': 'rejected',
+            'REPLACE_REJECTED': 'rejected',
+        }
+        return self.safe_string(statuses, status, status)
+
+    def parse_order(self, order: Dict[str, Any], market: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """`GET /orders` 의 주문 하나를 주문 구조로 옮긴다. 체결 결과(`execution`)와 수수료·세금도 싣는다."""
+        market = self.safe_market(self.safe_string(order, 'symbol'), market)
+        execution = self.safe_dict(order, 'execution', {})
+        timestamp = self.parse8601(self.safe_string(order, 'orderedAt'))
+        commission = self.safe_string(execution, 'commission')
+        tax = self.safe_string(execution, 'tax')
+        fee_cost = None
+        if commission is not None or tax is not None:
+            fee_cost = Precise.string_add(commission if commission is not None else '0', tax if tax is not None else '0')
+        filled = self.safe_string(execution, 'filledQuantity')
+        return self.safe_order({
+            'info': order,
+            'id': self.safe_string(order, 'orderId'),
+            'timestamp': timestamp,
+            'datetime': self.iso8601(timestamp),
+            'lastTradeTimestamp': self.parse8601(self.safe_string(execution, 'filledAt')),
+            'symbol': market['symbol'],
+            'type': self.safe_string_lower(order, 'orderType'),
+            'timeInForce': self.safe_string(order, 'timeInForce'),
+            'side': self.safe_string_lower(order, 'side'),
+            'price': self.safe_string(order, 'price'),
+            'amount': self.safe_string(order, 'quantity'),
+            'filled': filled if filled is not None else '0',
+            'average': self.safe_string(execution, 'averageFilledPrice'),
+            'cost': self.safe_string(execution, 'filledAmount'),
+            'status': self.parse_order_status(self.safe_string(order, 'status')),
+            'fee': {'currency': self.safe_string(order, 'currency', market['quote']), 'cost': fee_cost} if fee_cost is not None else None,
+            'trades': [],
+        }, market)
+
+    def fetch_order(self, id: str, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """주문 하나. `params['trigger']` 가 `True` 면 조건주문이다."""
+        trigger = self.safe_bool_2(params, 'trigger', 'stop', False) is True
+        market = self.market(symbol) if symbol is not None else None
+        if trigger:
+            detail = self.unwrap(self.private_account_get_conditional_orders_conditionalorderid({'conditionalOrderId': id}))
+            return self._parse_conditional_order(detail, market)
+        response = self.private_account_get_orders_orderid({'orderId': id})
+        return self.parse_order(self.unwrap(response), market)
+
+    def fetch_open_orders(self, symbol: Str = None, since: Int = None, limit: Int = None,
+                          params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """미체결 주문. `symbol` 을 주면 그 종목만 받는다. 조건주문은 별도 장부라서 `params['trigger']` 는 조건주문만,
+        `params['includeTrigger']` 는 일반 주문에 조건주문을 합쳐 돌려준다. 조회에 실패하면 던진다("스톱이 없다"로 읽히는 빈 목록으로 바꾸지 않는다)."""
+        params = {} if params is None else params
+        trigger_only = self.safe_bool_2(params, 'trigger', 'stop', False) is True
+        include_trigger = self.safe_bool(params, 'includeTrigger', False) is True
+        query = self.omit(params, ['trigger', 'stop', 'includeTrigger'])
+        market = self.market(symbol) if symbol is not None else None
+        orders: List[Dict[str, Any]] = []
+        if not trigger_only:
+            request: Dict[str, Any] = {'status': 'OPEN'}
+            if market is not None:
+                request['symbol'] = market['id']
+            response = self.unwrap(self.private_account_get_orders(self.extend(request, query)))
+            orders = self.parse_orders(self.safe_value(response, 'orders'), market)
+        if trigger_only or include_trigger:
+            rows = self._fetch_open_conditional_rows(market)
+            if market is not None:
+                rows = [row for row in rows if row.get('symbol') == market['id']]
+            rows = self._hydrate_conditional_legs(rows)
+            orders = orders + [self._parse_conditional_order(row, market) for row in rows]
+        return self.filter_by_symbol_since_limit(self.sort_by(orders, 'timestamp'), market['symbol'] if market is not None else None, since, limit)
+
+    def _fetch_open_conditional_rows(self, market: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """미체결 조건주문 원본을 커서로 끝까지 이어 받는다(공식 기본이 20건이라 커서 없이는 잘린다). 쪽 수 상한을 넘기면 로그를 남기고 자른다.
+        조회가 실패하면 던진다. 앞쪽만 돌려주면 뒤쪽의 스톱이 없는 것으로 읽힌다."""
+        request: Dict[str, Any] = {'status': 'OPEN', 'limit': CONDITIONAL_ORDER_PAGE_LIMIT}
+        if market is not None:
+            request['symbol'] = market['id']
+        max_pages = self.safe_integer(self.options, 'conditionalOrdersMaxPages', MAX_CONDITIONAL_ORDER_PAGES)
+        collected: List[Dict[str, Any]] = []
+        cursor = None
+        for _ in range(max_pages):
+            response = self.unwrap(self.private_account_get_conditional_orders(self.extend(request, {'cursor': cursor})))
+            collected.extend(self.safe_list(response, 'conditionalOrders', []) or [])
+            if not self.safe_value(response, 'hasNext') or not self.safe_value(response, 'nextCursor'):
+                return collected
+            cursor = response['nextCursor']
+        logger.warning('[toss] 미체결 조건주문이 페이지 상한을 넘어 나머지는 자른다(%d건, %d쪽)', len(collected), max_pages)
+        return collected
+
+    def fetch_closed_orders(self, symbol: Str = None, since: Int = None, limit: Int = None,
+                            params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """체결 완료 주문(종료된 주문). `params['until']`(ms)은 그 시각까지의 주문만 받는다. 100건씩 최대 10쪽까지 받는다."""
+        market = self.market(symbol) if symbol is not None else None
+        rows = self._fetch_closed_order_rows(market, since, limit, {} if params is None else params)
+        return self.parse_orders(rows, market, since, limit)
+
+    def _fetch_closed_order_rows(self, market: Optional[Dict[str, Any]], since: Int, limit: Int,
+                                 params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """체결 완료 주문 원본을 커서로 이어 받는다."""
+        request: Dict[str, Any] = {'status': 'CLOSED', 'limit': CLOSED_ORDER_PAGE_LIMIT}
+        if market is not None:
+            request['symbol'] = market['id']
+        # 날짜 조건은 주문한 날짜 기준이다. 자정을 넘겨 체결되는 주문이 빠지지 않게 하루를 더 앞에서 받고, 정확한 시각은 뒤에서 거른다.
+        if since is not None:
+            request['from'] = kst_date(since - DAY_MS)
+        until = self.safe_integer(params, 'until')
+        if until is not None:
+            request['to'] = kst_date(until)
+        query = self.omit(params, 'until')
+        max_pages = self.safe_integer(self.options, 'closedOrdersMaxPages', MAX_CLOSED_ORDER_PAGES)
+        collected: List[Dict[str, Any]] = []
+        cursor = None
+        for _ in range(max_pages):
+            response = self.unwrap(self.private_account_get_orders(self.extend(request, {'cursor': cursor}, query)))
+            collected.extend(self.safe_list(response, 'orders', []) or [])
+            if not self.safe_value(response, 'hasNext') or not self.safe_value(response, 'nextCursor'):
+                return collected
+            # 시각 조건 없이 개수만 정했다면(가장 최근 `limit` 건) 그만큼 모았을 때 멈춘다.
+            if since is None and limit is not None and len(collected) >= limit:
+                return collected
+            cursor = response['nextCursor']
+        logger.warning('[toss] 체결 완료 주문이 페이지 상한을 넘어 오래된 주문은 자른다(%d건)', len(collected))
+        return collected
+
+    def fetch_my_trades(self, symbol: Str = None, since: Int = None, limit: Int = None,
+                        params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """체결 내역. 토스에는 체결 단위 조회가 없어 체결 완료 주문 가운데 체결이 있는 것을 거래 하나로 본다.
+        가격은 평균 체결가, 수수료는 브로커가 확정한 `execution.commission` 과 `execution.tax` 의 합이다."""
+        market = self.market(symbol) if symbol is not None else None
+        rows = [row for row in self._fetch_closed_order_rows(market, since, None, {} if params is None else params)
+                if fn.js_number(self.safe_value(self.safe_value(row, 'execution'), 'filledQuantity')) > 0
+                and (market is None or row.get('symbol') == market['id'])]
+        return self.parse_trades(rows, market, since, limit)
+
+    def parse_trade(self, trade: Dict[str, Any], market: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """체결된 주문 하나를 거래 하나로 옮긴다. 체결 시각은 최종 체결 시각(없으면 주문 시각)이다."""
+        market = self.safe_market(self.safe_string(trade, 'symbol'), market)
+        execution = self.safe_dict(trade, 'execution', {})
+        timestamp = self.parse8601(self.safe_string(execution, 'filledAt'))
+        if timestamp is None:
+            timestamp = self.parse8601(self.safe_string(trade, 'orderedAt'))
+        if timestamp is None:
+            timestamp = self.milliseconds()
+        commission = self.safe_string(execution, 'commission')
+        tax = self.safe_string(execution, 'tax')
+        fee_cost = None
+        if commission is not None or tax is not None:
+            fee_cost = Precise.string_add(commission if commission is not None else '0', tax if tax is not None else '0')
+        order_id = self.safe_string(trade, 'orderId')
+        price = self.safe_string_2(execution, 'averageFilledPrice', 'price')
+        return self.safe_trade({
+            'info': trade,
+            'id': order_id,
+            'order': order_id,
+            'timestamp': timestamp,
+            'datetime': self.iso8601(timestamp),
+            'symbol': market['symbol'],
+            'type': self.safe_string_lower(trade, 'orderType'),
+            'side': self.safe_string_lower(trade, 'side'),
+            'takerOrMaker': None,
+            'price': price if price is not None else self.safe_string(trade, 'price'),
+            'amount': self.safe_string(execution, 'filledQuantity'),
+            'cost': self.safe_string(execution, 'filledAmount'),
+            'fee': {'currency': self.safe_string(trade, 'currency', market['quote']), 'cost': fee_cost} if fee_cost is not None else None,
+        }, market)
+
+    def cancel_order(self, id: str, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """주문을 취소한다. `params['trigger']` 가 `True` 면 조건주문 취소다. 이미 체결·취소된 주문이면 `OrderNotFound` 다.
+        응답 원본은 `info` 에 있고, 취소 응답 본문이 비어 있어도 성공이다."""
+        trigger = self.safe_bool_2(params, 'trigger', 'stop', False) is True
+        market = self.market(symbol) if symbol is not None else None
+        if trigger:
+            response = self.private_account_delete_conditional_orders_conditionalorderid({'conditionalOrderId': id})
+        else:
+            response = self.private_account_post_orders_orderid_cancel({'orderId': id})
+        logger.info('[toss] %s을 취소했다(%s %s)', '조건주문' if trigger else '주문', id, symbol)
+        info = self.unwrap(response)
+        return self.safe_order({
+            'info': info if info is not None else {},
+            'id': id,
+            'symbol': market['symbol'] if market is not None else None,
+            'status': 'canceled',
+            'trades': [],
+        }, market)
+
+    def cancel_all_orders(self, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """미체결 주문을 모두 취소한다(토스에는 전체 취소가 없어 조회한 주문을 하나씩 취소한다). `params['includeTrigger']` 면 조건주문도 취소한다.
+        돌려주는 목록은 대상 주문 전부다. 취소된 것(이미 사라진 주문 포함)은 `status: 'canceled'`, 취소하지 못한 것은 `info['cancelError']` 가 실린다."""
+        include_trigger = self.safe_bool(params, 'includeTrigger', False) is True
+        orders = self.fetch_open_orders(symbol, None, None, {'includeTrigger': True} if include_trigger else {})
+        results = []
+        for order in orders:
+            trigger = self.safe_string(order.get('info'), 'conditionalOrderId') is not None
+            try:
+                self.cancel_order(order['id'], order.get('symbol'), {'trigger': trigger})
+                results.append(self.extend(order, {'status': 'canceled'}))
+            except OrderNotFound:
+                results.append(self.extend(order, {'status': 'canceled', 'info': self.extend(order.get('info'), {'alreadyGone': True})}))
+            except Exception as error:
+                results.append(self.extend(order, {'info': self.extend(order.get('info'), {'cancelError': str(error)})}))
+        logger.info('[toss] 미체결 주문을 취소했다(%d건 중 %d건)', len(orders), sum(1 for order in results if order.get('status') == 'canceled'))
+        return results

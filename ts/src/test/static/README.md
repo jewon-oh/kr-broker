@@ -1,7 +1,7 @@
 # test/static/ — 두 판이 함께 쓰는 테스트 자료
 
 `request/<증권사>.json`(요청 픽스처)을 TypeScript 판(`ts/src/__tests__/request-fixtures.test.ts`)과 Python 판(`python/<패키지>/test/test_request_fixtures.py`)이
-똑같이 돌린다. 둘 다 통과하면 두 판이 같은 요청(URL·헤더·본문)을 만들고, 같은 응답을 같은 결과나 같은 오류로 바꾼다는 뜻이다.
+똑같이 돌린다. 둘 다 통과하면 두 판이 같은 요청(URL, 헤더, 본문)을 만들고, 같은 응답을 같은 결과나 같은 오류로 바꾼다는 뜻이다.
 TypeScript 판이 실계좌로 확인한 기준 구현이므로, 새 케이스는 TypeScript 판에서 먼저 통과시킨다.
 
 ## 형식
@@ -17,8 +17,9 @@ TypeScript 판이 실계좌로 확인한 기준 구현이므로, 새 케이스�
             "description": "무엇을 확인하는가",
             "config": { },                  // (선택) 이 케이스에만 덧씌울 설정. null 은 "설정하지 않음"이다
             "tokenStore": { },              // (선택) 이 케이스의 토큰 저장소
+            "now": 1774400400000,           // (선택) 현재 시각(UTC epoch ms). 장 시간 판정과 주문 시각이 이 시각을 쓴다
             "method": "privateMarketGetExchangeRate",   // 부를 메서드(camelCase 이름)
-            "args": [{ "baseCurrency": "USD" }],
+            "args": [{ "baseCurrency": "USD" }],   // null 은 "주지 않음"이다
             "http": [                       // 오가는 HTTP 교환. 순서대로 응답한다
                 {
                     "request": { "method": "GET", "url": "...", "headers": { }, "body": null },   // 기대하는 요청(헤더는 전부 같아야 한다)
@@ -35,5 +36,12 @@ TypeScript 판이 실계좌로 확인한 기준 구현이므로, 새 케이스�
 ```
 
 - 케이스마다 새 인스턴스를 만든다. 호출 간격 조절은 꺼 두어 테스트가 기다리지 않는다.
-- 요청 본문은 문자열 그대로 비교한다. 두 판 모두 JavaScript 의 `JSON.stringify` 와 같은 모양(공백 없음, 한글 그대로, 정수 값의 실수는 소수점 없이)으로 보낸다.
+- 휴장일 캘린더(`market-calendar`)는 모듈 전역 상태라서 케이스가 끝날 때마다 비운다.
+- `now`가 있으면 현재 시각을 그 값으로 고정한다. TypeScript 판은 `Date`만 바꾼다(`vi.useFakeTimers({ toFake: ['Date'] })`).
+  Python 판은 패키지의 시계 `kr_broker.base.functions.milliseconds`를 바꿔 끼운다. 호출 간격 조절기의 단조 시계와 타이머는 그대로 둔다.
+  주문 접수처럼 결과에 현재 시각이 실리는 케이스는 `now`를 적는다.
+- 결과(`output`)는 객체에서 값이 `null`인 키를 없는 키와 같게 보고 비교한다. JSON에는 `undefined`가 없고 Python 판에는 `null`과
+  `undefined`의 구분이 없기 때문이다. 그래서 `output`에는 값이 있는 키만 적는다.
+- `args`의 `null`은 TypeScript 판에서 `undefined`로 넘긴다. Python 판에서 인자의 기본값이 `None`인 것과 맞춘다.
+- 요청 본문은 문자열 그대로 비교한다. 두 판 모두 JavaScript의 `JSON.stringify`와 같은 모양(공백 없음, 한글 그대로, 정수 값의 실수는 소수점 없이)으로 보낸다.
 - `http` 목록보다 요청이 많거나 적으면 실패한다.

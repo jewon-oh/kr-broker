@@ -332,7 +332,7 @@ price = kis.private_get_uapi_domestic_stock_v1_quotations_inquire_price({
 print(price['output']['stck_prpr'])
 ```
 
-- 지금은 한국투자증권과 토스증권의 인증, 서명, 오류 처리, 호출 간격 조절이 있고, 모든 엔드포인트를 암묵 메서드로 부를 수 있습니다. 통합 메서드(`fetch_ticker` 등)는 차례로 옮기고 있으며, 옮긴 메서드만 `has`에서 `True`입니다. KB증권은 아직 없습니다.
+- 지금은 한국투자증권과 토스증권의 인증, 서명, 오류 처리, 호출 간격 조절이 있고, 모든 엔드포인트를 암묵 메서드로 부를 수 있습니다. 토스증권의 통합 메서드(`fetch_ticker`, `create_order` 등, 웹소켓 제외)는 옮겼고, 한국투자증권의 통합 메서드는 차례로 옮기고 있습니다. 옮긴 메서드만 `has`에서 `True`입니다. KB증권은 아직 없습니다.
 - 두 판은 같은 엔드포인트 표(`ts/src/spec/`)와 요청 픽스처(`ts/src/test/static/request/`)를 씁니다. CI가 두 판에서 같은 픽스처를 돌려 같은 요청을 만들고 같은 오류를 던지는지 확인합니다.
 - Python 3.10 이상이 필요하고 의존성은 `requests` 하나입니다. PyPI에는 아직 게시하지 않았습니다.
 
