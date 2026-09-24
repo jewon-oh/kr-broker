@@ -74,6 +74,11 @@ def _to_et_wall_clock(now_ms: int) -> EtWallClock:
     return EtWallClock(et.year, et.month, et.day, et.hour, et.minute, (et.weekday() + 1) % 7)
 
 
+def et_wall_clock(now_ms: Optional[int] = None) -> EtWallClock:
+    """미국 동부 벽시계 시각(연, 월, 일, 시, 분, 요일). 해외 체결 조회처럼 현지 날짜가 필요한 곳에서 쓴다."""
+    return _to_et_wall_clock(fn.milliseconds() if now_ms is None else now_ms)
+
+
 def _is_us_holiday(et: EtWallClock) -> bool:
     """그 동부 날짜가 휴장일인가. 증권사 캘린더가 알려 준 날짜만 안다."""
     if et.weekday in (0, 6):
