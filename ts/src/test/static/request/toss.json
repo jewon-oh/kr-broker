@@ -1646,6 +1646,120 @@
             }
         },
         {
+            "description": "createOrder 주문 요청이 시간 초과로 끝나면 접수 여부를 모르므로 다시 보내지 않고 OrderOutcomeUnknown 이다",
+            "now": 1774400400000,
+            "method": "createOrder",
+            "args": ["005930/KRW", "limit", "buy", 2, 70000, { "clientOrderId": "cid-0001" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/market-calendar/KR",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "previousBusinessDay": {
+                                    "date": "2026-03-24",
+                                    "integrated": {
+                                        "preMarket": { "startTime": "2026-03-24T08:00:00+09:00", "endTime": "2026-03-24T08:50:00+09:00" },
+                                        "regularMarket": { "startTime": "2026-03-24T09:00:00+09:00", "endTime": "2026-03-24T15:30:00+09:00" },
+                                        "afterMarket": { "startTime": "2026-03-24T15:30:00+09:00", "endTime": "2026-03-24T20:00:00+09:00" }
+                                    }
+                                },
+                                "today": {
+                                    "date": "2026-03-25",
+                                    "integrated": {
+                                        "preMarket": { "startTime": "2026-03-25T08:00:00+09:00", "endTime": "2026-03-25T08:50:00+09:00" },
+                                        "regularMarket": { "startTime": "2026-03-25T09:00:00+09:00", "endTime": "2026-03-25T15:30:00+09:00" },
+                                        "afterMarket": { "startTime": "2026-03-25T15:30:00+09:00", "endTime": "2026-03-25T20:00:00+09:00" }
+                                    }
+                                },
+                                "nextBusinessDay": {
+                                    "date": "2026-03-26",
+                                    "integrated": {
+                                        "preMarket": { "startTime": "2026-03-26T08:00:00+09:00", "endTime": "2026-03-26T08:50:00+09:00" },
+                                        "regularMarket": { "startTime": "2026-03-26T09:00:00+09:00", "endTime": "2026-03-26T15:30:00+09:00" },
+                                        "afterMarket": { "startTime": "2026-03-26T15:30:00+09:00", "endTime": "2026-03-26T20:00:00+09:00" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001", "Content-Type": "application/json" },
+                        "body": "{\"symbol\":\"005930\",\"side\":\"BUY\",\"orderType\":\"LIMIT\",\"clientOrderId\":\"cid-0001\",\"quantity\":\"2\",\"price\":\"70000\"}"
+                    },
+                    "network": "timeout"
+                }
+            ],
+            "error": { "class": "OrderOutcomeUnknown" }
+        },
+        {
+            "description": "createOrder 주문 요청 중 연결이 끊기면 다시 보내지 않고 OrderOutcomeUnknown 이다",
+            "now": 1774400400000,
+            "method": "createOrder",
+            "args": ["005930/KRW", "limit", "buy", 2, 70000, { "clientOrderId": "cid-0001" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/market-calendar/KR",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "previousBusinessDay": {
+                                    "date": "2026-03-24",
+                                    "integrated": {
+                                        "preMarket": { "startTime": "2026-03-24T08:00:00+09:00", "endTime": "2026-03-24T08:50:00+09:00" },
+                                        "regularMarket": { "startTime": "2026-03-24T09:00:00+09:00", "endTime": "2026-03-24T15:30:00+09:00" },
+                                        "afterMarket": { "startTime": "2026-03-24T15:30:00+09:00", "endTime": "2026-03-24T20:00:00+09:00" }
+                                    }
+                                },
+                                "today": {
+                                    "date": "2026-03-25",
+                                    "integrated": {
+                                        "preMarket": { "startTime": "2026-03-25T08:00:00+09:00", "endTime": "2026-03-25T08:50:00+09:00" },
+                                        "regularMarket": { "startTime": "2026-03-25T09:00:00+09:00", "endTime": "2026-03-25T15:30:00+09:00" },
+                                        "afterMarket": { "startTime": "2026-03-25T15:30:00+09:00", "endTime": "2026-03-25T20:00:00+09:00" }
+                                    }
+                                },
+                                "nextBusinessDay": {
+                                    "date": "2026-03-26",
+                                    "integrated": {
+                                        "preMarket": { "startTime": "2026-03-26T08:00:00+09:00", "endTime": "2026-03-26T08:50:00+09:00" },
+                                        "regularMarket": { "startTime": "2026-03-26T09:00:00+09:00", "endTime": "2026-03-26T15:30:00+09:00" },
+                                        "afterMarket": { "startTime": "2026-03-26T15:30:00+09:00", "endTime": "2026-03-26T20:00:00+09:00" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001", "Content-Type": "application/json" },
+                        "body": "{\"symbol\":\"005930\",\"side\":\"BUY\",\"orderType\":\"LIMIT\",\"clientOrderId\":\"cid-0001\",\"quantity\":\"2\",\"price\":\"70000\"}"
+                    },
+                    "network": "reset"
+                }
+            ],
+            "error": { "class": "OrderOutcomeUnknown" }
+        },
+        {
             "description": "createOrder 는 접수 응답에 orderId 가 없으면 OrderOutcomeUnknown 이다",
             "now": 1774400400000,
             "method": "createOrder",
