@@ -77,7 +77,7 @@ _OMITTED = object()
 
 
 def _now_ms() -> int:
-    return int(time.time() * 1000)
+    return fn.milliseconds()
 
 
 # ---- 앱키 단위 요청 스케줄러 ----
@@ -90,7 +90,7 @@ _slot_lock = threading.Lock()
 
 def acquire_kis_slot(app_key: str, interval_ms: float, sleep: Callable[[float], None] = time.sleep) -> None:
     with _slot_lock:
-        now = time.time() * 1000
+        now = fn.milliseconds()
         scheduled_at = max(now, _next_slot_at.get(app_key, 0))
         _next_slot_at[app_key] = scheduled_at + interval_ms
     wait_ms = scheduled_at - now
