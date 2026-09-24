@@ -1813,7 +1813,11 @@ export class kbsec extends Exchange {
                 // 켜고 끄는 옵션은 불리언이거나 불리언을 돌려주는 함수(값이 바뀔 수 있을 때)다. 기본은 꺼짐이다.
                 /** 정규장 밖 국내 주문을 SOR(KRX·NXT 중 유리한 쪽)로 낸다. */
                 nxtRouting: undefined,
-                /** 원마켓(통합증거금) 계좌의 미국 주식 매수여력을 원화 환산분으로 보강한다. */
+                /**
+                 * 원마켓(통합증거금) 계좌의 미국 주식 매수여력을 원화 환산분으로 보강한다. 원마켓 계좌는 USD 로 미리 환전하지 않고 원화로 미국 주식을 산다.
+                 * 켜면 `krw_exch_unty_ordr_psbl_amt`(원화환산 통합 주문가능금액)를 기준으로 읽고, 끄면 외화 예수금(`fcrncy_ordr_psbl_amt`)만 본다.
+                 * 계좌가 원마켓에 가입돼 있어야 뜻이 있으므로 계좌를 확인한 뒤 켠다.
+                 */
                 krwIntegratedMargin: undefined,
                 /** 토큰을 여러 프로세스가 나눠 쓰는 저장소(`BrokerTokenStore`). 없으면 프로세스 메모리 캐시만 쓴다. */
                 tokenStore: undefined,
@@ -2802,7 +2806,7 @@ export class kbsec extends Exchange {
      * 한 번이라도 본 적이 있다는 뜻이다. 그리드를 본 적이 없으면 빈 응답이 "보유 없음"인지 "그리드를 못 알아봄"인지 가를 수 없다.
      *
      * `USD` 항목은 해외 잔고평가(`SPQM2226`)의 통화별 예수금 그리드에서 온다(예수금·주문가능금액). 그 그리드를 못 읽었으면 `USD` 항목이 없다.
-     * **없다는 것은 0 이 아니라 모른다는 뜻이다.** 원마켓 기능 플래그가 켜져 있고 원화환산 외화예수금이 있으면 그것을 환율로 환산한 USD 가 우선한다.
+     * **없다는 것은 0 이 아니라 모른다는 뜻이다.** `options.krwIntegratedMargin` 이 켜져 있고 원화환산 외화예수금이 있으면 그것을 환율로 환산한 USD 가 우선한다.
      */
     override async fetchBalance(params: Dict = {}): Promise<Balances> {
         // 여러 TR 을 부르지만 `params` 는 기준이 되는 예수금 조회에만 합친다.
@@ -2810,7 +2814,7 @@ export class kbsec extends Exchange {
         // 실측 필드: ordr_psbl_csh(주문가능현금) · ordr_std_dpstn_csh(주문기준예수금)
         const krw = pickNum(deposit, 'ordr_psbl_csh', 'ordr_std_dpstn_csh', 'do_psbl_csh');
 
-        // 원마켓(통합증거금) 계좌는 달러 예수금이 0 이어도 원화로 미국 주식을 산다. 플래그가 켜져 있으면 원화환산 외화 예수금을 **USD 로 환산해**
+        // 원마켓(통합증거금) 계좌는 달러 예수금이 0 이어도 원화로 미국 주식을 산다. `krwIntegratedMargin` 옵션이 켜져 있으면 원화환산 외화 예수금을 **USD 로 환산해**
         // 라벨과 값의 축을 맞춘다. 원화 값을 USD 라벨에 그대로 담으면 사이징이 ~1,450배로 읽는다.
         let oneMarketUsd: Dict | undefined;
         if (await this.isOptionEnabled('krwIntegratedMargin')) {
@@ -2826,11 +2830,11 @@ export class kbsec extends Exchange {
                     oneMarketUsd = { amount: usdEquivalent, sourceCurrency: 'KRW', krwEquivalent: margin.krwEquivalentForeign };
                 }
             } else if (!this.oneMarketNoticeLogged) {
-                // 플래그를 켰는데 USD 항목이 안 생기는 경우가 있다. 안 남기면 "켰는데 왜 그대로냐"를 로그로 확인할 방법이 없다.
+                // 옵션을 켰는데 USD 항목이 안 생기는 경우가 있다. 안 남기면 "켰는데 왜 그대로냐"를 로그로 확인할 방법이 없다.
                 // `margin` 이 없으면 계좌가 원마켓 미신청(H049)이다. 코드로 만들 수 있는 매수여력이 아니라 사람이 할 일이다.
                 this.oneMarketNoticeLogged = true;
                 logger.warn({ marginSeen: margin !== undefined, krwEquivalentForeign: margin?.krwEquivalentForeign ?? null },
-                    '[kbsec] 원마켓 플래그는 켜졌는데 USD 매수여력이 안 생겼다 — marginSeen=false 면 계좌가 원마켓 미신청(H049)이다. 인스턴스당 1회만 남긴다');
+                    '[kbsec] krwIntegratedMargin 옵션은 켜졌는데 USD 매수여력이 안 생겼다 — marginSeen=false 면 계좌가 원마켓 미신청(H049)이다. 인스턴스당 1회만 남긴다');
             }
         }
 
@@ -3273,8 +3277,8 @@ export class kbsec extends Exchange {
      *
      * KB 원마켓플러스는 원화로 미국 주식을 산다(USD 사전 환전 불필요). 그래서 매수여력이 두 갈래로 온다.
      * `fcrncy_ordr_psbl_amt`(외화 주문가능금액)와 `krw_exch_unty_ordr_psbl_amt`(원화환산 통합 주문가능금액)다.
-     * 플래그가 켜져 있으면 통합 기준을 쓰고, 꺼져 있으면 순수 외화만 본다. `fcrncy_unty_ordr_psbl_amt_p2` 의 `unty` 는 **통합**이라
-     * 원화를 환산해 더한 값이므로 플래그를 꺼도 통합 금액이 USD 로 둔갑하지 않게 이 값은 순수 외화로 쓰지 않는다.
+     * `krwIntegratedMargin` 옵션이 켜져 있으면 통합 기준을 쓰고, 꺼져 있으면 순수 외화만 본다. `fcrncy_unty_ordr_psbl_amt_p2` 의 `unty` 는 **통합**이라
+     * 원화를 환산해 더한 값이므로 옵션을 꺼도 통합 금액이 USD 로 둔갑하지 않게 이 값은 순수 외화로 쓰지 않는다.
      *
      * `quoteCurrency` 로 어느 통화 기준인지 함께 돌려준다. 통화를 모른 채 숫자만 받으면 원화 금액을 달러로 오해해 수량이 ~1,400배가 된다.
      * 여력이 없으면 `undefined` 다.
@@ -4302,7 +4306,7 @@ export class kbsec extends Exchange {
      *   지정가가 호가보다 높으면 체결은 호가에서 일어나므로 버퍼는 상한일 뿐 비용이 아니다. 호가를 못 구하면 보내지 않는다.
      * - 접수 뒤에는 체결 조회로 체결가·수량을 확정한다. 확정하지 못하면 `order.info.fillConfirmed` 가 `false` 이고 `filled` 는 비어 있다.
      * - `params.fractional` 이 참이면 국내 소수점 주문이다(수량을 소수 6자리로 보내고 체결 확정을 하지 않는다).
-     * - `params.sor` 는 국내 라우팅(`K` KRX · `N` NXT · `S` SOR)이다. 생략하면 넥스트레이드 라우팅 기능 플래그를 따른다.
+     * - `params.sor` 는 국내 라우팅(`K` KRX · `N` NXT · `S` SOR)이다. 생략하면 `options.nxtRouting` 을 따른다.
      * - **조건(스톱) 주문은 받지 않는다.** `params` 에 `triggerPrice`·`stopPrice`·`stopLossPrice`·`takeProfitPrice` 가 있으면 요청 없이 `NotSupported` 다.
      *   버리고 일반 주문으로 내면 조건 주문을 의도한 호출이 곧바로 체결된다.
      *
@@ -4365,7 +4369,7 @@ export class kbsec extends Exchange {
                 jbClsf: side === 'buy' ? KBSEC_ORDER_SIDE_KR.BUY : KBSEC_ORDER_SIDE_KR.SELL,
                 sor,
             }, extra));
-            // 넥스트레이드 라우팅 플래그가 켜져 있으면 SOR 에 맡긴다(KRX/NXT 중 유리한 쪽). 꺼져 있으면 KRX 고정이다.
+            // `nxtRouting` 옵션이 켜져 있으면 SOR 에 맡긴다(KRX/NXT 중 유리한 쪽). 꺼져 있으면 KRX 고정이다.
             // 단 NXT 미상장 종목이 이미 확인됐으면 왕복을 건너뛴다.
             const wantSor = sorOverride === undefined && await this.isOptionEnabled('nxtRouting') && !this.nxtIneligible.has(base);
             try {
@@ -4644,7 +4648,7 @@ export class kbsec extends Exchange {
 
     /**
      * 원주문이 어느 라우팅으로 나갔는지. 정정에 그대로 실어야 한다. 미체결 목록의 원본 행에 `sor_ordr_ccd` 가 있어 그것을 정본으로 본다.
-     * 못 찾으면(이미 체결·조회 실패) 발주 때와 같은 정책으로 되짚는다. 같은 인스턴스 안에서는 플래그와 NXT 캐시가 그대로라 같은 값이 나온다.
+     * 못 찾으면(이미 체결·조회 실패) 발주 때와 같은 정책으로 되짚는다. 같은 인스턴스 안에서는 `nxtRouting` 옵션과 NXT 캐시가 그대로라 같은 값이 나온다.
      */
     private async resolveOrderSor(orderId: string, symbol: string): Promise<string> {
         try {

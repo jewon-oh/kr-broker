@@ -246,9 +246,9 @@ describe('세션 게이트', () => {
         await expect(makeToss().createOrder('PEP', 'limit', 'buy', 1, 49.3)).rejects.toThrow('캘린더 조회 실패');
     });
 
-    it('국내 애프터마켓은 nxt-routing 옵션이 꺼져 있으면 막는다', async () => {
+    it('국내 애프터마켓은 nxtRouting 옵션이 꺼져 있으면 막는다', async () => {
         installFakeToss({ 'GET /api/v1/market-calendar/KR': krCalendar('afterMarket') });
-        await expect(makeToss().createOrder('005930', 'limit', 'buy', 1, 70000)).rejects.toThrow('nxt-routing');
+        await expect(makeToss().createOrder('005930', 'limit', 'buy', 1, 70000)).rejects.toThrow('nxtRouting');
     });
 
     it('국내 애프터마켓은 옵션이 켜져 있으면 지정가 정수 수량을 접수한다', async () => {
@@ -316,7 +316,7 @@ describe('확장세션 시장가를 지정가로 바꿔 낸다', () => {
 
     it('옵션이 꺼져 있으면 전환하지 않고 게이트가 막는다', async () => {
         krAfterMarket();
-        await expect(makeToss().createOrder('005930', 'market', 'sell', 3)).rejects.toThrow('nxt-routing');
+        await expect(makeToss().createOrder('005930', 'market', 'sell', 3)).rejects.toThrow('nxtRouting');
     });
 
     it('정규장에서는 시장가 그대로 낸다', async () => {

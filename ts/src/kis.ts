@@ -4866,7 +4866,7 @@ export class kis extends Exchange {
      * 주문. 수량은 정수 주로 내린다(소수점 매수는 지원하지 않는다). 거래시간 밖은 주문을 보내지 않고 `MarketClosed` 를 던진다.
      *
      * `params`:
-     * - `session`: `'regular'` 이나 `'nxt'`. 생략하면 NXT 라우팅 기능 플래그와 NXT 확장세션 시각으로 자동 판정한다(국내).
+     * - `session`: `'regular'` 이나 `'nxt'`. 생략하면 `options.nxtRouting` 과 NXT 확장세션 시각으로 자동 판정한다(국내).
  *   확장세션이면 종목이 NXT 에서 거래되는지 먼저 확인하고, 아니면 `MarketClosed` 를 던진다(실전만).
      * - 그 밖의 키는 요청 본문에 그대로 합친다.
      *
@@ -4909,7 +4909,7 @@ export class kis extends Exchange {
     private async createDomesticOrder(instrument: KisInstrument, type: OrderType, side: OrderSide, quantity: number, price: Num, params: Dict): Promise<Order> {
         const session = this.safeString(params, 'session');
         params = this.omit(params, 'session');
-        // 확장세션(NXT 프리 08:00~08:50, 애프터 15:30~20:00)은 정규장 게이트를 우회하고 SOR 로 낸다. 기능 플래그가 꺼져 있으면 정규장 규칙이다.
+        // 확장세션(NXT 프리 08:00~08:50, 애프터 15:30~20:00)은 정규장 게이트를 우회하고 SOR 로 낸다. `nxtRouting` 옵션이 꺼져 있으면 정규장 규칙이다.
         const extended = session === 'nxt'
             || (session === undefined && (await this.isOptionEnabled('nxtRouting')) && isNxtExtendedTradable());
         if (extended) await this.assertNxtTradable(instrument);
