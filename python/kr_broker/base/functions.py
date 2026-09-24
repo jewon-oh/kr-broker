@@ -623,6 +623,30 @@ def parse8601(x: Any) -> Optional[int]:
     return ms
 
 
+_JS_ISO_DATE_TIME = re.compile(r'([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(Z|[+-][0-9]{2}:[0-9]{2})')
+
+
+def js_date_parse_iso(text: Any) -> Optional[int]:
+    """JavaScript `Date.parse('YYYY-MM-DDTHH:MM:SS±HH:MM')`(또는 끝이 `Z`)와 같다. 못 읽으면(`NaN`) `None` 이다.
+    V8 처럼 일은 달과 상관없이 31까지 받아 넘치는 날을 다음 달로 넘기고(`02-30` → 3월 2일), 시는 `24:00:00` 까지 받는다."""
+    if not isinstance(text, str):
+        return None
+    m = _JS_ISO_DATE_TIME.fullmatch(text)
+    if m is None:
+        return None
+    year, month, day, hour, minute, second = (int(m.group(i)) for i in range(1, 7))
+    if not (1 <= month <= 12 and 1 <= day <= 31 and minute <= 59 and second <= 59):
+        return None
+    if hour > 24 or (hour == 24 and (minute != 0 or second != 0)):
+        return None
+    zone = m.group(7)
+    offset_minutes = 0 if zone == 'Z' else (1 if zone[0] == '+' else -1) * (int(zone[1:3]) * 60 + int(zone[4:6]))
+    try:
+        return calendar.timegm((year, month, day, hour, minute, second, 0, 0, 0)) * 1000 - offset_minutes * 60_000
+    except (ValueError, OverflowError):
+        return None
+
+
 _SECONDS_PER_UNIT = {'s': 1, 'm': 60, 'h': 3600, 'd': 86400, 'w': 604800, 'M': 2592000, 'y': 31536000}
 
 

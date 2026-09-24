@@ -1,43 +1,75 @@
-"""한국투자증권 Open API. TypeScript 판 `ts/src/kis.ts` 의 선언·모의투자 전환·인증·서명·오류 처리를 옮겼다.
-
-지금은 암묵 메서드로 모든 엔드포인트를 부를 수 있다. TR ID 는 `params['tr_id']` 로 넘기면 `sign()` 이 헤더로 옮긴다.
-통합 메서드(`fetch_ticker` 등)는 차례로 옮기며, 옮긴 것만 `has` 에서 `True` 가 된다.
+"""한국투자증권 Open API(`class kis(Exchange, ImplicitAPI)`). TypeScript 판 `ts/src/kis.ts` 를 옮겼다. 국내와 미국 주식 현물의 시세와 종목,
+휴장일 캘린더, 순위 같은 고유 조회를 ccxt 와 같은 모양으로 다룬다. 웹소켓(`watch_*`)은 옮기지 않았다.
 
 .. code-block:: python
 
     import kr_broker
     broker = kr_broker.kis({'apiKey': APP_KEY, 'secret': APP_SECRET, 'uid': '12345678-01'})
+    ticker = broker.fetch_ticker('005930/KRW')
     price = broker.private_get_uapi_domestic_stock_v1_quotations_inquire_price({
         'tr_id': 'FHKST01010100', 'FID_COND_MRKT_DIV_CODE': 'J', 'FID_INPUT_ISCD': '005930',
     })
+
+자격증명
+    `apiKey` 는 앱키, `secret` 은 앱시크릿, `uid` 는 계좌번호(`8자리-2자리`, 뒤 2자리를 생략하면 `01`)다. `set_sandbox_mode(True)` 나
+    설정의 `'sandbox': True` 로 모의투자 도메인과 모의 TR ID, 초당 2건 호출 간격으로 바꾼다.
+
+심볼
+    국내는 `005930/KRW`, 미국은 `AAPL/USD` 다. 슬래시가 든 티커(`BRK/B`)는 `BRK.B/USD` 로 쓰고 `market['id']` 에 KIS 표기를 둔다.
+    접미사를 뺀 `005930`, `AAPL` 도 받는다. 국내 종목은 종목코드 모양(6자리)만으로 가르고, 해외 종목의 거래소는 종목 마스터
+    (`options['masterData']`, `kis_master_data` 참고)에서 찾는다. `load_markets()` 는 마스터 데이터로 종목 목록을 만들 뿐이고 시세 호출에는 필요 없다.
+
+요청
+    모든 REST 호출에 접근 토큰이 필요하다. TR ID 는 `params['tr_id']` 로 넘기면 `sign()` 이 헤더로 옮긴다. 조회가 `EGW00201`·`EGW00215`
+    (초당 거래건수 초과)로 실패하면 `RateLimitExceeded` 를 던지고 조회에 한해 몇 번 다시 보낸다. 시간 초과는 다시 보내지 않는다.
+
+옵션
+    `tokenStore`(토큰 저장소), `nxtRouting`(정규장 밖 NXT 시세, 불리언이거나 불리언을 돌려주는 함수), `masterData`(종목 마스터),
+    `stockDirectory`(코스피·코스닥 구분을 알려 주는 `find_kr_market(code)` 객체)다.
+
+한계
+    `fetch_ohlcv` 는 야후 파이낸스에서 받는다(국내는 항상, 미국 일·주·월봉은 야후가 비면 KIS 로 다시 받는다). `fetch_order_book` 은 국내만,
+    `fetch_tickers` 는 국내 30종목까지다.
 """
 
 import json
 import logging
+import math
+import re
 import threading
 import time
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, NamedTuple, Optional
 
 from kr_broker.abstract.kis import ImplicitAPI
 from kr_broker.base import functions as fn
-from kr_broker.base.decimal_to_precision import TICK_SIZE
+from kr_broker.base.decimal_to_precision import NO_PADDING, ROUND, TICK_SIZE, decimal_to_precision
 from kr_broker.base.errors import (
-    ArgumentsRequired, AuthenticationError, ExchangeError, NotSupported, RateLimitExceeded, RequestTimeout,
+    ArgumentsRequired, AuthenticationError, BadRequest, BadSymbol, ExchangeError, NotSupported, NullResponse, RateLimitExceeded,
+    RequestTimeout,
 )
 from kr_broker.base.exchange import Exchange
+from kr_broker.base.precise import Precise
 from kr_broker.base.token_store import BrokerTokenStore, refresh_token_with_lock
-from kr_broker.base.types import ApiName, Num, Str
+from kr_broker.base.types import ApiName, Int, Num, Str, Strings
+from kr_broker.broker_krx_code import is_krx_domestic_code
+from kr_broker.kis_candle_service import KISCandleService
+from kr_broker.kis_kr_market import resolve_kr_market
+from kr_broker.kis_master_data import master_data_of
+from kr_broker.kis_overseas_master import (
+    get_overseas_market_for_code, get_overseas_stock_by_code, search_overseas_stocks, to_order_market_code,
+)
+from kr_broker.kis_stock_master import get_krx_stock_by_code, get_stock_master_count, search_krx_stocks
+from kr_broker.kis_types import (
+    KIS_API_DOMAINS, KIS_BROKERAGE_FEE, KIS_CUSTOMER_TYPE, KIS_OVERSEAS_DEFAULT_FEE_RATE, KIS_WS_DOMAINS, get_tick_size,
+)
+from kr_broker.kis_yahoo_candles import fetch_yahoo_candles
+from kr_broker.krx_sell_tax import krx_sell_tax_rate
+from kr_broker.krx_trading_hours import is_nxt_extended_tradable
+from kr_broker.market_calendar import refresh_market_calendar as refresh_shared_market_calendar
+from kr_broker.us_market_hours import et_wall_clock
 
 logger = logging.getLogger('kr_broker')
 
-KIS_API_DOMAINS = {
-    'REAL': 'https://openapi.koreainvestment.com:9443',
-    'VIRTUAL': 'https://openapivts.koreainvestment.com:29443',
-}
-KIS_WS_DOMAINS = {
-    'REAL': 'ws://ops.koreainvestment.com:21000',
-    'VIRTUAL': 'ws://ops.koreainvestment.com:31000',
-}
 # 실전 하드 한도 초당 20건(50ms)에 여유를 둔 초당 15건, 모의는 초당 2건이다.
 REAL_RATE_LIMIT_MS = 67
 SANDBOX_RATE_LIMIT_MS = 500
@@ -46,8 +78,17 @@ ORDER_TIMEOUT_MS = 25_000
 AUTH_TIMEOUT_MS = 10_000
 READ_RETRIES = 3
 READ_RETRY_DELAY_MS = 500
-KIS_BROKERAGE_FEE = 0.00015
-KIS_CUSTOMER_TYPE = 'P'
+# 관심종목(멀티종목) 시세 한 번에 담을 수 있는 종목 수.
+MULTI_TICKER_LIMIT = 30
+# VI 발동 현황 조회의 고정 화면 분류 코드. 공식 예제가 이 값 하나만 쓴다.
+VI_STATUS_SCREEN_CODE = '20139'
+
+KST_OFFSET_MS = 9 * 60 * 60 * 1000
+DAY_MS = 24 * 60 * 60 * 1000
+# 지난 영업일을 알기 위해 되돌아 조회하는 기간.
+HOLIDAY_LOOKBACK_MS = 30 * DAY_MS
+# 휴장일 캘린더를 신선하게 보는 시간. KIS 는 하루 한 번 호출을 권하므로 하루에 두 번까지만 부른다.
+CALENDAR_TTL_MS = 12 * 60 * 60 * 1000
 
 KIS_EXCEPTIONS_EXACT = {
     # 초당 거래건수 초과. 조회는 다시 보내도 되므로 백오프 뒤 재시도한다.
@@ -74,6 +115,441 @@ KIS_TOKEN_MIN_LIFETIME_MS = 60_000
 
 # `tr()` 에 모의 TR ID 를 주지 않았다는 표지.
 _OMITTED = object()
+
+
+class KisInstrument(NamedTuple):
+    """종목 식별 결과. 국내는 종목코드 모양으로, 해외는 종목 마스터로 정한다."""
+    # 통합 심볼(`005930/KRW`, `AAPL/USD`, `BRK.B/USD`)
+    symbol: str
+    # KIS 가 쓰는 종목 식별자(국내 종목코드, 해외 티커는 슬래시 표기 그대로)
+    code: str
+    overseas: bool
+    quote: str
+    # 시세 거래소 코드(`NAS`). 해외 마스터에 없으면 None
+    quote_exchange: Optional[str]
+    # 주문·잔고 거래소 코드(`NASD`). 해외 마스터에 없으면 None
+    order_exchange: Optional[str]
+
+
+_SUFFIXED_SYMBOL = re.compile(r'(.+)/(KRW|USD)')
+_YMD = re.compile(r'[0-9]{8}')
+_HMS = re.compile(r'[0-9]{6}')
+
+
+def kst_ymd(ms: int) -> str:
+    """UTC 밀리초의 한국 날짜 `YYYYMMDD`."""
+    return fn.iso8601(ms + KST_OFFSET_MS)[:10].replace('-', '')
+
+
+def et_ymd(ms: int) -> str:
+    """UTC 밀리초의 미국 동부(ET) 날짜 `YYYYMMDD`. 해외 체결 조회의 일자는 현지 날짜다."""
+    et = et_wall_clock(ms)
+    return f'{et.year:04d}{et.month:02d}{et.day:02d}'
+
+
+def kst_timestamp(ymd: Str, hms: Str) -> Int:
+    """`YYYYMMDD` 와 `HHMMSS`(한국 시각)를 UTC 밀리초로 바꾼다. 날짜를 못 읽으면 None, 시각을 못 읽으면 그날 0시다."""
+    if ymd is None or _YMD.fullmatch(ymd) is None:
+        return None
+    clock = hms if hms is not None and _HMS.fullmatch(hms) is not None else '000000'
+    return fn.js_date_parse_iso(f'{ymd[0:4]}-{ymd[4:6]}-{ymd[6:8]}T{clock[0:2]}:{clock[2:4]}:{clock[4:6]}+09:00')
+
+
+def first_row(value: Any) -> Dict[str, Any]:
+    """응답의 첫 행. 배열이면 첫 원소, 사전이면 그대로, 없으면 빈 사전이다."""
+    if isinstance(value, list):
+        return value[0] if len(value) > 0 and value[0] is not None else {}
+    return value if isinstance(value, dict) else {}
+
+
+def rows_of(value: Any) -> List[Dict[str, Any]]:
+    """응답의 행 목록. 배열이 아니면 빈 목록이다."""
+    return value if isinstance(value, list) else []
+
+
+def multi_rows_of(value: Any) -> List[Dict[str, Any]]:
+    """응답의 행 목록. 배열이면 그대로, 사전이면 키가 있을 때만 한 행으로 감싼다(KIS 는 행이 하나면 사전으로, 없으면 빈 사전으로 준다)."""
+    if isinstance(value, list):
+        return value
+    if isinstance(value, dict) and len(value) > 0:
+        return [value]
+    return []
+
+
+def to_number(value: Any) -> float:
+    """JavaScript 의 `Number(value)`. 유한한 수가 아니면 0 이다."""
+    n = fn.js_number(value)
+    return n if math.isfinite(n) else 0
+
+
+def _js_sign(n: float) -> int:
+    return (n > 0) - (n < 0)
+
+
+def _field(response: Any, key: str) -> Any:
+    """응답 사전의 필드. 응답이 사전이 아니면 None 이다."""
+    return response.get(key) if isinstance(response, dict) else None
+
+
+def _tpl(value: Any) -> str:
+    """JavaScript 템플릿 문자열에 넣은 값(`undefined` 는 그 글자 그대로)."""
+    return 'undefined' if value is None else fn.js_string(value)
+
+
+def _or_none(value: Str) -> Str:
+    """JavaScript 의 `value || undefined`. 빈 문자열을 없는 값으로 본다."""
+    return value if value else None
+
+
+# ---- 순위 ----
+
+def _previous_fiscal_year(now: int) -> str:
+    """직전 회계연도(한국 날짜 기준 올해 - 1). 재무 순위의 회계연도 기본값이다."""
+    return str(int(kst_ymd(now)[0:4]) - 1)
+
+
+def _finance_ranking_params(now: int, screen: str, sort: str) -> Dict[str, Any]:
+    """재무 순위 세 종류의 공통 입력. 결산(`3`)과 직전 회계연도가 기본이다."""
+    return {
+        'fid_trgt_cls_code': '0', 'fid_cond_mrkt_div_code': 'J', 'fid_cond_scr_div_code': screen, 'fid_input_iscd': '0000',
+        'fid_div_cls_code': '0', 'fid_input_price_1': '', 'fid_input_price_2': '', 'fid_vol_cnt': '',
+        'fid_input_option_1': _previous_fiscal_year(now), 'fid_input_option_2': '3', 'fid_rank_sort_cls_code': sort,
+        'fid_blng_cls_code': '0', 'fid_trgt_exls_cls_code': '0',
+    }
+
+
+# 시간외 순위는 공통 필드를 시간외 단일가 값으로 채운다.
+KIS_OVERTIME_FIELDS = {'price': 'ovtm_untp_prpr', 'change': 'ovtm_untp_prdy_vrss', 'rate': 'ovtm_untp_prdy_ctrt', 'volume': 'ovtm_untp_vol'}
+
+# 해외 순위의 거래소 코드(`EXCD`)와 그 거래소의 거래 통화.
+KIS_OVERSEAS_RANKING_EXCHANGES = {
+    'NYS': 'USD', 'NAS': 'USD', 'AMS': 'USD', 'HKS': 'HKD', 'SHS': 'CNY', 'SZS': 'CNY', 'HSX': 'VND', 'HNX': 'VND', 'TSE': 'JPY',
+}
+
+# 해외 신고가·신저가의 기간(`params['period']`) → `NDAY`.
+KIS_NEW_HIGH_LOW_PERIODS = {'5d': '0', '10d': '1', '20d': '2', '30d': '3', '60d': '4', '120d': '5', '52w': '6', '1y': '7'}
+
+
+def _dividend_params(params: Dict[str, Any]) -> Dict[str, Any]:
+    """배당 종류(`stock` 주식배당, `cash` 현금배당)를 `GB3` 로 옮긴다. 전체 값이 없는 필터라 기본값을 두지 않는다."""
+    rest = {key: value for key, value in params.items() if key != 'dividendType'}
+    dividend_type = params.get('dividendType')
+    gb3 = rest.get('GB3')
+    if gb3 is None:
+        gb3 = '1' if dividend_type == 'stock' else '2' if dividend_type == 'cash' else None
+    if gb3 != '1' and gb3 != '2':
+        raise ArgumentsRequired("kis fetchRankings('DIVIDEND_RATE') 는 params.dividendType('stock' 주식배당, 'cash' 현금배당)이 필요하다")
+    rest['GB3'] = gb3
+    return rest
+
+
+def _overseas_ranking_params(params: Dict[str, Any]) -> Dict[str, Any]:
+    """해외 순위의 거래소(`params['exchange']`, 예: `NAS`)를 `EXCD` 로 옮긴다. 전체 값이 없는 필터라 기본값을 두지 않는다."""
+    rest = {key: value for key, value in params.items() if key != 'exchange'}
+    code = rest.get('EXCD')
+    if code is None:
+        code = params.get('exchange')
+    if code is None or code == '':
+        raise ArgumentsRequired('kis 해외 순위는 params.exchange(NYS, NAS, AMS, HKS, SHS, SZS, HSX, HNX, TSE)가 필요하다')
+    if KIS_OVERSEAS_RANKING_EXCHANGES.get(fn.js_string(code)) is None:
+        raise BadRequest(f'kis 해외 순위의 exchange 는 설명에 있는 거래소 코드여야 한다: {_tpl(code)}')
+    rest['EXCD'] = code
+    return rest
+
+
+def _new_high_low_params(params: Dict[str, Any]) -> Dict[str, Any]:
+    """해외 신고가·신저가의 기간(`NDAY`). 빠지면 실계좌에서 거부되고 전체 값이 없어 호출하는 쪽이 고른다."""
+    rest = {key: value for key, value in params.items() if key != 'period'}
+    period = params.get('period')
+    code = rest.get('NDAY')
+    if code is None:
+        code = KIS_NEW_HIGH_LOW_PERIODS.get(period) if isinstance(period, str) else None
+    if code is None:
+        raise ArgumentsRequired(f"kis 해외 신고가·신저가 순위는 params.period({', '.join(KIS_NEW_HIGH_LOW_PERIODS)})가 필요하다")
+    rest['NDAY'] = code
+    return _overseas_ranking_params(rest)
+
+
+# 해외 순위의 공통 입력. 거래량 조건은 전체(`0`), 연속조회 키와 권한 정보는 빈 값이다. 거래소는 `prepare` 가 채운다.
+KIS_OVERSEAS_RANKING_COMMON = {'EXCD': '', 'VOL_RANG': '0', 'KEYB': '', 'AUTH': ''}
+
+
+def _overseas_ranking(path: str, tr_id: str, params: Dict[str, Any], name: str = 'name',
+                      prepare: Callable[[Dict[str, Any]], Dict[str, Any]] = _overseas_ranking_params) -> Dict[str, Any]:
+    """해외 순위 표 항목. 행은 `output2`, 종목코드는 `symb` 다. 종목명 필드는 순위마다 `name` 이나 `knam` 이다."""
+    return {
+        'path': f'uapi/overseas-stock/v1/ranking/{path}', 'trId': tr_id, 'symbolKey': 'symb', 'rowsKey': 'output2', 'overseas': True,
+        'fields': {'rank': 'rank', 'name': name, 'price': 'last', 'change': 'diff', 'rate': 'rate', 'volume': 'tvol'},
+        'params': lambda now: fn.extend(KIS_OVERSEAS_RANKING_COMMON, params),
+        'prepare': prepare,
+    }
+
+
+def _price_limit_params(params: Dict[str, Any]) -> Dict[str, Any]:
+    """상하한가 구분(`upper` 상한가, `lower` 하한가)을 `FID_PRC_CLS_CODE` 로 옮긴다. 전체 값이 없는 필터라 기본값을 두지 않는다."""
+    rest = {key: value for key, value in params.items() if key != 'priceLimit'}
+    price_limit = params.get('priceLimit')
+    code = rest.get('FID_PRC_CLS_CODE')
+    if code is None:
+        code = '0' if price_limit == 'upper' else '1' if price_limit == 'lower' else None
+    if code != '0' and code != '1':
+        raise ArgumentsRequired("kis fetchRankings('PRICE_LIMIT') 는 params.priceLimit('upper' 상한가, 'lower' 하한가)이 필요하다")
+    rest['FID_PRC_CLS_CODE'] = code
+    return rest
+
+
+# 순위 표의 공통 입력: 시장 KRX(`J`), 대상과 제외 대상과 분류는 전체, 가격과 거래량 범위는 비움.
+KIS_RANKING_COMMON = {
+    'fid_cond_mrkt_div_code': 'J', 'fid_input_iscd': '0000', 'fid_div_cls_code': '0', 'fid_trgt_cls_code': '0', 'fid_trgt_exls_cls_code': '0',
+    'fid_input_price_1': '', 'fid_input_price_2': '', 'fid_vol_cnt': '',
+}
+
+
+def _elw_ranking(path: str, tr_id: str, name_key: str, extra: Dict[str, Any]) -> Dict[str, Any]:
+    """ELW 순위 한 종류. 다섯 순위가 나눠 쓰는 입력(시장 `W`, 기초자산 전체, 발행사 전체, 범위 비움, 결재방법 `0`)에 종류별 입력을 더한다."""
+    return {
+        'path': f'uapi/elw/v1/ranking/{path}',
+        'trId': tr_id,
+        'symbolKey': 'elw_shrn_iscd',
+        'params': lambda now: fn.extend({
+            'FID_COND_MRKT_DIV_CODE': 'W', 'FID_UNAS_INPUT_ISCD': '000000', 'FID_INPUT_ISCD': '00000', 'FID_INPUT_PRICE_1': '',
+            'FID_INPUT_PRICE_2': '', 'FID_INPUT_VOL_1': '', 'FID_INPUT_VOL_2': '', 'FID_BLNG_CLS_CODE': '0',
+        }, extra),
+        'fields': {'name': name_key, 'price': 'elw_prpr'},
+    }
+
+
+def _near_new_high_low(prc_cls_code: str) -> Dict[str, Any]:
+    return {
+        'path': 'uapi/domestic-stock/v1/ranking/near-new-highlow', 'trId': 'FHPST01870000', 'symbolKey': 'mksc_shrn_iscd',
+        'params': lambda now: {
+            'fid_aply_rang_vol': '0', 'fid_cond_mrkt_div_code': 'J', 'fid_cond_scr_div_code': '20187', 'fid_div_cls_code': '0',
+            'fid_input_cnt_1': '', 'fid_input_cnt_2': '', 'fid_prc_cls_code': prc_cls_code, 'fid_input_iscd': '0000', 'fid_trgt_cls_code': '0',
+            'fid_trgt_exls_cls_code': '0', 'fid_aply_rang_prc_1': '', 'fid_aply_rang_prc_2': '',
+        },
+    }
+
+
+# 표로 정의하는 순위. `path` 는 API 트리 경로이고 암묵 메서드 이름이 여기서 나온다. `params(now)` 는 공식 예제의 요청 키를 그대로 쓴다.
+# 조회 방식을 고르는 필수 입력(정렬 등)은 예제값이 기본이고 `params` 로 바꿀 수 있다. 등락률과 거래량 순위는 따로 부른다.
+KIS_RANKING_SPECS: Dict[str, Dict[str, Any]] = {
+    # 시간외잔량 순위. 정렬 기본은 장전 시간외(`1`)
+    'AFTER_HOUR_BALANCE': {
+        'path': 'uapi/domestic-stock/v1/ranking/after-hour-balance', 'trId': 'FHPST01760000', 'symbolKey': 'stck_shrn_iscd',
+        'params': lambda now: fn.extend(KIS_RANKING_COMMON, {'fid_cond_scr_div_code': '20176', 'fid_rank_sort_cls_code': '1'}),
+    },
+    # 대량체결건수 상위. 정렬 기본은 매수상위(`0`)
+    'BULK_TRANS': {
+        'path': 'uapi/domestic-stock/v1/ranking/bulk-trans-num', 'trId': 'FHKST190900C0', 'symbolKey': 'mksc_shrn_iscd',
+        'params': lambda now: {
+            'fid_aply_rang_prc_2': '', 'fid_cond_mrkt_div_code': 'J', 'fid_cond_scr_div_code': '11909', 'fid_input_iscd': '0000',
+            'fid_rank_sort_cls_code': '0', 'fid_div_cls_code': '0', 'fid_input_price_1': '', 'fid_aply_rang_prc_1': '', 'fid_input_iscd_2': '',
+            'fid_trgt_exls_cls_code': '0', 'fid_trgt_cls_code': '0', 'fid_vol_cnt': '',
+        },
+    },
+    # 이격도 순위. 정렬 기본은 이격도상위(`0`), 기간은 5일(`5`)
+    'DISPARITY': {
+        'path': 'uapi/domestic-stock/v1/ranking/disparity', 'trId': 'FHPST01780000', 'symbolKey': 'mksc_shrn_iscd',
+        'params': lambda now: fn.extend(KIS_RANKING_COMMON, {'fid_cond_scr_div_code': '20178', 'fid_rank_sort_cls_code': '0', 'fid_hour_cls_code': '5'}),
+    },
+    # 예상체결 상승·하락 상위. 누적거래량 대신 예상 체결량(`cntg_vol`)이 온다
+    'EXPECTED_CHANGE': {
+        'path': 'uapi/domestic-stock/v1/ranking/exp-trans-updown', 'trId': 'FHPST01820000', 'symbolKey': 'stck_shrn_iscd',
+        'fields': {'volume': 'cntg_vol'},
+        'params': lambda now: {
+            'fid_rank_sort_cls_code': '0', 'fid_cond_mrkt_div_code': 'J', 'fid_cond_scr_div_code': '20182', 'fid_input_iscd': '0000',
+            'fid_div_cls_code': '0', 'fid_aply_rang_prc_1': '', 'fid_vol_cnt': '', 'fid_pbmn': '', 'fid_blng_cls_code': '0',
+            'fid_mkop_cls_code': '0',
+        },
+    },
+    # 시가총액 상위
+    'MARKET_CAP': {
+        'path': 'uapi/domestic-stock/v1/ranking/market-cap', 'trId': 'FHPST01740000', 'symbolKey': 'mksc_shrn_iscd',
+        'params': lambda now: fn.extend(KIS_RANKING_COMMON, {'fid_cond_scr_div_code': '20174'}),
+    },
+    # 신고가 근접 상위(`fid_prc_cls_code=0`)
+    'NEAR_NEW_HIGH': _near_new_high_low('0'),
+    # 신저가 근접 상위(`fid_prc_cls_code=1`)
+    'NEAR_NEW_LOW': _near_new_high_low('1'),
+    # 우선주 괴리율 상위
+    'PREFERRED_DISPARITY': {
+        'path': 'uapi/domestic-stock/v1/ranking/prefer-disparate-ratio', 'trId': 'FHPST01770000', 'symbolKey': 'mksc_shrn_iscd',
+        'params': lambda now: fn.extend(KIS_RANKING_COMMON, {'fid_cond_scr_div_code': '20177'}),
+    },
+    # 호가잔량 순위. 정렬 기본은 순매수잔량순(`0`)
+    'QUOTE_BALANCE': {
+        'path': 'uapi/domestic-stock/v1/ranking/quote-balance', 'trId': 'FHPST01720000', 'symbolKey': 'mksc_shrn_iscd',
+        'params': lambda now: fn.extend(KIS_RANKING_COMMON, {'fid_cond_scr_div_code': '20172', 'fid_rank_sort_cls_code': '0'}),
+    },
+    # 관심종목등록 상위
+    'TOP_INTEREST': {
+        'path': 'uapi/domestic-stock/v1/ranking/top-interest-stock', 'trId': 'FHPST01800000', 'symbolKey': 'mksc_shrn_iscd',
+        'params': lambda now: fn.extend(KIS_RANKING_COMMON, {'fid_cond_scr_div_code': '20180', 'fid_input_iscd_2': '000000', 'fid_input_cnt_1': '1'}),
+    },
+    # 당사매매종목 상위. 기간은 오늘 하루(한국 날짜)
+    'TRADED_BY_COMPANY': {
+        'path': 'uapi/domestic-stock/v1/ranking/traded-by-company', 'trId': 'FHPST01860000', 'symbolKey': 'mksc_shrn_iscd',
+        'params': lambda now: {
+            'fid_trgt_exls_cls_code': '0', 'fid_cond_mrkt_div_code': 'J', 'fid_cond_scr_div_code': '20186', 'fid_div_cls_code': '0',
+            'fid_rank_sort_cls_code': '0', 'fid_input_date_1': kst_ymd(now), 'fid_input_date_2': kst_ymd(now), 'fid_input_iscd': '0000',
+            'fid_trgt_cls_code': '0', 'fid_aply_rang_vol': '0', 'fid_aply_rang_prc_2': '', 'fid_aply_rang_prc_1': '',
+        },
+    },
+    # 체결강도 상위
+    'VOLUME_POWER': {
+        'path': 'uapi/domestic-stock/v1/ranking/volume-power', 'trId': 'FHPST01680000', 'symbolKey': 'stck_shrn_iscd',
+        'params': lambda now: fn.extend(KIS_RANKING_COMMON, {'fid_cond_scr_div_code': '20168'}),
+    },
+    # 신용잔고 상위. 행은 `output2` 다
+    'CREDIT_BALANCE': {
+        'path': 'uapi/domestic-stock/v1/ranking/credit-balance', 'trId': 'FHKST17010000', 'symbolKey': 'mksc_shrn_iscd', 'rowsKey': 'output2',
+        'params': lambda now: {
+            'FID_COND_SCR_DIV_CODE': '11701', 'FID_INPUT_ISCD': '0000', 'FID_OPTION': '2', 'FID_COND_MRKT_DIV_CODE': 'J',
+            'FID_RANK_SORT_CLS_CODE': '0',
+        },
+    },
+    # 배당률 상위. 배당 종류는 `params['dividendType']` 으로 반드시 고른다. 기준일 범위는 최근 1년이다
+    'DIVIDEND_RATE': {
+        'path': 'uapi/domestic-stock/v1/ranking/dividend-rate', 'trId': 'HHKDB13470100', 'symbolKey': 'sht_cd',
+        'fields': {'rank': 'rank', 'name': 'isin_name'},
+        'params': lambda now: {
+            'CTS_AREA': ' ', 'GB1': '1', 'UPJONG': '0001', 'GB2': '0', 'GB3': '', 'F_DT': kst_ymd(now - 365 * DAY_MS), 'T_DT': kst_ymd(now),
+            'GB4': '0',
+        },
+        'prepare': _dividend_params,
+    },
+    # 재무비율 순위. 정렬 기본은 수익성 분석(`7`)
+    'FINANCE_RATIO': {
+        'path': 'uapi/domestic-stock/v1/ranking/finance-ratio', 'trId': 'FHPST01750000', 'symbolKey': 'mksc_shrn_iscd',
+        'params': lambda now: _finance_ranking_params(now, '20175', '7'),
+    },
+    # HTS 조회상위 20종목. 행은 `output1` 이다
+    'HTS_TOP_VIEW': {
+        'path': 'uapi/domestic-stock/v1/ranking/hts-top-view', 'trId': 'HHMCM000100C0', 'symbolKey': 'mksc_shrn_iscd', 'rowsKey': 'output1',
+        'params': lambda now: {},
+    },
+    # 시장가치 순위. 정렬 기본은 PER(`23`)
+    'MARKET_VALUE': {
+        'path': 'uapi/domestic-stock/v1/ranking/market-value', 'trId': 'FHPST01790000', 'symbolKey': 'mksc_shrn_iscd',
+        'params': lambda now: _finance_ranking_params(now, '20179', '23'),
+    },
+    # 시간외 예상체결 등락률
+    'OVERTIME_EXPECTED_CHANGE': {
+        'path': 'uapi/domestic-stock/v1/ranking/overtime-exp-trans-fluct', 'trId': 'FHKST11860000', 'symbolKey': 'stck_shrn_iscd',
+        'fields': {'price': 'ovtm_untp_antc_cnpr', 'change': 'ovtm_untp_antc_cntg_vrss', 'rate': 'ovtm_untp_antc_cntg_ctrt', 'volume': 'ovtm_untp_antc_cnqn'},
+        'params': lambda now: {
+            'FID_COND_MRKT_DIV_CODE': 'J', 'FID_COND_SCR_DIV_CODE': '11186', 'FID_INPUT_ISCD': '0000', 'FID_RANK_SORT_CLS_CODE': '0',
+            'FID_DIV_CLS_CODE': '0', 'FID_INPUT_PRICE_1': '', 'FID_INPUT_PRICE_2': '', 'FID_INPUT_VOL_1': '',
+        },
+    },
+    # 시간외 등락률 순위. 행은 `output2` 다
+    'OVERTIME_CHANGE': {
+        'path': 'uapi/domestic-stock/v1/ranking/overtime-fluctuation', 'trId': 'FHPST02340000', 'symbolKey': 'mksc_shrn_iscd', 'rowsKey': 'output2',
+        'fields': KIS_OVERTIME_FIELDS,
+        'params': lambda now: {
+            'FID_COND_MRKT_DIV_CODE': 'J', 'FID_MRKT_CLS_CODE': '', 'FID_COND_SCR_DIV_CODE': '20234', 'FID_INPUT_ISCD': '0000',
+            'FID_DIV_CLS_CODE': '1', 'FID_INPUT_PRICE_1': '', 'FID_INPUT_PRICE_2': '', 'FID_VOL_CNT': '', 'FID_TRGT_CLS_CODE': '',
+            'FID_TRGT_EXLS_CLS_CODE': '',
+        },
+    },
+    # 시간외 거래량 순위. 행은 `output2` 다
+    'OVERTIME_VOLUME': {
+        'path': 'uapi/domestic-stock/v1/ranking/overtime-volume', 'trId': 'FHPST02350000', 'symbolKey': 'stck_shrn_iscd', 'rowsKey': 'output2',
+        'fields': KIS_OVERTIME_FIELDS,
+        'params': lambda now: {
+            'FID_COND_MRKT_DIV_CODE': 'J', 'FID_COND_SCR_DIV_CODE': '20235', 'FID_INPUT_ISCD': '0000', 'FID_RANK_SORT_CLS_CODE': '0',
+            'FID_INPUT_PRICE_1': '', 'FID_INPUT_PRICE_2': '', 'FID_VOL_CNT': '', 'FID_TRGT_CLS_CODE': '', 'FID_TRGT_EXLS_CLS_CODE': '',
+        },
+    },
+    # 수익자산지표 순위
+    'PROFIT_ASSET': {
+        'path': 'uapi/domestic-stock/v1/ranking/profit-asset-index', 'trId': 'FHPST01730000', 'symbolKey': 'mksc_shrn_iscd',
+        'params': lambda now: _finance_ranking_params(now, '20173', '0'),
+    },
+    # 공매도 상위. 순위 필드가 없다
+    'SHORT_SALE': {
+        'path': 'uapi/domestic-stock/v1/ranking/short-sale', 'trId': 'FHPST04820000', 'symbolKey': 'mksc_shrn_iscd',
+        'params': lambda now: {
+            'FID_APLY_RANG_VOL': '', 'FID_COND_MRKT_DIV_CODE': 'J', 'FID_COND_SCR_DIV_CODE': '20482', 'FID_INPUT_ISCD': '0000',
+            'FID_PERIOD_DIV_CODE': 'D', 'FID_INPUT_CNT_1': '0', 'FID_TRGT_EXLS_CLS_CODE': '', 'FID_TRGT_CLS_CODE': '', 'FID_APLY_RANG_PRC_1': '',
+            'FID_APLY_RANG_PRC_2': '',
+        },
+    },
+    # 장마감 예상체결가. 거래량 자리에는 체결거래량(`cntg_vol`)을 넣는다
+    'CLOSING_EXPECTED': {
+        'path': 'uapi/domestic-stock/v1/quotations/exp-closing-price', 'trId': 'FHKST117300C0', 'symbolKey': 'stck_shrn_iscd',
+        'fields': {'volume': 'cntg_vol'},
+        'params': lambda now: {
+            'FID_COND_MRKT_DIV_CODE': 'J', 'FID_INPUT_ISCD': '0000', 'FID_RANK_SORT_CLS_CODE': '0', 'FID_COND_SCR_DIV_CODE': '11173',
+            'FID_BLNG_CLS_CODE': '0',
+        },
+    },
+    # 국내기관·외국인 매매종목 가집계
+    'FOREIGN_INSTITUTION_ESTIMATE': {
+        'path': 'uapi/domestic-stock/v1/quotations/foreign-institution-total', 'trId': 'FHPTJ04400000', 'symbolKey': 'mksc_shrn_iscd',
+        'params': lambda now: {
+            'FID_COND_MRKT_DIV_CODE': 'V', 'FID_COND_SCR_DIV_CODE': '16449', 'FID_INPUT_ISCD': '0000', 'FID_DIV_CLS_CODE': '0',
+            'FID_RANK_SORT_CLS_CODE': '0', 'FID_ETC_CLS_CODE': '0',
+        },
+    },
+    # 외국계 매매종목 가집계
+    'FOREIGN_BROKER_ESTIMATE': {
+        'path': 'uapi/domestic-stock/v1/quotations/frgnmem-trade-estimate', 'trId': 'FHKST644100C0', 'symbolKey': 'stck_shrn_iscd',
+        'params': lambda now: {
+            'FID_COND_MRKT_DIV_CODE': 'J', 'FID_COND_SCR_DIV_CODE': '16441', 'FID_INPUT_ISCD': '0000', 'FID_RANK_SORT_CLS_CODE': '0',
+            'FID_RANK_SORT_CLS_CODE_2': '0',
+        },
+    },
+    # 상하한가 포착. 상하한가 구분은 `params['priceLimit']` 으로 반드시 고른다
+    'PRICE_LIMIT': {
+        'path': 'uapi/domestic-stock/v1/quotations/capture-uplowprice', 'trId': 'FHKST130000C0', 'symbolKey': 'mksc_shrn_iscd',
+        'params': lambda now: {
+            'FID_COND_MRKT_DIV_CODE': 'J', 'FID_COND_SCR_DIV_CODE': '11300', 'FID_PRC_CLS_CODE': '', 'FID_DIV_CLS_CODE': '0',
+            'FID_INPUT_ISCD': '0000', 'FID_TRGT_CLS_CODE': '', 'FID_TRGT_EXLS_CLS_CODE': '', 'FID_INPUT_PRICE_1': '', 'FID_INPUT_PRICE_2': '',
+            'FID_VOL_CNT': '',
+        },
+        'prepare': _price_limit_params,
+    },
+    # 해외 순위. 거래소(`params['exchange']`)는 반드시 받는다. 통화구분(`CURR_GB`)은 빠지면 실계좌에서 거부된다
+    'OVERSEAS_MARKET_CAP': _overseas_ranking('market-cap', 'HHDFS76350100', {'CURR_GB': '0'}),
+    'OVERSEAS_NEW_HIGH': _overseas_ranking('new-highlow', 'HHDFS76300000', {'MINX': '0', 'GUBN': '1', 'GUBN2': '1'}, prepare=_new_high_low_params),
+    'OVERSEAS_NEW_LOW': _overseas_ranking('new-highlow', 'HHDFS76300000', {'MINX': '0', 'GUBN': '0', 'GUBN2': '1'}, prepare=_new_high_low_params),
+    'OVERSEAS_PRICE_SURGE': _overseas_ranking('price-fluct', 'HHDFS76260000', {'GUBN': '1', 'MINX': '0'}, 'knam'),
+    'OVERSEAS_PRICE_PLUNGE': _overseas_ranking('price-fluct', 'HHDFS76260000', {'GUBN': '0', 'MINX': '0'}, 'knam'),
+    'OVERSEAS_GAINERS': _overseas_ranking('updown-rate', 'HHDFS76290000', {'NDAY': '0', 'GUBN': '1'}),
+    'OVERSEAS_LOSERS': _overseas_ranking('updown-rate', 'HHDFS76290000', {'NDAY': '0', 'GUBN': '0'}),
+    'OVERSEAS_VOLUME': _overseas_ranking('trade-vol', 'HHDFS76310010', {'NDAY': '0', 'PRC1': '', 'PRC2': ''}),
+    'OVERSEAS_TRADE_AMOUNT': _overseas_ranking('trade-pbmn', 'HHDFS76320010', {'NDAY': '0', 'PRC1': '', 'PRC2': ''}),
+    'OVERSEAS_TRADE_GROWTH': _overseas_ranking('trade-growth', 'HHDFS76330000', {'NDAY': '0'}),
+    'OVERSEAS_TURNOVER': _overseas_ranking('trade-turnover', 'HHDFS76340000', {'NDAY': '0'}),
+    'OVERSEAS_VOLUME_POWER': _overseas_ranking('volume-power', 'HHDFS76280000', {'NDAY': '0'}),
+    'OVERSEAS_VOLUME_SURGE': _overseas_ranking('volume-surge', 'HHDFS76270000', {'MINX': '0'}, 'knam'),
+    # ELW 순위. 종목코드는 ELW 단축코드(`elw_shrn_iscd`)다
+    'ELW_UPDOWN_RATE': _elw_ranking('updown-rate', 'FHPEW02770000', 'hts_kor_isnm', {
+        'FID_COND_SCR_DIV_CODE': '20277', 'FID_INPUT_RMNN_DYNU_1': '0', 'FID_DIV_CLS_CODE': '0', 'FID_INPUT_DATE_1': '',
+        'FID_RANK_SORT_CLS_CODE': '0', 'FID_INPUT_DATE_2': '',
+    }),
+    'ELW_VOLUME': _elw_ranking('volume-rank', 'FHPEW02780000', 'elw_kor_isnm', {
+        'FID_COND_SCR_DIV_CODE': '20278', 'FID_INPUT_RMNN_DYNU_1': '', 'FID_DIV_CLS_CODE': '0', 'FID_INPUT_DATE_1': '',
+        'FID_RANK_SORT_CLS_CODE': '0', 'FID_INPUT_ISCD_2': '0000', 'FID_INPUT_DATE_2': '',
+    }),
+    'ELW_INDICATOR': _elw_ranking('indicator', 'FHPEW02790000', 'elw_kor_isnm', {
+        'FID_COND_SCR_DIV_CODE': '20279', 'FID_DIV_CLS_CODE': '0', 'FID_RANK_SORT_CLS_CODE': '0',
+    }),
+    'ELW_SENSITIVITY': _elw_ranking('sensitivity', 'FHPEW02850000', 'elw_kor_isnm', {
+        'FID_COND_SCR_DIV_CODE': '20285', 'FID_DIV_CLS_CODE': '0', 'FID_RANK_SORT_CLS_CODE': '0', 'FID_INPUT_RMNN_DYNU_1': '',
+        'FID_INPUT_DATE_1': '',
+    }),
+    'ELW_QUICK_CHANGE': _elw_ranking('quick-change', 'FHPEW02870000', 'elw_kor_isnm', {
+        'FID_COND_SCR_DIV_CODE': '20287', 'FID_MRKT_CLS_CODE': 'A', 'FID_HOUR_CLS_CODE': '1', 'FID_INPUT_HOUR_1': '', 'FID_INPUT_HOUR_2': '',
+        'FID_RANK_SORT_CLS_CODE': '1',
+    }),
+}
+
+
+def _implicit_get(path: str) -> str:
+    """API 트리 경로 → 암묵 메서드 이름(`uapi/domestic-stock/v1/ranking/fluctuation` → `private_get_uapi_domestic_stock_v1_ranking_fluctuation`)."""
+    return 'private_get_' + re.sub(r'[/-]', '_', path).lower()
 
 
 def _now_ms() -> int:
@@ -251,6 +727,7 @@ class kis(Exchange, ImplicitAPI):
     def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
         self._auth: Optional[KISAuth] = None
         self._auth_app_key: Str = None
+        self._candle_service: Optional[KISCandleService] = None
         super().__init__(config)
 
     def describe(self) -> Dict[str, Any]:
@@ -262,20 +739,49 @@ class kis(Exchange, ImplicitAPI):
             'rateLimit': REAL_RATE_LIMIT_MS,
             'timeout': READ_TIMEOUT_MS,
             'orderTimeout': ORDER_TIMEOUT_MS,
-            # 옮긴 통합 메서드만 True 다. 나머지는 TypeScript 판에 있고 Python 판에는 아직 없다.
+            # 옮긴 통합 메서드만 True 다. 웹소켓(`ws`, `watch*`)은 옮기지 않아 False 다.
             'has': {
+                'ws': False,
+                'watchTicker': False,
+                'watchTrades': False,
+                'watchOrderBook': False,
+                'watchOrders': False,
                 'spot': True,
                 'margin': False,
                 'swap': False,
                 'future': False,
                 'option': False,
                 'sandbox': True,
-                'ws': False,
+                'createOrder': False,
                 'createLimitOrder': False,
                 'createMarketOrder': False,
-                'fetchMarkets': False,
+                'cancelOrder': False,
+                'cancelAllOrders': False,
+                'editOrder': False,
+                'createTriggerOrder': False,
+                'fetchBalance': False,
+                'fetchMarkets': True,
                 'fetchCurrencies': False,
+                'fetchTicker': True,
+                'fetchTickers': True,
+                'fetchOrderBook': True,
+                'fetchOHLCV': True,
+                'fetchOrder': False,
+                'fetchOrders': False,
+                'fetchOpenOrders': False,
+                'fetchClosedOrders': False,
+                'fetchCanceledOrders': False,
+                'fetchMyTrades': False,
+                'fetchTradingFee': True,
+                'fetchStatus': False,
+                'fetchTime': False,
+                'fetchMarketCalendar': True,
+                'fetchStockWarnings': True,
+                'fetchInvestorTrading': True,
+                'fetchRankings': True,
             },
+            # 야후 파이낸스로 받는 봉 주기. 국내 캔들은 KIS 가 당일 분봉과 100행 일봉만 줘서 야후를 쓴다.
+            'timeframes': {'1m': '1m', '5m': '5m', '15m': '15m', '30m': '30m', '1h': '1h', '4h': '4h', '1d': '1d', '1w': '1w', '1M': '1M'},
             'urls': {
                 'api': {'public': KIS_API_DOMAINS['REAL'], 'private': KIS_API_DOMAINS['REAL']},
                 'test': {'public': KIS_API_DOMAINS['VIRTUAL'], 'private': KIS_API_DOMAINS['VIRTUAL']},
@@ -286,6 +792,7 @@ class kis(Exchange, ImplicitAPI):
                     'https://apiportal.koreainvestment.com/apiservice',
                     'https://github.com/koreainvestment/open-trading-api',
                 ],
+                'fees': 'https://securities.koreainvestment.com/main/customer/guide/_static/TF04ae010000.jsp',
             },
             'requiredCredentials': {'apiKey': True, 'secret': True, 'uid': True},
             'fees': {
@@ -297,8 +804,18 @@ class kis(Exchange, ImplicitAPI):
                 # 조회 재시도. 시간 초과는 fetch 가 재시도 대상에서 뺀다.
                 'maxRetriesOnFailure': READ_RETRIES,
                 'maxRetriesOnFailureDelay': READ_RETRY_DELAY_MS,
+                # 주문가능금액(`inquire-psbl-order`)은 종목을 지정해야 조회된다. 현금 주문가능액은 종목과 무관하므로 어느 상장 종목이든 좋다.
+                'orderableProbeCode': '005930',
                 # 토큰과 발급 락을 여러 프로세스가 나눠 쓰는 저장소(BrokerTokenStore). 없으면 프로세스 메모리 캐시만 쓴다.
                 'tokenStore': None,
+                # 정규장 밖(NXT 프리·애프터) 주문과 시세를 연다. 불리언이거나 불리언을 돌려주는 함수다. 기본은 꺼짐이다.
+                'nxtRouting': None,
+                # 종목 검색과 해외 거래소 판별에 쓰는 KIS 마스터 데이터(`kis_master_data` 참고). 없으면 빈 데이터다.
+                'masterData': None,
+                # 국내 종목의 코스피·코스닥 구분을 알려 주는 곳(`find_kr_market(code)` 가 있는 객체). 없으면 마스터 데이터로 판별한다.
+                'stockDirectory': None,
+                # 접수 뒤 체결 확정 조회의 예산 `{'attempts', 'intervalMs'}`. 사전이거나 사전을 돌려주는 함수다.
+                'confirmBudget': None,
             },
         })
 
@@ -452,3 +969,486 @@ class kis(Exchange, ImplicitAPI):
             self.invalidate_token()
         except Exception:
             logger.warning('[kis] 토큰 캐시 무효화 실패', exc_info=True)
+
+    # ============ 종목 ============
+
+    def fetch_markets(self, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """종목 마스터 데이터(`options['masterData']`)로 종목 목록을 만든다. 국내(코스피·코스닥)와 미국(나스닥·뉴욕·아멕스)이 들어 있다.
+        `params['market']` 으로 `'domestic'` 이나 `'overseas'` 만 받을 수 있다."""
+        which = self.safe_string(params, 'market', 'all')
+        master = self._master()
+        rows: List[Dict[str, Any]] = []
+        if which != 'overseas':
+            rows.extend(search_krx_stocks(master, None, max(get_stock_master_count(master), 1)))
+        if which != 'domestic':
+            rows.extend(search_overseas_stocks(master, None, 2 ** 53 - 1))
+        return self.parse_markets(rows)
+
+    def parse_market(self, market: Dict[str, Any]) -> Dict[str, Any]:
+        """마스터 행 하나를 종목으로 옮긴다. 해외 마스터 행은 `currency` 를 갖고 국내 행은 갖지 않는다."""
+        market_id = self.safe_string(market, 'code')
+        if market_id is None:
+            raise ExchangeError(f'{self.id} parseMarket() missing code')
+        overseas = self.safe_string(market, 'currency') is not None or not is_krx_domestic_code(market_id)
+        quote = 'USD' if overseas else 'KRW'
+        base = market_id.replace('/', '.', 1)
+        exchange_code = self.safe_string(market, 'market')
+        fee = KIS_OVERSEAS_DEFAULT_FEE_RATE if overseas else KIS_BROKERAGE_FEE
+        return self.safe_market_structure({
+            'id': market_id,
+            'symbol': f'{base}/{quote}',
+            'base': base,
+            'quote': quote,
+            'baseId': market_id,
+            'quoteId': quote,
+            'settle': None,
+            'settleId': None,
+            'type': 'spot',
+            'spot': True,
+            'margin': False,
+            'swap': False,
+            'future': False,
+            'option': False,
+            'active': True,
+            'contract': False,
+            'linear': None,
+            'inverse': None,
+            'taker': fee,
+            'maker': fee,
+            'contractSize': None,
+            'expiry': None,
+            'expiryDatetime': None,
+            'strike': None,
+            'optionType': None,
+            # 국내 호가 단위는 가격대별이라 한 값으로 적을 수 없다. `price_to_precision` 이 표를 쓴다. 미국은 0.01 달러다.
+            'precision': {'amount': 1, 'price': 0.01 if overseas else None},
+            'limits': {
+                'leverage': {'min': None, 'max': None},
+                'amount': {'min': 1, 'max': None},
+                'price': {'min': None, 'max': None},
+                'cost': {'min': None, 'max': None},
+            },
+            'created': None,
+            'info': market,
+            'options': {'exchange': exchange_code, 'orderExchange': to_order_market_code(exchange_code) if overseas else None},
+        })
+
+    def price_to_precision(self, symbol: Str, price: Any) -> Str:
+        """가격을 호가 단위에 맞춘 문자열. 국내 일반 주식은 가격대별 호가 단위(2천원 미만 1원 … 50만원 이상 1천원)로 반올림하고,
+        ETF·ETN 은 표가 달라 그대로 둔다. 미국은 0.01 달러 단위다."""
+        if price is None:
+            return None
+        instrument = self._instrument_of(symbol)
+        if instrument.overseas:
+            return decimal_to_precision(price, ROUND, 0.01, TICK_SIZE, NO_PADDING)
+        stock = get_krx_stock_by_code(self._master(), instrument.code)
+        security_type = None if stock is None else stock.get('securityType')
+        if security_type is not None and security_type != 'STOCK':
+            return self.number_to_string(price)
+        return decimal_to_precision(price, ROUND, get_tick_size(fn.js_number(price)), TICK_SIZE, NO_PADDING)
+
+    def _instrument_of(self, symbol: str) -> KisInstrument:
+        """심볼(또는 종목코드)을 종목 식별 결과로 바꾼다. 국내는 마스터 없이도 되고, 해외는 마스터에서 거래소를 찾는다."""
+        suffixed = _SUFFIXED_SYMBOL.fullmatch(symbol)
+        base = (suffixed.group(1) if suffixed else symbol).strip()
+        if is_krx_domestic_code(base):
+            return KisInstrument(f'{base}/KRW', base, False, 'KRW', None, None)
+        # 통합 심볼의 점(`BRK.B`)을 KIS 표기의 슬래시(`BRK/B`)로 돌린다. 마스터가 그 표기를 가질 때만 바꾼다.
+        upper = base.upper()
+        slashed = upper.replace('.', '/', 1)
+        master = self._master()
+        use_slashed = get_overseas_stock_by_code(master, upper) is None and get_overseas_stock_by_code(master, slashed) is not None
+        code = slashed if use_slashed else upper
+        quote_exchange = get_overseas_market_for_code(master, code)
+        return KisInstrument(f"{code.replace('/', '.', 1)}/USD", code, True, 'USD', quote_exchange, to_order_market_code(quote_exchange))
+
+    def _market_of(self, instrument: KisInstrument) -> Dict[str, Any]:
+        """`load_markets()` 로 받은 종목이 있으면 그것을, 없으면 마스터 행(또는 모양)으로 종목을 만든다."""
+        known = (self.markets or {}).get(instrument.symbol)
+        if known is not None:
+            return known
+        master = self._master()
+        if instrument.overseas:
+            row = get_overseas_stock_by_code(master, instrument.code) or {'code': instrument.code, 'currency': 'USD'}
+        else:
+            row = get_krx_stock_by_code(master, instrument.code) or {'code': instrument.code}
+        return self.parse_market(row)
+
+    def _master(self) -> Dict[str, Any]:
+        """이 인스턴스의 종목 마스터 데이터(`options['masterData']`). 넘기지 않았으면 빈 데이터다."""
+        return master_data_of(self.options)
+
+    def _quote_market_division(self) -> str:
+        """국내 시세 조회의 상품구분. `nxtRouting` 옵션이 켜져 있고 NXT 확장세션이면 통합(`UN`)으로 애프터마켓 시세를 받는다."""
+        return 'UN' if is_nxt_extended_tradable() and self.is_option_enabled('nxtRouting') else 'J'
+
+    # ============ 시세 ============
+
+    def fetch_ticker(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """현재가. 호가(`bid`·`ask`)는 채우지 않는다. 현재가가 0 이거나 비어 있으면 `NullResponse` 를 던진다. 장 마감·지연시세·휴장에
+        빈 값이 오는데, 0 을 현재가로 넘기면 호출하는 쪽의 손익이 -100% 로 보인다."""
+        instrument = self._instrument_of(symbol)
+        market = self._market_of(instrument)
+        if instrument.overseas:
+            if instrument.quote_exchange is None:
+                raise BadSymbol(f'해외 마스터에 없는 ticker: {symbol}')
+            response = self.private_get_uapi_overseas_price_v1_quotations_price(self.extend({
+                'AUTH': '',
+                'EXCD': instrument.quote_exchange,
+                'SYMB': instrument.code,
+                'tr_id': 'HHDFS00000300',
+            }, params))
+        else:
+            response = self.private_get_uapi_domestic_stock_v1_quotations_inquire_price(self.extend({
+                'FID_COND_MRKT_DIV_CODE': self._quote_market_division(),
+                'FID_INPUT_ISCD': instrument.code,
+                'tr_id': 'FHKST01010100',
+            }, params))
+        output = self.safe_dict(response, 'output', {})
+        last = fn.js_number(self.safe_string(output, 'last' if instrument.overseas else 'stck_prpr'))
+        if not math.isfinite(last) or last <= 0:
+            raise NullResponse(f'{self.id} {symbol} 현재가가 0 이거나 비어 있다')
+        return self.parse_ticker(output, market)
+
+    def parse_ticker(self, ticker: Dict[str, Any], market: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        timestamp = self.milliseconds()
+        if market is not None and market.get('quote') == 'USD':
+            last = self.safe_string(ticker, 'last')
+            previous_close = self.safe_string(ticker, 'base') if Precise.string_gt(self.safe_string(ticker, 'base'), '0') else None
+            return self.safe_ticker({
+                'symbol': market['symbol'],
+                'timestamp': timestamp,
+                'datetime': self.iso8601(timestamp),
+                'high': self.safe_string(ticker, 'high'),
+                'low': self.safe_string(ticker, 'low'),
+                'open': self.safe_string(ticker, 'open'),
+                'close': last,
+                'last': last,
+                'previousClose': previous_close,
+                # 절대 변동은 전일 종가로 구한다. 응답은 부호를 따로 주어 `diff` 를 그대로 쓰지 않는다.
+                'change': Precise.string_sub(last, previous_close) if previous_close is not None else None,
+                'percentage': self.safe_string(ticker, 'rate'),
+                'baseVolume': self.safe_string(ticker, 'tvol'),
+                'quoteVolume': self.safe_string(ticker, 'tamt'),
+                'info': ticker,
+            }, market)
+        last = self.safe_string(ticker, 'stck_prpr')
+        percentage = self.safe_string(ticker, 'prdy_ctrt')
+        # 전일대비(`prdy_vrss`)는 부호가 없을 수 있어 등락률의 부호로 정한다. 보합(등락률 0)이면 변동도 0이다.
+        change = self.number_to_string(abs(to_number(self.safe_string(ticker, 'prdy_vrss'))) * _js_sign(to_number(percentage)))
+        return self.safe_ticker({
+            'symbol': None if market is None else market.get('symbol'),
+            'timestamp': timestamp,
+            'datetime': self.iso8601(timestamp),
+            'high': self.safe_string(ticker, 'stck_hgpr'),
+            'low': self.safe_string(ticker, 'stck_lwpr'),
+            'open': self.safe_string(ticker, 'stck_oprc'),
+            'close': last,
+            'last': last,
+            'previousClose': self.safe_string(ticker, 'stck_sdpr'),
+            'change': change,
+            'percentage': percentage,
+            'baseVolume': self.safe_string(ticker, 'acml_vol'),
+            'quoteVolume': self.safe_string(ticker, 'acml_tr_pbmn'),
+            'info': ticker,
+        }, market)
+
+    def fetch_tickers(self, symbols: Strings = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """여러 종목의 현재가를 한 번에 받는다(`intstock-multprice`, 한 번에 30종목까지). 국내만 받는다. 이 API 는 NXT 통합(`UN`)을
+        문서에 적어 두지 않아 `fetch_ticker` 와 달리 항상 KRX(`J`)로 묻는다."""
+        if symbols is None or len(symbols) == 0:
+            raise ArgumentsRequired(f'{self.id} fetchTickers() 는 symbols 인자가 필요하다')
+        if len(symbols) > MULTI_TICKER_LIMIT:
+            raise BadRequest(f'{self.id} fetchTickers() 는 한 번에 최대 {MULTI_TICKER_LIMIT}종목까지 지원한다: {len(symbols)}종목')
+        instruments = []
+        for symbol in symbols:
+            instrument = self._instrument_of(symbol)
+            if instrument.overseas:
+                raise BadSymbol(f'{self.id} fetchTickers() 은 국내 종목만 지원한다: {symbol}')
+            instruments.append(instrument)
+        by_code = {instrument.code: instrument for instrument in instruments}
+        request: Dict[str, Any] = {'tr_id': 'FHKST11300006'}
+        for i, instrument in enumerate(instruments):
+            request[f'FID_COND_MRKT_DIV_CODE_{i + 1}'] = 'J'
+            request[f'FID_INPUT_ISCD_{i + 1}'] = instrument.code
+        response = self.private_get_uapi_domestic_stock_v1_quotations_intstock_multprice(self.extend(request, params))
+        result: Dict[str, Any] = {}
+        for row in rows_of(self.safe_value(response, 'output')):
+            instrument = by_code.get(self.safe_string(row, 'inter_shrn_iscd', ''))
+            if instrument is None:
+                continue
+            market = self._market_of(instrument)
+            result[market['symbol']] = self.parse_ticker({
+                'stck_prpr': row.get('inter2_prpr'),
+                'stck_hgpr': row.get('inter2_hgpr'),
+                'stck_lwpr': row.get('inter2_lwpr'),
+                'stck_oprc': row.get('inter2_oprc'),
+                'stck_sdpr': row.get('inter2_sdpr'),
+                'prdy_vrss': row.get('inter2_prdy_vrss'),
+                'prdy_ctrt': row.get('prdy_ctrt'),
+                'acml_vol': row.get('acml_vol'),
+                'acml_tr_pbmn': row.get('acml_tr_pbmn'),
+            }, market)
+        return result
+
+    def fetch_order_book(self, symbol: str, limit: Int = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """국내 호가 10단계(잔량 포함). 매수는 높은 가격부터, 매도는 낮은 가격부터다. 미국 종목은 받지 않는다. 호가가 없으면 `NullResponse`."""
+        instrument = self._instrument_of(symbol)
+        if instrument.overseas:
+            raise NotSupported(f'{self.id} fetchOrderBook() 은 국내 종목만 지원한다: {symbol}')
+        response = self.private_get_uapi_domestic_stock_v1_quotations_inquire_asking_price_exp_ccn(self.extend({
+            'FID_COND_MRKT_DIV_CODE': self._quote_market_division(),
+            'FID_INPUT_ISCD': instrument.code,
+            'tr_id': 'FHKST01010200',
+        }, params))
+        output = self.safe_dict(response, 'output1', {})
+        bids: List[List[float]] = []
+        asks: List[List[float]] = []
+        for level in range(1, 11):
+            ask_price = fn.js_number(output[f'askp{level}']) if f'askp{level}' in output else math.nan
+            if math.isfinite(ask_price) and ask_price > 0:
+                asks.append([ask_price, to_number(output.get(f'askp_rsqn{level}'))])
+            bid_price = fn.js_number(output[f'bidp{level}']) if f'bidp{level}' in output else math.nan
+            if math.isfinite(bid_price) and bid_price > 0:
+                bids.append([bid_price, to_number(output.get(f'bidp_rsqn{level}'))])
+        if len(bids) == 0 and len(asks) == 0:
+            raise NullResponse(f'{self.id} {symbol} 호가가 비어 있다')
+        book = self.safe_order_book({'symbol': instrument.symbol, 'timestamp': self.milliseconds(), 'bids': bids, 'asks': asks})
+        if limit is not None:
+            book['bids'] = book['bids'][:limit]
+            book['asks'] = book['asks'][:limit]
+        return book
+
+    def fetch_ohlcv(self, symbol: str, timeframe: str = '1d', since: Int = None, limit: Int = 100,
+                    params: Optional[Dict[str, Any]] = None) -> List[List[Any]]:
+        """봉. 국내는 항상 야후 파이낸스로 받는다(KIS 는 분봉이 당일뿐이고 일봉도 100행이다). 미국 일·주·월봉은 야후를 먼저 부르고,
+        야후가 비면 KIS 로 다시 받는다. `params['until']`(ms)로 끝 시각을 정한다."""
+        timeframe = '1d' if timeframe is None else timeframe
+        limit = 100 if limit is None else limit
+        instrument = self._instrument_of(symbol)
+        until = self.safe_integer(params, 'until')
+        # 코스피·코스닥 구분으로 야후 티커의 접미사(.KS·.KQ)를 맞게 붙인다.
+        kr_market = resolve_kr_market(symbol, self.options.get('stockDirectory'), self._master())
+        yahoo = fetch_yahoo_candles(symbol, timeframe, limit, since, until, kr_market, session=self.session)
+        daily_like = timeframe in ('1d', '1w', '1W', '1M')
+        if len(yahoo) > 0 or not instrument.overseas or not daily_like:
+            return yahoo
+        # 자격증명이 없으면 KIS 로 다시 받을 수 없어 야후 결과를 그대로 돌려준다.
+        if instrument.quote_exchange is None or not self.check_required_credentials(False):
+            return yahoo
+        logger.info('[kis] 야후가 비어 KIS 해외 일봉으로 폴백한다 (symbol=%s, timeframe=%s)', symbol, timeframe)
+        native = self.candles().fetch_overseas_daily_ohlcv(instrument.code, instrument.quote_exchange, timeframe, limit)
+        return native if len(native) > 0 else yahoo
+
+    def candles(self) -> KISCandleService:
+        """KIS 가 직접 주는 봉(일봉·당일 분봉·해외 일봉)과 깊은 이력 페이지 조회. `fetch_ohlcv` 가 쓰지 않는 원본 경로다."""
+        if self._candle_service is None:
+            self._candle_service = KISCandleService(self)
+        return self._candle_service
+
+    # ============ 수수료 ============
+
+    def fetch_trading_fee(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """수수료율. 국내 위탁수수료 0.015%(뱅키스 기준, 계좌 유형과 이벤트에 따라 다르다), 미국 0.25%다. 요율을 알려 주는 API 가 없어 표를 쓴다.
+        국내 매도에는 증권거래세가 더해진다. 세율은 시행일 표(`krx_sell_tax`)를 따르며 `info['sellTaxRate']` 에 있다."""
+        instrument = self._instrument_of(symbol)
+        rate = KIS_OVERSEAS_DEFAULT_FEE_RATE if instrument.overseas else KIS_BROKERAGE_FEE
+        return {
+            'info': {'brokerageRate': rate, 'sellTaxRate': 0 if instrument.overseas else krx_sell_tax_rate()},
+            'symbol': instrument.symbol,
+            'maker': rate,
+            'taker': rate,
+            'percentage': True,
+            'tierBased': False,
+        }
+
+    # ============ 고유 조회 ============
+
+    def fetch_stock_warnings(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """변동성완화장치(VI) 발동 현황(`inquire-vi-status`). 지정한 영업일(기본은 오늘 한국 날짜)에 이 종목의 VI 가 발동한 기록이다.
+        발동한 적이 없으면 빈 목록이다. 국내만 받는다."""
+        instrument = self._instrument_of(symbol)
+        if instrument.overseas:
+            raise BadSymbol(f'{self.id} fetchStockWarnings() 은 국내 종목만 지원한다: {symbol}')
+        response = self.private_get_uapi_domestic_stock_v1_quotations_inquire_vi_status(self.extend({
+            'FID_DIV_CLS_CODE': '0',
+            'FID_COND_SCR_DIV_CODE': VI_STATUS_SCREEN_CODE,
+            'FID_MRKT_CLS_CODE': '0',
+            'FID_INPUT_ISCD': instrument.code,
+            'FID_RANK_SORT_CLS_CODE': '0',
+            'FID_INPUT_DATE_1': kst_ymd(self.milliseconds()),
+            'FID_TRGT_CLS_CODE': '',
+            'FID_TRGT_EXLS_CLS_CODE': '',
+            'tr_id': 'FHPST01390000',
+        }, params))
+        return [self.extend(self.kst_stamp(self.safe_string(row, 'bsop_date')), {
+            'businessDate': self.safe_string(row, 'bsop_date', ''),
+            'statusCode': self.safe_string(row, 'vi_cls_code', ''),
+            'kindCode': self.safe_string(row, 'vi_kind_code', ''),
+            'triggeredAt': _or_none(self.safe_string(row, 'cntg_vi_hour')),
+            'canceledAt': _or_none(self.safe_string(row, 'vi_cncl_hour')),
+            'price': self.safe_number(row, 'vi_prc'),
+            'count': self.safe_number(row, 'vi_count'),
+            'info': row,
+        }) for row in multi_rows_of(self.safe_value(response, 'output'))]
+
+    def fetch_investor_trading(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """종목의 투자자별(개인·외국인·기관계) 매매동향(`inquire-investor`)을 최근 영업일 순으로 돌려준다. 국내만 받는다.
+        당일 값은 장 종료 뒤에 채워진다. 토스증권의 같은 이름 메서드는 시장 단위라서 범위가 다르다."""
+        instrument = self._instrument_of(symbol)
+        if instrument.overseas:
+            raise BadSymbol(f'{self.id} fetchInvestorTrading() 은 국내 종목만 지원한다: {symbol}')
+        response = self.private_get_uapi_domestic_stock_v1_quotations_inquire_investor(self.extend({
+            'FID_COND_MRKT_DIV_CODE': 'J',
+            'FID_INPUT_ISCD': instrument.code,
+            'tr_id': 'FHKST01010900',
+        }, params))
+
+        def amounts(row: Dict[str, Any], prefix: str) -> Dict[str, Any]:
+            return {
+                'netBuyVolume': self.safe_number(row, f'{prefix}_ntby_qty'),
+                'netBuyAmount': self.safe_number(row, f'{prefix}_ntby_tr_pbmn'),
+                'buyVolume': self.safe_number(row, f'{prefix}_shnu_vol'),
+                'buyAmount': self.safe_number(row, f'{prefix}_shnu_tr_pbmn'),
+                'sellVolume': self.safe_number(row, f'{prefix}_seln_vol'),
+                'sellAmount': self.safe_number(row, f'{prefix}_seln_tr_pbmn'),
+            }
+
+        return [self.extend(self.kst_stamp(self.safe_string(row, 'stck_bsop_date')), {
+            'businessDate': self.safe_string(row, 'stck_bsop_date', ''),
+            'close': self.safe_number(row, 'stck_clpr'),
+            'change': self.safe_number(row, 'prdy_vrss'),
+            'changeSign': _or_none(self.safe_string(row, 'prdy_vrss_sign')),
+            'individual': amounts(row, 'prsn'),
+            'foreign': amounts(row, 'frgn'),
+            'institution': amounts(row, 'orgn'),
+            'info': row,
+        }) for row in multi_rows_of(self.safe_value(response, 'output'))]
+
+    def fetch_rankings(self, type: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """종목 순위. 국내 순위, 해외 순위(`OVERSEAS_*`, `params['exchange']` 로 거래소를 반드시 고른다), ELW 순위(`ELW_*`)를 받는다.
+        공통 필드(순위, 심볼, 이름, 현재가, 전일대비, 등락률, 누적거래량)로 정리하고 종류별 지표는 `info` 에 원문으로 둔다.
+        응답에 순위 필드가 없는 종류는 `rank` 를 비운다. KIS 는 순위에도 연속조회를 쓰지만 첫 페이지만 돌려준다."""
+        params = {} if params is None else params
+        if type == 'FLUCTUATION':
+            return self._fetch_fluctuation_ranking(params)
+        if type == 'VOLUME':
+            return self._fetch_volume_ranking(params)
+        spec = KIS_RANKING_SPECS.get(type) if isinstance(type, str) else None
+        if spec is None:
+            raise NotSupported(f'{self.id} fetchRankings() 는 {_tpl(type)} 랭킹을 지원하지 않는다')
+        return self._fetch_spec_ranking(spec, params)
+
+    def _fetch_spec_ranking(self, spec: Dict[str, Any], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """표(`KIS_RANKING_SPECS`)로 정의한 순위 하나를 부른다."""
+        prepare = spec.get('prepare')
+        prepared = prepare(params) if prepare is not None else params
+        call = getattr(self, _implicit_get(spec['path']))
+        request = self.extend(spec['params'](self.milliseconds()), {'tr_id': spec['trId']})
+        response = call(self.extend(request, prepared))
+        f = spec.get('fields') or {}
+        currency = _tpl(KIS_OVERSEAS_RANKING_EXCHANGES.get(fn.js_string(prepared.get('EXCD')))) if spec.get('overseas') else 'KRW'
+        return [{
+            'rank': self.safe_number(row, f.get('rank', 'data_rank')),
+            'symbol': f"{self.safe_string(row, spec['symbolKey'], '')}/{currency}",
+            'name': _or_none(self.safe_string(row, f.get('name', 'hts_kor_isnm'))),
+            'last': self.safe_number(row, f.get('price', 'stck_prpr')),
+            'change': self.safe_number(row, f.get('change', 'prdy_vrss')),
+            'percentage': self.safe_number(row, f.get('rate', 'prdy_ctrt')),
+            'volume': self.safe_number(row, f.get('volume', 'acml_vol')),
+            'info': row,
+        } for row in rows_of(self.safe_value(response, spec.get('rowsKey', 'output')))]
+
+    def _ranking_rows(self, response: Any, symbol_key: str) -> List[Dict[str, Any]]:
+        return [{
+            'rank': self.safe_number(row, 'data_rank'),
+            'symbol': f"{self.safe_string(row, symbol_key, '')}/KRW",
+            'name': _or_none(self.safe_string(row, 'hts_kor_isnm')),
+            'last': self.safe_number(row, 'stck_prpr'),
+            'change': self.safe_number(row, 'prdy_vrss'),
+            'percentage': self.safe_number(row, 'prdy_ctrt'),
+            'volume': self.safe_number(row, 'acml_vol'),
+            'info': row,
+        } for row in rows_of(self.safe_value(response, 'output'))]
+
+    def _fetch_fluctuation_ranking(self, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """등락률 순위(`ranking/fluctuation`). 정렬 방향 코드는 공식 문서에 뚜렷하지 않아 예제가 쓴 값(`'0'`)만 기본으로 쓴다."""
+        response = self.private_get_uapi_domestic_stock_v1_ranking_fluctuation(self.extend({
+            'fid_rsfl_rate2': '',
+            'fid_cond_mrkt_div_code': 'J',
+            'fid_cond_scr_div_code': '20170',
+            'fid_input_iscd': '0000',
+            'fid_rank_sort_cls_code': '0',
+            'fid_input_cnt_1': '0',
+            'fid_prc_cls_code': '0',
+            'fid_input_price_1': '',
+            'fid_input_price_2': '',
+            'fid_vol_cnt': '',
+            'fid_trgt_cls_code': '0',
+            'fid_trgt_exls_cls_code': '0',
+            'fid_div_cls_code': '0',
+            'fid_rsfl_rate1': '',
+            'tr_id': 'FHPST01700000',
+        }, params))
+        return self._ranking_rows(response, 'stck_shrn_iscd')
+
+    def _fetch_volume_ranking(self, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """거래량 순위(`quotations/volume-rank`)."""
+        response = self.private_get_uapi_domestic_stock_v1_quotations_volume_rank(self.extend({
+            'FID_COND_MRKT_DIV_CODE': 'J',
+            'FID_COND_SCR_DIV_CODE': '20171',
+            'FID_INPUT_ISCD': '0000',
+            'FID_DIV_CLS_CODE': '0',
+            'FID_BLNG_CLS_CODE': '0',
+            'FID_TRGT_CLS_CODE': '111111111',
+            'FID_TRGT_EXLS_CLS_CODE': '0000000000',
+            'FID_INPUT_PRICE_1': '0',
+            'FID_INPUT_PRICE_2': '0',
+            'FID_VOL_CNT': '0',
+            'FID_INPUT_DATE_1': '0',
+            'tr_id': 'FHPST01710000',
+        }, params))
+        return self._ranking_rows(response, 'mksc_shrn_iscd')
+
+    # ============ 휴장일 ============
+
+    def fetch_market_calendar(self, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """국내 휴장일 캘린더(`chk-holiday`). 기준일부터 이후 날짜의 개장·영업·거래·결제 여부를 준다. 실전 계좌에서만 쓸 수 있다.
+        지난 영업일을 세는 코드가 지난 연휴를 알도록 30일 전 기준일과 오늘 기준일을 함께 조회한다. KIS 는 하루 한 번 호출을 권한다."""
+        if self.isSandboxModeEnabled:
+            raise NotSupported(f'{self.id} 휴장일 조회(chk-holiday)는 실전 계좌에서만 쓸 수 있다')
+        now = self.milliseconds()
+        days: Dict[str, Dict[str, Any]] = {}
+        for base in (kst_ymd(now - HOLIDAY_LOOKBACK_MS), kst_ymd(now)):
+            response = self.private_get_uapi_domestic_stock_v1_quotations_chk_holiday(self.extend({
+                'BASS_DT': base,
+                'CTX_AREA_FK': '',
+                'CTX_AREA_NK': '',
+                'tr_id': 'CTCA0903R',
+            }, params))
+            rows = _field(response, 'output')
+            for row in (rows if isinstance(rows, list) else [rows]):
+                date = self.safe_string(row, 'bass_dt')
+                open_ = self.safe_string(row, 'opnd_yn')
+                if date is None or open_ is None:
+                    continue
+                days[date] = self.extend(self.kst_stamp(date), {
+                    'date': date,
+                    'open': open_ == 'Y',
+                    'business': self.safe_string(row, 'bzdy_yn') == 'Y',
+                    'trading': self.safe_string(row, 'tr_day_yn') == 'Y',
+                    'settlement': self.safe_string(row, 'sttl_day_yn') == 'Y',
+                    'info': row,
+                })
+        return list(days.values())
+
+    def refresh_market_calendar(self) -> bool:
+        """휴장일 캘린더를 공용 캘린더(`market_calendar`)에 넣는다. 장 시간 판정이 이 값을 읽는다. 12시간 안에 성공한 호출은 다시 하지 않는다.
+        국내 실주문 직전에 저절로 부른다. 장 시간 판정을 주문 밖에서 쓰면 시작할 때 한 번 직접 부른다.
+
+        신선한 캘린더가 있으면 `True` 다. 자격증명이 없거나 모의투자면 부르지 않고 `False`, 호출에 실패해도 던지지 않고 `False` 다.
+        """
+        if self.isSandboxModeEnabled or not self.check_required_credentials(False):
+            return False
+        return refresh_shared_market_calendar(
+            'KR', lambda: [{'date': day['date'], 'open': day['open']} for day in self.fetch_market_calendar()], CALENDAR_TTL_MS)

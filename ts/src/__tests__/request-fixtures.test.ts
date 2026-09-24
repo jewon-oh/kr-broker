@@ -103,7 +103,15 @@ function fakeFetch(exchanges: FixtureExchange[], seen: FixtureRequest[]) {
         if (exchange.network === 'reset') throw new TypeError('fetch failed');
         const reply = exchange.response as NonNullable<FixtureExchange['response']>;
         const text = typeof reply.body === 'string' ? reply.body : JSON.stringify(reply.body);
-        return { status: reply.status, statusText: '', headers: new Headers(reply.headers ?? {}), text: async () => text };
+        // 야후 파이낸스 봉 조회처럼 `ok`·`json()` 을 읽는 코드가 있어 실제 `Response` 처럼 둘 다 준다.
+        return {
+            ok: reply.status >= 200 && reply.status < 300,
+            status: reply.status,
+            statusText: '',
+            headers: new Headers(reply.headers ?? {}),
+            text: async () => text,
+            json: async () => JSON.parse(text) as unknown,
+        };
     });
 }
 

@@ -6,7 +6,17 @@
         "secret": "kis-app-secret",
         "uid": "12345678-01",
         "enableRateLimit": false,
-        "options": { "maxRetriesOnFailure": 0, "maxRetriesOnFailureDelay": 0 }
+        "options": {
+            "maxRetriesOnFailure": 0,
+            "maxRetriesOnFailureDelay": 0,
+            "masterData": {
+                "kospi": [{ "code": "005930", "name": "삼성전자", "market": "KOSPI", "securityType": "STOCK" }],
+                "kosdaq": [{ "code": "247540", "name": "에코프로비엠", "market": "KOSDAQ", "securityType": "STOCK" }],
+                "nasdaq": [{ "code": "AAPL", "name": "APPLE INC", "nameKr": "애플", "market": "NAS", "currency": "USD" }],
+                "nyse": [{ "code": "BRK/B", "name": "BERKSHIRE HATHAWAY INC-CL B", "nameKr": "버크셔해서웨이B", "market": "NYS", "currency": "USD" }],
+                "amex": []
+            }
+        }
     },
     "tokenStore": {
         "kis:token:kis-app-key-": { "accessToken": "tok-stored", "expiresAt": 4102444800000 }
@@ -266,6 +276,2258 @@
             "args": [{ "FID_COND_MRKT_DIV_CODE": "J", "FID_INPUT_ISCD": "005930" }],
             "http": [],
             "error": { "class": "ArgumentsRequired" }
+        },
+        {
+            "description": "fetchMarkets 는 마스터 데이터의 국내 종목과 보충 ETF 를 종목으로 옮긴다",
+            "method": "fetchMarkets",
+            "args": [{ "market": "domestic" }],
+            "http": [],
+            "output": [
+                {
+                    "id": "005930",
+                    "symbol": "005930/KRW",
+                    "base": "005930",
+                    "quote": "KRW",
+                    "baseId": "005930",
+                    "quoteId": "KRW",
+                    "type": "spot",
+                    "spot": true,
+                    "margin": false,
+                    "swap": false,
+                    "future": false,
+                    "option": false,
+                    "index": false,
+                    "active": true,
+                    "contract": false,
+                    "taker": 0.00015,
+                    "maker": 0.00015,
+                    "precision": { "amount": 1 },
+                    "limits": { "leverage": {}, "amount": { "min": 1 }, "price": {}, "cost": {} },
+                    "info": { "code": "005930", "name": "삼성전자", "market": "KOSPI", "securityType": "STOCK" },
+                    "options": { "exchange": "KOSPI" }
+                },
+                {
+                    "id": "247540",
+                    "symbol": "247540/KRW",
+                    "base": "247540",
+                    "quote": "KRW",
+                    "baseId": "247540",
+                    "quoteId": "KRW",
+                    "type": "spot",
+                    "spot": true,
+                    "margin": false,
+                    "swap": false,
+                    "future": false,
+                    "option": false,
+                    "index": false,
+                    "active": true,
+                    "contract": false,
+                    "taker": 0.00015,
+                    "maker": 0.00015,
+                    "precision": { "amount": 1 },
+                    "limits": { "leverage": {}, "amount": { "min": 1 }, "price": {}, "cost": {} },
+                    "info": { "code": "247540", "name": "에코프로비엠", "market": "KOSDAQ", "securityType": "STOCK" },
+                    "options": { "exchange": "KOSDAQ" }
+                },
+                {
+                    "id": "0193L0",
+                    "symbol": "0193L0/KRW",
+                    "base": "0193L0",
+                    "quote": "KRW",
+                    "baseId": "0193L0",
+                    "quoteId": "KRW",
+                    "type": "spot",
+                    "spot": true,
+                    "margin": false,
+                    "swap": false,
+                    "future": false,
+                    "option": false,
+                    "index": false,
+                    "active": true,
+                    "contract": false,
+                    "taker": 0.00015,
+                    "maker": 0.00015,
+                    "precision": { "amount": 1 },
+                    "limits": { "leverage": {}, "amount": { "min": 1 }, "price": {}, "cost": {} },
+                    "info": { "code": "0193L0", "name": "PLUS 삼성전자선물단일종목인버스2X", "market": "KOSPI", "securityType": "ETF" },
+                    "options": { "exchange": "KOSPI" }
+                },
+                {
+                    "id": "0197X0",
+                    "symbol": "0197X0/KRW",
+                    "base": "0197X0",
+                    "quote": "KRW",
+                    "baseId": "0197X0",
+                    "quoteId": "KRW",
+                    "type": "spot",
+                    "spot": true,
+                    "margin": false,
+                    "swap": false,
+                    "future": false,
+                    "option": false,
+                    "index": false,
+                    "active": true,
+                    "contract": false,
+                    "taker": 0.00015,
+                    "maker": 0.00015,
+                    "precision": { "amount": 1 },
+                    "limits": { "leverage": {}, "amount": { "min": 1 }, "price": {}, "cost": {} },
+                    "info": { "code": "0197X0", "name": "SOL SK하이닉스선물단일종목인버스2X", "market": "KOSPI", "securityType": "ETF" },
+                    "options": { "exchange": "KOSPI" }
+                }
+            ]
+        },
+        {
+            "description": "fetchMarkets 해외는 마스터의 미국 종목이고 슬래시 티커는 점 심볼이 된다",
+            "method": "fetchMarkets",
+            "args": [{ "market": "overseas" }],
+            "http": [],
+            "output": [
+                {
+                    "id": "AAPL",
+                    "symbol": "AAPL/USD",
+                    "base": "AAPL",
+                    "quote": "USD",
+                    "baseId": "AAPL",
+                    "quoteId": "USD",
+                    "type": "spot",
+                    "spot": true,
+                    "margin": false,
+                    "swap": false,
+                    "future": false,
+                    "option": false,
+                    "index": false,
+                    "active": true,
+                    "contract": false,
+                    "taker": 0.0025,
+                    "maker": 0.0025,
+                    "precision": { "amount": 1, "price": 0.01 },
+                    "limits": { "leverage": {}, "amount": { "min": 1 }, "price": {}, "cost": {} },
+                    "info": { "code": "AAPL", "name": "APPLE INC", "nameKr": "애플", "market": "NAS", "currency": "USD" },
+                    "options": { "exchange": "NAS", "orderExchange": "NASD" }
+                },
+                {
+                    "id": "BRK/B",
+                    "symbol": "BRK.B/USD",
+                    "base": "BRK.B",
+                    "quote": "USD",
+                    "baseId": "BRK/B",
+                    "quoteId": "USD",
+                    "type": "spot",
+                    "spot": true,
+                    "margin": false,
+                    "swap": false,
+                    "future": false,
+                    "option": false,
+                    "index": false,
+                    "active": true,
+                    "contract": false,
+                    "taker": 0.0025,
+                    "maker": 0.0025,
+                    "precision": { "amount": 1, "price": 0.01 },
+                    "limits": { "leverage": {}, "amount": { "min": 1 }, "price": {}, "cost": {} },
+                    "info": { "code": "BRK/B", "name": "BERKSHIRE HATHAWAY INC-CL B", "nameKr": "버크셔해서웨이B", "market": "NYS", "currency": "USD" },
+                    "options": { "exchange": "NYS", "orderExchange": "NYSE" }
+                }
+            ]
+        },
+        {
+            "description": "fetchMarkets 는 마스터 데이터가 없으면 보충 ETF 두 종목만 준다",
+            "config": { "options": { "masterData": null } },
+            "method": "fetchMarkets",
+            "args": [null],
+            "http": [],
+            "output": [
+                {
+                    "id": "0193L0",
+                    "symbol": "0193L0/KRW",
+                    "base": "0193L0",
+                    "quote": "KRW",
+                    "baseId": "0193L0",
+                    "quoteId": "KRW",
+                    "type": "spot",
+                    "spot": true,
+                    "margin": false,
+                    "swap": false,
+                    "future": false,
+                    "option": false,
+                    "index": false,
+                    "active": true,
+                    "contract": false,
+                    "taker": 0.00015,
+                    "maker": 0.00015,
+                    "precision": { "amount": 1 },
+                    "limits": { "leverage": {}, "amount": { "min": 1 }, "price": {}, "cost": {} },
+                    "info": { "code": "0193L0", "name": "PLUS 삼성전자선물단일종목인버스2X", "market": "KOSPI", "securityType": "ETF" },
+                    "options": { "exchange": "KOSPI" }
+                },
+                {
+                    "id": "0197X0",
+                    "symbol": "0197X0/KRW",
+                    "base": "0197X0",
+                    "quote": "KRW",
+                    "baseId": "0197X0",
+                    "quoteId": "KRW",
+                    "type": "spot",
+                    "spot": true,
+                    "margin": false,
+                    "swap": false,
+                    "future": false,
+                    "option": false,
+                    "index": false,
+                    "active": true,
+                    "contract": false,
+                    "taker": 0.00015,
+                    "maker": 0.00015,
+                    "precision": { "amount": 1 },
+                    "limits": { "leverage": {}, "amount": { "min": 1 }, "price": {}, "cost": {} },
+                    "info": { "code": "0197X0", "name": "SOL SK하이닉스선물단일종목인버스2X", "market": "KOSPI", "securityType": "ETF" },
+                    "options": { "exchange": "KOSPI" }
+                }
+            ]
+        },
+        {
+            "description": "fetchTicker 국내는 정규장에 KRX(J) 시세를 받고 전일대비 부호를 등락률로 정한다",
+            "now": 1774400400000,
+            "method": "fetchTicker",
+            "args": ["005930/KRW"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010100",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": {
+                                "stck_prpr": "71000",
+                                "prdy_vrss": "1500",
+                                "prdy_vrss_sign": "5",
+                                "prdy_ctrt": "-2.07",
+                                "stck_oprc": "72000",
+                                "stck_hgpr": "72500",
+                                "stck_lwpr": "70800",
+                                "stck_sdpr": "72500",
+                                "acml_vol": "12345678",
+                                "acml_tr_pbmn": "880000000000"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "symbol": "005930/KRW",
+                "timestamp": 1774400400000,
+                "datetime": "2026-03-25T01:00:00.000Z",
+                "high": 72500,
+                "low": 70800,
+                "open": 72000,
+                "close": 71000,
+                "last": 71000,
+                "previousClose": 72500,
+                "change": -1500,
+                "percentage": -2.07,
+                "baseVolume": 12345678,
+                "quoteVolume": 880000000000,
+                "info": {
+                    "stck_prpr": "71000",
+                    "prdy_vrss": "1500",
+                    "prdy_vrss_sign": "5",
+                    "prdy_ctrt": "-2.07",
+                    "stck_oprc": "72000",
+                    "stck_hgpr": "72500",
+                    "stck_lwpr": "70800",
+                    "stck_sdpr": "72500",
+                    "acml_vol": "12345678",
+                    "acml_tr_pbmn": "880000000000"
+                },
+                "average": 71500,
+                "vwap": 71280.00584496048
+            }
+        },
+        {
+            "description": "fetchTicker 국내는 NXT 애프터마켓이고 nxtRouting 이 켜져 있으면 통합(UN) 시세를 받는다",
+            "config": { "options": { "nxtRouting": true } },
+            "now": 1774425600000,
+            "method": "fetchTicker",
+            "args": ["005930"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-price?FID_COND_MRKT_DIV_CODE=UN&FID_INPUT_ISCD=005930",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010100",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": { "stck_prpr": "71200", "prdy_vrss": "200", "prdy_ctrt": "0.28", "stck_sdpr": "71000", "acml_vol": "345" }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "symbol": "005930/KRW",
+                "timestamp": 1774425600000,
+                "datetime": "2026-03-25T08:00:00.000Z",
+                "open": 71000,
+                "close": 71200,
+                "last": 71200,
+                "previousClose": 71000,
+                "change": 200,
+                "percentage": 0.28,
+                "baseVolume": 345,
+                "info": { "stck_prpr": "71200", "prdy_vrss": "200", "prdy_ctrt": "0.28", "stck_sdpr": "71000", "acml_vol": "345" },
+                "average": 71100
+            }
+        },
+        {
+            "description": "fetchTicker 국내 보합이면 변동은 0 이다",
+            "now": 1774400400000,
+            "method": "fetchTicker",
+            "args": ["005930/KRW"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010100",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": { "stck_prpr": "71000", "prdy_vrss": "0", "prdy_ctrt": "0.00", "stck_sdpr": "71000" }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "symbol": "005930/KRW",
+                "timestamp": 1774400400000,
+                "datetime": "2026-03-25T01:00:00.000Z",
+                "open": 71000,
+                "close": 71000,
+                "last": 71000,
+                "previousClose": 71000,
+                "change": 0,
+                "percentage": 0,
+                "info": { "stck_prpr": "71000", "prdy_vrss": "0", "prdy_ctrt": "0.00", "stck_sdpr": "71000" },
+                "average": 71000
+            }
+        },
+        {
+            "description": "fetchTicker 해외는 마스터의 시세 거래소(NAS)로 조회하고 전일 종가로 변동을 구한다",
+            "now": 1774450800000,
+            "method": "fetchTicker",
+            "args": ["AAPL/USD"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-price/v1/quotations/price?AUTH=&EXCD=NAS&SYMB=AAPL",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "HHDFS00000300",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": {
+                                "rsym": "DNASAAPL",
+                                "zdiv": "4",
+                                "base": "170.0000",
+                                "pvol": "50000000",
+                                "last": "172.5000",
+                                "sign": "2",
+                                "diff": "2.5000",
+                                "rate": "+1.47",
+                                "tvol": "41234567",
+                                "tamt": "7100000000",
+                                "ordy": "매도불가",
+                                "open": "170.5000",
+                                "high": "173.1000",
+                                "low": "169.9000"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "symbol": "AAPL/USD",
+                "timestamp": 1774450800000,
+                "datetime": "2026-03-25T15:00:00.000Z",
+                "high": 173.1,
+                "low": 169.9,
+                "open": 170.5,
+                "close": 172.5,
+                "last": 172.5,
+                "previousClose": 170,
+                "change": 2.5,
+                "percentage": 1.47,
+                "baseVolume": 41234567,
+                "quoteVolume": 7100000000,
+                "info": {
+                    "rsym": "DNASAAPL",
+                    "zdiv": "4",
+                    "base": "170.0000",
+                    "pvol": "50000000",
+                    "last": "172.5000",
+                    "sign": "2",
+                    "diff": "2.5000",
+                    "rate": "+1.47",
+                    "tvol": "41234567",
+                    "tamt": "7100000000",
+                    "ordy": "매도불가",
+                    "open": "170.5000",
+                    "high": "173.1000",
+                    "low": "169.9000"
+                },
+                "average": 171.5,
+                "vwap": 172.18563250585365
+            }
+        },
+        {
+            "description": "fetchTicker 슬래시 티커는 BRK.B 심볼로 받아 KIS 표기(BRK/B)로 조회한다",
+            "now": 1774450800000,
+            "method": "fetchTicker",
+            "args": ["BRK.B/USD"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-price/v1/quotations/price?AUTH=&EXCD=NYS&SYMB=BRK%2FB",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "HHDFS00000300",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": { "base": "0", "last": "410.2500", "rate": "0.00", "tvol": "1000" }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "symbol": "BRK.B/USD",
+                "timestamp": 1774450800000,
+                "datetime": "2026-03-25T15:00:00.000Z",
+                "close": 410.25,
+                "last": 410.25,
+                "baseVolume": 1000,
+                "info": { "base": "0", "last": "410.2500", "rate": "0.00", "tvol": "1000" }
+            }
+        },
+        {
+            "description": "fetchTicker 해외 마스터에 없는 종목은 요청 전에 BadSymbol 이다",
+            "method": "fetchTicker",
+            "args": ["MSFT/USD"],
+            "http": [],
+            "error": { "class": "BadSymbol" }
+        },
+        {
+            "description": "fetchTicker 현재가가 0 이면 NullResponse 다",
+            "now": 1774400400000,
+            "method": "fetchTicker",
+            "args": ["005930/KRW"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010100",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": { "stck_prpr": "0", "prdy_vrss": "0", "prdy_ctrt": "0.00" }
+                        }
+                    }
+                }
+            ],
+            "error": { "class": "NullResponse" }
+        },
+        {
+            "description": "fetchTicker 업무 오류는 ExchangeError 이고 코드를 detail 에 담는다",
+            "now": 1774400400000,
+            "method": "fetchTicker",
+            "args": ["005930/KRW"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010100",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": { "status": 200, "body": { "rt_cd": "1", "msg_cd": "OPSQ0002", "msg1": "없는 서비스 코드 입니다" } }
+                }
+            ],
+            "error": { "class": "ExchangeError", "detail": "OPSQ0002" }
+        },
+        {
+            "description": "fetchTickers 는 종목마다 시장구분과 종목코드를 번호 붙여 한 번에 묻고, 묻지 않은 행은 버린다",
+            "now": 1774400400000,
+            "method": "fetchTickers",
+            "args": [["005930/KRW", "247540"]],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/intstock-multprice?FID_COND_MRKT_DIV_CODE_1=J&FID_INPUT_ISCD_1=005930&FID_COND_MRKT_DIV_CODE_2=J&FID_INPUT_ISCD_2=247540",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST11300006",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [
+                                {
+                                    "inter_shrn_iscd": "005930",
+                                    "inter_kor_isnm": "삼성전자",
+                                    "inter2_prpr": "71000",
+                                    "inter2_prdy_vrss": "-1500",
+                                    "prdy_ctrt": "-2.07",
+                                    "inter2_oprc": "72000",
+                                    "inter2_hgpr": "72500",
+                                    "inter2_lwpr": "70800",
+                                    "inter2_sdpr": "72500",
+                                    "acml_vol": "12345678",
+                                    "acml_tr_pbmn": "880000000000"
+                                },
+                                {
+                                    "inter_shrn_iscd": "247540",
+                                    "inter_kor_isnm": "에코프로비엠",
+                                    "inter2_prpr": "180500",
+                                    "inter2_prdy_vrss": "3500",
+                                    "prdy_ctrt": "1.98",
+                                    "inter2_oprc": "177000",
+                                    "inter2_hgpr": "181000",
+                                    "inter2_lwpr": "176500",
+                                    "inter2_sdpr": "177000",
+                                    "acml_vol": "456789",
+                                    "acml_tr_pbmn": "82000000000"
+                                },
+                                { "inter_shrn_iscd": "000660", "inter2_prpr": "200000", "prdy_ctrt": "1.00" }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "005930/KRW": {
+                    "symbol": "005930/KRW",
+                    "timestamp": 1774400400000,
+                    "datetime": "2026-03-25T01:00:00.000Z",
+                    "high": 72500,
+                    "low": 70800,
+                    "open": 72000,
+                    "close": 71000,
+                    "last": 71000,
+                    "previousClose": 72500,
+                    "change": -1500,
+                    "percentage": -2.07,
+                    "baseVolume": 12345678,
+                    "quoteVolume": 880000000000,
+                    "info": {
+                        "stck_prpr": "71000",
+                        "stck_hgpr": "72500",
+                        "stck_lwpr": "70800",
+                        "stck_oprc": "72000",
+                        "stck_sdpr": "72500",
+                        "prdy_vrss": "-1500",
+                        "prdy_ctrt": "-2.07",
+                        "acml_vol": "12345678",
+                        "acml_tr_pbmn": "880000000000"
+                    },
+                    "average": 71500,
+                    "vwap": 71280.00584496048
+                },
+                "247540/KRW": {
+                    "symbol": "247540/KRW",
+                    "timestamp": 1774400400000,
+                    "datetime": "2026-03-25T01:00:00.000Z",
+                    "high": 181000,
+                    "low": 176500,
+                    "open": 177000,
+                    "close": 180500,
+                    "last": 180500,
+                    "previousClose": 177000,
+                    "change": 3500,
+                    "percentage": 1.98,
+                    "baseVolume": 456789,
+                    "quoteVolume": 82000000000,
+                    "info": {
+                        "stck_prpr": "180500",
+                        "stck_hgpr": "181000",
+                        "stck_lwpr": "176500",
+                        "stck_oprc": "177000",
+                        "stck_sdpr": "177000",
+                        "prdy_vrss": "3500",
+                        "prdy_ctrt": "1.98",
+                        "acml_vol": "456789",
+                        "acml_tr_pbmn": "82000000000"
+                    },
+                    "average": 178750,
+                    "vwap": 179513.9550208083
+                }
+            }
+        },
+        {
+            "description": "fetchTickers 는 symbols 가 없으면 ArgumentsRequired 다",
+            "method": "fetchTickers",
+            "args": [null],
+            "http": [],
+            "error": { "class": "ArgumentsRequired" }
+        },
+        {
+            "description": "fetchTickers 는 해외 종목을 받지 않는다(BadSymbol)",
+            "method": "fetchTickers",
+            "args": [["005930/KRW", "AAPL/USD"]],
+            "http": [],
+            "error": { "class": "BadSymbol" }
+        },
+        {
+            "description": "fetchTickers 는 30종목을 넘으면 BadRequest 다",
+            "method": "fetchTickers",
+            "args": [
+                [
+                    "000001",
+                    "000002",
+                    "000003",
+                    "000004",
+                    "000005",
+                    "000006",
+                    "000007",
+                    "000008",
+                    "000009",
+                    "000010",
+                    "000011",
+                    "000012",
+                    "000013",
+                    "000014",
+                    "000015",
+                    "000016",
+                    "000017",
+                    "000018",
+                    "000019",
+                    "000020",
+                    "000021",
+                    "000022",
+                    "000023",
+                    "000024",
+                    "000025",
+                    "000026",
+                    "000027",
+                    "000028",
+                    "000029",
+                    "000030",
+                    "000031"
+                ]
+            ],
+            "http": [],
+            "error": { "class": "BadRequest" }
+        },
+        {
+            "description": "fetchOrderBook 은 호가 10단계에서 가격이 있는 단계만 담고 limit 으로 자른다",
+            "now": 1774400400000,
+            "method": "fetchOrderBook",
+            "args": ["005930/KRW", 2],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-asking-price-exp-ccn?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010200",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output1": {
+                                "aspr_acpt_hour": "100000",
+                                "askp1": "71100",
+                                "askp2": "71200",
+                                "askp3": "71300",
+                                "askp4": "0",
+                                "askp5": "",
+                                "askp6": "0",
+                                "askp7": "0",
+                                "askp8": "0",
+                                "askp9": "0",
+                                "askp10": "0",
+                                "bidp1": "71000",
+                                "bidp2": "70900",
+                                "bidp3": "70800",
+                                "bidp4": "0",
+                                "bidp5": "0",
+                                "bidp6": "0",
+                                "bidp7": "0",
+                                "bidp8": "0",
+                                "bidp9": "0",
+                                "bidp10": "0",
+                                "askp_rsqn1": "1200",
+                                "askp_rsqn2": "3400",
+                                "askp_rsqn3": "560",
+                                "bidp_rsqn1": "2100",
+                                "bidp_rsqn2": "800",
+                                "bidp_rsqn3": ""
+                            },
+                            "output2": { "antc_cnpr": "71000" }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "symbol": "005930/KRW",
+                "bids": [[71000, 2100], [70900, 800]],
+                "asks": [[71100, 1200], [71200, 3400]],
+                "timestamp": 1774400400000,
+                "datetime": "2026-03-25T01:00:00.000Z"
+            }
+        },
+        {
+            "description": "fetchOrderBook 은 NXT 애프터마켓이고 nxtRouting 이 켜져 있으면 통합(UN) 호가를 받는다",
+            "config": { "options": { "nxtRouting": true } },
+            "now": 1774425600000,
+            "method": "fetchOrderBook",
+            "args": ["005930"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-asking-price-exp-ccn?FID_COND_MRKT_DIV_CODE=UN&FID_INPUT_ISCD=005930",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010200",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output1": { "askp1": "71300", "askp_rsqn1": "10", "bidp1": "71200", "bidp_rsqn1": "5" }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "symbol": "005930/KRW",
+                "bids": [[71200, 5]],
+                "asks": [[71300, 10]],
+                "timestamp": 1774425600000,
+                "datetime": "2026-03-25T08:00:00.000Z"
+            }
+        },
+        {
+            "description": "fetchOrderBook 은 해외 종목을 받지 않는다(NotSupported)",
+            "method": "fetchOrderBook",
+            "args": ["AAPL/USD"],
+            "http": [],
+            "error": { "class": "NotSupported" }
+        },
+        {
+            "description": "fetchOrderBook 은 호가가 하나도 없으면 NullResponse 다",
+            "now": 1774400400000,
+            "method": "fetchOrderBook",
+            "args": ["005930/KRW"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-asking-price-exp-ccn?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010200",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": { "rt_cd": "0", "msg_cd": "MCA00000", "msg1": "정상처리 되었습니다.", "output1": { "askp1": "0", "bidp1": "0" } }
+                    }
+                }
+            ],
+            "error": { "class": "NullResponse" }
+        },
+        {
+            "description": "fetchOHLCV 국내는 야후(코스피 .KS)에서 받고 거래 없는 봉은 건너뛰며 최신 limit 개만 준다",
+            "now": 1774440000000,
+            "method": "fetchOHLCV",
+            "args": ["005930/KRW", "1d", null, 2],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://query1.finance.yahoo.com/v8/finance/chart/005930.KS?interval=1d&range=5y",
+                        "headers": { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "chart": {
+                                "result": [
+                                    {
+                                        "meta": { "symbol": "005930.KS", "currency": "KRW", "exchangeTimezoneName": "Asia/Seoul", "regularMarketPrice": 72000 },
+                                        "timestamp": [1773964800, 1774224000, 1774310400, 1774396800],
+                                        "indicators": {
+                                            "quote": [
+                                                {
+                                                    "open": [70000, null, 71000, 71500],
+                                                    "high": [71000, null, 72000, 72500],
+                                                    "low": [69500, null, 70500, 71000],
+                                                    "close": [70800, null, 71800, 72000],
+                                                    "volume": [1000000, null, 1200000, null]
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ],
+                                "error": null
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [[1774310400000, 71000, 72000, 70500, 71800, 1200000], [1774396800000, 71500, 72500, 71000, 72000, 0]]
+        },
+        {
+            "description": "fetchOHLCV 코스닥 종목은 .KQ 를 붙이고 since 로 조회 범위(range)를 고른다",
+            "now": 1774440000000,
+            "method": "fetchOHLCV",
+            "args": ["247540/KRW", "1d", 1772712000000],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://query1.finance.yahoo.com/v8/finance/chart/247540.KQ?interval=1d&range=1mo",
+                        "headers": { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "chart": {
+                                "result": [
+                                    {
+                                        "meta": {
+                                            "symbol": "247540.KQ",
+                                            "currency": "KRW",
+                                            "exchangeTimezoneName": "Asia/Seoul",
+                                            "regularMarketPrice": 180500
+                                        },
+                                        "timestamp": [1774224000],
+                                        "indicators": {
+                                            "quote": [{ "open": [177000], "high": [181000], "low": [176500], "close": [180500], "volume": [456789] }]
+                                        }
+                                    }
+                                ],
+                                "error": null
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [[1774224000000, 177000, 181000, 176500, 180500, 456789]]
+        },
+        {
+            "description": "fetchOHLCV 4h 는 야후 1h 봉을 4시간으로 합친다. 마지막 1h 봉 시각을 4h 격자로 내려 바로 앞 1h 봉을 덮어쓴다",
+            "now": 1774440000000,
+            "method": "fetchOHLCV",
+            "args": ["005930/KRW", "4h"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://query1.finance.yahoo.com/v8/finance/chart/005930.KS?interval=1h&range=1y",
+                        "headers": { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "chart": {
+                                "result": [
+                                    {
+                                        "meta": { "symbol": "005930.KS", "currency": "KRW", "exchangeTimezoneName": "Asia/Seoul", "regularMarketPrice": 71400 },
+                                        "timestamp": [1774396800, 1774400400, 1774404000, 1774407600, 1774411200, 1774414800],
+                                        "indicators": {
+                                            "quote": [
+                                                {
+                                                    "open": [70000, 70500, 70200, 70800, 71000, 71200],
+                                                    "high": [70600, 70900, 70900, 71100, 71300, 71500],
+                                                    "low": [69900, 70100, 70000, 70500, 70800, 71000],
+                                                    "close": [70500, 70200, 70800, 71000, 71200, 71400],
+                                                    "volume": [100, 200, 300, 400, 500, 600]
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ],
+                                "error": null
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [[1774396800000, 70000, 71100, 69900, 71000, 1000], [1774411200000, 71200, 71500, 71000, 71400, 600]]
+        },
+        {
+            "description": "fetchOHLCV 분봉의 진행 중인 마지막 봉 시각은 직전 봉 격자로 내린다",
+            "now": 1774440000000,
+            "method": "fetchOHLCV",
+            "args": ["005930/KRW", "1h"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://query1.finance.yahoo.com/v8/finance/chart/005930.KS?interval=1h&range=1y",
+                        "headers": { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "chart": {
+                                "result": [
+                                    {
+                                        "meta": { "symbol": "005930.KS", "currency": "KRW", "exchangeTimezoneName": "Asia/Seoul", "regularMarketPrice": 70900 },
+                                        "timestamp": [1774396800, 1774400400, 1774405400],
+                                        "indicators": {
+                                            "quote": [
+                                                {
+                                                    "open": [70000, 70500, 70800],
+                                                    "high": [70600, 70900, 71000],
+                                                    "low": [69900, 70100, 70700],
+                                                    "close": [70500, 70800, 70900],
+                                                    "volume": [100, 200, 50]
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ],
+                                "error": null
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                [1774396800000, 70000, 70600, 69900, 70500, 100],
+                [1774400400000, 70500, 70900, 70100, 70800, 200],
+                [1774404000000, 70800, 71000, 70700, 70900, 50]
+            ]
+        },
+        {
+            "description": "fetchOHLCV 미국 일봉은 야후가 없는 심볼로 답하면 KIS 해외 기간별 시세로 다시 받는다",
+            "now": 1774440000000,
+            "method": "fetchOHLCV",
+            "args": ["AAPL/USD", "1d", null, 3],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=1d&range=5y",
+                        "headers": { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": { "chart": { "result": null, "error": { "code": "Not Found", "description": "No data found, symbol may be delisted" } } }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-price/v1/quotations/dailyprice?AUTH=&EXCD=NAS&SYMB=AAPL&GUBN=0&BYMD=20260325&MODP=1",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "HHDFS76240000",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output1": { "rsym": "DNASAAPL", "zdiv": "4", "nrec": "3" },
+                            "output2": [
+                                {
+                                    "xymd": "20260324",
+                                    "clos": "172.5000",
+                                    "sign": "2",
+                                    "diff": "2.5000",
+                                    "rate": "1.47",
+                                    "open": "170.5000",
+                                    "high": "173.1000",
+                                    "low": "169.9000",
+                                    "tvol": "41234567",
+                                    "tamt": "7100000000"
+                                },
+                                {
+                                    "xymd": "20260323",
+                                    "clos": "170.0000",
+                                    "sign": "5",
+                                    "diff": "1.0000",
+                                    "rate": "-0.58",
+                                    "open": "171.0000",
+                                    "high": "171.5000",
+                                    "low": "169.0000",
+                                    "tvol": "38000000",
+                                    "tamt": "6500000000"
+                                },
+                                { "xymd": "", "clos": "0" }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": [[1774224000000, 171, 171.5, 169, 170, 38000000], [1774310400000, 170.5, 173.1, 169.9, 172.5, 41234567]]
+        },
+        {
+            "description": "fetchOHLCV 미국 분봉은 야후가 비어도 KIS 로 다시 받지 않는다",
+            "now": 1774440000000,
+            "method": "fetchOHLCV",
+            "args": ["AAPL/USD", "5m"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=5m&range=60d",
+                        "headers": { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+                        "body": null
+                    },
+                    "response": { "status": 404, "body": { "chart": { "result": null, "error": { "code": "Not Found", "description": "not found" } } } }
+                }
+            ],
+            "output": []
+        },
+        {
+            "description": "fetchOHLCV 는 야후가 주지 않는 타임프레임이면 요청 없이 UnsupportedTimeframeError 다",
+            "method": "fetchOHLCV",
+            "args": ["005930/KRW", "2h"],
+            "http": [],
+            "error": { "class": "UnsupportedTimeframeError" }
+        },
+        {
+            "description": "fetchTradingFee 국내는 위탁수수료 0.015% 와 그해의 증권거래세율이다",
+            "now": 1774400400000,
+            "method": "fetchTradingFee",
+            "args": ["005930/KRW"],
+            "http": [],
+            "output": {
+                "info": { "brokerageRate": 0.00015, "sellTaxRate": 0.002 },
+                "symbol": "005930/KRW",
+                "maker": 0.00015,
+                "taker": 0.00015,
+                "percentage": true,
+                "tierBased": false
+            }
+        },
+        {
+            "description": "fetchTradingFee 해외는 0.25% 이고 거래세가 없다",
+            "now": 1774400400000,
+            "method": "fetchTradingFee",
+            "args": ["AAPL"],
+            "http": [],
+            "output": {
+                "info": { "brokerageRate": 0.0025, "sellTaxRate": 0 },
+                "symbol": "AAPL/USD",
+                "maker": 0.0025,
+                "taker": 0.0025,
+                "percentage": true,
+                "tierBased": false
+            }
+        },
+        {
+            "description": "fetchMarketCalendar 는 30일 전과 오늘을 기준일로 두 번 묻고 같은 날짜는 뒤 응답으로 합친다",
+            "now": 1774400400000,
+            "method": "fetchMarketCalendar",
+            "args": [null],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260223&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260223", "wday_dvsn_cd": "02", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260301", "wday_dvsn_cd": "01", "bzdy_yn": "N", "tr_day_yn": "N", "opnd_yn": "N", "sttl_day_yn": "N" },
+                                { "bass_dt": "20260302", "wday_dvsn_cd": "02", "bzdy_yn": "N", "tr_day_yn": "Y", "opnd_yn": "N", "sttl_day_yn": "N" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260325&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260302", "wday_dvsn_cd": "02", "bzdy_yn": "N", "tr_day_yn": "Y", "opnd_yn": "N", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260325", "wday_dvsn_cd": "04", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260326", "wday_dvsn_cd": "05", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260327" }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "timestamp": 1771772400000,
+                    "datetime": "2026-02-22T15:00:00.000Z",
+                    "date": "20260223",
+                    "open": true,
+                    "business": true,
+                    "trading": true,
+                    "settlement": true,
+                    "info": { "bass_dt": "20260223", "wday_dvsn_cd": "02", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" }
+                },
+                {
+                    "timestamp": 1772290800000,
+                    "datetime": "2026-02-28T15:00:00.000Z",
+                    "date": "20260301",
+                    "open": false,
+                    "business": false,
+                    "trading": false,
+                    "settlement": false,
+                    "info": { "bass_dt": "20260301", "wday_dvsn_cd": "01", "bzdy_yn": "N", "tr_day_yn": "N", "opnd_yn": "N", "sttl_day_yn": "N" }
+                },
+                {
+                    "timestamp": 1772377200000,
+                    "datetime": "2026-03-01T15:00:00.000Z",
+                    "date": "20260302",
+                    "open": false,
+                    "business": false,
+                    "trading": true,
+                    "settlement": true,
+                    "info": { "bass_dt": "20260302", "wday_dvsn_cd": "02", "bzdy_yn": "N", "tr_day_yn": "Y", "opnd_yn": "N", "sttl_day_yn": "Y" }
+                },
+                {
+                    "timestamp": 1774364400000,
+                    "datetime": "2026-03-24T15:00:00.000Z",
+                    "date": "20260325",
+                    "open": true,
+                    "business": true,
+                    "trading": true,
+                    "settlement": true,
+                    "info": { "bass_dt": "20260325", "wday_dvsn_cd": "04", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" }
+                },
+                {
+                    "timestamp": 1774450800000,
+                    "datetime": "2026-03-25T15:00:00.000Z",
+                    "date": "20260326",
+                    "open": true,
+                    "business": true,
+                    "trading": true,
+                    "settlement": true,
+                    "info": { "bass_dt": "20260326", "wday_dvsn_cd": "05", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" }
+                }
+            ]
+        },
+        {
+            "description": "fetchMarketCalendar 는 행이 하나면 사전으로 온 output 도 읽는다",
+            "now": 1774400400000,
+            "method": "fetchMarketCalendar",
+            "args": [null],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260223&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": { "status": 200, "body": { "rt_cd": "0", "msg_cd": "MCA00000", "msg1": "정상처리 되었습니다.", "output": {} } }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260325&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": { "bass_dt": "20260325", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "timestamp": 1774364400000,
+                    "datetime": "2026-03-24T15:00:00.000Z",
+                    "date": "20260325",
+                    "open": true,
+                    "business": true,
+                    "trading": true,
+                    "settlement": true,
+                    "info": { "bass_dt": "20260325", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" }
+                }
+            ]
+        },
+        {
+            "description": "fetchMarketCalendar 는 모의투자에서 NotSupported 다",
+            "config": { "sandbox": true },
+            "method": "fetchMarketCalendar",
+            "args": [null],
+            "http": [],
+            "error": { "class": "NotSupported" }
+        },
+        {
+            "description": "fetchStockWarnings 는 오늘(한국 날짜) 이 종목의 VI 발동 기록을 준다",
+            "now": 1774400400000,
+            "method": "fetchStockWarnings",
+            "args": ["005930/KRW"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-vi-status?FID_DIV_CLS_CODE=0&FID_COND_SCR_DIV_CODE=20139&FID_MRKT_CLS_CODE=0&FID_INPUT_ISCD=005930&FID_RANK_SORT_CLS_CODE=0&FID_INPUT_DATE_1=20260325&FID_TRGT_CLS_CODE=&FID_TRGT_EXLS_CLS_CODE=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHPST01390000",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [
+                                {
+                                    "hts_kor_isnm": "삼성전자",
+                                    "mksc_shrn_iscd": "005930",
+                                    "vi_cls_code": "Y",
+                                    "bsop_date": "20260325",
+                                    "cntg_vi_hour": "093015",
+                                    "vi_cncl_hour": "093215",
+                                    "vi_kind_code": "1",
+                                    "vi_prc": "78100",
+                                    "vi_stnd_prc": "71000",
+                                    "vi_dprt": "10.00",
+                                    "vi_count": "1"
+                                },
+                                {
+                                    "hts_kor_isnm": "삼성전자",
+                                    "mksc_shrn_iscd": "005930",
+                                    "vi_cls_code": "Y",
+                                    "bsop_date": "20260325",
+                                    "cntg_vi_hour": "101500",
+                                    "vi_cncl_hour": "",
+                                    "vi_kind_code": "2",
+                                    "vi_prc": "77000",
+                                    "vi_count": "2"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "timestamp": 1774364400000,
+                    "datetime": "2026-03-24T15:00:00.000Z",
+                    "businessDate": "20260325",
+                    "statusCode": "Y",
+                    "kindCode": "1",
+                    "triggeredAt": "093015",
+                    "canceledAt": "093215",
+                    "price": 78100,
+                    "count": 1,
+                    "info": {
+                        "hts_kor_isnm": "삼성전자",
+                        "mksc_shrn_iscd": "005930",
+                        "vi_cls_code": "Y",
+                        "bsop_date": "20260325",
+                        "cntg_vi_hour": "093015",
+                        "vi_cncl_hour": "093215",
+                        "vi_kind_code": "1",
+                        "vi_prc": "78100",
+                        "vi_stnd_prc": "71000",
+                        "vi_dprt": "10.00",
+                        "vi_count": "1"
+                    }
+                },
+                {
+                    "timestamp": 1774364400000,
+                    "datetime": "2026-03-24T15:00:00.000Z",
+                    "businessDate": "20260325",
+                    "statusCode": "Y",
+                    "kindCode": "2",
+                    "triggeredAt": "101500",
+                    "price": 77000,
+                    "count": 2,
+                    "info": {
+                        "hts_kor_isnm": "삼성전자",
+                        "mksc_shrn_iscd": "005930",
+                        "vi_cls_code": "Y",
+                        "bsop_date": "20260325",
+                        "cntg_vi_hour": "101500",
+                        "vi_cncl_hour": "",
+                        "vi_kind_code": "2",
+                        "vi_prc": "77000",
+                        "vi_count": "2"
+                    }
+                }
+            ]
+        },
+        {
+            "description": "fetchStockWarnings 는 발동 기록이 없으면(빈 사전) 빈 목록이다",
+            "now": 1774400400000,
+            "method": "fetchStockWarnings",
+            "args": ["005930"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-vi-status?FID_DIV_CLS_CODE=0&FID_COND_SCR_DIV_CODE=20139&FID_MRKT_CLS_CODE=0&FID_INPUT_ISCD=005930&FID_RANK_SORT_CLS_CODE=0&FID_INPUT_DATE_1=20260325&FID_TRGT_CLS_CODE=&FID_TRGT_EXLS_CLS_CODE=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHPST01390000",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": { "status": 200, "body": { "rt_cd": "0", "msg_cd": "MCA00000", "msg1": "정상처리 되었습니다.", "output": {} } }
+                }
+            ],
+            "output": []
+        },
+        {
+            "description": "fetchStockWarnings 는 해외 종목을 받지 않는다(BadSymbol)",
+            "method": "fetchStockWarnings",
+            "args": ["AAPL/USD"],
+            "http": [],
+            "error": { "class": "BadSymbol" }
+        },
+        {
+            "description": "fetchInvestorTrading 은 종목의 개인·외국인·기관 매매동향을 영업일마다 준다",
+            "now": 1774400400000,
+            "method": "fetchInvestorTrading",
+            "args": ["005930/KRW"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-investor?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010900",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [
+                                {
+                                    "stck_bsop_date": "20260325",
+                                    "stck_clpr": "71000",
+                                    "prdy_vrss": "-1500",
+                                    "prdy_vrss_sign": "5",
+                                    "prsn_ntby_qty": "",
+                                    "frgn_ntby_qty": "",
+                                    "orgn_ntby_qty": ""
+                                },
+                                {
+                                    "stck_bsop_date": "20260324",
+                                    "stck_clpr": "72500",
+                                    "prdy_vrss": "500",
+                                    "prdy_vrss_sign": "2",
+                                    "prsn_ntby_qty": "-120000",
+                                    "frgn_ntby_qty": "150000",
+                                    "orgn_ntby_qty": "-30000",
+                                    "prsn_ntby_tr_pbmn": "-8700",
+                                    "frgn_ntby_tr_pbmn": "10875",
+                                    "orgn_ntby_tr_pbmn": "-2175",
+                                    "prsn_shnu_vol": "3000000",
+                                    "frgn_shnu_vol": "2500000",
+                                    "orgn_shnu_vol": "900000",
+                                    "prsn_shnu_tr_pbmn": "217500",
+                                    "frgn_shnu_tr_pbmn": "181250",
+                                    "orgn_shnu_tr_pbmn": "65250",
+                                    "prsn_seln_vol": "3120000",
+                                    "frgn_seln_vol": "2350000",
+                                    "orgn_seln_vol": "930000",
+                                    "prsn_seln_tr_pbmn": "226200",
+                                    "frgn_seln_tr_pbmn": "170375",
+                                    "orgn_seln_tr_pbmn": "67425"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "timestamp": 1774364400000,
+                    "datetime": "2026-03-24T15:00:00.000Z",
+                    "businessDate": "20260325",
+                    "close": 71000,
+                    "change": -1500,
+                    "changeSign": "5",
+                    "individual": {},
+                    "foreign": {},
+                    "institution": {},
+                    "info": {
+                        "stck_bsop_date": "20260325",
+                        "stck_clpr": "71000",
+                        "prdy_vrss": "-1500",
+                        "prdy_vrss_sign": "5",
+                        "prsn_ntby_qty": "",
+                        "frgn_ntby_qty": "",
+                        "orgn_ntby_qty": ""
+                    }
+                },
+                {
+                    "timestamp": 1774278000000,
+                    "datetime": "2026-03-23T15:00:00.000Z",
+                    "businessDate": "20260324",
+                    "close": 72500,
+                    "change": 500,
+                    "changeSign": "2",
+                    "individual": {
+                        "netBuyVolume": -120000,
+                        "netBuyAmount": -8700,
+                        "buyVolume": 3000000,
+                        "buyAmount": 217500,
+                        "sellVolume": 3120000,
+                        "sellAmount": 226200
+                    },
+                    "foreign": {
+                        "netBuyVolume": 150000,
+                        "netBuyAmount": 10875,
+                        "buyVolume": 2500000,
+                        "buyAmount": 181250,
+                        "sellVolume": 2350000,
+                        "sellAmount": 170375
+                    },
+                    "institution": {
+                        "netBuyVolume": -30000,
+                        "netBuyAmount": -2175,
+                        "buyVolume": 900000,
+                        "buyAmount": 65250,
+                        "sellVolume": 930000,
+                        "sellAmount": 67425
+                    },
+                    "info": {
+                        "stck_bsop_date": "20260324",
+                        "stck_clpr": "72500",
+                        "prdy_vrss": "500",
+                        "prdy_vrss_sign": "2",
+                        "prsn_ntby_qty": "-120000",
+                        "frgn_ntby_qty": "150000",
+                        "orgn_ntby_qty": "-30000",
+                        "prsn_ntby_tr_pbmn": "-8700",
+                        "frgn_ntby_tr_pbmn": "10875",
+                        "orgn_ntby_tr_pbmn": "-2175",
+                        "prsn_shnu_vol": "3000000",
+                        "frgn_shnu_vol": "2500000",
+                        "orgn_shnu_vol": "900000",
+                        "prsn_shnu_tr_pbmn": "217500",
+                        "frgn_shnu_tr_pbmn": "181250",
+                        "orgn_shnu_tr_pbmn": "65250",
+                        "prsn_seln_vol": "3120000",
+                        "frgn_seln_vol": "2350000",
+                        "orgn_seln_vol": "930000",
+                        "prsn_seln_tr_pbmn": "226200",
+                        "frgn_seln_tr_pbmn": "170375",
+                        "orgn_seln_tr_pbmn": "67425"
+                    }
+                }
+            ]
+        },
+        {
+            "description": "fetchInvestorTrading 은 해외 종목을 받지 않는다(BadSymbol)",
+            "method": "fetchInvestorTrading",
+            "args": ["AAPL/USD"],
+            "http": [],
+            "error": { "class": "BadSymbol" }
+        },
+        {
+            "description": "fetchRankings FLUCTUATION 은 등락률 순위를 공통 필드로 정리하고 params 로 정렬을 바꾼다",
+            "now": 1774400400000,
+            "method": "fetchRankings",
+            "args": ["FLUCTUATION", { "fid_rank_sort_cls_code": "1" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/ranking/fluctuation?fid_rsfl_rate2=&fid_cond_mrkt_div_code=J&fid_cond_scr_div_code=20170&fid_input_iscd=0000&fid_rank_sort_cls_code=1&fid_input_cnt_1=0&fid_prc_cls_code=0&fid_input_price_1=&fid_input_price_2=&fid_vol_cnt=&fid_trgt_cls_code=0&fid_trgt_exls_cls_code=0&fid_div_cls_code=0&fid_rsfl_rate1=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHPST01700000",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [
+                                {
+                                    "stck_shrn_iscd": "005930",
+                                    "mksc_shrn_iscd": "005930",
+                                    "data_rank": "1",
+                                    "hts_kor_isnm": "삼성전자",
+                                    "stck_prpr": "71000",
+                                    "prdy_vrss": "-1500",
+                                    "prdy_ctrt": "-2.07",
+                                    "acml_vol": "12345678"
+                                },
+                                {
+                                    "stck_shrn_iscd": "247540",
+                                    "mksc_shrn_iscd": "247540",
+                                    "data_rank": "2",
+                                    "hts_kor_isnm": "",
+                                    "stck_prpr": "180500",
+                                    "prdy_vrss": "3500",
+                                    "prdy_ctrt": "1.98",
+                                    "acml_vol": "456789"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "rank": 1,
+                    "symbol": "005930/KRW",
+                    "name": "삼성전자",
+                    "last": 71000,
+                    "change": -1500,
+                    "percentage": -2.07,
+                    "volume": 12345678,
+                    "info": {
+                        "stck_shrn_iscd": "005930",
+                        "mksc_shrn_iscd": "005930",
+                        "data_rank": "1",
+                        "hts_kor_isnm": "삼성전자",
+                        "stck_prpr": "71000",
+                        "prdy_vrss": "-1500",
+                        "prdy_ctrt": "-2.07",
+                        "acml_vol": "12345678"
+                    }
+                },
+                {
+                    "rank": 2,
+                    "symbol": "247540/KRW",
+                    "last": 180500,
+                    "change": 3500,
+                    "percentage": 1.98,
+                    "volume": 456789,
+                    "info": {
+                        "stck_shrn_iscd": "247540",
+                        "mksc_shrn_iscd": "247540",
+                        "data_rank": "2",
+                        "hts_kor_isnm": "",
+                        "stck_prpr": "180500",
+                        "prdy_vrss": "3500",
+                        "prdy_ctrt": "1.98",
+                        "acml_vol": "456789"
+                    }
+                }
+            ]
+        },
+        {
+            "description": "fetchRankings VOLUME 은 거래량 순위(mksc_shrn_iscd)를 준다",
+            "now": 1774400400000,
+            "method": "fetchRankings",
+            "args": ["VOLUME"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/volume-rank?FID_COND_MRKT_DIV_CODE=J&FID_COND_SCR_DIV_CODE=20171&FID_INPUT_ISCD=0000&FID_DIV_CLS_CODE=0&FID_BLNG_CLS_CODE=0&FID_TRGT_CLS_CODE=111111111&FID_TRGT_EXLS_CLS_CODE=0000000000&FID_INPUT_PRICE_1=0&FID_INPUT_PRICE_2=0&FID_VOL_CNT=0&FID_INPUT_DATE_1=0",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHPST01710000",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [
+                                {
+                                    "stck_shrn_iscd": "005930",
+                                    "mksc_shrn_iscd": "005930",
+                                    "data_rank": "1",
+                                    "hts_kor_isnm": "삼성전자",
+                                    "stck_prpr": "71000",
+                                    "prdy_vrss": "-1500",
+                                    "prdy_ctrt": "-2.07",
+                                    "acml_vol": "12345678"
+                                },
+                                {
+                                    "stck_shrn_iscd": "247540",
+                                    "mksc_shrn_iscd": "247540",
+                                    "data_rank": "2",
+                                    "hts_kor_isnm": "",
+                                    "stck_prpr": "180500",
+                                    "prdy_vrss": "3500",
+                                    "prdy_ctrt": "1.98",
+                                    "acml_vol": "456789"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "rank": 1,
+                    "symbol": "005930/KRW",
+                    "name": "삼성전자",
+                    "last": 71000,
+                    "change": -1500,
+                    "percentage": -2.07,
+                    "volume": 12345678,
+                    "info": {
+                        "stck_shrn_iscd": "005930",
+                        "mksc_shrn_iscd": "005930",
+                        "data_rank": "1",
+                        "hts_kor_isnm": "삼성전자",
+                        "stck_prpr": "71000",
+                        "prdy_vrss": "-1500",
+                        "prdy_ctrt": "-2.07",
+                        "acml_vol": "12345678"
+                    }
+                },
+                {
+                    "rank": 2,
+                    "symbol": "247540/KRW",
+                    "last": 180500,
+                    "change": 3500,
+                    "percentage": 1.98,
+                    "volume": 456789,
+                    "info": {
+                        "stck_shrn_iscd": "247540",
+                        "mksc_shrn_iscd": "247540",
+                        "data_rank": "2",
+                        "hts_kor_isnm": "",
+                        "stck_prpr": "180500",
+                        "prdy_vrss": "3500",
+                        "prdy_ctrt": "1.98",
+                        "acml_vol": "456789"
+                    }
+                }
+            ]
+        },
+        {
+            "description": "fetchRankings MARKET_CAP 은 표의 경로와 TR 로 부른다",
+            "now": 1774400400000,
+            "method": "fetchRankings",
+            "args": ["MARKET_CAP"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/ranking/market-cap?fid_cond_mrkt_div_code=J&fid_input_iscd=0000&fid_div_cls_code=0&fid_trgt_cls_code=0&fid_trgt_exls_cls_code=0&fid_input_price_1=&fid_input_price_2=&fid_vol_cnt=&fid_cond_scr_div_code=20174",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHPST01740000",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [
+                                {
+                                    "stck_shrn_iscd": "005930",
+                                    "mksc_shrn_iscd": "005930",
+                                    "data_rank": "1",
+                                    "hts_kor_isnm": "삼성전자",
+                                    "stck_prpr": "71000",
+                                    "prdy_vrss": "-1500",
+                                    "prdy_ctrt": "-2.07",
+                                    "acml_vol": "12345678"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "rank": 1,
+                    "symbol": "005930/KRW",
+                    "name": "삼성전자",
+                    "last": 71000,
+                    "change": -1500,
+                    "percentage": -2.07,
+                    "volume": 12345678,
+                    "info": {
+                        "stck_shrn_iscd": "005930",
+                        "mksc_shrn_iscd": "005930",
+                        "data_rank": "1",
+                        "hts_kor_isnm": "삼성전자",
+                        "stck_prpr": "71000",
+                        "prdy_vrss": "-1500",
+                        "prdy_ctrt": "-2.07",
+                        "acml_vol": "12345678"
+                    }
+                }
+            ]
+        },
+        {
+            "description": "fetchRankings FINANCE_RATIO 는 직전 회계연도(한국 날짜)를 기본 입력으로 넣는다",
+            "now": 1774400400000,
+            "method": "fetchRankings",
+            "args": ["FINANCE_RATIO"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/ranking/finance-ratio?fid_trgt_cls_code=0&fid_cond_mrkt_div_code=J&fid_cond_scr_div_code=20175&fid_input_iscd=0000&fid_div_cls_code=0&fid_input_price_1=&fid_input_price_2=&fid_vol_cnt=&fid_input_option_1=2025&fid_input_option_2=3&fid_rank_sort_cls_code=7&fid_blng_cls_code=0&fid_trgt_exls_cls_code=0",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHPST01750000",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": { "status": 200, "body": { "rt_cd": "0", "msg_cd": "MCA00000", "msg1": "정상처리 되었습니다.", "output": [] } }
+                }
+            ],
+            "output": []
+        },
+        {
+            "description": "fetchRankings CREDIT_BALANCE 는 행을 output2 에서 읽는다",
+            "now": 1774400400000,
+            "method": "fetchRankings",
+            "args": ["CREDIT_BALANCE"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/ranking/credit-balance?FID_COND_SCR_DIV_CODE=11701&FID_INPUT_ISCD=0000&FID_OPTION=2&FID_COND_MRKT_DIV_CODE=J&FID_RANK_SORT_CLS_CODE=0",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST17010000",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output1": { "bstp_cls_code": "0000", "bsop_date": "20260324" },
+                            "output2": [
+                                {
+                                    "stck_shrn_iscd": "247540",
+                                    "mksc_shrn_iscd": "247540",
+                                    "data_rank": "2",
+                                    "hts_kor_isnm": "",
+                                    "stck_prpr": "180500",
+                                    "prdy_vrss": "3500",
+                                    "prdy_ctrt": "1.98",
+                                    "acml_vol": "456789"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "rank": 2,
+                    "symbol": "247540/KRW",
+                    "last": 180500,
+                    "change": 3500,
+                    "percentage": 1.98,
+                    "volume": 456789,
+                    "info": {
+                        "stck_shrn_iscd": "247540",
+                        "mksc_shrn_iscd": "247540",
+                        "data_rank": "2",
+                        "hts_kor_isnm": "",
+                        "stck_prpr": "180500",
+                        "prdy_vrss": "3500",
+                        "prdy_ctrt": "1.98",
+                        "acml_vol": "456789"
+                    }
+                }
+            ]
+        },
+        {
+            "description": "fetchRankings DIVIDEND_RATE 는 dividendType 을 GB3 로 옮기고 최근 1년을 기준일 범위로 둔다",
+            "now": 1774400400000,
+            "method": "fetchRankings",
+            "args": ["DIVIDEND_RATE", { "dividendType": "cash" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/ranking/dividend-rate?CTS_AREA=%20&GB1=1&UPJONG=0001&GB2=0&GB3=2&F_DT=20250325&T_DT=20260325&GB4=0",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "HHKDB13470100",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [
+                                {
+                                    "rank": "1",
+                                    "sht_cd": "005930",
+                                    "isin_name": "삼성전자",
+                                    "record_date": "20251231",
+                                    "per_sto_divi_amt": "361",
+                                    "divi_rate": "0.51",
+                                    "divi_kind": "현금"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "rank": 1,
+                    "symbol": "005930/KRW",
+                    "name": "삼성전자",
+                    "info": {
+                        "rank": "1",
+                        "sht_cd": "005930",
+                        "isin_name": "삼성전자",
+                        "record_date": "20251231",
+                        "per_sto_divi_amt": "361",
+                        "divi_rate": "0.51",
+                        "divi_kind": "현금"
+                    }
+                }
+            ]
+        },
+        {
+            "description": "fetchRankings DIVIDEND_RATE 는 배당 종류가 없으면 요청 없이 ArgumentsRequired 다",
+            "method": "fetchRankings",
+            "args": ["DIVIDEND_RATE"],
+            "http": [],
+            "error": { "class": "ArgumentsRequired" }
+        },
+        {
+            "description": "fetchRankings OVERSEAS_GAINERS 는 거래소를 EXCD 로 옮기고 그 거래소의 통화를 심볼에 붙인다",
+            "now": 1774450800000,
+            "method": "fetchRankings",
+            "args": ["OVERSEAS_GAINERS", { "exchange": "NAS" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/ranking/updown-rate?EXCD=NAS&VOL_RANG=0&KEYB=&AUTH=&NDAY=0&GUBN=1",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "HHDFS76290000",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output1": { "zdiv": "4", "stat": "", "nrec": "1" },
+                            "output2": [
+                                {
+                                    "rsym": "DNASAAPL",
+                                    "excd": "NAS",
+                                    "symb": "AAPL",
+                                    "name": "APPLE INC",
+                                    "knam": "애플",
+                                    "last": "172.5000",
+                                    "sign": "2",
+                                    "diff": "2.5000",
+                                    "rate": "1.47",
+                                    "tvol": "41234567",
+                                    "rank": "1"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "rank": 1,
+                    "symbol": "AAPL/USD",
+                    "name": "APPLE INC",
+                    "last": 172.5,
+                    "change": 2.5,
+                    "percentage": 1.47,
+                    "volume": 41234567,
+                    "info": {
+                        "rsym": "DNASAAPL",
+                        "excd": "NAS",
+                        "symb": "AAPL",
+                        "name": "APPLE INC",
+                        "knam": "애플",
+                        "last": "172.5000",
+                        "sign": "2",
+                        "diff": "2.5000",
+                        "rate": "1.47",
+                        "tvol": "41234567",
+                        "rank": "1"
+                    }
+                }
+            ]
+        },
+        {
+            "description": "fetchRankings OVERSEAS_NEW_HIGH 는 period 를 NDAY 로 옮긴다",
+            "now": 1774450800000,
+            "method": "fetchRankings",
+            "args": ["OVERSEAS_NEW_HIGH", { "exchange": "NYS", "period": "52w" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/ranking/new-highlow?EXCD=NYS&VOL_RANG=0&KEYB=&AUTH=&MINX=0&GUBN=1&GUBN2=1&NDAY=6",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "HHDFS76300000",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output2": [
+                                {
+                                    "symb": "BRK/B",
+                                    "name": "BERKSHIRE HATHAWAY INC-CL B",
+                                    "last": "410.2500",
+                                    "diff": "1.2000",
+                                    "rate": "0.29",
+                                    "tvol": "1000"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "symbol": "BRK/B/USD",
+                    "name": "BERKSHIRE HATHAWAY INC-CL B",
+                    "last": 410.25,
+                    "change": 1.2,
+                    "percentage": 0.29,
+                    "volume": 1000,
+                    "info": { "symb": "BRK/B", "name": "BERKSHIRE HATHAWAY INC-CL B", "last": "410.2500", "diff": "1.2000", "rate": "0.29", "tvol": "1000" }
+                }
+            ]
+        },
+        {
+            "description": "fetchRankings 해외 순위는 거래소가 없으면 요청 없이 ArgumentsRequired 다",
+            "method": "fetchRankings",
+            "args": ["OVERSEAS_MARKET_CAP"],
+            "http": [],
+            "error": { "class": "ArgumentsRequired" }
+        },
+        {
+            "description": "fetchRankings 해외 순위의 거래소가 목록에 없으면 BadRequest 다",
+            "method": "fetchRankings",
+            "args": ["OVERSEAS_VOLUME", { "exchange": "LSE" }],
+            "http": [],
+            "error": { "class": "BadRequest" }
+        },
+        {
+            "description": "fetchRankings ELW_VOLUME 은 ELW 단축코드와 ELW 이름·현재가 필드를 쓴다",
+            "now": 1774400400000,
+            "method": "fetchRankings",
+            "args": ["ELW_VOLUME"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/elw/v1/ranking/volume-rank?FID_COND_MRKT_DIV_CODE=W&FID_UNAS_INPUT_ISCD=000000&FID_INPUT_ISCD=00000&FID_INPUT_PRICE_1=&FID_INPUT_PRICE_2=&FID_INPUT_VOL_1=&FID_INPUT_VOL_2=&FID_BLNG_CLS_CODE=0&FID_COND_SCR_DIV_CODE=20278&FID_INPUT_RMNN_DYNU_1=&FID_DIV_CLS_CODE=0&FID_INPUT_DATE_1=&FID_RANK_SORT_CLS_CODE=0&FID_INPUT_ISCD_2=0000&FID_INPUT_DATE_2=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHPEW02780000",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [
+                                {
+                                    "elw_shrn_iscd": "58J001",
+                                    "elw_kor_isnm": "가상ELW콜",
+                                    "elw_prpr": "120",
+                                    "prdy_vrss": "5",
+                                    "prdy_ctrt": "4.35",
+                                    "acml_vol": "1500000"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "symbol": "58J001/KRW",
+                    "name": "가상ELW콜",
+                    "last": 120,
+                    "change": 5,
+                    "percentage": 4.35,
+                    "volume": 1500000,
+                    "info": {
+                        "elw_shrn_iscd": "58J001",
+                        "elw_kor_isnm": "가상ELW콜",
+                        "elw_prpr": "120",
+                        "prdy_vrss": "5",
+                        "prdy_ctrt": "4.35",
+                        "acml_vol": "1500000"
+                    }
+                }
+            ]
+        },
+        {
+            "description": "fetchRankings 는 표에 없는 종류면 NotSupported 다",
+            "method": "fetchRankings",
+            "args": ["UNKNOWN_RANKING"],
+            "http": [],
+            "error": { "class": "NotSupported" }
         }
     ]
 }
