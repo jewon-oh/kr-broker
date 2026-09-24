@@ -54,7 +54,8 @@ pnpm hygiene:check   # 비밀이나 사설 식별자로 보이는 값 검사
 - 테스트 하나만 실행하려면 `pnpm exec vitest run ts/src/kis/__tests__/kis-order.test.ts`처럼 경로를 지정합니다.
 - 테스트는 `ts/src/**/__tests__/` 아래에 둡니다.
 - 테스트는 `fetch`를 가짜 함수로 대체합니다. 증권사 서버를 호출하지 않습니다.
-- CI는 `pnpm typecheck`, `pnpm hygiene:check`, `pnpm test`, `pnpm build`, `pnpm audit --prod`를 실행합니다. 테스트는 Linux의 Node.js 22와 24, Windows의 Node.js 22에서 실행합니다.
+- `docs/coverage/`의 자료를 고쳤다면 `pnpm docs:gen`으로 `docs/brokers/`와 README의 기능 표를 다시 만듭니다. README는 `<!-- coverage:start -->`와 `<!-- coverage:end -->` 사이만 바뀝니다. `pnpm docs:check`는 둘이 자료와 다르면 실패합니다.
+- CI는 `pnpm typecheck`, `pnpm hygiene:check`, `pnpm test`, `pnpm docs:check`, `pnpm build`, `pnpm audit --prod`를 실행합니다. 테스트는 Linux의 Node.js 22와 24, Windows의 Node.js 22에서 실행합니다.
 
 PR을 올리기 전에 `pnpm typecheck`, `pnpm test`, `pnpm build`가 통과해야 합니다. 빌드한 `dist/`는 `node scripts/check-dist-imports.mjs`로 Node.js에서 불러와지는지 확인합니다.
 
