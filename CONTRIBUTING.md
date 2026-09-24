@@ -47,13 +47,14 @@ pnpm install
 pnpm typecheck   # 소스, 테스트, examples/ 까지 타입 검사
 pnpm test
 pnpm build
+pnpm hygiene:check   # 비밀이나 사설 식별자로 보이는 값 검사
 ```
 
 - `pnpm typecheck`는 `examples/ts/`도 검사합니다. README의 예제 코드가 실제 API와 어긋나면 `pnpm typecheck`가 실패합니다.
 - 테스트 하나만 실행하려면 `pnpm exec vitest run ts/src/kis/__tests__/kis-order.test.ts`처럼 경로를 지정합니다.
 - 테스트는 `ts/src/**/__tests__/` 아래에 둡니다.
 - 테스트는 `fetch`를 가짜 함수로 대체합니다. 증권사 서버를 호출하지 않습니다.
-- CI는 `pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm audit --prod`를 실행합니다. 테스트는 Linux의 Node.js 22와 24, Windows의 Node.js 22에서 실행합니다.
+- CI는 `pnpm typecheck`, `pnpm hygiene:check`, `pnpm test`, `pnpm build`, `pnpm audit --prod`를 실행합니다. 테스트는 Linux의 Node.js 22와 24, Windows의 Node.js 22에서 실행합니다.
 
 PR을 올리기 전에 `pnpm typecheck`, `pnpm test`, `pnpm build`가 통과해야 합니다. 빌드한 `dist/`는 `node scripts/check-dist-imports.mjs`로 Node.js에서 불러와지는지 확인합니다.
 
@@ -131,6 +132,7 @@ PR 본문은 [PR 템플릿](.github/pull_request_template.md)의 항목을 채�
 - 실제 응답을 바탕으로 만든 픽스처는 필드 구조를 그대로 두고 값을 바꿉니다.
 - 수량, 가격, 체결 시각처럼 계좌 활동을 드러내는 값도 바꿉니다.
 - 커밋한 비밀은 이력에 남습니다. 커밋 전에 `git diff`로 픽스처를 확인합니다.
+- `pnpm hygiene:check`는 JWT, 개인 키, AWS 액세스 키 모양과 사설 IP, `example.*`가 아닌 이메일, 홈 디렉터리 경로를 찾습니다. 계좌번호와 주문번호는 패턴으로 가릴 수 없으므로 직접 확인합니다.
 - 실수로 올렸다면 PR을 닫고 [보안 정책](SECURITY.md)의 절차대로 앱키를 폐기합니다.
 
 ## 증권사 API 변경 대응

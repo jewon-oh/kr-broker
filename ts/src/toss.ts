@@ -1686,7 +1686,7 @@ export class toss extends Exchange {
             if (session !== 'regularMarket') {
                 // 확장세션(프리 08:00~08:50, 애프터 15:30~20:00)은 기능 옵션으로 연다. 옵션을 보지 않고 막으면 켜 놓아도 확장세션 청산이 안 된다.
                 if (!(await this.isOptionEnabled('nxtRouting'))) {
-                    return `KRX ${session} 세션 — 확장세션 주문은 nxt-routing 기능이 켜져 있어야 한다`;
+                    return `KRX ${session} 세션 — 확장세션 주문은 nxtRouting 옵션이 켜져 있어야 한다`;
                 }
                 return krSessionOrderRestriction(session, form);
             }

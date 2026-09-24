@@ -47,19 +47,6 @@ export const KBSEC_TOKEN_SAFETY_MARGIN_MS = 60 * 1000;
 /** expires_in 누락 시 기본 토큰 유효기간(ms) — 가이드 예시 86400s(24h). */
 export const KBSEC_TOKEN_DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
 
-/**
- * 원마켓(통합증거금) 사용 기능 플래그.
- *
- * KB 원마켓/원마켓플러스는 **원화로 미국 주식을 산다** — USD 사전 환전이 필요 없다.
- * 켜면 US 매수여력을 `krw_exch_unty_ordr_psbl_amt`(원화환산 통합 주문가능금액) 기준으로
- * 읽어, 달러 예수금이 0 이어도 원화로 주문할 수 있다.
- * 끄면 외화 예수금(`fcrncy_ordr_psbl_amt`)만 본다 — 통합증거금 미신청 계좌 기준.
- *
- * 토스의 `toss-krw-integrated-margin` 과 같은 개념이며 기본값도 동일하게 off 로 둔다
- * (계좌가 통합증거금에 가입돼 있어야 의미가 있어, 켜는 건 계좌 확인 후 결정).
- */
-export const KBSEC_KRW_INTEGRATED_MARGIN_FLAG = 'kbsec-krw-integrated-margin';
-
 // ============ 자격증명 ============
 
 export interface KBSecCredentials {

@@ -303,7 +303,7 @@ describe('createOrder — 넥스트레이드 라우팅', () => {
         return bodies[index];
     };
 
-    it('플래그가 꺼져 있으면 KRX 고정이다', async () => {
+    it('nxtRouting 옵션이 꺼져 있으면 KRX 고정이다', async () => {
         routeTr(mockFetch, { [TR_BUY]: { ordr_no: 'A1' } });
 
         await newExchange().createOrder('005930/KRW', 'limit', 'buy', 1, 70000);
@@ -311,7 +311,7 @@ describe('createOrder — 넥스트레이드 라우팅', () => {
         expect(sorOf(0)).toBe('K');
     });
 
-    it('플래그가 켜져 있으면 SOR 에 맡긴다', async () => {
+    it('nxtRouting 옵션이 켜져 있으면 SOR 에 맡긴다', async () => {
         enableNxt();
         routeTr(mockFetch, { [TR_BUY]: { ordr_no: 'A1' } });
 

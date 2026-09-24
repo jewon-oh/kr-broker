@@ -258,7 +258,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run",
     "docs:gen": "node scripts/gen-broker-docs.mjs",
-    "docs:check": "node scripts/gen-broker-docs.mjs --check"
+    "docs:check": "node scripts/gen-broker-docs.mjs --check",
+    "hygiene:check": "node scripts/check-hygiene.mjs"
   },
   "dependencies": {
     "ws": "^8.19.0"
