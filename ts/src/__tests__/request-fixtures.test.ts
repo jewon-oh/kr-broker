@@ -1,0 +1,130 @@
+/**
+ * @fileoverview `ts/src/test/static/request/*.json` 을 TypeScript 판으로 돌린다. Python 판(`python/<패키지>/test/test_request_fixtures.py`)도 같은 파일을 돌리므로,
+ * 둘 다 통과하면 두 판이 같은 요청(URL·헤더·본문)을 만들고 같은 응답을 같은 결과와 오류로 바꾼다는 뜻이다.
+ *
+ * 케이스마다 새 인스턴스를 만들고, 가짜 `fetch` 가 `http` 목록을 순서대로 응답한다. 형식은 `ts/src/test/static/README.md` 에 있다.
+ */
+import { readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { deepExtend } from '../base/functions/generic';
+import type { Dict } from '../base/types';
+import { kis } from '../kis';
+import type { BrokerTokenStore } from '../options';
+import { toss } from '../toss';
+
+const FIXTURES = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../test/static/request');
+const BROKERS: Record<string, new (config: Dict) => Dict> = { kis, toss } as unknown as Record<string, new (config: Dict) => Dict>;
+
+interface FixtureRequest { method: string; url: string; headers: Record<string, string>; body: string | null }
+interface FixtureExchange {
+    request: FixtureRequest;
+    response?: { status: number; headers?: Record<string, string>; body: unknown };
+    network?: 'timeout' | 'reset';
+}
+interface FixtureCase {
+    description: string;
+    config?: Dict;
+    tokenStore?: Record<string, unknown>;
+    method: string;
+    args: unknown[];
+    http: FixtureExchange[];
+    output?: unknown;
+    error?: { class: string; detail?: string };
+    tokenStoreAfter?: Record<string, 'present' | 'absent'>;
+}
+interface FixtureFile { broker: string; config: Dict; tokenStore?: Record<string, unknown>; cases: FixtureCase[] }
+
+/** 픽스처용 토큰 저장소. 값은 JSON 문자열로 둔다(실제 저장소와 같다). */
+class MemoryTokenStore implements BrokerTokenStore {
+    readonly values = new Map<string, string>();
+    private readonly locks = new Map<string, string>();
+
+    constructor(initial: Record<string, unknown> = {}) {
+        for (const [key, value] of Object.entries(initial)) this.values.set(key, JSON.stringify(value));
+    }
+
+    async get(key: string): Promise<string | null> { return this.values.get(key) ?? null; }
+    async set(key: string, value: string): Promise<void> { this.values.set(key, value); }
+    async delete(key: string): Promise<void> { this.values.delete(key); }
+    async deleteIfAccessTokenEquals(key: string, accessToken: string): Promise<boolean> {
+        const raw = this.values.get(key);
+        if (raw === undefined) return false;
+        try {
+            if ((JSON.parse(raw) as Dict).accessToken !== accessToken) return false;
+        } catch {
+            return false;
+        }
+        this.values.delete(key);
+        return true;
+    }
+    async tryLock(key: string, owner: string): Promise<boolean> {
+        if (this.locks.has(key)) return false;
+        this.locks.set(key, owner);
+        return true;
+    }
+    async unlock(key: string, owner: string): Promise<void> {
+        if (this.locks.get(key) === owner) this.locks.delete(key);
+    }
+}
+
+/** `null` 값은 "설정하지 않음" 이다(Python 판의 `None` 기본값과 맞춘다). */
+function dropNulls(config: Dict): Dict {
+    return Object.fromEntries(Object.entries(config).filter(([, value]) => value !== null));
+}
+
+function fakeFetch(exchanges: FixtureExchange[], seen: FixtureRequest[]) {
+    let index = 0;
+    return vi.fn(async (url: string, init: { method?: string; headers?: Record<string, string>; body?: string } = {}) => {
+        seen.push({ method: init.method ?? 'GET', url: String(url), headers: { ...(init.headers ?? {}) }, body: init.body ?? null });
+        const exchange = exchanges[index++];
+        if (exchange === undefined) throw new Error(`픽스처에 없는 요청: ${init.method ?? 'GET'} ${String(url)}`);
+        if (exchange.network === 'timeout') throw Object.assign(new Error('timed out'), { name: 'TimeoutError' });
+        if (exchange.network === 'reset') throw new TypeError('fetch failed');
+        const reply = exchange.response as NonNullable<FixtureExchange['response']>;
+        const text = typeof reply.body === 'string' ? reply.body : JSON.stringify(reply.body);
+        return { status: reply.status, statusText: '', headers: new Headers(reply.headers ?? {}), text: async () => text };
+    });
+}
+
+const files = readdirSync(FIXTURES).filter((name) => name.endsWith('.json')).sort();
+
+afterEach(() => {
+    vi.unstubAllGlobals();
+});
+
+describe.each(files)('test/static/request/%s', (file) => {
+    const fixture = JSON.parse(readFileSync(path.join(FIXTURES, file), 'utf8')) as FixtureFile;
+    const Broker = BROKERS[fixture.broker];
+
+    it.each(fixture.cases.map((c) => [c.description, c] as const))('%s', async (_description, c) => {
+        const store = new MemoryTokenStore(c.tokenStore ?? fixture.tokenStore ?? {});
+        const config = dropNulls(deepExtend(fixture.config, c.config ?? {}, { options: { tokenStore: store } }) as Dict);
+        const seen: FixtureRequest[] = [];
+        vi.stubGlobal('fetch', fakeFetch(c.http, seen));
+        const broker = new Broker(config);
+
+        let result: unknown;
+        let error: unknown;
+        try {
+            result = await (broker[c.method] as (...args: unknown[]) => Promise<unknown>)(...c.args);
+        } catch (e) {
+            error = e;
+        }
+
+        expect(seen).toEqual(c.http.map((h) => h.request));
+        if (c.error !== undefined) {
+            expect(error, '오류를 던져야 한다').toBeInstanceOf(Error);
+            expect((error as Error).name).toBe(c.error.class);
+            if (c.error.detail !== undefined) expect((error as { detail?: string }).detail).toBe(c.error.detail);
+        } else {
+            if (error !== undefined) throw error;
+            expect(result).toEqual(c.output);
+        }
+        for (const [key, state] of Object.entries(c.tokenStoreAfter ?? {})) {
+            expect(store.values.has(key), `${key} 는 ${state} 여야 한다`).toBe(state === 'present');
+        }
+    });
+});

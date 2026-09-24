@@ -1,0 +1,169 @@
+{
+    "schema_version": 1,
+    "broker": "kbsec",
+    "endpoints": {
+        "privatePostIvu10140": { "api": ["private"], "method": "POST", "path": "ivu10140", "cost": 1 },
+        "privatePostIvu10070": { "api": ["private"], "method": "POST", "path": "ivu10070", "cost": 1 },
+        "privatePostIvs11560": { "api": ["private"], "method": "POST", "path": "ivs11560", "cost": 1 },
+        "privatePostIvu10080": { "api": ["private"], "method": "POST", "path": "ivu10080", "cost": 1 },
+        "privatePostSzqm0771": { "api": ["private"], "method": "POST", "path": "szqm0771", "cost": 1 },
+        "privatePostSiqm4900": { "api": ["private"], "method": "POST", "path": "siqm4900", "cost": 1 },
+        "privatePostSpam2508": { "api": ["private"], "method": "POST", "path": "spam2508", "cost": 1 },
+        "privatePostIvu10430": { "api": ["private"], "method": "POST", "path": "ivu10430", "cost": 1 },
+        "privatePostIvu10240": { "api": ["private"], "method": "POST", "path": "ivu10240", "cost": 1 },
+        "privatePostIvu10280": { "api": ["private"], "method": "POST", "path": "ivu10280", "cost": 1 },
+        "privatePostIvs10920": { "api": ["private"], "method": "POST", "path": "ivs10920", "cost": 1 },
+        "privatePostIvu10210": { "api": ["private"], "method": "POST", "path": "ivu10210", "cost": 1 },
+        "privatePostIvs10910": { "api": ["private"], "method": "POST", "path": "ivs10910", "cost": 1 },
+        "privatePostIva60190": { "api": ["private"], "method": "POST", "path": "iva60190", "cost": 1 },
+        "privatePostIva60140": { "api": ["private"], "method": "POST", "path": "iva60140", "cost": 1 },
+        "privatePostIvm10050": { "api": ["private"], "method": "POST", "path": "ivm10050", "cost": 1 },
+        "privatePostIvu10550": { "api": ["private"], "method": "POST", "path": "ivu10550", "cost": 1 },
+        "privatePostIvu10020": {
+            "api": ["private"],
+            "method": "POST",
+            "path": "ivu10020",
+            "cost": 1,
+            "params": [
+                {
+                    "name": "excg_clsf",
+                    "required": true,
+                    "type": "string",
+                    "description": "거래소구분"
+                },
+                {
+                    "name": "mkt_clsf",
+                    "required": true,
+                    "type": "string",
+                    "description": "시장구분(0:거래소, 1:코스닥, 2:전체)"
+                },
+                {
+                    "name": "invstr_ccd",
+                    "required": true,
+                    "type": "string",
+                    "description": "투자자구분코드(14종 — 외국인·기관계 등)"
+                },
+                {
+                    "name": "prd_clsf",
+                    "required": true,
+                    "type": "string",
+                    "description": "기간구분(7종)"
+                },
+                {
+                    "name": "rnk_clsf",
+                    "required": true,
+                    "type": "string",
+                    "description": "순위구분코드(6종 — 순매수·순매도 등)"
+                }
+            ],
+            "response": [
+                {
+                    "field": "shrt_is_cd",
+                    "type": "string",
+                    "description": "단축종목코드"
+                },
+                {
+                    "field": "is_nm",
+                    "type": "string",
+                    "description": "종목명"
+                },
+                {
+                    "field": "now_prc",
+                    "type": "string",
+                    "description": "현재가"
+                },
+                {
+                    "field": "bdy_cmpr",
+                    "type": "string",
+                    "description": "전일대비"
+                },
+                {
+                    "field": "bdy_cmpr_r_p2",
+                    "type": "string",
+                    "description": "등락율"
+                },
+                {
+                    "field": "vlm",
+                    "type": "string",
+                    "description": "거래량"
+                },
+                {
+                    "field": "nt_b_s_q",
+                    "type": "string",
+                    "description": "순매매수량"
+                },
+                {
+                    "field": "hld_rt_p2",
+                    "type": "string",
+                    "description": "보유율"
+                }
+            ],
+            "evidence": "ts/src/kbsec.ts:989-1005(fetchInvestorRanking)"
+        },
+        "privatePostIva10370": { "api": ["private"], "method": "POST", "path": "iva10370", "cost": 1 },
+        "privatePostIvs11190": { "api": ["private"], "method": "POST", "path": "ivs11190", "cost": 1 },
+        "privatePostIvu10270": { "api": ["private"], "method": "POST", "path": "ivu10270", "cost": 1 },
+        "privatePostIvu10420": { "api": ["private"], "method": "POST", "path": "ivu10420", "cost": 1 },
+        "privatePostIvu10450": { "api": ["private"], "method": "POST", "path": "ivu10450", "cost": 1 },
+        "privatePostIvsa0070": { "api": ["private"], "method": "POST", "path": "ivsa0070", "cost": 1 },
+        "privatePostIvs11430": { "api": ["private"], "method": "POST", "path": "ivs11430", "cost": 1 },
+        "privatePostIvm30010": { "api": ["private"], "method": "POST", "path": "ivm30010", "cost": 1 },
+        "privatePostGss10030": { "api": ["private"], "method": "POST", "path": "gss10030", "cost": 1 },
+        "privatePostGss10040": { "api": ["private"], "method": "POST", "path": "gss10040", "cost": 1 },
+        "privatePostGsc10060": { "api": ["private"], "method": "POST", "path": "gsc10060", "cost": 1 },
+        "privatePostGsa10020": { "api": ["private"], "method": "POST", "path": "gsa10020", "cost": 1 },
+        "privatePostSsqm0004": { "api": ["private"], "method": "POST", "path": "ssqm0004", "cost": 1 },
+        "privatePostSsqm1801": { "api": ["private"], "method": "POST", "path": "ssqm1801", "cost": 1 },
+        "privatePostSsqm2952": { "api": ["private"], "method": "POST", "path": "ssqm2952", "cost": 1 },
+        "privatePostSsqm0006": { "api": ["private"], "method": "POST", "path": "ssqm0006", "cost": 1 },
+        "privatePostSsqm5472": { "api": ["private"], "method": "POST", "path": "ssqm5472", "cost": 1 },
+        "privatePostSwqa2301": { "api": ["private"], "method": "POST", "path": "swqa2301", "cost": 1 },
+        "privatePostSwqb2301": { "api": ["private"], "method": "POST", "path": "swqb2301", "cost": 1 },
+        "privatePostSwqn2302": { "api": ["private"], "method": "POST", "path": "swqn2302", "cost": 1 },
+        "privatePostSzqm6019": { "api": ["private"], "method": "POST", "path": "szqm6019", "cost": 1 },
+        "privatePostSsqm2392": { "api": ["private"], "method": "POST", "path": "ssqm2392", "cost": 1 },
+        "privatePostSwqm2412": { "api": ["private"], "method": "POST", "path": "swqm2412", "cost": 1 },
+        "privatePostSwqm2302": { "api": ["private"], "method": "POST", "path": "swqm2302", "cost": 1 },
+        "privatePostSpqn3390": { "api": ["private"], "method": "POST", "path": "spqn3390", "cost": 1 },
+        "privatePostSkqo3390": { "api": ["private"], "method": "POST", "path": "skqo3390", "cost": 1 },
+        "privatePostSsqm1802": { "api": ["private"], "method": "POST", "path": "ssqm1802", "cost": 1 },
+        "privatePostSsam1802": { "api": ["private"], "method": "POST", "path": "ssam1802", "cost": 1, "order": true },
+        "privatePostSsam1801": { "api": ["private"], "method": "POST", "path": "ssam1801", "cost": 1, "order": true },
+        "privatePostSsam1805": { "api": ["private"], "method": "POST", "path": "ssam1805", "cost": 1, "order": true },
+        "privatePostSsam1806": { "api": ["private"], "method": "POST", "path": "ssam1806", "cost": 1, "order": true },
+        "privatePostSsqm2341": { "api": ["private"], "method": "POST", "path": "ssqm2341", "cost": 1 },
+        "privatePostSsqm2121": { "api": ["private"], "method": "POST", "path": "ssqm2121", "cost": 1 },
+        "privatePostSsam5763": { "api": ["private"], "method": "POST", "path": "ssam5763", "cost": 1, "order": true },
+        "privatePostSsam5762": { "api": ["private"], "method": "POST", "path": "ssam5762", "cost": 1, "order": true },
+        "privatePostSsqn5472": { "api": ["private"], "method": "POST", "path": "ssqn5472", "cost": 1 },
+        "privatePostSsqm5765": { "api": ["private"], "method": "POST", "path": "ssqm5765", "cost": 1 },
+        "privatePostSsqm5475": { "api": ["private"], "method": "POST", "path": "ssqm5475", "cost": 1 },
+        "privatePostSsam0831": { "api": ["private"], "method": "POST", "path": "ssam0831", "cost": 1, "order": true },
+        "privatePostSsqm0831": { "api": ["private"], "method": "POST", "path": "ssqm0831", "cost": 1 },
+        "privatePostSsqm0834": { "api": ["private"], "method": "POST", "path": "ssqm0834", "cost": 1 },
+        "privatePostSrqm3051": { "api": ["private"], "method": "POST", "path": "srqm3051", "cost": 1 },
+        "privatePostSkam2101": { "api": ["private"], "method": "POST", "path": "skam2101", "cost": 1, "order": true },
+        "privatePostSkam2102": { "api": ["private"], "method": "POST", "path": "skam2102", "cost": 1, "order": true },
+        "privatePostSkam2201": { "api": ["private"], "method": "POST", "path": "skam2201", "cost": 1, "order": true },
+        "privatePostSpqm2103": { "api": ["private"], "method": "POST", "path": "spqm2103", "cost": 1 },
+        "privatePostSpqn5472": { "api": ["private"], "method": "POST", "path": "spqn5472", "cost": 1 },
+        "privatePostSpqm5472": { "api": ["private"], "method": "POST", "path": "spqm5472", "cost": 1 },
+        "privatePostSpqn5473": { "api": ["private"], "method": "POST", "path": "spqn5473", "cost": 1 },
+        "privatePostSpao2104": { "api": ["private"], "method": "POST", "path": "spao2104", "cost": 1, "order": true },
+        "privatePostSpao2106": { "api": ["private"], "method": "POST", "path": "spao2106", "cost": 1, "order": true },
+        "privatePostSpqm1818": { "api": ["private"], "method": "POST", "path": "spqm1818", "cost": 1 },
+        "privatePostSkqm2106": { "api": ["private"], "method": "POST", "path": "skqm2106", "cost": 1 },
+        "privatePostSpqm3390": { "api": ["private"], "method": "POST", "path": "spqm3390", "cost": 1 },
+        "privatePostSpqm2226": { "api": ["private"], "method": "POST", "path": "spqm2226", "cost": 1 },
+        "privatePostSpqm2205": { "api": ["private"], "method": "POST", "path": "spqm2205", "cost": 1 },
+        "privatePostSkqm3350": { "api": ["private"], "method": "POST", "path": "skqm3350", "cost": 1 },
+        "privatePostSpqm2106": { "api": ["private"], "method": "POST", "path": "spqm2106", "cost": 1 },
+        "privatePostSpqm2204": { "api": ["private"], "method": "POST", "path": "spqm2204", "cost": 1 },
+        "privatePostSsqm0005": { "api": ["private"], "method": "POST", "path": "ssqm0005", "cost": 1 },
+        "privatePostSsqn2952": { "api": ["private"], "method": "POST", "path": "ssqn2952", "cost": 1 },
+        "privatePostSsqm2932": { "api": ["private"], "method": "POST", "path": "ssqm2932", "cost": 1 },
+        "privatePostSsqm2442": { "api": ["private"], "method": "POST", "path": "ssqm2442", "cost": 1 },
+        "privatePostSsqm2443": { "api": ["private"], "method": "POST", "path": "ssqm2443", "cost": 1 },
+        "privatePostSpqm5473": { "api": ["private"], "method": "POST", "path": "spqm5473", "cost": 1 }
+    }
+}

@@ -1,0 +1,275 @@
+{
+  "name": "kr-broker",
+  "version": "0.4.0",
+  "private": true,
+  "description": "한국 증권사(KB증권·한국투자증권·토스증권) API 를 ccxt 처럼 쓰는 TypeScript 라이브러리",
+  "license": "MIT",
+  "keywords": [
+    "ccxt",
+    "korea",
+    "korean-stock",
+    "broker",
+    "trading",
+    "typescript",
+    "kis",
+    "toss",
+    "kbsec",
+    "koreainvestment",
+    "tossinvest"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jewon-oh/kr-broker"
+  },
+  "homepage": "https://github.com/jewon-oh/kr-broker#readme",
+  "bugs": {
+    "url": "https://github.com/jewon-oh/kr-broker/issues"
+  },
+  "author": "jewon-oh",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./base/errors": {
+      "types": "./dist/base/errors.d.ts",
+      "default": "./dist/base/errors.js"
+    },
+    "./base/types": {
+      "types": "./dist/base/types.d.ts",
+      "default": "./dist/base/types.js"
+    },
+    "./broker-krx-code": {
+      "types": "./dist/broker-krx-code.d.ts",
+      "default": "./dist/broker-krx-code.js"
+    },
+    "./broker-market-group": {
+      "types": "./dist/broker-market-group.d.ts",
+      "default": "./dist/broker-market-group.js"
+    },
+    "./broker-time": {
+      "types": "./dist/broker-time.d.ts",
+      "default": "./dist/broker-time.js"
+    },
+    "./execution-confirm": {
+      "types": "./dist/execution-confirm.d.ts",
+      "default": "./dist/execution-confirm.js"
+    },
+    "./kbsec": {
+      "types": "./dist/kbsec.d.ts",
+      "default": "./dist/kbsec.js"
+    },
+    "./kbsec/kbsec-auth": {
+      "types": "./dist/kbsec/kbsec-auth.d.ts",
+      "default": "./dist/kbsec/kbsec-auth.js"
+    },
+    "./kbsec/kbsec-chart": {
+      "types": "./dist/kbsec/kbsec-chart.d.ts",
+      "default": "./dist/kbsec/kbsec-chart.js"
+    },
+    "./kbsec/kbsec-envelope": {
+      "types": "./dist/kbsec/kbsec-envelope.d.ts",
+      "default": "./dist/kbsec/kbsec-envelope.js"
+    },
+    "./kbsec/kbsec-error-codes": {
+      "types": "./dist/kbsec/kbsec-error-codes.d.ts",
+      "default": "./dist/kbsec/kbsec-error-codes.js"
+    },
+    "./kbsec/kbsec-fee": {
+      "types": "./dist/kbsec/kbsec-fee.d.ts",
+      "default": "./dist/kbsec/kbsec-fee.js"
+    },
+    "./kbsec/kbsec-fill-row": {
+      "types": "./dist/kbsec/kbsec-fill-row.d.ts",
+      "default": "./dist/kbsec/kbsec-fill-row.js"
+    },
+    "./kbsec/kbsec-fill-warnings": {
+      "types": "./dist/kbsec/kbsec-fill-warnings.d.ts",
+      "default": "./dist/kbsec/kbsec-fill-warnings.js"
+    },
+    "./kbsec/kbsec-order-body": {
+      "types": "./dist/kbsec/kbsec-order-body.d.ts",
+      "default": "./dist/kbsec/kbsec-order-body.js"
+    },
+    "./kbsec/kbsec-overseas-settlement-match": {
+      "types": "./dist/kbsec/kbsec-overseas-settlement-match.d.ts",
+      "default": "./dist/kbsec/kbsec-overseas-settlement-match.js"
+    },
+    "./kbsec/kbsec-overseas-settlement-row": {
+      "types": "./dist/kbsec/kbsec-overseas-settlement-row.d.ts",
+      "default": "./dist/kbsec/kbsec-overseas-settlement-row.js"
+    },
+    "./kbsec/kbsec-settlement-match": {
+      "types": "./dist/kbsec/kbsec-settlement-match.d.ts",
+      "default": "./dist/kbsec/kbsec-settlement-match.js"
+    },
+    "./kbsec/kbsec-settlement-row": {
+      "types": "./dist/kbsec/kbsec-settlement-row.d.ts",
+      "default": "./dist/kbsec/kbsec-settlement-row.js"
+    },
+    "./kbsec/kbsec-token-breaker": {
+      "types": "./dist/kbsec/kbsec-token-breaker.d.ts",
+      "default": "./dist/kbsec/kbsec-token-breaker.js"
+    },
+    "./kbsec/kbsec-tr-inputs": {
+      "types": "./dist/kbsec/kbsec-tr-inputs.d.ts",
+      "default": "./dist/kbsec/kbsec-tr-inputs.js"
+    },
+    "./kbsec/kbsec-types": {
+      "types": "./dist/kbsec/kbsec-types.d.ts",
+      "default": "./dist/kbsec/kbsec-types.js"
+    },
+    "./kis": {
+      "types": "./dist/kis.d.ts",
+      "default": "./dist/kis.js"
+    },
+    "./kis/kis-auth": {
+      "types": "./dist/kis/kis-auth.d.ts",
+      "default": "./dist/kis/kis-auth.js"
+    },
+    "./kis/kis-candle-pagination": {
+      "types": "./dist/kis/kis-candle-pagination.d.ts",
+      "default": "./dist/kis/kis-candle-pagination.js"
+    },
+    "./kis/kis-candle-service": {
+      "types": "./dist/kis/kis-candle-service.d.ts",
+      "default": "./dist/kis/kis-candle-service.js"
+    },
+    "./kis/kis-error-codes": {
+      "types": "./dist/kis/kis-error-codes.d.ts",
+      "default": "./dist/kis/kis-error-codes.js"
+    },
+    "./kis/kis-master-data": {
+      "types": "./dist/kis/kis-master-data.d.ts",
+      "default": "./dist/kis/kis-master-data.js"
+    },
+    "./kis/kis-overseas-master": {
+      "types": "./dist/kis/kis-overseas-master.d.ts",
+      "default": "./dist/kis/kis-overseas-master.js"
+    },
+    "./kis/kis-price-ws": {
+      "types": "./dist/kis/kis-price-ws.d.ts",
+      "default": "./dist/kis/kis-price-ws.js"
+    },
+    "./kis/kis-rate-limiter": {
+      "types": "./dist/kis/kis-rate-limiter.d.ts",
+      "default": "./dist/kis/kis-rate-limiter.js"
+    },
+    "./kis/kis-realtime-parser": {
+      "types": "./dist/kis/kis-realtime-parser.d.ts",
+      "default": "./dist/kis/kis-realtime-parser.js"
+    },
+    "./kis/kis-stock-master": {
+      "types": "./dist/kis/kis-stock-master.d.ts",
+      "default": "./dist/kis/kis-stock-master.js"
+    },
+    "./kis/kis-trading-hours": {
+      "types": "./dist/kis/kis-trading-hours.d.ts",
+      "default": "./dist/kis/kis-trading-hours.js"
+    },
+    "./kis/kis-types": {
+      "types": "./dist/kis/kis-types.d.ts",
+      "default": "./dist/kis/kis-types.js"
+    },
+    "./kis/kr-market": {
+      "types": "./dist/kis/kr-market.d.ts",
+      "default": "./dist/kis/kr-market.js"
+    },
+    "./kis/master-search-rank": {
+      "types": "./dist/kis/master-search-rank.d.ts",
+      "default": "./dist/kis/master-search-rank.js"
+    },
+    "./kis/us-market-hours": {
+      "types": "./dist/kis/us-market-hours.d.ts",
+      "default": "./dist/kis/us-market-hours.js"
+    },
+    "./kis/yahoo-finance-candles": {
+      "types": "./dist/kis/yahoo-finance-candles.d.ts",
+      "default": "./dist/kis/yahoo-finance-candles.js"
+    },
+    "./krx-sell-tax": {
+      "types": "./dist/krx-sell-tax.d.ts",
+      "default": "./dist/krx-sell-tax.js"
+    },
+    "./krx-trading-hours": {
+      "types": "./dist/krx-trading-hours.d.ts",
+      "default": "./dist/krx-trading-hours.js"
+    },
+    "./logger": {
+      "types": "./dist/logger.d.ts",
+      "default": "./dist/logger.js"
+    },
+    "./market-calendar": {
+      "types": "./dist/market-calendar.d.ts",
+      "default": "./dist/market-calendar.js"
+    },
+    "./options": {
+      "types": "./dist/options.d.ts",
+      "default": "./dist/options.js"
+    },
+    "./token-refresh-lock": {
+      "types": "./dist/token-refresh-lock.d.ts",
+      "default": "./dist/token-refresh-lock.js"
+    },
+    "./toss": {
+      "types": "./dist/toss.d.ts",
+      "default": "./dist/toss.js"
+    },
+    "./toss/toss-auth": {
+      "types": "./dist/toss/toss-auth.d.ts",
+      "default": "./dist/toss/toss-auth.js"
+    },
+    "./toss/toss-errors": {
+      "types": "./dist/toss/toss-errors.d.ts",
+      "default": "./dist/toss/toss-errors.js"
+    },
+    "./toss/toss-trading-hours": {
+      "types": "./dist/toss/toss-trading-hours.d.ts",
+      "default": "./dist/toss/toss-trading-hours.js"
+    },
+    "./toss/toss-types": {
+      "types": "./dist/toss/toss-types.d.ts",
+      "default": "./dist/toss/toss-types.js"
+    },
+    "./trading-hours": {
+      "types": "./dist/trading-hours.d.ts",
+      "default": "./dist/trading-hours.js"
+    },
+    "./us-market-hours": {
+      "types": "./dist/us-market-hours.d.ts",
+      "default": "./dist/us-market-hours.js"
+    }
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "ts",
+    "docs",
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "test": "vitest run",
+    "docs:gen": "node scripts/gen-broker-docs.mjs",
+    "docs:check": "node scripts/gen-broker-docs.mjs --check"
+  },
+  "dependencies": {
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@11.18.0"
+}

@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 기본 권한은 읽기뿐이다. 잡이 더 필요하면 그 잡에서 따로 올린다.
+permissions:
+  contents: read
+
+# 같은 브랜치에서 새 커밋이 올라오면 진행 중인 PR 검사를 취소한다. main 은 취소하지 않는다.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # 별도 lint 도구가 없다. 타입 검사가 소스, 테스트, 예제를 함께 본다.
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+
+  test:
+    name: test (${{ matrix.os }}, node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        node: [22, 24]
+        include:
+          - os: windows-latest
+            node: 22
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm docs:check
+      - run: pnpm build
+
+  # Python 판. 암묵 API 선언이 엔드포인트 표(ts/src/spec)와 같은지 보고, TypeScript 판과 같은 요청 픽스처(ts/src/test/static/request)를 돌린다.
+  python:
+    name: python (${{ matrix.python }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.13']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+      - run: node scripts/gen-python-abstract.mjs --check
+      - run: python -m pip install -e './python[dev]'
+      - run: python -m pytest
+        working-directory: python
+      - name: 예제 문법 검사
+        run: python -m py_compile examples/py/*.py
+
+  # 운영 의존성만 검사한다. 개발 의존성의 취약점은 배포물에 실리지 않는다.
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --prod
+
+  # 브랜치 규칙의 필수 검사는 이 잡 하나만 가리킨다. test 매트릭스에 OS나 Node 버전을 추가·삭제해도
+  # 이 잡의 이름은 바뀌지 않아서, 매트릭스가 만드는 개별 체크 이름을 규칙에서 따로 맞출 필요가 없다.
+  required:
+    name: 필수 검사 통과
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: always()
+    needs: [typecheck, test, python, audit]
+    steps:
+      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: |
+          echo "typecheck, test, python, audit 중 실패하거나 취소된 잡이 있다."
+          exit 1

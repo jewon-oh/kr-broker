@@ -1,0 +1,287 @@
+{
+    "schema_version": 1,
+    "broker": "toss",
+    "config": { "apiKey": "toss-client-id-123456", "secret": "toss-secret", "uid": "ACC-001", "enableRateLimit": false },
+    "tokenStore": {
+        "toss:token:toss-client-" : { "accessToken": "tok-stored", "expiresAt": 4102444800000 }
+    },
+    "cases": [
+        {
+            "description": "시세 API 는 토큰만 싣고 GET 쿼리로 보낸다",
+            "method": "privateMarketGetExchangeRate",
+            "args": [{ "baseCurrency": "USD", "quoteCurrency": "KRW" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/exchange-rate?baseCurrency=USD&quoteCurrency=KRW",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": { "status": 200, "body": { "result": { "rate": "1385.5" } } }
+                }
+            ],
+            "output": { "result": { "rate": "1385.5" } }
+        },
+        {
+            "description": "계좌 API 는 계좌 순번 헤더를 더한다",
+            "method": "privateAccountGetHoldings",
+            "args": [{}],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/holdings",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": { "status": 200, "body": { "result": { "items": [] } } }
+                }
+            ],
+            "output": { "result": { "items": [] } }
+        },
+        {
+            "description": "경로 인자는 encodeURIComponent 로 인코딩하고 나머지는 쿼리로 보낸다",
+            "method": "privateMarketGetStocksSymbolWarnings",
+            "args": [{ "symbol": "A&B C", "market": "KR" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/stocks/A%26B%20C/warnings?market=KR",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": { "status": 200, "body": { "result": [] } }
+                }
+            ],
+            "output": { "result": [] }
+        },
+        {
+            "description": "주문은 JSON 본문으로 보낸다. 정수 값의 실수는 소수점 없이, 한글은 그대로 싣는다",
+            "method": "privateAccountPostOrders",
+            "args": [{ "symbol": "AAPL", "side": "BUY", "orderType": "LIMIT", "price": 228.5, "quantity": 3.0, "memo": "테스트" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001", "Content-Type": "application/json" },
+                        "body": "{\"symbol\":\"AAPL\",\"side\":\"BUY\",\"orderType\":\"LIMIT\",\"price\":228.5,\"quantity\":3,\"memo\":\"테스트\"}"
+                    },
+                    "response": { "status": 200, "body": { "result": { "orderId": "O-1" } } }
+                }
+            ],
+            "output": { "result": { "orderId": "O-1" } }
+        },
+        {
+            "description": "조건주문 취소는 DELETE 이고, 빈 본문은 빈 문자열로 돌려준다",
+            "method": "privateAccountDeleteConditionalOrdersConditionalOrderId",
+            "args": [{ "conditionalOrderId": "C-9" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "DELETE",
+                        "url": "https://openapi.tossinvest.com/api/v1/conditional-orders/C-9",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": { "status": 204, "body": "" }
+                }
+            ],
+            "output": ""
+        },
+        {
+            "description": "저장소에 토큰이 없으면 폼 본문으로 발급받아 저장한 뒤 요청한다",
+            "tokenStore": {},
+            "method": "privateMarketGetExchangeRate",
+            "args": [{ "baseCurrency": "USD", "quoteCurrency": "KRW" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.tossinvest.com/oauth2/token",
+                        "headers": { "Content-Type": "application/x-www-form-urlencoded" },
+                        "body": "grant_type=client_credentials&client_id=toss-client-id-123456&client_secret=toss-secret"
+                    },
+                    "response": { "status": 200, "body": { "access_token": "tok-new", "token_type": "Bearer", "expires_in": 86400 } }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/exchange-rate?baseCurrency=USD&quoteCurrency=KRW",
+                        "headers": { "Authorization": "Bearer tok-new" },
+                        "body": null
+                    },
+                    "response": { "status": 200, "body": { "result": { "rate": "1385.5" } } }
+                }
+            ],
+            "output": { "result": { "rate": "1385.5" } },
+            "tokenStoreAfter": { "toss:token:toss-client-": "present" }
+        },
+        {
+            "description": "uid 가 없으면 계좌 목록의 첫 계좌 순번을 쓴다",
+            "config": { "uid": null },
+            "method": "privateAccountGetHoldings",
+            "args": [{}],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/accounts",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": { "status": 200, "body": { "result": [{ "accountSeq": "ACC-9" }, { "accountSeq": "ACC-10" }] } }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/holdings",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-9" },
+                        "body": null
+                    },
+                    "response": { "status": 200, "body": { "result": { "items": [] } } }
+                }
+            ],
+            "output": { "result": { "items": [] } }
+        },
+        {
+            "description": "401 을 받으면 그 토큰만 지우고 새로 발급받아 한 번 다시 보낸다",
+            "method": "privateMarketGetExchangeRate",
+            "args": [{ "baseCurrency": "USD", "quoteCurrency": "KRW" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/exchange-rate?baseCurrency=USD&quoteCurrency=KRW",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": { "status": 401, "body": { "error": { "code": "token-revoked", "message": "만료" } } }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.tossinvest.com/oauth2/token",
+                        "headers": { "Content-Type": "application/x-www-form-urlencoded" },
+                        "body": "grant_type=client_credentials&client_id=toss-client-id-123456&client_secret=toss-secret"
+                    },
+                    "response": { "status": 200, "body": { "access_token": "tok-renewed", "token_type": "Bearer", "expires_in": 86400 } }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/exchange-rate?baseCurrency=USD&quoteCurrency=KRW",
+                        "headers": { "Authorization": "Bearer tok-renewed" },
+                        "body": null
+                    },
+                    "response": { "status": 200, "body": { "result": { "rate": "1386" } } }
+                }
+            ],
+            "output": { "result": { "rate": "1386" } }
+        },
+        {
+            "description": "422 의 오류 코드를 표에서 찾아 던지고 코드를 detail 에 담는다",
+            "method": "privateAccountPostOrders",
+            "args": [{ "symbol": "005930", "side": "BUY", "orderType": "MARKET", "quantity": 1 }],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001", "Content-Type": "application/json" },
+                        "body": "{\"symbol\":\"005930\",\"side\":\"BUY\",\"orderType\":\"MARKET\",\"quantity\":1}"
+                    },
+                    "response": { "status": 422, "body": { "error": { "code": "insufficient-buying-power", "message": "주문가능금액 부족" } } }
+                }
+            ],
+            "error": { "class": "InsufficientFunds", "detail": "insufficient-buying-power" }
+        },
+        {
+            "description": "이미 끝난 주문을 취소하면 OrderNotFound 다",
+            "method": "privateAccountPostOrdersOrderIdCancel",
+            "args": [{ "orderId": "O-1" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders/O-1/cancel",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001", "Content-Type": "application/json" },
+                        "body": "{}"
+                    },
+                    "response": { "status": 409, "body": { "error": { "code": "already-filled", "message": "이미 체결" } } }
+                }
+            ],
+            "error": { "class": "OrderNotFound", "detail": "already-filled" }
+        },
+        {
+            "description": "429 는 TossRateLimited 이고 다시 보내지 않는다",
+            "method": "privateMarketGetPrices",
+            "args": [{ "symbols": "005930" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/prices?symbols=005930",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": { "status": 429, "headers": { "Retry-After": "2" }, "body": { "error": { "code": "rate-limit-exceeded", "message": "잠시 후" } } }
+                }
+            ],
+            "error": { "class": "TossRateLimited", "detail": "rate-limit-exceeded" }
+        },
+        {
+            "description": "500 internal-error 는 ExchangeNotAvailable 이다",
+            "method": "privateMarketGetPrices",
+            "args": [{ "symbols": "005930" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/prices?symbols=005930",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": { "status": 500, "body": { "error": { "code": "internal-error", "message": "내부 오류" } } }
+                }
+            ],
+            "error": { "class": "ExchangeNotAvailable", "detail": "internal-error" }
+        },
+        {
+            "description": "호가 단위를 어기면 invalid-request 에 tickSize 가 실려 오고 InvalidOrder 로 바꾼다",
+            "method": "privateAccountPostOrders",
+            "args": [{ "symbol": "005930", "side": "BUY", "orderType": "LIMIT", "price": 71050, "quantity": 1 }],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001", "Content-Type": "application/json" },
+                        "body": "{\"symbol\":\"005930\",\"side\":\"BUY\",\"orderType\":\"LIMIT\",\"price\":71050,\"quantity\":1}"
+                    },
+                    "response": { "status": 400, "body": { "error": { "code": "invalid-request", "message": "호가 단위", "data": { "tickSize": "100" } } } }
+                }
+            ],
+            "error": { "class": "InvalidOrder", "detail": "price-tick-invalid" }
+        },
+        {
+            "description": "주문 요청이 시간 초과로 끝나면 접수 여부를 모르므로 OrderOutcomeUnknown 이다",
+            "method": "privateAccountPostOrders",
+            "args": [{ "symbol": "005930", "side": "BUY", "orderType": "MARKET", "quantity": 1 }],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001", "Content-Type": "application/json" },
+                        "body": "{\"symbol\":\"005930\",\"side\":\"BUY\",\"orderType\":\"MARKET\",\"quantity\":1}"
+                    },
+                    "network": "timeout"
+                }
+            ],
+            "error": { "class": "OrderOutcomeUnknown" }
+        }
+    ]
+}

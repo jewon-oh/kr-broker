@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "kr-broker"
+version = "0.4.0"
+description = "한국투자증권·토스증권 Open API 를 ccxt 방식으로 부르는 Python 라이브러리"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = ["requests>=2.31"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Developers",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["kr_broker"]
+# 테스트는 저장소의 ts/src/test/static/ 를 읽으므로 휠에 싣지 않는다.
+exclude = ["kr_broker/test"]
+
+[tool.pytest.ini_options]
+testpaths = ["kr_broker/test"]

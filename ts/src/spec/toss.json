@@ -1,0 +1,70 @@
+{
+    "schema_version": 1,
+    "broker": "toss",
+    "endpoints": {
+        "publicPostOauth2Token": { "api": ["public"], "method": "POST", "path": "oauth2/token", "cost": 1, "bucket": "auth" },
+        "privateMarketGetAccounts": { "api": ["private", "market"], "method": "GET", "path": "accounts", "cost": 1, "bucket": "account" },
+        "privateMarketGetExchangeRate": {
+            "api": ["private", "market"],
+            "method": "GET",
+            "path": "exchange-rate",
+            "cost": 1,
+            "bucket": "market_info",
+            "params": [
+                {
+                    "name": "baseCurrency",
+                    "required": true,
+                    "type": "string",
+                    "description": "기준 통화 코드(예: USD)"
+                },
+                {
+                    "name": "quoteCurrency",
+                    "required": true,
+                    "type": "string",
+                    "description": "표시 통화 코드(예: KRW)"
+                }
+            ],
+            "response": [
+                {
+                    "field": "rate",
+                    "type": "number",
+                    "description": "기준 통화 1단위당 표시 통화 환율"
+                }
+            ],
+            "evidence": "ts/src/toss.ts:1400(usdKrwRate)"
+        },
+        "privateMarketGetMarketCalendarKR": { "api": ["private", "market"], "method": "GET", "path": "market-calendar/KR", "cost": 1, "bucket": "market_info" },
+        "privateMarketGetMarketCalendarUS": { "api": ["private", "market"], "method": "GET", "path": "market-calendar/US", "cost": 1, "bucket": "market_info" },
+        "privateMarketGetPrices": { "api": ["private", "market"], "method": "GET", "path": "prices", "cost": 1, "bucket": "market_data" },
+        "privateMarketGetOrderbook": { "api": ["private", "market"], "method": "GET", "path": "orderbook", "cost": 1, "bucket": "market_data" },
+        "privateMarketGetCandles": { "api": ["private", "market"], "method": "GET", "path": "candles", "cost": 1, "bucket": "market_data_chart" },
+        "privateMarketGetTrades": { "api": ["private", "market"], "method": "GET", "path": "trades", "cost": 1, "bucket": "market_data" },
+        "privateMarketGetPriceLimits": { "api": ["private", "market"], "method": "GET", "path": "price-limits", "cost": 1, "bucket": "market_data" },
+        "privateMarketGetStocks": { "api": ["private", "market"], "method": "GET", "path": "stocks", "cost": 1, "bucket": "stock" },
+        "privateMarketGetStocksAll": { "api": ["private", "market"], "method": "GET", "path": "stocks/all", "cost": 1, "bucket": "stock_all" },
+        "privateMarketGetStocksSymbolWarnings": { "api": ["private", "market"], "method": "GET", "path": "stocks/{symbol}/warnings", "cost": 1, "bucket": "stock" },
+        "privateMarketGetRankings": { "api": ["private", "market"], "method": "GET", "path": "rankings", "cost": 1, "bucket": "ranking" },
+        "privateMarketGetMarketIndicatorsSymbolInvestorTrading": { "api": ["private", "market"], "method": "GET", "path": "market-indicators/{symbol}/investor-trading", "cost": 1, "bucket": "market_indicator" },
+        "privateMarketGetMarketIndicatorsPrices": { "api": ["private", "market"], "method": "GET", "path": "market-indicators/prices", "cost": 1, "bucket": "market_indicator" },
+        "privateMarketGetMarketIndicatorsSymbolCandles": { "api": ["private", "market"], "method": "GET", "path": "market-indicators/{symbol}/candles", "cost": 1, "bucket": "market_indicator_chart" },
+        "privateMarketGetStocksSymbolInvestorTrading": { "api": ["private", "market"], "method": "GET", "path": "stocks/{symbol}/investor-trading", "cost": 1, "bucket": "stock_trading_trend" },
+        "privateMarketGetStocksSymbolProgramTrades": { "api": ["private", "market"], "method": "GET", "path": "stocks/{symbol}/program-trades", "cost": 1, "bucket": "stock_trading_trend" },
+        "privateMarketGetStocksSymbolShortSelling": { "api": ["private", "market"], "method": "GET", "path": "stocks/{symbol}/short-selling", "cost": 1, "bucket": "stock_trading_trend" },
+        "privateMarketGetStocksSymbolCreditTrades": { "api": ["private", "market"], "method": "GET", "path": "stocks/{symbol}/credit-trades", "cost": 1, "bucket": "stock_trading_trend" },
+        "privateMarketGetStocksSymbolSecuritiesLending": { "api": ["private", "market"], "method": "GET", "path": "stocks/{symbol}/securities-lending", "cost": 1, "bucket": "stock_trading_trend" },
+        "privateAccountGetHoldings": { "api": ["private", "account"], "method": "GET", "path": "holdings", "cost": 1, "bucket": "asset" },
+        "privateAccountGetBuyingPower": { "api": ["private", "account"], "method": "GET", "path": "buying-power", "cost": 1, "bucket": "order_info", "peak": true },
+        "privateAccountGetCommissions": { "api": ["private", "account"], "method": "GET", "path": "commissions", "cost": 1, "bucket": "order_info", "peak": true },
+        "privateAccountGetSellableQuantity": { "api": ["private", "account"], "method": "GET", "path": "sellable-quantity", "cost": 1, "bucket": "order_info", "peak": true },
+        "privateAccountGetOrders": { "api": ["private", "account"], "method": "GET", "path": "orders", "cost": 1, "bucket": "order_history" },
+        "privateAccountGetOrdersOrderId": { "api": ["private", "account"], "method": "GET", "path": "orders/{orderId}", "cost": 1, "bucket": "order_history" },
+        "privateAccountGetConditionalOrders": { "api": ["private", "account"], "method": "GET", "path": "conditional-orders", "cost": 1, "bucket": "conditional_order_history" },
+        "privateAccountGetConditionalOrdersConditionalOrderId": { "api": ["private", "account"], "method": "GET", "path": "conditional-orders/{conditionalOrderId}", "cost": 1, "bucket": "conditional_order_history" },
+        "privateAccountPostOrders": { "api": ["private", "account"], "method": "POST", "path": "orders", "cost": 1, "bucket": "order", "order": true },
+        "privateAccountPostOrdersOrderIdCancel": { "api": ["private", "account"], "method": "POST", "path": "orders/{orderId}/cancel", "cost": 1, "bucket": "order", "order": true },
+        "privateAccountPostOrdersOrderIdModify": { "api": ["private", "account"], "method": "POST", "path": "orders/{orderId}/modify", "cost": 1, "bucket": "order", "order": true },
+        "privateAccountPostConditionalOrders": { "api": ["private", "account"], "method": "POST", "path": "conditional-orders", "cost": 1, "bucket": "conditional_order", "order": true },
+        "privateAccountPostConditionalOrdersConditionalOrderIdModify": { "api": ["private", "account"], "method": "POST", "path": "conditional-orders/{conditionalOrderId}/modify", "cost": 1, "bucket": "conditional_order", "order": true },
+        "privateAccountDeleteConditionalOrdersConditionalOrderId": { "api": ["private", "account"], "method": "DELETE", "path": "conditional-orders/{conditionalOrderId}", "cost": 1, "bucket": "conditional_order", "order": true }
+    }
+}

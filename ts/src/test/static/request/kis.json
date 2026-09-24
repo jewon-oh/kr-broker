@@ -1,0 +1,271 @@
+{
+    "schema_version": 1,
+    "broker": "kis",
+    "config": {
+        "apiKey": "kis-app-key-abcdefgh",
+        "secret": "kis-app-secret",
+        "uid": "12345678-01",
+        "enableRateLimit": false,
+        "options": { "maxRetriesOnFailure": 0, "maxRetriesOnFailureDelay": 0 }
+    },
+    "tokenStore": {
+        "kis:token:kis-app-key-": { "accessToken": "tok-stored", "expiresAt": 4102444800000 }
+    },
+    "cases": [
+        {
+            "description": "비공개 조회는 params 의 tr_id 를 헤더로 옮기고 나머지를 쿼리로 보낸다",
+            "method": "privateGetUapiDomesticStockV1QuotationsInquirePrice",
+            "args": [{ "tr_id": "FHKST01010100", "FID_COND_MRKT_DIV_CODE": "J", "FID_INPUT_ISCD": "005930" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010100",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": { "status": 200, "body": { "rt_cd": "0", "msg_cd": "MCA00000", "msg1": "정상처리 되었습니다.", "output": { "stck_prpr": "71000" } } }
+                }
+            ],
+            "output": { "rt_cd": "0", "msg_cd": "MCA00000", "msg1": "정상처리 되었습니다.", "output": { "stck_prpr": "71000" } }
+        },
+        {
+            "description": "주문은 JSON 본문으로 보내고 대문자 키를 그대로 둔다",
+            "method": "privatePostUapiDomesticStockV1TradingOrderCash",
+            "args": [{ "tr_id": "TTTC0012U", "CANO": "12345678", "ACNT_PRDT_CD": "01", "PDNO": "005930", "ORD_DVSN": "00", "ORD_QTY": "10", "ORD_UNPR": "71000" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/trading/order-cash",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTC0012U",
+                            "custtype": "P"
+                        },
+                        "body": "{\"CANO\":\"12345678\",\"ACNT_PRDT_CD\":\"01\",\"PDNO\":\"005930\",\"ORD_DVSN\":\"00\",\"ORD_QTY\":\"10\",\"ORD_UNPR\":\"71000\"}"
+                    },
+                    "response": { "status": 200, "body": { "rt_cd": "0", "msg_cd": "APBK0013", "msg1": "주문 전송 완료", "output": { "ODNO": "0000117057" } } }
+                }
+            ],
+            "output": { "rt_cd": "0", "msg_cd": "APBK0013", "msg1": "주문 전송 완료", "output": { "ODNO": "0000117057" } }
+        },
+        {
+            "description": "모의투자는 모의 도메인으로 보낸다",
+            "config": { "sandbox": true },
+            "method": "privateGetUapiDomesticStockV1QuotationsInquirePrice",
+            "args": [{ "tr_id": "FHKST01010100", "FID_COND_MRKT_DIV_CODE": "J", "FID_INPUT_ISCD": "005930" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapivts.koreainvestment.com:29443/uapi/domestic-stock/v1/quotations/inquire-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010100",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": { "status": 200, "body": { "rt_cd": "0", "output": { "stck_prpr": "71000" } } }
+                }
+            ],
+            "output": { "rt_cd": "0", "output": { "stck_prpr": "71000" } }
+        },
+        {
+            "description": "저장소에 토큰이 없으면 JSON 본문으로 발급받아 저장한 뒤 요청한다",
+            "tokenStore": {},
+            "method": "privateGetUapiDomesticStockV1QuotationsInquirePrice",
+            "args": [{ "tr_id": "FHKST01010100", "FID_COND_MRKT_DIV_CODE": "J", "FID_INPUT_ISCD": "005930" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.koreainvestment.com:9443/oauth2/tokenP",
+                        "headers": { "Content-Type": "application/json; charset=UTF-8" },
+                        "body": "{\"grant_type\":\"client_credentials\",\"appkey\":\"kis-app-key-abcdefgh\",\"appsecret\":\"kis-app-secret\"}"
+                    },
+                    "response": { "status": 200, "body": { "access_token": "tok-new", "token_type": "Bearer", "expires_in": 86400 } }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-new",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010100",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": { "status": 200, "body": { "rt_cd": "0", "output": { "stck_prpr": "71000" } } }
+                }
+            ],
+            "output": { "rt_cd": "0", "output": { "stck_prpr": "71000" } },
+            "tokenStoreAfter": { "kis:token:kis-app-key-": "present" }
+        },
+        {
+            "description": "업무 오류(rt_cd 1)는 표에 없는 코드면 ExchangeError 이고 코드를 detail 에 담는다",
+            "method": "privatePostUapiDomesticStockV1TradingOrderCash",
+            "args": [{ "tr_id": "TTTC0012U", "CANO": "12345678", "ACNT_PRDT_CD": "01", "PDNO": "005930", "ORD_DVSN": "01", "ORD_QTY": "1", "ORD_UNPR": "0" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/trading/order-cash",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTC0012U",
+                            "custtype": "P"
+                        },
+                        "body": "{\"CANO\":\"12345678\",\"ACNT_PRDT_CD\":\"01\",\"PDNO\":\"005930\",\"ORD_DVSN\":\"01\",\"ORD_QTY\":\"1\",\"ORD_UNPR\":\"0\"}"
+                    },
+                    "response": { "status": 200, "body": { "rt_cd": "1", "msg_cd": "APBK0919 ", "msg1": "장운영일자가 주문일과 상이합니다" } }
+                }
+            ],
+            "error": { "class": "ExchangeError", "detail": "APBK0919" }
+        },
+        {
+            "description": "초당 거래건수 초과(HTTP 500, EGW00201)는 RateLimitExceeded 이고 조회는 설정한 횟수만큼 다시 보낸다",
+            "config": { "options": { "maxRetriesOnFailure": 1, "maxRetriesOnFailureDelay": 0 } },
+            "method": "privateGetUapiDomesticStockV1QuotationsInquirePrice",
+            "args": [{ "tr_id": "FHKST01010100", "FID_COND_MRKT_DIV_CODE": "J", "FID_INPUT_ISCD": "005930" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010100",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": { "status": 500, "body": { "rt_cd": "1", "msg_cd": "EGW00201", "msg1": "초당 거래건수를 초과하였습니다." } }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010100",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": { "status": 200, "body": { "rt_cd": "0", "output": { "stck_prpr": "71000" } } }
+                }
+            ],
+            "output": { "rt_cd": "0", "output": { "stck_prpr": "71000" } }
+        },
+        {
+            "description": "토큰 만료(EGW00123)는 AuthenticationError 이고 저장소의 토큰을 지운다",
+            "method": "privateGetUapiDomesticStockV1QuotationsInquirePrice",
+            "args": [{ "tr_id": "FHKST01010100", "FID_COND_MRKT_DIV_CODE": "J", "FID_INPUT_ISCD": "005930" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010100",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": { "status": 500, "body": { "rt_cd": "1", "msg_cd": "EGW00123", "msg1": "기간이 만료된 token 입니다." } }
+                }
+            ],
+            "error": { "class": "AuthenticationError", "detail": "EGW00123" },
+            "tokenStoreAfter": { "kis:token:kis-app-key-": "absent" }
+        },
+        {
+            "description": "주문 요청이 시간 초과로 끝나면 OrderOutcomeUnknown 이고 다시 보내지 않는다",
+            "config": { "options": { "maxRetriesOnFailure": 3, "maxRetriesOnFailureDelay": 0 } },
+            "method": "privatePostUapiDomesticStockV1TradingOrderCash",
+            "args": [{ "tr_id": "TTTC0012U", "CANO": "12345678", "ACNT_PRDT_CD": "01", "PDNO": "005930", "ORD_DVSN": "01", "ORD_QTY": "1", "ORD_UNPR": "0" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/trading/order-cash",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTC0012U",
+                            "custtype": "P"
+                        },
+                        "body": "{\"CANO\":\"12345678\",\"ACNT_PRDT_CD\":\"01\",\"PDNO\":\"005930\",\"ORD_DVSN\":\"01\",\"ORD_QTY\":\"1\",\"ORD_UNPR\":\"0\"}"
+                    },
+                    "network": "timeout"
+                }
+            ],
+            "error": { "class": "OrderOutcomeUnknown" }
+        },
+        {
+            "description": "조회도 시간 초과는 다시 보내지 않는다",
+            "config": { "options": { "maxRetriesOnFailure": 3, "maxRetriesOnFailureDelay": 0 } },
+            "method": "privateGetUapiDomesticStockV1QuotationsInquirePrice",
+            "args": [{ "tr_id": "FHKST01010100", "FID_COND_MRKT_DIV_CODE": "J", "FID_INPUT_ISCD": "005930" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010100",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "network": "timeout"
+                }
+            ],
+            "error": { "class": "RequestTimeout" }
+        },
+        {
+            "description": "tr_id 가 없으면 요청을 보내기 전에 ArgumentsRequired 다",
+            "method": "privateGetUapiDomesticStockV1QuotationsInquirePrice",
+            "args": [{ "FID_COND_MRKT_DIV_CODE": "J", "FID_INPUT_ISCD": "005930" }],
+            "http": [],
+            "error": { "class": "ArgumentsRequired" }
+        }
+    ]
+}
