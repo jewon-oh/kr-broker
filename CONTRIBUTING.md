@@ -55,7 +55,7 @@ pnpm build
 - 테스트는 `fetch`를 가짜 함수로 대체합니다. 증권사 서버를 호출하지 않습니다.
 - CI는 `pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm audit --prod`를 실행합니다. 테스트는 Linux의 Node.js 22와 24, Windows의 Node.js 22에서 실행합니다.
 
-PR을 올리기 전에 `pnpm typecheck`, `pnpm test`, `pnpm build`가 통과해야 합니다.
+PR을 올리기 전에 `pnpm typecheck`, `pnpm test`, `pnpm build`가 통과해야 합니다. 빌드한 `dist/`는 `node scripts/check-dist-imports.mjs`로 Node.js에서 불러와지는지 확인합니다.
 
 ### Python
 
