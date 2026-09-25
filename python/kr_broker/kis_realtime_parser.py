@@ -11,7 +11,8 @@ from typing import List, NamedTuple, Tuple, Union
 from kr_broker.base import functions as fn
 from kr_broker.kis_types import KIS_WS_FIELD, KIS_WS_TR, is_overseas_symbol
 
-__all__ = ['OVERSEAS_STREAM_QUOTE', 'KisTradeRecord', 'KisOrderbookRecord', 'to_stream_symbol', 'parse_kis_realtime_frame', 'is_ping_pong']
+__all__ = ['OVERSEAS_STREAM_QUOTE', 'KisTradeRecord', 'KisOrderbookRecord', 'to_stream_symbol', 'parse_kis_realtime_frame', 'parse_kis_realtime_payload',
+           'is_ping_pong']
 
 # 해외 주식 스트림의 호가 통화. `USDT` 가 아니라 `USD` 다. 가격 스트림을 받는 쪽이 거래소 접두 없는 심볼을 키로 쓰면, 주식을 토큰화해
 # `AMD/USDT` 로 거래하는 거래소의 피드와 키가 겹쳐 다른 자산 가격으로 손절·익절을 평가할 수 있다. `USD` 는 스테이블코인 페어에 쓰이지 않는다.
@@ -56,11 +57,15 @@ def parse_kis_realtime_frame(raw: str) -> List[KisRealtimeRecord]:
     parts = raw.split('|')
     if len(parts) < 4:
         return []
-    tr_id = parts[1]
-    count_number = fn.js_number(parts[2])
-    # JavaScript 의 `Math.max(1, Number(parts[2]) || 1)`
+    return parse_kis_realtime_payload(parts[1], parts[2], '|'.join(parts[3:]))
+
+
+def parse_kis_realtime_payload(tr_id: str, count_text: str, payload: str) -> List[KisRealtimeRecord]:
+    """프레임의 TR, 건수, 본문(`^` 구분)을 레코드 목록으로 바꾼다. `KisPriceWs` 는 연결이 복호까지 마친 본문을 넘긴다."""
+    count_number = fn.js_number(count_text)
+    # JavaScript 의 `Math.max(1, Number(countText) || 1)`
     count = max(1, count_number if count_number and not math.isnan(count_number) else 1)
-    fields = '|'.join(parts[3:]).split('^')
+    fields = payload.split('^')
     out: List[KisRealtimeRecord] = []
 
     if tr_id in (KIS_WS_TR['DOMESTIC_TRADE'], KIS_WS_TR['OVERSEAS_TRADE']):

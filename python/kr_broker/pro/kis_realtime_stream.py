@@ -1,17 +1,19 @@
-"""KIS 실시간(웹소켓) 범용 구독. TypeScript 판 `ts/src/kis/kis-realtime-stream.ts` 를 옮겼다.
+"""KIS 실시간(웹소켓) 연결과 범용 구독. TypeScript 판 `ts/src/kis/kis-realtime-stream.ts` 를 옮겼다.
 
-`KisPriceWs` 는 체결, 호가 세 TR 만 가격으로 읽고 나머지 프레임을 버린다. 이 클래스는 어떤 TR 이든 구독과 해지를 하고, 받은 값을
-`KIS_REALTIME_COLUMNS` 의 필드 이름으로 묶어 원문 문자열 그대로 넘긴다. 체결통보(맨 앞이 `1`)는 구독 응답이 준 key 와 iv 로 AES-CBC 복호한 뒤
-같은 방식으로 읽는다(공식 예제 `kis_auth.py` 의 `aes_cbc_base64_dec` 와 같다).
+구독 등록과 재등록, PINGPONG 되돌림, 구독 거부 알림, 체결통보 복호를 이 클래스가 맡는다. 체결가, 호가 스트림(`KisPriceWs`)은 이 클래스를
+상속해 프레임 해석(`_on_frame`)만 바꾼다. 이 클래스는 어떤 TR 이든 구독과 해지를 하고, 받은 값을 `KIS_REALTIME_COLUMNS` 의 필드 이름으로 묶어
+원문 문자열 그대로 넘긴다. 체결통보(맨 앞이 `1`)는 구독 응답이 준 key 와 iv 로 AES-CBC 복호한 뒤 같은 방식으로 읽는다(공식 예제
+`kis_auth.py` 의 `aes_cbc_base64_dec` 와 같다).
 
-연결과 재연결은 `ReconnectingWebSocket` 이 맡는다. 재연결 대기는 2초에서 시작해 두 배씩 늘고 30초에서 멈춘다.
+연결과 재연결은 `ReconnectingWebSocket` 이 맡는다. 재연결 대기는 2초에서 시작해 두 배씩 늘고 30초에서 멈춘다. 다시 연결하면 접속키를 다시 받고
+구독을 모두 다시 등록한다.
 """
 
 import base64
 import json
 import logging
 import math
-from typing import Any, Awaitable, Callable, Dict, List, NamedTuple, Optional, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, NamedTuple, Optional, Sequence, Set, Tuple
 
 from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -23,7 +25,7 @@ from kr_broker.kis_realtime_columns import kis_realtime_columns
 from kr_broker.kis_realtime_parser import is_ping_pong
 from kr_broker.kis_types import KIS_WS_DOMAINS, KIS_WS_PATH
 
-__all__ = ['KisRealtimeRecord', 'KisRealtimeStream', 'split_kis_realtime_records', 'decrypt_kis_payload']
+__all__ = ['KisWsSub', 'KisRealtimeRecord', 'KisRealtimeStream', 'split_kis_realtime_records', 'decrypt_kis_payload']
 
 # 늘 암호화되어 오는 체결통보 TR(국내, 해외, 실전, 모의).
 _ENCRYPTED_NOTICE_TRS = frozenset(['H0STCNI0', 'H0STCNI9', 'H0GSCNI0', 'H0GSCNI9'])
@@ -32,8 +34,20 @@ logger = logging.getLogger('kr_broker')
 
 RECONNECT_BASE_MS = 2_000
 RECONNECT_MAX_MS = 30_000
-# KIS 연결당 등록 한계(`KisPriceWs` 와 같다). 넘으면 경고만 남기고 등록한다.
+# KIS 연결당 등록 한계(41 안팎). 넘는 구독은 등록되지 않는다.
 MAX_REGISTRATIONS = 40
+
+
+class KisWsSub(NamedTuple):
+    """구독 하나."""
+    # 실시간 TR(예: H0STCNT0, H0STASP0, HDFSCNT0)
+    tr_id: str
+    # 구독 키. 국내는 종목코드(005930), 해외는 D + 거래소 + 심볼(DNASAAPL), 체결통보는 HTS ID
+    tr_key: str
+
+
+def _sub_id(tr_id: str, tr_key: str) -> str:
+    return f'{tr_id}|{tr_key}'
 
 
 class KisRealtimeRecord(NamedTuple):
@@ -109,38 +123,67 @@ class KisRealtimeStream(ReconnectingWebSocket):
         # 구독 응답이 실패(`rt_cd` 가 `0` 이 아님)면 부른다
         self._on_subscribe_error = on_subscribe_error
         self._approval_key = ''
-        self._subs: Dict[str, Tuple[str, str]] = {}
+        # 등록할 구독. 다시 연결하면 이 순서대로 모두 다시 등록한다
+        self._subs: Dict[str, KisWsSub] = {}
+        # 구독 응답이 거부한 구독. 목록에는 남아 다시 연결하면 다시 등록하고, 다시 `subscribe` 하면 등록 프레임을 또 보낸다
+        self._rejected: Set[str] = set()
         self._cipher_keys: Dict[str, Tuple[str, str]] = {}
 
     def subscribe(self, tr_id: str, tr_key: str) -> None:
-        """구독을 등록한다. 처음 부르면 접속하고, 접속 뒤에는 바로 등록 프레임(`tr_type` 1)을 보낸다. 같은 구독은 한 번만 보낸다."""
-        sub_id = f'{tr_id}|{tr_key}'
+        """구독을 등록한다. 처음 부르면 접속하고, 접속 뒤에는 바로 등록 프레임(`tr_type` 1)을 보낸다. 같은 구독은 거부되지 않았으면 한 번만 보낸다."""
+        sub_id = _sub_id(tr_id, tr_key)
         if sub_id in self._subs:
-            # 앞선 이벤트 루프가 끝나 연결 작업이 멈췄으면 다시 연결한다. 연결되면 등록된 구독을 모두 다시 보낸다.
-            if not self.running:
-                self.start()
-            return
-        if len(self._subs) >= MAX_REGISTRATIONS:
-            logger.warning('[KisRealtimeStream] 연결당 등록 한계를 넘는다 (trId=%s, trKey=%s, subs=%s)', tr_id, tr_key, len(self._subs))
-        self._subs[sub_id] = (tr_id, tr_key)
+            if sub_id not in self._rejected:
+                # 앞선 이벤트 루프가 끝나 연결 작업이 멈췄으면 다시 연결한다. 연결되면 등록된 구독을 모두 다시 보낸다.
+                if not self.running:
+                    super().start()
+                return
+            self._rejected.discard(sub_id)
+        else:
+            if len(self._subs) >= MAX_REGISTRATIONS:
+                logger.warning('%s 연결당 등록 한계를 넘는다 (trId=%s, trKey=%s, subs=%s)', self.label, tr_id, tr_key, len(self._subs))
+            self._subs[sub_id] = KisWsSub(tr_id, tr_key)
+        # `KisPriceWs` 가 `start(subs)` 를 덮어쓰므로 연결 작업은 `ReconnectingWebSocket.start` 로 띄운다.
         if not self.running:
-            self.start()
+            super().start()
             return
         self._send_sub(tr_id, tr_key, '1')
 
     def unsubscribe(self, tr_id: str, tr_key: str) -> None:
         """구독을 해지한다(`tr_type` 2)."""
-        if self._subs.pop(f'{tr_id}|{tr_key}', None) is None:
+        sub_id = _sub_id(tr_id, tr_key)
+        self._rejected.discard(sub_id)
+        if self._subs.pop(sub_id, None) is None:
             return
         self._send_sub(tr_id, tr_key, '2')
+
+    def _set_subs(self, subs: Sequence[KisWsSub]) -> None:
+        """구독 목록을 `subs` 로 바꾼다. 프레임은 보내지 않는다(다음 연결이 등록한다)."""
+        self._subs = {_sub_id(*sub): sub for sub in subs}
+        self._rejected.clear()
+
+    def _replace_subs(self, subs: Sequence[KisWsSub]) -> None:
+        """구독 목록을 `subs` 로 바꾼다. 연결돼 있으면 빠진 구독은 해지하고 새 구독은 등록한다. 다시 연결하면 `subs` 순서대로 등록한다."""
+        previous = self._subs
+        self._subs = {_sub_id(*sub): sub for sub in subs}
+        # 해지를 먼저 보내 연결당 등록 한계에 자리를 낸다.
+        for sub_id, sub in previous.items():
+            if sub_id not in self._subs:
+                self._rejected.discard(sub_id)
+                self._send_sub(sub.tr_id, sub.tr_key, '2')
+        for sub_id, sub in self._subs.items():
+            if sub_id not in previous:
+                self._send_sub(sub.tr_id, sub.tr_key, '1')
 
     async def connect_target(self) -> Tuple[str, Dict[str, str]]:
         self._approval_key = await self._get_approval_key()
         return self.url or (KIS_WS_DOMAINS['VIRTUAL'] if self.is_virtual else KIS_WS_DOMAINS['REAL']) + KIS_WS_PATH, {}
 
     def on_open(self) -> None:
-        for tr_id, tr_key in list(self._subs.values()):
-            self._send_sub(tr_id, tr_key, '1')
+        self._rejected.clear()
+        logger.info('%s WS 연결 완료 — 구독 등록 (subs=%s)', self.label, len(self._subs))
+        for sub in list(self._subs.values()):
+            self._send_sub(sub.tr_id, sub.tr_key, '1')
 
     def _send_sub(self, tr_id: str, tr_key: str, tr_type: str) -> None:
         self.send(subscription_frame(self._approval_key, tr_id, tr_key, tr_type))
@@ -155,7 +198,7 @@ class KisRealtimeStream(ReconnectingWebSocket):
         self._on_data(text)
 
     def _on_system_message(self, raw: str) -> None:
-        """구독 응답. 실패면 그 구독을 지우고 알린다. 성공이면 체결통보의 복호 key 와 iv 를 TR 별로 기억한다."""
+        """구독 응답. 실패면 로그를 남기고 알린다. 성공이면 체결통보의 복호 key 와 iv 를 TR 별로 기억한다."""
         try:
             message = json.loads(raw)
         except ValueError:
@@ -167,11 +210,13 @@ class KisRealtimeStream(ReconnectingWebSocket):
         tr_id = _text(header.get('tr_id'))
         # TypeScript 판처럼 `rt_cd` 가 없을 때만 넘어가고, null 은 실패로 본다.
         if 'rt_cd' in body and fn.js_string(body['rt_cd']) != '0':
-            tr_key = _text(header.get('tr_key'))
-            # 거부된 구독을 남겨 두면 같은 구독을 다시 불러도 등록 프레임을 보내지 않는다.
-            self._subs.pop(f'{tr_id}|{tr_key}', None)
+            tr_key, text = _text(header.get('tr_key')), _text(body.get('msg1'))
+            logger.warning('%s 구독 거부 (trId=%s, trKey=%s, message=%s)', self.label, tr_id, tr_key, text)
+            sub_id = _sub_id(tr_id, tr_key)
+            if sub_id in self._subs:
+                self._rejected.add(sub_id)
             if self._on_subscribe_error is not None:
-                self._on_subscribe_error(tr_id, tr_key, _text(body.get('msg1')))
+                self._on_subscribe_error(tr_id, tr_key, text)
             return
         output = body.get('output') if isinstance(body.get('output'), dict) else {}
         key, iv = output.get('key'), output.get('iv')
@@ -186,21 +231,25 @@ class KisRealtimeStream(ReconnectingWebSocket):
         payload = '|'.join(parts[3:])
         # KIS 실시간 연결은 평문이다. 체결통보는 늘 암호화되어 오므로, 평문 체결통보는 경로 위에서 끼워 넣은 프레임으로 보고 버린다.
         if flag != '1' and tr_id in _ENCRYPTED_NOTICE_TRS:
-            logger.warning('[KisRealtimeStream] 암호화되지 않은 체결통보 프레임 — 버린다 (trId=%s)', tr_id)
+            logger.warning('%s 암호화되지 않은 체결통보 프레임 — 버린다 (trId=%s)', self.label, tr_id)
             return
         if flag == '1':
             cipher = self._cipher_keys.get(tr_id)
             if cipher is None:
-                logger.warning('[KisRealtimeStream] 복호 key 를 받기 전에 암호화 프레임이 왔다 — 버린다 (trId=%s)', tr_id)
+                logger.warning('%s 복호 key 를 받기 전에 암호화 프레임이 왔다 — 버린다 (trId=%s)', self.label, tr_id)
                 return
             try:
                 payload = decrypt_kis_payload(payload, cipher[0], cipher[1])
             except Exception:
-                logger.warning('[KisRealtimeStream] 복호 실패 — 버린다 (trId=%s)', tr_id, exc_info=True)
+                logger.warning('%s 복호 실패 — 버린다 (trId=%s)', self.label, tr_id, exc_info=True)
                 return
+        self._on_frame(tr_id, count_text, payload)
+
+    def _on_frame(self, tr_id: str, count_text: str, payload: str) -> None:
+        """복호를 마친 데이터 프레임 하나. 건수대로 나눠 `on_record` 에 넘긴다."""
         for record in split_kis_realtime_records(tr_id, fn.js_number(count_text), payload):
             # 한 건의 콜백이 던져도 나머지 건은 계속 넘긴다.
             try:
                 self._on_record(record)
             except Exception:
-                logger.warning('[KisRealtimeStream] on_record 처리 실패 (trId=%s)', tr_id, exc_info=True)
+                logger.warning('%s on_record 처리 실패 (trId=%s)', self.label, tr_id, exc_info=True)

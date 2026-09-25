@@ -384,6 +384,24 @@ def test_stream_forgets_a_rejected_subscription_so_subscribing_again_resends_it(
     asyncio.run(main())
 
 
+def test_stream_logs_rejection_and_reregisters_the_rejected_subscription_after_reconnect(caplog: pytest.LogCaptureFixture) -> None:
+    async def main() -> None:
+        rig = StreamRig()
+        ws = await rig.open()
+        rig.stream.subscribe('H0IFASP0', '101W12')
+        ws.feed(json.dumps({'header': {'tr_id': 'H0IFCNT0', 'tr_key': '101W12'}, 'body': {'rt_cd': '1', 'msg1': 'MAX SUBSCRIBE OVER'}}))
+        await settle()
+        ws.drop()
+        await settle(20)
+        assert rig.connector.last is not ws
+        assert [f['body']['input']['tr_id'] for f in frames(rig.connector.last)] == ['H0IFCNT0', 'H0IFASP0']
+        await rig.stream.stop()
+
+    caplog.set_level(logging.WARNING, logger='kr_broker')
+    asyncio.run(main())
+    assert '[KisRealtimeStream] 구독 거부 (trId=H0IFCNT0, trKey=101W12, message=MAX SUBSCRIBE OVER)' in caplog.messages
+
+
 def test_create_realtime_stream_follows_sandbox_mode() -> None:
     stream = new_kis(sandbox=False).create_realtime_stream(lambda record: None)
     assert isinstance(stream, KisRealtimeStream)
@@ -487,6 +505,64 @@ def test_price_ws_update_subs_unsubscribes_removed_subscriptions() -> None:
         await ws.stop()
 
     asyncio.run(main())
+
+
+def test_price_ws_reconnect_registers_the_updated_list_in_order_once_each() -> None:
+    async def main() -> None:
+        connector = FakeConnector()
+        ws = KisPriceWs(ApprovalKey(), True, connector, sleep=RecordingSleep())
+        ws.start([('H0STCNT0', '005930'), ('H0STCNT0', '005930'), ('H0STCNT0', '000660')])
+        await settle(10)
+        first = connector.last
+        ws.update_subs([('H0STASP0', '000660'), ('H0STCNT0', '000660')])
+        await settle()
+        first.drop()
+        await settle(20)
+        assert [(f['header']['tr_type'], f['body']['input']['tr_id'], f['body']['input']['tr_key']) for f in frames(first)] == [
+            ('1', 'H0STCNT0', '005930'), ('1', 'H0STCNT0', '000660'), ('2', 'H0STCNT0', '005930'), ('1', 'H0STASP0', '000660'),
+        ]
+        assert [(f['body']['input']['tr_id'], f['body']['input']['tr_key']) for f in frames(connector.last)] == [
+            ('H0STASP0', '000660'), ('H0STCNT0', '000660'),
+        ]
+        await ws.stop()
+
+    asyncio.run(main())
+
+
+def test_price_ws_reregisters_a_rejected_subscription_after_reconnect() -> None:
+    async def main() -> None:
+        connector = FakeConnector()
+        ws = KisPriceWs(ApprovalKey(), True, connector, sleep=RecordingSleep())
+        ws.start([('H0STCNT0', '005930'), ('H0STCNT0', '000660')])
+        await settle(10)
+        first = connector.last
+        first.feed(json.dumps({'header': {'tr_id': 'H0STCNT0', 'tr_key': '000660'}, 'body': {'rt_cd': '1', 'msg1': 'MAX SUBSCRIBE OVER'}}))
+        await settle()
+        first.drop()
+        await settle(20)
+        assert [f['body']['input']['tr_key'] for f in frames(connector.last)] == ['005930', '000660']
+        await ws.stop()
+
+    asyncio.run(main())
+
+
+def test_price_ws_shares_the_order_notice_guards_of_the_stream(caplog: pytest.LogCaptureFixture) -> None:
+    async def main() -> List[Tuple[str, float, float]]:
+        trades: List[Tuple[str, float, float]] = []
+        connector = FakeConnector()
+        ws = KisPriceWs(ApprovalKey(), True, connector, lambda *args: trades.append(args), sleep=RecordingSleep())
+        ws.start([])
+        await settle(10)
+        connector.last.feed('0|H0STCNI0|001|HTSID^1^2')
+        connector.last.feed('1|H0STCNT0|001|005930^093000^79000^5^100^2.5')
+        await settle()
+        await ws.stop()
+        return trades
+
+    caplog.set_level(logging.WARNING, logger='kr_broker')
+    assert asyncio.run(main()) == []
+    assert '[KisPriceWs] 암호화되지 않은 체결통보 프레임 — 버린다 (trId=H0STCNI0)' in caplog.messages
+    assert '[KisPriceWs] 복호 key 를 받기 전에 암호화 프레임이 왔다 — 버린다 (trId=H0STCNT0)' in caplog.messages
 
 
 def test_price_ws_reports_subscribe_rejections_to_the_log_and_the_callback(caplog: pytest.LogCaptureFixture) -> None:

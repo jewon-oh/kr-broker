@@ -49,9 +49,13 @@ export function parseKisRealtimeFrame(raw: string): KisRealtimeRecord[] {
     if (!raw || raw[0] === '{') return [];
     const parts = raw.split('|');
     if (parts.length < 4) return [];
-    const trId = parts[1];
-    const count = Math.max(1, Number(parts[2]) || 1);
-    const fields = parts.slice(3).join('|').split('^');
+    return parseKisRealtimePayload(parts[1] ?? '', parts[2] ?? '', parts.slice(3).join('|'));
+}
+
+/** 프레임의 TR, 건수, 본문(`^` 구분)을 record 배열로 파싱한다. `KisPriceWs`는 연결이 복호까지 마친 본문을 넘긴다. */
+export function parseKisRealtimePayload(trId: string, countText: string, payload: string): KisRealtimeRecord[] {
+    const count = Math.max(1, Number(countText) || 1);
+    const fields = payload.split('^');
     const out: KisRealtimeRecord[] = [];
 
     if (trId === KIS_WS_TR.DOMESTIC_TRADE || trId === KIS_WS_TR.OVERSEAS_TRADE) {

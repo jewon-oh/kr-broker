@@ -336,4 +336,28 @@ describe('KisRealtimeStream 연결 수명', () => {
         expect(onSubscribeError).toHaveBeenCalledWith('H0STCNT0', '005930', 'MAX SUBSCRIBE OVER');
         stream.stop();
     });
+
+    it('구독 거부는 로그로 남기고, 거부된 구독도 다시 접속하면 다시 등록한다', async () => {
+        vi.useFakeTimers();
+        try {
+            const stream = newStream();
+            stream.subscribe('H0STCNT0', '005930');
+            stream.subscribe('H0STCNT0', '000660');
+            await vi.advanceTimersByTimeAsync(0);
+            const first = FakeWs.instances[0]!;
+            first.emit('open');
+            first.emit('message', { data: JSON.stringify({ header: { tr_id: 'H0STCNT0', tr_key: '005930' }, body: { rt_cd: '1', msg1: 'MAX SUBSCRIBE OVER' } }) });
+            first.emit('close', { code: 1006 });
+            await vi.advanceTimersByTimeAsync(2_000);
+            const second = FakeWs.instances[1]!;
+            second.emit('open');
+
+            expect(logger.warn).toHaveBeenCalledWith({ trId: 'H0STCNT0', trKey: '005930', message: 'MAX SUBSCRIBE OVER' }, '[KisRealtimeStream] 구독 거부');
+            const keys = second.sent.map((s) => (JSON.parse(s) as { body: { input: { tr_key: string } } }).body.input.tr_key);
+            expect(keys).toEqual(['005930', '000660']);
+            stream.stop();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
 });
