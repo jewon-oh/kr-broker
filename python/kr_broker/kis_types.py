@@ -3,6 +3,7 @@
 from kr_broker.base import functions as fn
 from kr_broker.broker_krx_code import KIS_KRX_CODE_DIGITS, KNOWN_ALNUM_KRX_CODES, is_krx_domestic_code
 from kr_broker.krx_sell_tax import krx_sell_tax_rate
+from kr_broker.krx_tick_size import get_krx_tick_size
 
 __all__ = [
     'KIS_API_DOMAINS', 'KIS_WS_DOMAINS', 'KIS_WS_PATH', 'KIS_WS_TR', 'KIS_WS_FIELD',
@@ -89,21 +90,8 @@ KIS_PRESENT_BALANCE_PARAMS = {
 }
 
 
-def get_tick_size(price: float) -> int:
-    """KRX 가격대별 호가 단위."""
-    if price < 2000:
-        return 1
-    if price < 5000:
-        return 5
-    if price < 20000:
-        return 10
-    if price < 50000:
-        return 50
-    if price < 200000:
-        return 100
-    if price < 500000:
-        return 500
-    return 1000
+# 옛 이름. 호가 단위 표는 세 증권사 공용인 `kr_broker.krx_tick_size` 로 옮겼다. `get_krx_tick_size` 를 쓴다. 다음 판에서 지운다.
+get_tick_size = get_krx_tick_size
 
 
 def is_overseas_symbol(symbol: str) -> bool:

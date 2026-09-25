@@ -9,15 +9,15 @@ from kr_broker import us_market_hours
 from kr_broker.krx_sell_tax import krx_sell_tax_rate
 from kr_broker.krx_trading_hours import (
     check_krx_trading_hours_at, get_krx_market_phase, get_nxt_session, get_time_until_krx_open, is_krx_business_day_kst,
-    is_nxt_extended_tradable,
+    is_nxt_extended_tradable, krx_order_block_reason,
 )
 from kr_broker.market_calendar import (
     apply_market_calendar, expand_business_days, is_market_closed_day, market_calendar_status, market_day_status,
     refresh_market_calendar, reset_market_calendar,
 )
-from kr_broker.trading_hours import get_time_until_market_open, is_trading_hours, trading_hours_block_reason
+from kr_broker.trading_hours import get_time_until_market_open, is_trading_hours, market_session_block_reason, trading_hours_block_reason
 from kr_broker.us_market_hours import (
-    et_wall_clock_to_utc_ms, format_et_wall_clock, get_time_until_us_market_open, get_us_market_phase,
+    et_wall_clock_to_utc_ms, format_et_wall_clock, get_time_until_us_market_open, get_us_market_phase, us_order_block_reason,
 )
 
 HOUR = 60 * 60 * 1000
@@ -207,3 +207,47 @@ def test_krx_sell_tax_schedule() -> None:
     assert krx_sell_tax_rate(utc(2024, 12, 31, 14, 59)) == 0.0018  # 2024-12-31 23:59 KST
     assert krx_sell_tax_rate(utc(2024, 12, 31, 15)) == 0.0015  # 2025-01-01 00:00 KST
     assert krx_sell_tax_rate(utc(2020, 1, 1, 0)) == 0.002
+
+
+# ============ 세 증권사 공용 주문 게이트 ============
+
+def _kst(hour: int, minute: int, second: int = 0) -> int:
+    """2026-09-22(화) 한국 시각."""
+    return utc(2026, 9, 22, hour - 9, minute) + second * 1000
+
+
+def _et(hour: int, minute: int, second: int = 0) -> int:
+    """2026-09-22(화) 미국 동부 시각(서머타임)."""
+    return utc(2026, 9, 22, hour + 4, minute) + second * 1000
+
+
+def test_krx_order_block_reason() -> None:
+    assert krx_order_block_reason(_kst(10, 0)) is None
+    assert krx_order_block_reason(_kst(21, 30)) == '거래시간 외: 장 마감 (현재: 21:30 KST, 마감: 15:30)'
+    # 종가 동시호가의 신규 매수는 시장이 받으므로 기본으로 연다. 옵션을 켜면 15:20:00 부터 매수만 막는다.
+    assert krx_order_block_reason(_kst(15, 25), 'buy') is None
+    assert krx_order_block_reason(_kst(15, 19, 59), 'buy', True) is None
+    assert '종가 동시호가' in (krx_order_block_reason(_kst(15, 20), 'buy', True) or '')
+    assert krx_order_block_reason(_kst(15, 20), 'sell', True) is None
+    assert krx_order_block_reason(_kst(16, 30), sessions=('nxt',)) is None
+    assert krx_order_block_reason(_kst(15, 25), sessions=('nxt',)) == 'NXT 거래시간 외 (session=krx-closing-auction)'
+    assert krx_order_block_reason(_kst(16, 30), sessions=('regular', 'nxt')) is None
+    assert (krx_order_block_reason(_kst(21, 30), sessions=('regular', 'nxt')) or '').endswith('(NXT session=closed)')
+
+
+def test_us_order_block_reason() -> None:
+    assert 'phase=closed' in (us_order_block_reason(_et(9, 24, 59)) or '')
+    assert 'phase=pre-auction' in (us_order_block_reason(_et(9, 25)) or '')
+    assert us_order_block_reason(_et(9, 25), sessions=('regular', 'opening-auction')) is None
+    assert us_order_block_reason(_et(9, 30)) is None
+    assert us_order_block_reason(_et(15, 55), 'buy') is None
+    assert us_order_block_reason(_et(15, 49, 59), 'buy', True) is None
+    assert '종가 동시호가' in (us_order_block_reason(_et(15, 50), 'buy', True) or '')
+    assert us_order_block_reason(_et(15, 50), 'sell', True) is None
+    assert 'phase=closed' in (us_order_block_reason(_et(16, 0)) or '')
+
+
+def test_market_session_block_reason_auction_policy() -> None:
+    assert market_session_block_reason('kbsec', '005930/KRW', _kst(15, 25), side='buy') is None
+    assert '종가 동시호가' in (market_session_block_reason('kbsec', '005930/KRW', _kst(15, 25), side='buy', block_auction_buys=True) or '')
+

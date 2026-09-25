@@ -244,6 +244,16 @@ describe('createOrder — 장 시간', () => {
 
         expect(calledTrs(mockFetch)).toContain(KBSEC_TR.MARKET_STATUS.toLowerCase());
     });
+
+    it('종가 동시호가(15:25 KST)의 신규 매수는 기본으로 내고, blockAuctionBuys 를 켜면 막는다. 매도는 켜도 낸다', async () => {
+        routeTr(mockFetch, { [TR_BUY]: { ordr_no: 'A1' }, [TR_SELL]: { ordr_no: 'S1' } });
+        vi.setSystemTime(new Date('2026-08-19T06:25:00Z'));
+        const guarded = () => new kbsec({ ...CREDS, rateLimit: 0, options: { blockAuctionBuys: true, confirmBudget: { intervalMs: 0 } } });
+
+        await expect(newExchange().createOrder('005930/KRW', 'limit', 'buy', 1, 70000)).resolves.toMatchObject({ id: 'A1' });
+        await expect(guarded().createOrder('005930/KRW', 'limit', 'buy', 1, 70000)).rejects.toThrow(/종가 동시호가/);
+        await expect(guarded().createOrder('005930/KRW', 'limit', 'sell', 1, 70000)).resolves.toMatchObject({ id: 'S1' });
+    });
 });
 
 describe('createOrder — 해외', () => {
@@ -407,6 +417,44 @@ describe('createOrder — 실패의 종류', () => {
     });
 });
 
+describe('createOrder·editOrder — 호가 단위', () => {
+    /** 마스터가 005930 을 일반 주식(STOCK)이라고 알려 주는 인스턴스. */
+    const withStockMaster = () => new kbsec({
+        ...CREDS,
+        rateLimit: 0,
+        options: {
+            masterData: { ...MASTER_DATA, kospi: [{ code: '005930', name: '삼성전자', market: 'KOSPI' as const, securityType: 'STOCK' }] },
+            confirmBudget: { intervalMs: 0 },
+        },
+    });
+
+    it('마스터가 주식이라고 알려 주면 호가 단위에 맞지 않는 지정가를 요청 없이 InvalidOrder 로 막는다. 가격을 바꿔 내지 않는다', async () => {
+        routeTr(mockFetch, { [TR_BUY]: { ordr_no: 'A123' } });
+
+        const error = await withStockMaster().createOrder('005930/KRW', 'limit', 'buy', 3, 70_030).catch((e: unknown) => e);
+
+        expect(error).toBeInstanceOf(InvalidOrder);
+        expect((error as InvalidOrder).detail).toBe('price-tick-invalid');
+        expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('정정 가격도 같다. 원주문 라우팅 조회도 나가지 않는다', async () => {
+        routeTr(mockFetch, { [KBSEC_TR.AMEND_KR]: { ordr_no: 'AM1' } });
+
+        await expect(withStockMaster().editOrder('O9', '005930/KRW', 'limit', 'buy', undefined, 70_030)).rejects.toBeInstanceOf(InvalidOrder);
+
+        expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('종목 유형을 모르면 막지 않고 가격을 그대로 보낸다(서버의 1896 에 맡긴다)', async () => {
+        routeTr(mockFetch, { [TR_BUY]: { ordr_no: 'A123' } });
+
+        await newExchange().createOrder('005930/KRW', 'limit', 'buy', 3, 70_030);
+
+        expect(trBody(mockFetch, TR_BUY).dataBody.ordr_uprc).toBe('70030');
+    });
+});
+
 describe('editOrder', () => {
     it('국내 일부정정 — crct_clsf 1, 원주문 번호, 수량과 가격. 정정하면 주문번호가 바뀐다', async () => {
         routeTr(mockFetch, { [KBSEC_TR.AMEND_KR]: { ordr_no: 'AM1' }, [KBSEC_TR.TRADES_KR]: { Record1: [] } });
@@ -420,14 +468,44 @@ describe('editOrder', () => {
         expect(order.amount).toBe(2);
     });
 
-    it('국내 전부정정은 수량을 0 으로 보낸다 — 수량을 실으면 거부된다(2329)', async () => {
+    /** 원주문 O9 가 5주 가운데 2주 체결된 미체결 목록. */
+    const openO9 = { Record1: [{ ordr_no: 'O9', stnd_is_no: 'A005930', trd_dl_ccd_nm: '현금매수', ordr_q: '5', tl_ccls_q: '2', nccls_q: '3', sor_ordr_ccd: 'K' }] };
+
+    it('국내 전부정정은 수량을 0 으로 보낸다 — 수량을 실으면 거부된다(2329). amount 없이 부르면 반환값에 수량을 싣지 않는다', async () => {
         routeTr(mockFetch, { [KBSEC_TR.AMEND_KR]: { ordr_no: 'AM2' } });
+
+        const order = await newExchange().editOrder('O9', '005930/KRW', 'limit', 'buy', undefined, 71000);
+
+        expect(trBody(mockFetch, KBSEC_TR.AMEND_KR).dataBody).toMatchObject({ crct_clsf: '2', ordr_q: '0' });
+        expect(order.amount).toBeUndefined();
+    });
+
+    it('★amount 는 정정 뒤 총수량이다. 미체결 목록의 체결 + 잔량과 같으면 전부정정하고 그 총수량을 돌려준다', async () => {
+        routeTr(mockFetch, { [KBSEC_TR.TRADES_KR]: openO9, [KBSEC_TR.AMEND_KR]: { ordr_no: 'AM2' } });
 
         const order = await newExchange().editOrder('O9', '005930/KRW', 'limit', 'buy', 5, 71000);
 
-        expect(trBody(mockFetch, KBSEC_TR.AMEND_KR).dataBody).toMatchObject({ crct_clsf: '2', ordr_q: '0' });
-        // ★보내지 않은 수량 5 를 반환값에 싣지 않는다. 호출자의 장부가 실제 주문과 어긋나지 않게 한다.
-        expect(order.amount).toBeUndefined();
+        expect(trBody(mockFetch, KBSEC_TR.AMEND_KR).dataBody).toMatchObject({ crct_clsf: '2', ordr_q: '0', sor_ordr_ccd: 'K' });
+        expect(order.amount).toBe(5);
+    });
+
+    it('★amount 가 총수량과 다르면 받은 수량을 버리지 않고 정정 요청 없이 NotSupported 다', async () => {
+        routeTr(mockFetch, { [KBSEC_TR.TRADES_KR]: openO9, [KBSEC_TR.AMEND_KR]: { ordr_no: 'AM2' } });
+
+        await expect(newExchange().editOrder('O9', '005930/KRW', 'limit', 'buy', 3, 71000)).rejects.toBeInstanceOf(NotSupported);
+        expect(calledTrs(mockFetch)).not.toContain(KBSEC_TR.AMEND_KR.toLowerCase());
+    });
+
+    it('amount 를 줬는데 원주문이 미체결 목록에 없으면 발주 정책으로 폴백하지 않고 OrderNotFound 다', async () => {
+        routeTr(mockFetch, { [KBSEC_TR.TRADES_KR]: { Record1: [] }, [KBSEC_TR.AMEND_KR]: { ordr_no: 'AM2' } });
+
+        await expect(newExchange().editOrder('O9', '005930/KRW', 'limit', 'buy', 5, 71000)).rejects.toBeInstanceOf(OrderNotFound);
+        expect(calledTrs(mockFetch)).not.toContain(KBSEC_TR.AMEND_KR.toLowerCase());
+    });
+
+    it('일부정정(params.partial)에 amount 가 없으면 요청 없이 ArgumentsRequired 다', async () => {
+        await expect(newExchange().editOrder('O9', '005930/KRW', 'limit', 'buy', undefined, 71000, { partial: true })).rejects.toBeInstanceOf(ArgumentsRequired);
+        expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it('정정은 원주문과 같은 라우팅으로 나간다 — 미체결 목록의 sor_ordr_ccd 가 정본이다', async () => {
@@ -444,12 +522,24 @@ describe('editOrder', () => {
     it('해외 정정은 가격만 바꾼다 — crct_cncl_clsf 1 이고 수량 필드를 보내지 않는다', async () => {
         routeTr(mockFetch, { [KBSEC_TR.AMEND_CANCEL_US]: { ordr_no: 'UM1' } });
 
-        const order = await newExchange().editOrder('O9', 'AAPL/USD', 'limit', 'buy', 5, 230.25);
+        const order = await newExchange().editOrder('O9', 'AAPL/USD', 'limit', 'buy', undefined, 230.25);
 
         const body = trBody(mockFetch, KBSEC_TR.AMEND_CANCEL_US).dataBody;
         expect(body).toMatchObject({ crct_cncl_clsf: '1', orgn_ordr_no: 'O9', frgn_ordr_prc_p4: '230.2500' });
         expect(body.frgn_ordr_q).toBeUndefined();
         expect(order.id).toBe('UM1');
+    });
+
+    it('★해외 amount 는 원주문의 체결 수량을 믿을 만한 조회로 확인할 수 없어 요청(조회 포함) 없이 NotSupported 다', async () => {
+        routeTr(mockFetch, { [KBSEC_TR.AMEND_CANCEL_US]: { ordr_no: 'UM1' } });
+
+        await expect(newExchange().editOrder('O9', 'AAPL/USD', 'limit', 'buy', 3, 230.25)).rejects.toBeInstanceOf(NotSupported);
+        expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('해외 일부정정(params.partial)은 요청 없이 NotSupported 다', async () => {
+        await expect(newExchange().editOrder('O9', 'AAPL/USD', 'limit', 'buy', 1, 230.25, { partial: true })).rejects.toBeInstanceOf(NotSupported);
+        expect(mockFetch).not.toHaveBeenCalled();
     });
 });
 

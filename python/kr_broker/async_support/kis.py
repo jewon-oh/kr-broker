@@ -33,7 +33,8 @@
     주문은 재시도하지 않고, 시간 초과나 연결 끊김이면 접수 여부를 모르므로 `OrderOutcomeUnknown` 을 던진다.
 
 옵션
-    `tokenStore`(토큰 저장소), `nxtRouting`(정규장 밖 NXT 주문과 시세, 불리언이거나 불리언을 돌려주는 함수), `masterData`(종목 마스터),
+    `tokenStore`(토큰 저장소), `nxtRouting`(정규장 밖 NXT 주문과 시세, 불리언이거나 불리언을 돌려주는 함수), `blockAuctionBuys`(종가 동시호가의
+    신규 매수를 막는다, 기본 꺼짐), `masterData`(종목 마스터),
     `stockDirectory`(코스피·코스닥 구분을 알려 주는 `find_kr_market(code)` 객체), `orderableProbeCode`(주문가능현금 조회에 쓰는 종목)다.
 
 한계
@@ -76,11 +77,13 @@ from kr_broker.kis_overseas_master import (
 from kr_broker.kis_stock_master import get_krx_stock_by_code, get_stock_master_count, search_krx_stocks
 from kr_broker.kis_types import (
     KIS_API_DOMAINS, KIS_BROKERAGE_FEE, KIS_CUSTOMER_TYPE, KIS_DEFAULT_ACCOUNT_SUFFIX, KIS_ORDER_TYPE, KIS_OVERSEAS_DEFAULT_FEE_RATE,
-    KIS_OVERSEAS_ORD_DVSN, KIS_PRESENT_BALANCE_PARAMS, KIS_WS_DOMAINS, get_tick_size,
+    KIS_OVERSEAS_ORD_DVSN, KIS_PRESENT_BALANCE_PARAMS, KIS_WS_DOMAINS,
 )
 from kr_broker.krx_sell_tax import krx_sell_tax_rate
-from kr_broker.krx_trading_hours import check_krx_trading_hours, get_krx_market_phase, get_nxt_session, is_nxt_extended_tradable
-from kr_broker.us_market_hours import et_wall_clock_to_utc_ms, et_ymd, format_et_wall_clock, get_us_market_phase
+from kr_broker.edit_order_amount import assert_whole_remaining_edit, edit_order_total
+from kr_broker.krx_tick_size import KRX_TICK_INVALID_DETAIL, get_krx_tick_size, krx_tick_violation
+from kr_broker.krx_trading_hours import is_nxt_extended_tradable, krx_order_block_reason
+from kr_broker.us_market_hours import et_wall_clock_to_utc_ms, et_ymd, us_order_block_reason
 
 logger = logging.getLogger('kr_broker')
 
@@ -880,6 +883,8 @@ class kis(Exchange, ImplicitAPI):
                 'tokenStore': None,
                 # 정규장 밖(NXT 프리·애프터) 주문과 시세를 연다. 불리언이거나 불리언을 돌려주는 함수다. 기본은 꺼짐이다.
                 'nxtRouting': None,
+                # 종가 동시호가(국내 15:20~15:30, 미국 15:50~16:00 ET)의 신규 매수를 막는다. 불리언이거나 불리언을 돌려주는 함수다. 기본은 꺼짐.
+                'blockAuctionBuys': None,
                 # 종목 검색과 해외 거래소 판별에 쓰는 KIS 마스터 데이터(`kis_master_data` 참고). 없으면 빈 데이터다.
                 'masterData': None,
                 # 국내 종목의 코스피·코스닥 구분을 알려 주는 곳(`find_kr_market(code)` 가 있는 객체). 없으면 마스터 데이터로 판별한다.
@@ -1139,8 +1144,8 @@ class kis(Exchange, ImplicitAPI):
         })
 
     def price_to_precision(self, symbol: Str, price: Any) -> Str:
-        """가격을 호가 단위에 맞춘 문자열. 국내 일반 주식은 가격대별 호가 단위(2천원 미만 1원 … 50만원 이상 1천원)로 반올림하고,
-        ETF·ETN 은 표가 달라 그대로 둔다. 미국은 0.01 달러 단위다."""
+        """가격을 호가 단위에 맞춘 문자열. 국내 일반 주식은 가격대별 호가 단위 표(`krx_tick_size`)로 반올림하고,
+        ETF·ETN 은 표가 달라 그대로 둔다. 미국은 0.01 달러 단위다. 주문 경로는 이 메서드를 거치지 않는다."""
         if price is None:
             return None
         instrument = self._instrument_of(symbol)
@@ -1150,7 +1155,19 @@ class kis(Exchange, ImplicitAPI):
         security_type = None if stock is None else stock.get('securityType')
         if security_type is not None and security_type != 'STOCK':
             return self.number_to_string(price)
-        return decimal_to_precision(price, ROUND, get_tick_size(fn.js_number(price)), TICK_SIZE, NO_PADDING)
+        return decimal_to_precision(price, ROUND, get_krx_tick_size(fn.js_number(price)), TICK_SIZE, NO_PADDING)
+
+    def _assert_krx_tick_aligned(self, instrument: KisInstrument, price: Any, method: str) -> None:
+        """국내 지정가가 호가 단위 표에 맞지 않으면 요청 전에 `InvalidOrder` 다. 가격은 바꾸지 않는다. 마스터가 일반 주식(`STOCK`)이라고
+        알려 줄 때만 검사하고, 종목 종류를 모르거나 ETF·ETN 이면 서버에 맡긴다."""
+        if instrument.overseas:
+            return
+        stock = get_krx_stock_by_code(self._master(), instrument.code)
+        if stock is None or stock.get('securityType') != 'STOCK':
+            return
+        violation = krx_tick_violation(price)
+        if violation is not None:
+            raise InvalidOrder(f'{self.id} {method}() {violation} ({instrument.symbol})', detail=KRX_TICK_INVALID_DETAIL)
 
     def _instrument_of(self, symbol: str) -> KisInstrument:
         """심볼(또는 종목코드)을 종목 식별 결과로 바꾼다. 국내는 마스터 없이도 되고, 해외는 마스터에서 거래소를 찾는다."""
@@ -1200,7 +1217,7 @@ class kis(Exchange, ImplicitAPI):
 
     async def _quote_market_division(self) -> str:
         """국내 시세 조회의 상품구분. `nxtRouting` 옵션이 켜져 있고 NXT 확장세션이면 통합(`UN`)으로 애프터마켓 시세를 받는다."""
-        return 'UN' if is_nxt_extended_tradable() and await self.is_option_enabled('nxtRouting') else 'J'
+        return 'UN' if is_nxt_extended_tradable(self.milliseconds()) and await self.is_option_enabled('nxtRouting') else 'J'
 
     # ============ 시세 ============
 
@@ -1774,6 +1791,8 @@ class kis(Exchange, ImplicitAPI):
             self.check_order_arguments(None, type, side, quantity, price, params)
             return await self._create_overseas_order(instrument, type, side, quantity, price, params)
         self.check_order_arguments(None, type, side, quantity, price, params)
+        if type == 'limit' and price is not None:
+            self._assert_krx_tick_aligned(instrument, price, 'createOrder')
         return await self._create_domestic_order(instrument, type, side, quantity, price, params)
 
     def _normalize_quantity(self, instrument: KisInstrument, side: str, requested: Any) -> int:
@@ -1796,7 +1815,7 @@ class kis(Exchange, ImplicitAPI):
             raise BadRequest(f"{self.id} createOrder() 의 params.session 은 'regular' 이나 'nxt' 여야 한다: {session}")
         params = self.omit(params, 'session')
         # 확장세션(NXT 프리 08:00~08:50, 애프터 15:30~20:00)은 정규장 게이트 대신 NXT 게이트를 거쳐 SOR 로 낸다. `nxtRouting` 이 꺼져 있으면 정규장 규칙이다.
-        extended = session == 'nxt' or (session is None and await self.is_option_enabled('nxtRouting') and is_nxt_extended_tradable())
+        extended = session == 'nxt' or (session is None and await self.is_option_enabled('nxtRouting') and is_nxt_extended_tradable(self.milliseconds()))
         if extended:
             await self._assert_nxt_session_open()
             await self._assert_nxt_tradable(instrument)
@@ -1890,36 +1909,33 @@ class kis(Exchange, ImplicitAPI):
         """NXT 확장세션 게이트. 프리마켓, 메인마켓, 애프터마켓에만 낸다. 휴장일과 새벽, NXT 가 멈추는 시간(08:50~09:00, KRX 종가 동시호가
         15:20~15:30)은 막는다. 휴장일은 KIS 캘린더로 알아야 해서 먼저 받는다."""
         await self.refresh_market_calendar()
-        phase = get_nxt_session()
-        if phase not in ('pre-market', 'main', 'after-market'):
-            raise MarketClosed(f'NXT 거래시간 외 (session={phase})')
+        reason = krx_order_block_reason(self.milliseconds(), sessions=('nxt',))
+        if reason is not None:
+            raise MarketClosed(reason)
 
     async def _assert_domestic_edit_open(self) -> None:
         """국내 정정 게이트. KRX 정규장과 NXT 확장세션이 모두 닫혀 있으면 막는다. 정정은 신규 진입이 아니라서 동시호가의 매수 제한은 걸지 않는다.
         원주문이 어느 시장에 걸려 있는지는 정정 요청에 없으므로 둘 중 하나라도 열려 있으면 보낸다."""
         await self.refresh_market_calendar()
-        hours = check_krx_trading_hours()
-        if hours['tradable']:
-            return
-        phase = get_nxt_session()
-        if phase in ('pre-market', 'main', 'after-market'):
-            return
-        raise MarketClosed(f"거래시간 외: {_tpl(hours.get('reason'))} (NXT session={phase})")
+        reason = krx_order_block_reason(self.milliseconds(), sessions=('regular', 'nxt'))
+        if reason is not None:
+            raise MarketClosed(reason)
 
     def _assert_us_edit_open(self, exchange: str) -> None:
-        """미국 정정 게이트. 주문과 같이 완전 마감(`closed`)만 막는다. 홍콩·일본·베트남은 대상이 아니다."""
-        if exchange in US_ORDER_EXCHANGES and get_us_market_phase() == 'closed':
-            raise MarketClosed(f'미국장 정규장 외 ({format_et_wall_clock()}, phase=closed)')
+        """미국 정정 게이트. 주문과 같은 시간표(정규장과 종가 동시호가)를 쓴다. 홍콩·일본·베트남은 대상이 아니다."""
+        if exchange not in US_ORDER_EXCHANGES:
+            return
+        reason = us_order_block_reason(self.milliseconds())
+        if reason is not None:
+            raise MarketClosed(reason)
 
     async def _assert_domestic_session_open(self, side: str) -> None:
-        """국내 정규장 게이트. 휴장일은 KIS 캘린더로 알아야 해서 먼저 받는다. 종가 동시호가(15:20~15:30)의 신규 매수는 막는다."""
+        """국내 정규장 게이트. 휴장일은 KIS 캘린더로 알아야 해서 먼저 받는다. 종가 동시호가(15:20~15:30)의 신규 매수는
+        `options['blockAuctionBuys']` 가 켜졌을 때만 막는다. KRX 는 이 시간에도 호가를 받는다."""
         await self.refresh_market_calendar()
-        hours = check_krx_trading_hours()
-        if not hours['tradable']:
-            raise MarketClosed(f"거래시간 외: {_tpl(hours.get('reason'))}")
-        # 동시호가는 체결가가 예상과 크게 다를 수 있다. 청산(매도)은 진입보다 우선이라 막지 않는다.
-        if get_krx_market_phase() == 'closing-auction' and side == 'buy':
-            raise MarketClosed('종가 동시호가 (15:20-15:30) — 신규 매수 진입 금지')
+        reason = krx_order_block_reason(self.milliseconds(), side, await self.is_option_enabled('blockAuctionBuys'))
+        if reason is not None:
+            raise MarketClosed(reason)
 
     async def _extended_session_limit_price(self, symbol: str, side: str) -> float:
         """확장세션 시장가를 지정가로 바꾸는 가격. 확장세션은 지정가만 받는다. 같은 방향 미체결이 있거나 기준가를 못 구하면 던진다.
@@ -1941,14 +1957,12 @@ class kis(Exchange, ImplicitAPI):
         slot = OVERSEAS_ORDER_TR.get(exchange)
         if slot is None:
             raise NotSupported(f'미지원 거래소: {exchange}')
-        # 미국장 세션 게이트. 완전 마감은 양방향 모두 막고(닫힌 시장의 매도도 체결될 수 없다) 종가 동시호가의 신규 매수도 막는다.
-        # 홍콩·일본·베트남 같은 다른 해외 시장은 이 게이트의 대상이 아니다.
+        # 미국장 세션 게이트. 정규장(09:30~16:00 ET, 종가 동시호가 포함) 밖은 양방향 모두 막는다. 09:25~09:30 에 주문을 받는지는 확인하지 못해
+        # 연다고 보지 않는다. 종가 동시호가의 신규 매수는 `options['blockAuctionBuys']` 가 켜졌을 때만 막는다. 다른 해외 시장은 대상이 아니다.
         if exchange in US_ORDER_EXCHANGES:
-            phase = get_us_market_phase()
-            if phase == 'closed':
-                raise MarketClosed(f'미국장 정규장 외 ({format_et_wall_clock()}, phase=closed)')
-            if phase == 'closing-auction' and side == 'buy':
-                raise MarketClosed(f'종가 동시호가 (15:50-16:00 ET, {format_et_wall_clock()}) — 신규 매수 진입 금지')
+            reason = us_order_block_reason(self.milliseconds(), side, await self.is_option_enabled('blockAuctionBuys'))
+            if reason is not None:
+                raise MarketClosed(reason)
         # 모의투자는 지정가만 받는다. 실전은 시장가 의도를 장마감지정가(LOC)로 낸다.
         ord_dvsn = KIS_OVERSEAS_ORD_DVSN['LOC'] if type == 'market' and not self.isSandboxModeEnabled else KIS_OVERSEAS_ORD_DVSN['LIMIT']
         buy = side == 'buy'
@@ -2041,23 +2055,34 @@ class kis(Exchange, ImplicitAPI):
     async def edit_order(self, id: str, symbol: str, type: str, side: str, amount: Num = None, price: Num = None,
                    params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """정정. 취소와 같은 엔드포인트(`order-rvsecncl`)를 `RVSE_CNCL_DVSN_CD` 로 나눈다(`01` 정정, `02` 취소). `price` 가 필요하다.
-        `amount` 를 주면 그 수량으로 일부 정정(`QTY_ALL_ORD_YN: 'N'`)하고, 주지 않으면 국내는 전량(`'Y'`)을 정정한다.
-        국내는 KRX 정규장과 NXT 확장세션이 모두 닫혀 있으면, 미국은 완전 마감이면 `MarketClosed` 다."""
+
+        `amount` 는 ccxt 와 같이 정정 뒤 주문의 총수량(체결분 포함)이다. 주면 미체결 조회로 원주문의 체결 수량과 잔량을 확인하고, 둘의 합과
+        같을 때만 잔량 전부를 새 가격으로 정정한다. 수량을 바꾸는 조합은 정정 요청 없이 `NotSupported` 다. 주지 않으면 확인 없이 잔량 전부를
+        정정한다(국내 `QTY_ALL_ORD_YN: 'Y'`). 국내 일부정정(`'N'`)은 `params['partial']` 이 참일 때만 보내고, 이때 `amount` 는 옮길 수량이다.
+        반환 주문의 `amount` 는 정정 뒤 총수량(일부정정이면 옮긴 수량)이고, 확인하지 않은 값은 싣지 않는다.
+        국내는 KRX 정규장과 NXT 확장세션이 모두 닫혀 있으면, 미국은 정규장 밖이면 `MarketClosed` 다."""
         amount, price = fn.decimal_to_float(amount), fn.decimal_to_float(price)
         if price is None:
             raise ArgumentsRequired(f'{self.id} editOrder() requires a price argument')
+        partial = self.safe_bool(params, 'partial', False) is True
+        if partial and amount is None:
+            raise ArgumentsRequired(f'{self.id} editOrder() 의 일부정정(params.partial)에는 옮길 수량 amount 가 필요하다')
+        params = self.omit(params, 'partial')
         instrument = self._instrument_of(symbol)
         if instrument.overseas:
-            return await self._edit_overseas_order(id, instrument, price, amount, params)
+            return await self._edit_overseas_order(id, instrument, price, amount, partial, params)
+        self._assert_krx_tick_aligned(instrument, price, 'editOrder')
         await self._assert_domestic_edit_open()
+        if not partial and amount is not None:
+            assert_whole_remaining_edit(self.id, id, amount, await self._find_open_order(instrument, id))
         response = await self.private_post_uapi_domestic_stock_v1_trading_order_rvsecncl(self.extend(self.extend(self._account_params(), {
             'KRX_FWDG_ORD_ORGNO': self.safe_string(params, 'orderOrgNo', ''),
             'ORGN_ODNO': id,
             'ORD_DVSN': KIS_ORDER_TYPE['LIMIT'],
             'RVSE_CNCL_DVSN_CD': '01',  # 정정
-            'ORD_QTY': '0' if amount is None else fn.js_string(amount),
+            'ORD_QTY': fn.js_string(amount) if partial else '0',
             'ORD_UNPR': fn.js_string(price),
-            'QTY_ALL_ORD_YN': 'Y' if amount is None else 'N',
+            'QTY_ALL_ORD_YN': 'N' if partial else 'Y',
             'tr_id': self.tr('TTTC0803U'),
         }), self.omit(params, 'orderOrgNo')))
         new_id = self.safe_string(self.safe_dict(response, 'output', {}), 'ODNO', id)
@@ -2066,21 +2091,40 @@ class kis(Exchange, ImplicitAPI):
             'id': new_id, 'symbol': instrument.symbol, 'type': 'limit', 'price': price, 'amount': amount, 'status': 'open', 'info': response,
         }, self._market_of(instrument))
 
-    async def _edit_overseas_order(self, id: str, instrument: KisInstrument, price: float, amount: Num,
+    async def _find_open_order(self, instrument: KisInstrument, id: str) -> Dict[str, Any]:
+        """정정할 원주문을 미체결 목록에서 찾는다. 조회가 실패하면 던지고, 목록에 없으면 `OrderNotFound` 다."""
+        open_orders = await self.fetch_open_orders(instrument.symbol)
+        found = next((order for order in open_orders if order.get('id') == id), None)
+        if found is None:
+            raise OrderNotFound(f'{self.id} 미체결 주문을 찾지 못했다: {id} ({instrument.symbol})')
+        return found
+
+    async def _edit_overseas_order(self, id: str, instrument: KisInstrument, price: float, amount: Num, partial: bool,
                              params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-        """해외 정정. 수량(`amount` 나 `params['amount']`)이 없으면 미체결 조회에서 잔량을 찾는다. 모의투자는 미체결 조회가 없어 반드시 넘긴다.
-        공식 예제처럼 정정 요청에 실제 수량과 단가를 싣는다."""
+        """해외 정정. 정정 수량(`ORD_QTY`)에는 미체결 조회로 찾은 잔량을 싣고, `amount` 를 주면 국내처럼 원주문의 총수량과 대조한다.
+        `params['amount']` 를 주면 조회와 대조 없이 그 값을 정정 수량으로 싣는다. 모의투자는 미국 미체결 조회가 없어 `params['amount']` 가 필요하고
+        `amount` 는 대조할 수 없어 `NotSupported` 다. 일부정정(`params['partial']`)은 받지 않는다. 공식 예제처럼 정정 요청에 실제 수량과 단가를 싣는다."""
         exchange = instrument.order_exchange
         if exchange is None:
             raise BadSymbol(f'해외 마스터에 없는 ticker: {instrument.symbol}')
+        if partial:
+            raise NotSupported(f'{self.id} editOrder() 의 일부정정(params.partial)은 미국 주문에서 지원하지 않는다')
         quantity = self.safe_string(params, 'amount')
-        if quantity is None and amount is not None:
-            quantity = self.number_to_string(amount)
         if quantity is None and self.isSandboxModeEnabled:
-            raise ArgumentsRequired(f'{self.id} 모의투자의 해외 주문 정정에는 amount나 params.amount(정정 수량)가 필요하다')
+            if amount is not None:
+                raise NotSupported(f'{self.id} 모의투자는 미국 미체결 조회가 없어 editOrder() 의 amount 를 원주문과 대조할 수 없다. params.amount(정정 수량)로 준다')
+            raise ArgumentsRequired(f'{self.id} 모의투자의 해외 주문 정정에는 params.amount(정정 수량)가 필요하다')
         self._assert_us_edit_open(exchange)
+        total = None
         if quantity is None:
-            quantity = await self._open_quantity(id, instrument)
+            open_order = await self._find_open_order(instrument, id)
+            if amount is not None:
+                assert_whole_remaining_edit(self.id, id, amount, open_order)
+            total = edit_order_total(open_order)
+            remaining = open_order.get('remaining')
+            if remaining is None:
+                remaining = open_order.get('amount')
+            quantity = self.number_to_string(0 if remaining is None else remaining)
         response = await self.private_post_uapi_overseas_stock_v1_trading_order_rvsecncl(self.extend(self.extend(self._account_params(), {
             'OVRS_EXCG_CD': exchange,
             'PDNO': instrument.code,
@@ -2096,25 +2140,26 @@ class kis(Exchange, ImplicitAPI):
         logger.info('[kis] 해외 주문 정정 성공 (orderId=%s, newOrderId=%s, symbol=%s, price=%s, quantity=%s)', id, new_id, instrument.symbol,
                     price, quantity)
         return self.safe_order({
-            'id': new_id, 'symbol': instrument.symbol, 'type': 'limit', 'price': price, 'amount': fn.js_number(quantity), 'status': 'open',
+            'id': new_id, 'symbol': instrument.symbol, 'type': 'limit', 'price': price, 'amount': total, 'status': 'open',
             'info': response,
         }, self._market_of(instrument))
 
     async def cancel_all_orders(self, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        """미체결 주문을 모두 취소한다. 종목을 주면 그 종목만이다. 하나라도 취소하지 못하면 나머지를 다 시도한 뒤 첫 실패를 던진다.
-        살아 있을 수 있는 주문을 성공으로 돌려주지 않기 위해서다. TypeScript 판은 동시에 보내고 이 판은 같은 순서로 차례로 보낸다.
+        """미체결 주문을 모두 취소한다. 종목을 주면 그 종목만이다. 취소를 시도한 주문마다 미체결 조회로 받은 주문을 항목으로 돌려준다.
+        취소된 항목은 `status: 'canceled'` 이고 취소 응답 원문이 `info['cancelResponse']` 에 있다. 취소하지 못한 항목은 원래 상태(`open`)이고
+        `info['cancelError']`(메시지)와 `info['cancelErrorDetail']`(오류의 `detail`)이 있다. 일부가 실패해도 던지지 않으므로 항목의 `status` 를 확인한다.
+        미체결 조회가 실패하거나 잘리면 하나도 취소하지 않고 던진다. TypeScript 판은 동시에 보내고 이 판은 같은 순서로 차례로 보낸다.
         국내 취소에는 공식 예제처럼 미체결 행의 주문채번지점번호(`ord_gno_brno`)를 원주문 조직번호로 싣는다."""
         open_orders = await self.fetch_open_orders(symbol, None, None, params)
         results: List[Dict[str, Any]] = []
-        first_error: Optional[BaseException] = None
         for order in open_orders:
             try:
-                results.append(await self.cancel_order(order['id'], order.get('symbol'), self._cancel_params_of(order)))
+                canceled = await self.cancel_order(order['id'], order.get('symbol'), self._cancel_params_of(order))
+                results.append(self.extend(order, {'status': 'canceled', 'info': self.extend(order.get('info'), {'cancelResponse': canceled.get('info')})}))
             except Exception as error:
-                if first_error is None:
-                    first_error = error
-        if first_error is not None:
-            raise first_error
+                logger.warning('[kis] 주문 취소 실패(%s): %s', order.get('id'), error)
+                info = self.extend(order.get('info'), {'cancelError': str(error), 'cancelErrorDetail': getattr(error, 'detail', None)})
+                results.append(self.extend(order, {'info': info}))
         return results
 
     def _cancel_params_of(self, order: Dict[str, Any]) -> Dict[str, Any]:

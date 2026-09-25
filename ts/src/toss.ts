@@ -32,15 +32,20 @@
  * | `expireDate` | 조건주문 만료일(`YYYY-MM-DD`, 한국 시각). 조건주문에는 필요하다 |
  * | `confirmExecution` | `false` 면 접수 뒤 체결 조회를 하지 않는다(기본은 체결이 확정될 때까지 짧게 조회한다) |
  *
+ * 일반 주문은 위 키를 뺀 나머지를 요청 본문 끝에 합친다(ccxt 와 같다). 라이브러리가 인자로 채우는 필드(`symbol`·`side`·`orderType`·`quantity`·
+ * `orderAmount`·`price`·`confirmHighValueOrder`)를 `params` 로 주면 요청 없이 `BadRequest` 다. ccxt 조건 인자(`stopPrice` 등)는 요청 없이 `NotSupported` 다.
+ * `editOrder` 의 일반 정정도 같은 규칙이다.
+ *
  * 접수 응답에는 체결 정보가 없다. 그래서 `createOrder` 는 접수 뒤 주문 상세를 짧게 조회해 체결 수량·평균가·수수료를 확정하고, 확정하지 못하면
  * `filled` 를 비워 둔다(요청값으로 추정해 채우지 않는다). 확정한 값은 `order.info.execution` 에도 있다.
  *
  * ## 옵션
  *
  * 전역 설정은 없고 인스턴스가 `options` 로 받는다. `tokenStore`(토큰 저장소), `nxtRouting`(국내 확장세션 주문), `usExtendedLimit`(미국 확장세션 시장가를 지정가로),
+ * `blockAuctionBuys`(정규장 종가 동시호가의 신규 매수를 막는다),
  * `krwIntegratedMargin`(켜면 `fetchBalance({ currency: 'USD' })` 의 USD 에 원화 매수 여력의 달러 환산액을 늘 더한다. 환율은 토스 조회, 실패하면 `usdKrwRate`),
  * `confirmBudget`(체결 확정 조회 예산), `confirmExecution`(접수 뒤 체결 확정 조회)이다.
- * `nxtRouting`·`usExtendedLimit`·`krwIntegratedMargin` 은 불리언이거나 불리언을 돌려주는 함수이고 기본은 꺼짐이다. `confirmExecution` 은 기본이 켜짐이고
+ * `nxtRouting`·`usExtendedLimit`·`blockAuctionBuys`·`krwIntegratedMargin` 은 불리언이거나 불리언을 돌려주는 함수이고 기본은 꺼짐이다. `confirmExecution` 은 기본이 켜짐이고
  * `false` 일 때만 꺼지므로 함수를 넘기면 늘 켜진다.
  *
  * ## 오류
@@ -57,6 +62,7 @@ import {
     BadRequest,
     BadResponse,
     BadSymbol,
+    BaseError,
     DuplicateOrderId,
     ExchangeError,
     ExchangeClosedByUser,
@@ -75,9 +81,12 @@ import {
     Precise,
     RateLimitExceeded,
     DECIMAL_PLACES,
+    NO_PADDING,
+    ROUND,
     TICK_SIZE,
     TRUNCATE,
     decimalToPrecision,
+    numberToString,
     type ApiName,
     type Balances,
     type Dict,
@@ -108,6 +117,10 @@ import { candlePeriodUtcMs, isDailyOrLongerTimeframe } from './broker-time';
 import { logger } from './logger';
 import type { UsdKrwRateOption } from './options';
 import { applyMarketCalendar } from './market-calendar';
+import { krxAuctionBuyBlockReason } from './krx-trading-hours';
+import { usAuctionBuyBlockReason } from './us-market-hours';
+import { getKrxTickSize, KRX_TICK_INVALID_DETAIL, krxTickViolation } from './krx-tick-size';
+import { assertWholeRemainingEdit, editOrderTotal, type EditOrderOriginal } from './edit-order-amount';
 import { TossAuth, type TossIssuedToken } from './toss/toss-auth';
 import { OrderNotSent, TossRateLimited, TossTokenRejected } from './toss/toss-errors';
 import { TossPriceWs, type TossPriceWsOptions, type TossWsSub } from './toss/toss-price-ws';
@@ -248,6 +261,21 @@ const TAX_EXEMPT_SECURITY_TYPES: ReadonlySet<string> = new Set(['ETF', 'ETN']);
 const TERMINAL_ORDER_STATUSES: ReadonlySet<TossOrderStatus> = new Set<TossOrderStatus>([
     'FILLED', 'CANCELED', 'REJECTED', 'CANCEL_REJECTED', 'REPLACE_REJECTED', 'REPLACED',
 ]);
+
+/** ccxt 조건 인자. 조건주문은 `triggerPrice` 로만 내므로, 이 키를 버리고 일반 주문을 내지 않게 요청 전에 막는다. */
+const UNSUPPORTED_CONDITIONAL_PARAMS = ['stopPrice', 'stopLossPrice', 'takeProfitPrice', 'stopLoss', 'takeProfit'] as const;
+
+/** 일반 주문 경로가 `params` 에서 읽는 키. 본문에 합치지 않는다. */
+const ORDER_HANDLED_PARAMS = ['triggerPrice', 'cost', 'clientOrderId', 'timeInForce', 'confirmExecution'];
+
+/** 라이브러리가 인자로 채우는 주문 본문 필드. `params` 로 덮으면 돌려주는 주문과 실제 요청이 어긋나므로 받지 않는다. */
+const ORDER_COMPUTED_FIELDS = ['symbol', 'side', 'orderType', 'quantity', 'orderAmount', 'price', 'confirmHighValueOrder'] as const;
+
+/** 일반 정정 경로가 `params` 에서 읽는 키. 본문에 합치지 않는다. */
+const EDIT_HANDLED_PARAMS = ['trigger', 'stop', 'partial'];
+
+/** 라이브러리가 인자로 채우는 정정 본문 필드(`orderId` 는 경로에 실린다). */
+const EDIT_COMPUTED_FIELDS = ['orderId', 'orderType', 'quantity', 'price', 'confirmHighValueOrder'] as const;
 
 /** 미국 소수점 수량의 최대 자릿수. */
 const US_FRACTION_DIGITS = 6;
@@ -542,13 +570,15 @@ export class toss extends Exchange {
             },
             precisionMode: TICK_SIZE,
             options: {
-                // 아래 세 옵션은 불리언이거나 불리언을 돌려주는 함수(값이 바뀔 수 있을 때)다. 기본은 꺼짐이다.
+                // 아래 네 옵션은 불리언이거나 불리언을 돌려주는 함수(값이 바뀔 수 있을 때)다. 기본은 꺼짐이다.
                 /** `fetchBalance({ currency: 'USD' })` 의 USD 에 원화 매수 여력의 달러 환산액을 늘 더한다. 환율은 토스 조회, 실패하면 `usdKrwRate` 다. */
                 krwIntegratedMargin: undefined,
                 /** 국내 확장세션(프리·애프터) 주문을 연다. */
                 nxtRouting: undefined,
                 /** 미국 확장세션에서 시장가를 지정가로 바꿔 낸다. */
                 usExtendedLimit: undefined,
+                /** 정규장 종가 동시호가(국내 15:20~15:30, 미국 15:50~16:00 ET)의 신규 매수를 막는다. 시장이 받는 주문이라 기본은 꺼짐이다. */
+                blockAuctionBuys: undefined,
                 /** 토큰과 발급 락을 여러 프로세스가 나눠 쓰는 저장소(`BrokerTokenStore`). 없으면 프로세스 메모리 캐시만 쓴다. */
                 tokenStore: undefined,
                 /** 토스의 환율 조회가 실패했을 때 쓰는 환율 조회 함수. 1달러당 원화를 돌려주는 `() => Promise<number>` 다. */
@@ -896,6 +926,35 @@ export class toss extends Exchange {
     /** 종목의 시장. */
     private countryOf(market: MarketInterface): StockMarketGroup {
         return market.quote === 'KRW' ? 'KR' : 'US';
+    }
+
+    /**
+     * 가격을 호가 단위에 맞춘 문자열. 국내는 가격대별 호가 단위 표(`krx-tick-size`)로 반올림한다. 불러온 종목의 유형(`market.options.securityType`)이
+     * 주식(`STOCK`)이 아니면 표가 달라서 그대로 돌려준다. 미국은 기반 구현(`precision.price`)을 따른다. 주문 경로는 이 메서드로 가격을 바꾸지 않는다.
+     */
+    override priceToPrecision(symbol: Str, price: number | string | undefined): Str {
+        if (price === undefined) return undefined;
+        const market = this.market(symbol);
+        if (this.countryOf(market) !== 'KR') return super.priceToPrecision(symbol, price);
+        const securityType = this.safeString(market.options, 'securityType');
+        if (securityType !== undefined && securityType !== 'STOCK') return numberToString(price);
+        return decimalToPrecision(price, ROUND, getKrxTickSize(Number(price)), TICK_SIZE, NO_PADDING);
+    }
+
+    /**
+     * 국내 지정가가 호가 단위 표에 맞지 않으면 요청 전에 `InvalidOrder` 다. 불러온 종목이 주식(`STOCK`)일 때만 검사하고, 종목 유형을 모르거나
+     * (`loadMarkets` 전) ETF·ETN 이면 서버에 맡긴다. 서버도 같은 경우를 `price-tick-invalid` 로 거절한다.
+     */
+    private assertKrxTickAligned(market: MarketInterface, price: number, method: string): void {
+        if (this.countryOf(market) !== 'KR' || this.safeString(market.options, 'securityType') !== 'STOCK') return;
+        const violation = krxTickViolation(price);
+        if (violation !== null) throw new InvalidOrder(`${this.id} ${method}() ${violation} (${market.symbol})`, { detail: KRX_TICK_INVALID_DETAIL });
+    }
+
+    /** 요청 본문의 지정가. 국내는 호가에 맞추지 않고 그대로 보낸다(맞지 않는 가격은 `assertKrxTickAligned` 가 막거나 서버가 거절한다). */
+    private orderPriceString(market: MarketInterface, price: Num): string | undefined {
+        if (price === undefined) return undefined;
+        return this.countryOf(market) === 'KR' ? numberToString(price) : this.priceToPrecision(market.symbol, price);
     }
 
     /** 종목 상세(종목명·상장 상태·국내 거래정지 여부)를 받아 온다(`GET /stocks`, 한 번에 200종목까지). */
@@ -1471,18 +1530,14 @@ export class toss extends Exchange {
     ): Promise<Order> {
         if (side !== 'buy' && side !== 'sell') throw new InvalidOrder(`${this.id} createOrder() side must be 'buy' or 'sell'`);
         if (type !== 'limit' && type !== 'market') throw new InvalidOrder(`${this.id} createOrder() type must be 'limit' or 'market'`);
-        // 조건주문은 `triggerPrice` 로만 낸다. 다른 ccxt 조건 인자를 버리면 조건 없는 일반 주문이 바로 나가므로 요청 전에 막는다.
-        for (const key of ['stopPrice', 'stopLossPrice', 'takeProfitPrice', 'stopLoss', 'takeProfit']) {
-            if (this.safeValue(params, key) !== undefined) {
-                throw new NotSupported(`${this.id} createOrder() 는 조건 인자 ${key} 를 받지 않는다. 조건주문은 params.triggerPrice 나 createTriggerOrder() 로 낸다`);
-            }
-        }
+        this.assertNoConditionalParams('createOrder', params);
         const market = this.market(symbol);
         const country = this.countryOf(market);
 
         if (this.safeValue(params, 'triggerPrice') !== undefined) {
             return this.createConditionalOrder(market, type, side, amount, price, params);
         }
+        this.assertNoComputedParams('createOrder', params, ORDER_COMPUTED_FIELDS);
 
         const isMarket = type === 'market';
         const cost = this.safeNumber(params, 'cost');
@@ -1491,6 +1546,7 @@ export class toss extends Exchange {
         if (!useAmountBased && type === 'limit' && price === undefined) {
             throw new ArgumentsRequired(`${this.id} createOrder() requires a price argument for a limit order`);
         }
+        if (type === 'limit' && price !== undefined) this.assertKrxTickAligned(market, price, 'createOrder');
         const quantity = useAmountBased ? 0 : this.normalizeQuantity(symbol, type, side, amount);
         const clientOrderId = this.safeString(params, 'clientOrderId');
         const timeInForce = this.parseTimeInForce(params);
@@ -1516,7 +1572,7 @@ export class toss extends Exchange {
         }
 
         // 거래시간 검사: 국내는 캘린더의 세션, 미국은 캘린더의 네 세션으로 판정한다. 실주문 직전의 마지막 방어선이다.
-        const gate = await this.checkOrderableSession(symbol, country, { isMarket: effectiveType === 'market', useAmountBased, quantity });
+        const gate = await this.checkOrderableSession(symbol, country, { isMarket: effectiveType === 'market', useAmountBased, quantity }, side);
         if (gate !== null) {
             logger.info({ symbol, side, reason: gate }, '[toss] 거래시간 밖이라 주문을 보내지 않는다');
             throw new MarketClosed(gate);
@@ -1534,7 +1590,7 @@ export class toss extends Exchange {
         } else {
             body.quantity = this.numberToString(quantity);
         }
-        if (effectiveType === 'limit') body.price = this.priceToPrecision(symbol, effectivePrice);
+        if (effectiveType === 'limit') body.price = this.orderPriceString(market, effectivePrice);
 
         // 고액주문 확인 표시. 명목가를 알 수 있는 경우에만 붙인다(수량 기준 시장가는 서버의 400 이 마지막 방어선이다).
         const notional = useAmountBased ? (cost as number) : (effectivePrice !== undefined ? quantity * effectivePrice : 0);
@@ -1543,7 +1599,7 @@ export class toss extends Exchange {
             logger.warn({ symbol, notional, country }, '[toss] 고액주문이라 confirmHighValueOrder 를 켠다');
         }
 
-        const response = this.unwrap<TossOrderCreateResponse>(await this.privateAccountPostOrders(body));
+        const response = this.unwrap<TossOrderCreateResponse>(await this.privateAccountPostOrders(this.extend(body, this.omit(params, ORDER_HANDLED_PARAMS))));
         const orderId = this.safeString(response, 'orderId');
         if (orderId === undefined) {
             throw new OrderOutcomeUnknown(`${this.id} 주문 접수 응답에 orderId 가 없다. 접수 여부를 주문 조회로 확인해야 한다`);
@@ -1570,9 +1626,12 @@ export class toss extends Exchange {
     }
 
     /**
-     * 주문을 정정한다. 국내는 가격과 수량을 함께 정정한다(`amount` 필수). 미국은 가격만 정정한다(`amount` 를 주면 `NotSupported` 다).
-     * 미국은 고액주문 확인에 쓸 남은 수량을 정정 전에 주문 상세(`GET /orders/{orderId}`)로 읽는다.
-     * 정정하면 새 `orderId` 가 발급된다 — 반환한 `Order.id` 를 써야 한다.
+     * 주문을 정정한다. 잔량 전부를 새 가격으로 옮긴다. 국내는 정정 본문의 수량(`quantity`)에 주문 상세(`GET /orders/{orderId}`)로 읽은 잔량을
+     * 싣고, 미국은 가격만 보낸다. `amount` 는 ccxt 와 같이 정정 뒤 주문의 총수량(체결분 포함)이고, 주면 주문 상세로 대조해 총수량과 다르면
+     * 정정 요청 없이 `NotSupported` 다(수량을 바꾸는 정정은 한 요청으로 낼 수 없다). 명세의 `quantity` 가 정정 뒤 총수량인지 새 가격으로 옮길
+     * 수량인지 정해지지 않아, 국내는 두 뜻이 같은 값이 되는 체결 없는 주문만 정정하고 일부 체결된 주문은 `NotSupported` 다. 일부정정
+     * (`params.partial`)은 받지 않는다. 주문 상세 조회가 실패하면 던진다. 미국에서 `amount` 를 주지 않으면 조회는 고액주문 확인에만 쓰므로
+     * 실패해도 정정한다. 정정하면 새 `orderId` 가 발급된다 — 반환한 `Order.id` 를 써야 한다.
      *
      * `params.trigger: true` 는 조건주문 정정이다(`modifyConditionalOrder` 로 넘긴다). 조건주문은 등록과 같은 인자
      * (`triggerPrice`·`expireDate` 등 `params`)로 조건 전체를 다시 선언한다 — 부분 필드만 바꿀 수 없다.
@@ -1585,25 +1644,33 @@ export class toss extends Exchange {
             return this.modifyConditionalOrder(id, this.market(symbol), type, side, amount, price, params);
         }
         if (type !== 'limit' && type !== 'market') throw new InvalidOrder(`${this.id} editOrder() type must be 'limit' or 'market'`);
+        this.assertNoConditionalParams('editOrder', params);
+        this.assertNoComputedParams('editOrder', params, EDIT_COMPUTED_FIELDS);
         const market = this.market(symbol);
         const country = this.countryOf(market);
         if (type === 'limit' && price === undefined) throw new ArgumentsRequired(`${this.id} editOrder() requires a price argument for a limit order`);
-        if (country === 'US' && amount !== undefined) {
-            throw new NotSupported(`${this.id} editOrder() 는 미국 종목의 수량 정정을 지원하지 않는다(가격만 가능)`);
+        if (this.safeBool(params, 'partial', false) === true) {
+            throw new NotSupported(`${this.id} editOrder() 의 일부정정(params.partial)은 지원하지 않는다. 토스 정정은 잔량 전부를 새 가격으로 옮긴다`);
         }
-        if (country === 'KR' && amount === undefined) {
-            throw new ArgumentsRequired(`${this.id} editOrder() 는 국내 종목의 수량 정정에 amount 인자가 필요하다`);
+        if (type === 'limit' && price !== undefined) this.assertKrxTickAligned(market, price, 'editOrder');
+
+        // 국내는 정정 수량을 싣기 위해, `amount` 를 주면 대조하기 위해 원주문을 조회한다. 이때 조회가 실패하면 던진다.
+        const original = country === 'KR' || amount !== undefined ? await this.editOriginal(id) : undefined;
+        if (country === 'KR' && (original?.filled ?? 0) > 0) {
+            throw new NotSupported(`${this.id} editOrder() 는 일부 체결된 국내 주문(${id}, 체결 ${original?.filled})을 정정하지 않는다. `
+                + '정정 수량(quantity)이 정정 뒤 총수량인지 옮길 수량인지 확인하지 못했다. 취소한 뒤 다시 주문한다');
         }
+        if (amount !== undefined) assertWholeRemainingEdit(this.id, id, amount, original ?? {});
 
         const body: Dict = { orderId: id, orderType: type === 'market' ? 'MARKET' : 'LIMIT' };
-        if (country === 'KR') body.quantity = this.numberToString(this.normalizeQuantity(symbol, type, side, amount as number));
-        if (type === 'limit') body.price = this.priceToPrecision(symbol, price);
+        if (country === 'KR') body.quantity = this.numberToString(original?.remaining as number);
+        if (type === 'limit') body.price = this.orderPriceString(market, price);
 
-        // 국내 명목가는 정정 수량 × 가격이다. 미국 정정은 수량을 받지 않으므로 주문 상세의 남은 수량 × 가격으로 본다.
-        const notional = country === 'KR' ? (amount ?? 0) * (price ?? 0) : await this.usEditNotional(id, price);
+        // 명목가는 잔량 × 가격이다. 미국에서 원주문을 조회하지 않았으면 고액주문 확인용으로만 읽는다.
+        const notional = original !== undefined ? (original.remaining ?? 0) * (price ?? 0) : await this.usEditNotional(id, price);
         if (await this.isHighValue(notional, country)) body.confirmHighValueOrder = true;
 
-        const response = this.unwrap<TossOrderCreateResponse>(await this.privateAccountPostOrdersOrderIdModify(body));
+        const response = this.unwrap<TossOrderCreateResponse>(await this.privateAccountPostOrdersOrderIdModify(this.extend(body, this.omit(params, EDIT_HANDLED_PARAMS))));
         const newOrderId = this.safeString(response, 'orderId');
         if (newOrderId === undefined) {
             throw new OrderOutcomeUnknown(`${this.id} 정정 응답에 orderId 가 없다. 정정 여부를 주문 조회로 확인해야 한다`);
@@ -1619,10 +1686,21 @@ export class toss extends Exchange {
             type,
             side,
             price,
-            amount,
+            // 정정 뒤 총수량. 국내는 조회한 잔량을 실었으므로 알고, 미국에서 `amount` 를 주지 않았으면 확인하지 않았으므로 비운다.
+            amount: amount ?? (country === 'KR' && original !== undefined ? editOrderTotal(original) : undefined),
             status: 'open',
             trades: [],
         }, market);
+    }
+
+    /** 정정할 원주문의 체결 수량과 잔량(주문 상세). 조회가 실패하면 던지고, 없거나 잔량이 없으면 `OrderNotFound` 다. */
+    private async editOriginal(orderId: string): Promise<EditOrderOriginal> {
+        const order = this.unwrap<TossOrder | null>(await this.privateAccountGetOrdersOrderId({ orderId }));
+        const quantity = this.safeNumber(order, 'quantity');
+        const filled = this.safeNumber(this.safeDict(order, 'execution'), 'filledQuantity', 0) as number;
+        const remaining = quantity !== undefined ? Number(Precise.stringSub(this.numberToString(quantity), this.numberToString(filled))) : undefined;
+        if (remaining === undefined || !(remaining > 0)) throw new OrderNotFound(`${this.id} editOrder() 정정할 잔량이 있는 주문을 찾지 못했다: ${orderId}`);
+        return { filled, remaining };
     }
 
     /**
@@ -1670,6 +1748,24 @@ export class toss extends Exchange {
         return this.createOrder(symbol, 'market', 'buy', 0, undefined, this.extend(params, { cost }));
     }
 
+    /** ccxt 조건 인자가 있으면 요청 전에 `NotSupported` 다. 본문에 합치거나 버리면 조건 없는 주문이 나간다. */
+    private assertNoConditionalParams(method: string, params: Dict): void {
+        for (const key of UNSUPPORTED_CONDITIONAL_PARAMS) {
+            if (this.safeValue(params, key) !== undefined) {
+                throw new NotSupported(`${this.id} ${method}() 는 조건 인자 ${key} 를 받지 않는다. 조건주문은 params.triggerPrice 나 createTriggerOrder() 로 낸다`);
+            }
+        }
+    }
+
+    /** 라이브러리가 인자로 채우는 본문 필드가 `params` 에 있으면 요청 전에 `BadRequest` 다. 나머지 키는 본문에 합친다. */
+    private assertNoComputedParams(method: string, params: Dict, fields: readonly string[]): void {
+        for (const key of fields) {
+            if (key in params) {
+                throw new BadRequest(`${this.id} ${method}() 의 params.${key} 는 받지 않는다. 인자로 정하는 필드다`);
+            }
+        }
+    }
+
     /** `params.timeInForce` 를 토스의 값(`DAY`·`CLS`·`OPG`)으로 확인한다. 없으면 `undefined`(서버 기본 `DAY`). */
     private parseTimeInForce(params: Dict): Str {
         const value = this.safeStringUpper(params, 'timeInForce');
@@ -1685,7 +1781,8 @@ export class toss extends Exchange {
      *
      * 미국은 네 세션을 캘린더로 판정하고, 정규장 밖에서는 정규장 전용인 주문 형태(금액 주문·소수점 수량·시장가)를 막는다. 정규장 안에서도 종료 1시간 전 이후에는
      * 금액 주문과 소수점 수량 주문이 접수되지 않는다. 캘린더를 받지 못하면 정적 시간표(`isTossOrderable`)로 판정한다. 그 폴백에서 국내 휴장일은
-     * 공용 캘린더가 알 때만 막고(모르면 연다), 미국 확장세션은 막는다(좁히는 쪽).
+     * 공용 캘린더가 알 때만 막고(모르면 연다), 미국 확장세션은 막는다(좁히는 쪽). 정규장의 종가 동시호가 신규 매수는 `options.blockAuctionBuys` 가
+     * 켜졌을 때만 막는다(세 증권사 공용 판정 `krxAuctionBuyBlockReason`·`usAuctionBuyBlockReason`).
      *
      * @returns 막는 사유(한국어). 접수할 수 있으면 `null`.
      */
@@ -1693,11 +1790,16 @@ export class toss extends Exchange {
         symbol: string,
         country: StockMarketGroup,
         form: { isMarket: boolean; useAmountBased: boolean; quantity: number },
+        side: OrderSide,
     ): Promise<string | null> {
         const now = new Date(this.milliseconds());
+        const auction = async (): Promise<string | null> => {
+            if (!(await this.isOptionEnabled('blockAuctionBuys'))) return null;
+            return country === 'KR' ? krxAuctionBuyBlockReason(now, side) : usAuctionBuyBlockReason(now, side);
+        };
         if (country === 'KR') {
             const session = await this.currentKrSession(now);
-            if (session === null) return isTossOrderable(symbol) ? null : 'KRX 거래시간 외 (09:00-15:30 KST 평일, 캘린더 조회 실패)';
+            if (session === null) return isTossOrderable(symbol, now) ? auction() : 'KRX 거래시간 외 (09:00-15:30 KST 평일, 캘린더 조회 실패)';
             if (session === 'closed') return 'KRX 휴장·정규장 외';
             if (session !== 'regularMarket') {
                 // 확장세션(프리 08:00~08:50, 애프터 15:30~20:00)은 기능 옵션 `nxtRouting` 이 켜져 있을 때만 연다.
@@ -1706,15 +1808,15 @@ export class toss extends Exchange {
                 }
                 return krSessionOrderRestriction(session, form);
             }
-            return null;
+            return auction();
         }
         const session = await this.currentUsSession(now);
-        if (session === null) return isTossOrderable(symbol) ? null : '미국 정규장 외 (장 운영 캘린더 조회 실패)';
+        if (session === null) return isTossOrderable(symbol, now) ? auction() : '미국 정규장 외 (장 운영 캘린더 조회 실패)';
         if (session === 'closed') return '미국장 휴장·세션 외';
         const regularCloseMs = findUsRegularCloseMs(this.calendars.US?.value, now);
         const restriction = usSessionOrderRestriction(
             session, form, regularCloseMs !== null ? { nowMs: now.getTime(), regularCloseMs } : undefined,
-        );
+        ) ?? (session === 'regularMarket' ? await auction() : null);
         if (restriction !== null) return restriction;
         logger.info({ symbol, session }, '[toss] 미국 세션을 확인했다. 주문을 접수할 수 있다');
         return null;
@@ -2080,6 +2182,7 @@ export class toss extends Exchange {
             CANCELED: 'canceled',
             REPLACED: 'canceled',
             REJECTED: 'rejected',
+            // 명세: 거절된 취소·정정 요청을 기록한 별도 레코드의 상태다. 원주문은 이전 상태로 돌아가 제 상태로 따로 조회된다.
             CANCEL_REJECTED: 'rejected',
             REPLACE_REJECTED: 'rejected',
         };
@@ -2312,7 +2415,8 @@ export class toss extends Exchange {
      * 미체결 주문을 모두 취소한다(토스에는 전체 취소가 없어 조회한 주문을 하나씩 취소한다). `symbol` 을 주면 그 종목만 취소한다.
      * 일반 주문만 대상이며, `params.includeTrigger: true` 면 조건주문도 취소한다.
      *
-     * 돌려주는 목록은 대상이 된 주문 전부다. 취소된 것은 `status: 'canceled'` 이고, 취소하지 못한 것은 원래 상태(`open`)에 `info.cancelError` 가 실린다.
+     * 돌려주는 목록은 대상이 된 주문 전부이고, 항목은 미체결 조회로 받은 주문이다. 취소된 것은 `status: 'canceled'` 이고 취소 응답 원문이 `info.cancelResponse` 에 있다.
+     * 취소하지 못한 것은 원래 상태(`open`)에 `info.cancelError`(메시지)와 `info.cancelErrorDetail`(오류의 `detail`)이 실린다. 일부가 실패해도 던지지 않는다.
      * 취소하려는 사이에 끝난 주문은 브로커 원인 코드(`info.cancelErrorDetail`)대로 옮긴다. `already-filled` 는 `closed`, `already-canceled` 는 `canceled`,
      * `already-rejected` 는 `rejected` 다. 정정으로 대체된 주문(`already-modified`)과 원인을 모르는 경우는 새 주문이 살아 있을 수 있어 원래 상태로 둔다.
      */
@@ -2325,9 +2429,12 @@ export class toss extends Exchange {
         }));
         const results = settled.map((outcome, index): Order => {
             const order = orders[index]!;
-            if (outcome.status === 'fulfilled') return { ...order, status: 'canceled' };
+            if (outcome.status === 'fulfilled') return { ...order, status: 'canceled', info: { ...order.info, cancelResponse: outcome.value.info } };
             const message = outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason);
-            if (!(outcome.reason instanceof OrderNotFound)) return { ...order, info: { ...order.info, cancelError: message } };
+            if (!(outcome.reason instanceof OrderNotFound)) {
+                const detail = outcome.reason instanceof BaseError ? outcome.reason.detail : undefined;
+                return { ...order, info: { ...order.info, cancelError: message, cancelErrorDetail: detail } };
+            }
             const detail = outcome.reason.detail;
             const info = { ...order.info, alreadyGone: true, cancelError: message, cancelErrorDetail: detail };
             if (detail === 'already-filled') return { ...order, status: 'closed', filled: order.amount, remaining: 0, cost: undefined, average: undefined, info };

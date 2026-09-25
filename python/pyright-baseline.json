@@ -1,7 +1,7 @@
 {
   "async_support/base/exchange.py": 3,
   "async_support/kis.py": 18,
-  "async_support/toss.py": 22,
+  "async_support/toss.py": 21,
   "base/decimal_to_precision.py": 36,
   "base/exchange.py": 17,
   "base/token_store.py": 1,
@@ -12,6 +12,6 @@
   "test/test_kis_helpers.py": 10,
   "test/test_order_outcome.py": 1,
   "test/test_toss_helpers.py": 9,
-  "toss.py": 22,
+  "toss.py": 21,
   "us_market_hours.py": 1
 }

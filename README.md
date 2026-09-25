@@ -80,7 +80,7 @@ TypeScript 판과 Python 판이 있습니다. Python 판은 ccxt처럼 동기(`k
 | 소수점 주문 | ➖ | ⚠️ | ⚠️ | `kis` 공식 API 목록에 소수점 주문이 없습니다.<br>`toss` 미국만 지원합니다. 매도는 수량 기준(`createOrder`), 매수는 금액 기준(`createMarketBuyOrderWithCost`)만 됩니다.<br>`kbsec` 국내는 수량 기준으로 매수·매도를 냅니다(취소는 없고, 주문 내역은 `fetchFractionalOrders`로 읽습니다). 해외(미국)는 금액 기준 매수만 됩니다. |
 | 금액 기준 매수 `createMarketBuyOrderWithCost` | ➖ | ⚠️ | ⚠️ | `kis` 공식 API 목록에 금액 주문이 없습니다.<br>`toss` 미국 시장가 매수만 지원합니다.<br>`kbsec` 미국 시장가 매수만 지원합니다. |
 | 조건과 트리거 주문 `createTriggerOrder` | ⚠️ | ❓ | ⚠️ | `kis` 국내만 지원합니다. 스탑지정가로 냅니다(지정가만, `order-cash`에 조건가격 `CNDT_PRIC`을 실어 보냅니다). 해외는 대응하는 API를 찾지 못해 `NotSupported`를 던집니다.<br>`toss` `createTriggerOrder`나 `createOrder`의 `triggerPrice`로 냅니다. 국내 종목은 테스트로 확인했고 미국은 확인하지 못했습니다.<br>`kbsec` 국내·해외 모두 스탑지정가로 냅니다(지정가만, `price`·`triggerPrice` 둘 다 필수입니다). 해외 명세엔 스톱시장가(`B`)도 있으나 아직 안 씁니다. |
-| 정정 `editOrder` | ✅ | ✅ | ⚠️ | `kis` 정정 구분(RVSE_CNCL_DVSN_CD=01)으로 취소와 같은 엔드포인트를 씁니다. `amount`를 주면 일부정정, 안 주면 전량정정입니다.<br>`toss` 국내는 수량과 가격을 함께(`amount` 필수), 미국은 가격만(`amount`를 주면 `NotSupported`) 정정합니다. 조건주문 정정(`params.trigger: true`)은 조건 전체를 다시 보내는 재설정이라 새 conditionalOrderId가 발급됩니다.<br>`kbsec` 미국은 가격만 정정합니다. `price`가 없으면 요청 전에 `ArgumentsRequired`를 던집니다. |
+| 정정 `editOrder` | ✅ | ✅ | ⚠️ | `kis` 정정 구분(RVSE_CNCL_DVSN_CD=01)으로 취소와 같은 엔드포인트를 씁니다. `amount`는 정정 뒤 총수량이고, 미체결 조회로 대조한 뒤 잔량 전부를 정정합니다. 국내 일부정정은 `params.partial: true`로 냅니다.<br>`toss` 잔량 전부를 새 가격으로 정정합니다. 국내는 주문 상세로 읽은 잔량을 수량으로 싣고, 일부 체결된 주문은 `NotSupported`입니다. 미국은 가격만 정정합니다. `amount`는 정정 뒤 총수량입니다. 조건주문 정정(`params.trigger: true`)은 조건 전체를 다시 보내는 재설정이라 새 conditionalOrderId가 발급됩니다.<br>`kbsec` 국내는 `amount`(정정 뒤 총수량)를 미체결 목록과 대조한 뒤 전부정정하고, 일부정정은 `params.partial: true`로 냅니다. 미국은 잔량 전부의 가격만 정정하고 `amount`를 주면 `NotSupported`입니다. `price`가 없으면 요청 전에 `ArgumentsRequired`를 던집니다. |
 | 취소 `cancelOrder` | ✅ | ✅ | ✅ | `toss` 조건 주문은 `params.trigger`로 취소합니다.<br>`kbsec` 전량 취소만 씁니다. |
 | 전체 취소 `cancelAllOrders` | 🔁 | 🔁 | 🔁 | `kis` 미국은 실전만 지원합니다.<br>`kbsec` 국내만 지원합니다. |
 | 정규장 밖 주문 | ⚠️ | ✅ | ❌ | `kis` 국내만 지원합니다. `options.nxtRouting`이 필요합니다.<br>`toss` 국내는 `options.nxtRouting`이 필요하고 시장가는 현재가 지정가로 바꿉니다. 미국은 정수 수량의 지정가만 받고, `options.usExtendedLimit`을 켜면 시장가를 지정가로 바꿉니다.<br>`kbsec` 주문 TR이 시간외 시장을 받지만 세션 검사가 정규장 밖 주문을 막습니다. |
@@ -309,6 +309,7 @@ await broker.close();
 | `orderTimeout` | 주문 상한 | 주문 요청 시간 상한(ms). 넘으면 `OrderOutcomeUnknown` |
 | `options.tokenStore` | 없음 | 접근 토큰과 발급 잠금을 여러 프로세스가 나눠 쓰는 저장소(`BrokerTokenStore`)입니다. 없으면 프로세스 메모리 캐시만 사용합니다. 함수를 전달하면 사용할 때마다 호출합니다 |
 | `options.nxtRouting` | `false` | 정규장 밖(넥스트레이드 프리마켓과 애프터마켓) 국내 주문을 허용합니다(한국투자증권과 토스증권). 시장가 주문은 현재가 지정가로 바꿔 냅니다. KB증권에서는 정규장 안에서 주문을 SOR로 보내는 데만 사용하고 정규장 밖은 허용하지 않습니다. 불리언이거나 불리언을 반환하는 함수입니다 |
+| `options.blockAuctionBuys` | `false` | 종가 동시호가(국내 15:20~15:30, 미국 15:50~16:00 ET)의 신규 매수를 요청 전에 `MarketClosed`로 막습니다(세 증권사). 시장은 이 시간에도 주문을 받으므로 기본은 꺼져 있습니다. 불리언이거나 불리언을 반환하는 함수입니다 |
 | `options.krwIntegratedMargin` | `false` | 통합증거금 계좌의 미국 주식 매수여력을 원화 예수금 환산분으로 보강합니다(토스증권과 KB증권) |
 | `options.usExtendedLimit` | `false` | 미국 정규장 밖에서 시장가 주문을 지정가 주문으로 변환해 냅니다(토스증권) |
 | `options.usdKrwRate` | 없음 | 1달러당 원화를 반환하는 `() => Promise<number>`입니다. 원화 환산에 사용합니다(토스증권과 KB증권) |
@@ -377,7 +378,7 @@ asyncio.run(main())
 - KB증권 캔들은 코스피를 기본으로 조회합니다. 코스닥 종목은 `params.mkt_clsf = '1'`을 전달합니다.
 - KB증권 `createOrder`는 조건 인자(`triggerPrice`, `stopPrice`, `stopLossPrice`, `takeProfitPrice`)를 받지 않고 요청 전에 `NotSupported`를 던집니다. 스탑지정가는 `createTriggerOrder`로 냅니다.
 - KB증권 미체결 행에는 주문 시각이 없어서 `fetchOpenOrders`는 `since`를 적용하지 않습니다. `since`를 전달해도 미체결 전체를 반환합니다.
-- 국내 호가단위는 가격대별이라 ccxt의 단일 `precision.price`로 표현할 수 없습니다.
+- 국내 호가단위는 가격대별이라 ccxt의 단일 `precision.price`로 표현할 수 없습니다. `priceToPrecision()`은 KRX 호가 단위 표로 반올림하고, 주문은 가격을 바꾸지 않습니다. 자세한 규칙은 [FAQ](docs/faq.md)에 있습니다.
 - 실계좌 검증은 작성자가 가진 계좌로 확인한 범위까지만 했습니다.
 
 ## 약관과 시세 데이터

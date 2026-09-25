@@ -4749,8 +4749,296 @@
             "error": { "class": "MarketClosed" }
         },
         {
-            "description": "createOrder 국내 종가 동시호가의 신규 매수는 MarketClosed 다",
+            "description": "createOrder 국내 종가 동시호가(15:25)의 신규 매수는 KRX 가 받는 주문이라 기본으로 낸다",
             "now": 1774419900000,
+            "method": "createOrder",
+            "args": ["005930/KRW", "limit", "buy", 1, 70000],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260223&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260223", "wday_dvsn_cd": "02", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260302", "wday_dvsn_cd": "02", "bzdy_yn": "N", "tr_day_yn": "Y", "opnd_yn": "N", "sttl_day_yn": "N" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260325&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260325", "wday_dvsn_cd": "04", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260326", "wday_dvsn_cd": "05", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/trading/order-cash",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTC0802U",
+                            "custtype": "P"
+                        },
+                        "body": "{\"CANO\":\"12345678\",\"ACNT_PRDT_CD\":\"01\",\"PDNO\":\"005930\",\"ORD_DVSN\":\"00\",\"ORD_QTY\":\"1\",\"ORD_UNPR\":\"70000\"}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "APBK0013",
+                            "msg1": "주문 전송 완료 되었습니다.",
+                            "output": { "KRX_FWDG_ORD_ORGNO": "91252", "ODNO": "ORD-0003", "ORD_TMD": "152501" }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "info": {
+                    "rt_cd": "0",
+                    "msg_cd": "APBK0013",
+                    "msg1": "주문 전송 완료 되었습니다.",
+                    "output": { "KRX_FWDG_ORD_ORGNO": "91252", "ODNO": "ORD-0003", "ORD_TMD": "152501" }
+                },
+                "id": "ORD-0003",
+                "timestamp": 1774419901000,
+                "datetime": "2026-03-25T06:25:01.000Z",
+                "symbol": "005930/KRW",
+                "type": "limit",
+                "side": "buy",
+                "price": 70000,
+                "amount": 1,
+                "status": "open",
+                "trades": [],
+                "fees": []
+            }
+        },
+        {
+            "description": "createOrder 국내 종가 동시호가의 신규 매수는 options.blockAuctionBuys 를 켜면 MarketClosed 다",
+            "config": { "options": { "blockAuctionBuys": true } },
+            "now": 1774419900000,
+            "method": "createOrder",
+            "args": ["005930/KRW", "limit", "buy", 1, 70000],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260223&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260223", "wday_dvsn_cd": "02", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260302", "wday_dvsn_cd": "02", "bzdy_yn": "N", "tr_day_yn": "Y", "opnd_yn": "N", "sttl_day_yn": "N" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260325&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260325", "wday_dvsn_cd": "04", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260326", "wday_dvsn_cd": "05", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "error": { "class": "MarketClosed" }
+        },
+        {
+            "description": "createOrder 국내 blockAuctionBuys 를 켜도 동시호가 직전(15:19:59 KST)의 신규 매수는 낸다",
+            "config": { "options": { "blockAuctionBuys": true } },
+            "now": 1774419599000,
+            "method": "createOrder",
+            "args": ["005930/KRW", "limit", "buy", 1, 70000],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260223&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260223", "wday_dvsn_cd": "02", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260302", "wday_dvsn_cd": "02", "bzdy_yn": "N", "tr_day_yn": "Y", "opnd_yn": "N", "sttl_day_yn": "N" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260325&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260325", "wday_dvsn_cd": "04", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260326", "wday_dvsn_cd": "05", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/trading/order-cash",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTC0802U",
+                            "custtype": "P"
+                        },
+                        "body": "{\"CANO\":\"12345678\",\"ACNT_PRDT_CD\":\"01\",\"PDNO\":\"005930\",\"ORD_DVSN\":\"00\",\"ORD_QTY\":\"1\",\"ORD_UNPR\":\"70000\"}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "APBK0013",
+                            "msg1": "주문 전송 완료 되었습니다.",
+                            "output": { "KRX_FWDG_ORD_ORGNO": "91252", "ODNO": "ORD-0003", "ORD_TMD": "152501" }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "info": {
+                    "rt_cd": "0",
+                    "msg_cd": "APBK0013",
+                    "msg1": "주문 전송 완료 되었습니다.",
+                    "output": { "KRX_FWDG_ORD_ORGNO": "91252", "ODNO": "ORD-0003", "ORD_TMD": "152501" }
+                },
+                "id": "ORD-0003",
+                "timestamp": 1774419901000,
+                "datetime": "2026-03-25T06:25:01.000Z",
+                "symbol": "005930/KRW",
+                "type": "limit",
+                "side": "buy",
+                "price": 70000,
+                "amount": 1,
+                "status": "open",
+                "trades": [],
+                "fees": []
+            }
+        },
+        {
+            "description": "createOrder 국내 blockAuctionBuys 를 켜면 동시호가가 시작하는 15:20:00 KST 의 신규 매수는 MarketClosed 다",
+            "config": { "options": { "blockAuctionBuys": true } },
+            "now": 1774419600000,
             "method": "createOrder",
             "args": ["005930/KRW", "limit", "buy", 1, 70000],
             "http": [
@@ -5895,6 +6183,13 @@
             }
         },
         {
+            "description": "createOrder 국내 일반 주식(마스터 STOCK)의 지정가가 호가 단위에 맞지 않으면 가격을 바꾸지 않고 요청 없이 InvalidOrder 다",
+            "method": "createOrder",
+            "args": ["005930/KRW", "limit", "buy", 1, 70030],
+            "http": [],
+            "error": { "class": "InvalidOrder", "detail": "price-tick-invalid" }
+        },
+        {
             "description": "createOrder session 이 nxt 여도 NXT 가 닫힌 새벽에는 주문을 보내지 않고 MarketClosed 다",
             "now": 1774375200000,
             "method": "createOrder",
@@ -6362,6 +6657,185 @@
             "error": { "class": "MarketClosed" }
         },
         {
+            "description": "createOrder 미국 종가 동시호가(15:55 ET)의 신규 매수는 기본으로 낸다",
+            "now": 1774468500000,
+            "method": "createOrder",
+            "args": ["AAPL/USD", "limit", "buy", 2, 170.5],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/trading/order",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTT1002U",
+                            "custtype": "P"
+                        },
+                        "body": "{\"CANO\":\"12345678\",\"ACNT_PRDT_CD\":\"01\",\"OVRS_EXCG_CD\":\"NASD\",\"PDNO\":\"AAPL\",\"ORD_QTY\":\"2\",\"OVRS_ORD_UNPR\":\"170.5\",\"CTAC_TLNO\":\"\",\"MGCO_APTM_ODNO\":\"\",\"SLL_TYPE\":\"\",\"ORD_SVR_DVSN_CD\":\"0\",\"ORD_DVSN\":\"00\"}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "APBK0013",
+                            "msg1": "주문 전송 완료 되었습니다.",
+                            "output": { "KRX_FWDG_ORD_ORGNO": "01790", "ODNO": "ORD-0101", "ORD_TMD": "000001" }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "info": {
+                    "rt_cd": "0",
+                    "msg_cd": "APBK0013",
+                    "msg1": "주문 전송 완료 되었습니다.",
+                    "output": { "KRX_FWDG_ORD_ORGNO": "01790", "ODNO": "ORD-0101", "ORD_TMD": "000001" }
+                },
+                "id": "ORD-0101",
+                "timestamp": 1774450801000,
+                "datetime": "2026-03-25T15:00:01.000Z",
+                "symbol": "AAPL/USD",
+                "type": "limit",
+                "side": "buy",
+                "price": 170.5,
+                "amount": 2,
+                "status": "open",
+                "trades": [],
+                "fees": []
+            }
+        },
+        {
+            "description": "createOrder 미국 blockAuctionBuys 를 켜도 종가 동시호가 직전(15:49:59 ET)의 신규 매수는 낸다",
+            "config": { "options": { "blockAuctionBuys": true } },
+            "now": 1774468199000,
+            "method": "createOrder",
+            "args": ["AAPL/USD", "limit", "buy", 2, 170.5],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/trading/order",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTT1002U",
+                            "custtype": "P"
+                        },
+                        "body": "{\"CANO\":\"12345678\",\"ACNT_PRDT_CD\":\"01\",\"OVRS_EXCG_CD\":\"NASD\",\"PDNO\":\"AAPL\",\"ORD_QTY\":\"2\",\"OVRS_ORD_UNPR\":\"170.5\",\"CTAC_TLNO\":\"\",\"MGCO_APTM_ODNO\":\"\",\"SLL_TYPE\":\"\",\"ORD_SVR_DVSN_CD\":\"0\",\"ORD_DVSN\":\"00\"}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "APBK0013",
+                            "msg1": "주문 전송 완료 되었습니다.",
+                            "output": { "KRX_FWDG_ORD_ORGNO": "01790", "ODNO": "ORD-0101", "ORD_TMD": "000001" }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "info": {
+                    "rt_cd": "0",
+                    "msg_cd": "APBK0013",
+                    "msg1": "주문 전송 완료 되었습니다.",
+                    "output": { "KRX_FWDG_ORD_ORGNO": "01790", "ODNO": "ORD-0101", "ORD_TMD": "000001" }
+                },
+                "id": "ORD-0101",
+                "timestamp": 1774450801000,
+                "datetime": "2026-03-25T15:00:01.000Z",
+                "symbol": "AAPL/USD",
+                "type": "limit",
+                "side": "buy",
+                "price": 170.5,
+                "amount": 2,
+                "status": "open",
+                "trades": [],
+                "fees": []
+            }
+        },
+        {
+            "description": "createOrder 미국 blockAuctionBuys 를 켜면 15:50:00 ET 의 신규 매수는 MarketClosed 다",
+            "config": { "options": { "blockAuctionBuys": true } },
+            "now": 1774468200000,
+            "method": "createOrder",
+            "args": ["AAPL/USD", "limit", "buy", 2, 170.5],
+            "http": [],
+            "error": { "class": "MarketClosed" }
+        },
+        {
+            "description": "createOrder 미국 09:24:59 ET 는 정규장 전이라 MarketClosed 다",
+            "now": 1774445099000,
+            "method": "createOrder",
+            "args": ["AAPL/USD", "limit", "buy", 2, 170.5],
+            "http": [],
+            "error": { "class": "MarketClosed" }
+        },
+        {
+            "description": "createOrder 미국 시초가 동시호가(09:25:00 ET)는 주문을 받는다고 확인하지 못해 MarketClosed 다",
+            "now": 1774445100000,
+            "method": "createOrder",
+            "args": ["AAPL/USD", "limit", "buy", 2, 170.5],
+            "http": [],
+            "error": { "class": "MarketClosed" }
+        },
+        {
+            "description": "createOrder 미국 정규장이 시작하는 09:30:00 ET 의 주문은 낸다",
+            "now": 1774445400000,
+            "method": "createOrder",
+            "args": ["AAPL/USD", "limit", "buy", 2, 170.5],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/trading/order",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTT1002U",
+                            "custtype": "P"
+                        },
+                        "body": "{\"CANO\":\"12345678\",\"ACNT_PRDT_CD\":\"01\",\"OVRS_EXCG_CD\":\"NASD\",\"PDNO\":\"AAPL\",\"ORD_QTY\":\"2\",\"OVRS_ORD_UNPR\":\"170.5\",\"CTAC_TLNO\":\"\",\"MGCO_APTM_ODNO\":\"\",\"SLL_TYPE\":\"\",\"ORD_SVR_DVSN_CD\":\"0\",\"ORD_DVSN\":\"00\"}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "APBK0013",
+                            "msg1": "주문 전송 완료 되었습니다.",
+                            "output": { "KRX_FWDG_ORD_ORGNO": "01790", "ODNO": "ORD-0101", "ORD_TMD": "000001" }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "info": {
+                    "rt_cd": "0",
+                    "msg_cd": "APBK0013",
+                    "msg1": "주문 전송 완료 되었습니다.",
+                    "output": { "KRX_FWDG_ORD_ORGNO": "01790", "ODNO": "ORD-0101", "ORD_TMD": "000001" }
+                },
+                "id": "ORD-0101",
+                "timestamp": 1774364401000,
+                "datetime": "2026-03-24T15:00:01.000Z",
+                "symbol": "AAPL/USD",
+                "type": "limit",
+                "side": "buy",
+                "price": 170.5,
+                "amount": 2,
+                "status": "open",
+                "trades": [],
+                "fees": []
+            }
+        },
+        {
             "description": "createOrder 해외 마스터에 없는 종목은 BadSymbol 이다",
             "now": 1774450800000,
             "method": "createOrder",
@@ -6768,10 +7242,10 @@
             }
         },
         {
-            "description": "editOrder 국내 일부 정정은 수량과 원주문 조직번호(orderOrgNo)를 싣는다",
+            "description": "editOrder 국내 일부정정(params.partial)은 옮길 수량과 원주문 조직번호(orderOrgNo)를 싣는다",
             "now": 1774400400000,
             "method": "editOrder",
-            "args": ["ORD-0001", "005930/KRW", "limit", "buy", 3, 70500, { "orderOrgNo": "91252" }],
+            "args": ["ORD-0001", "005930/KRW", "limit", "buy", 3, 70500, { "orderOrgNo": "91252", "partial": true }],
             "http": [
                 {
                     "request": {
@@ -6872,6 +7346,257 @@
                 "fees": [],
                 "trades": []
             }
+        },
+        {
+            "description": "editOrder 국내 amount 는 정정 뒤 총수량이다. 미체결 조회로 체결 + 잔량과 같은지 확인한 뒤 잔량 전부를 정정한다(QTY_ALL_ORD_YN Y)",
+            "now": 1774400400000,
+            "method": "editOrder",
+            "args": ["ORD-0001", "005930/KRW", "limit", "buy", 10, 70500],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260223&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260223", "wday_dvsn_cd": "02", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260302", "wday_dvsn_cd": "02", "bzdy_yn": "N", "tr_day_yn": "Y", "opnd_yn": "N", "sttl_day_yn": "N" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260325&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260325", "wday_dvsn_cd": "04", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260326", "wday_dvsn_cd": "05", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/trading/inquire-psbl-rvsecncl?CANO=12345678&ACNT_PRDT_CD=01&CTX_AREA_FK100=&CTX_AREA_NK100=&INQR_DVSN_1=0&INQR_DVSN_2=0",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTC0084R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [
+                                {
+                                    "odno": "ORD-0001",
+                                    "orgn_odno": "",
+                                    "pdno": "005930",
+                                    "prdt_name": "삼성전자",
+                                    "ord_qty": "10",
+                                    "ord_unpr": "70000",
+                                    "ord_tmd": "093000",
+                                    "tot_ccld_qty": "3",
+                                    "tot_ccld_amt": "210000",
+                                    "psbl_qty": "7",
+                                    "sll_buy_dvsn_cd": "02",
+                                    "ord_dvsn_cd": "00"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/trading/order-rvsecncl",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTC0803U",
+                            "custtype": "P"
+                        },
+                        "body": "{\"CANO\":\"12345678\",\"ACNT_PRDT_CD\":\"01\",\"KRX_FWDG_ORD_ORGNO\":\"\",\"ORGN_ODNO\":\"ORD-0001\",\"ORD_DVSN\":\"00\",\"RVSE_CNCL_DVSN_CD\":\"01\",\"ORD_QTY\":\"0\",\"ORD_UNPR\":\"70500\",\"QTY_ALL_ORD_YN\":\"Y\"}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "APBK0013",
+                            "msg1": "정정 주문 전송 완료",
+                            "output": { "KRX_FWDG_ORD_ORGNO": "91252", "ODNO": "ORD-0011", "ORD_TMD": "101500" }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "id": "ORD-0011",
+                "symbol": "005930/KRW",
+                "type": "limit",
+                "price": 70500,
+                "amount": 10,
+                "status": "open",
+                "info": {
+                    "rt_cd": "0",
+                    "msg_cd": "APBK0013",
+                    "msg1": "정정 주문 전송 완료",
+                    "output": { "KRX_FWDG_ORD_ORGNO": "91252", "ODNO": "ORD-0011", "ORD_TMD": "101500" }
+                },
+                "fees": [],
+                "trades": []
+            }
+        },
+        {
+            "description": "editOrder 국내 amount 로 수량을 바꾸는 정정은 한 요청으로 낼 수 없어 미체결 조회 뒤 정정 요청 없이 NotSupported 다(주문이 두 가격으로 나뉘지 않는다)",
+            "now": 1774400400000,
+            "method": "editOrder",
+            "args": ["ORD-0001", "005930/KRW", "limit", "buy", 5, 70500],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260223&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260223", "wday_dvsn_cd": "02", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260302", "wday_dvsn_cd": "02", "bzdy_yn": "N", "tr_day_yn": "Y", "opnd_yn": "N", "sttl_day_yn": "N" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260325&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260325", "wday_dvsn_cd": "04", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260326", "wday_dvsn_cd": "05", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/trading/inquire-psbl-rvsecncl?CANO=12345678&ACNT_PRDT_CD=01&CTX_AREA_FK100=&CTX_AREA_NK100=&INQR_DVSN_1=0&INQR_DVSN_2=0",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTC0084R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [
+                                {
+                                    "odno": "ORD-0001",
+                                    "orgn_odno": "",
+                                    "pdno": "005930",
+                                    "prdt_name": "삼성전자",
+                                    "ord_qty": "10",
+                                    "ord_unpr": "70000",
+                                    "ord_tmd": "093000",
+                                    "tot_ccld_qty": "3",
+                                    "tot_ccld_amt": "210000",
+                                    "psbl_qty": "7",
+                                    "sll_buy_dvsn_cd": "02",
+                                    "ord_dvsn_cd": "00"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "error": { "class": "NotSupported" }
         },
 {
             "description": "editOrder 국내는 정규장이 끝나도 NXT 애프터마켓이면 정정을 보낸다",
@@ -7053,11 +7778,65 @@
             "error": { "class": "ArgumentsRequired" }
         },
         {
-            "description": "editOrder 미국은 수량을 주면 그 수량과 단가로 정정한다",
+            "description": "editOrder 국내 일반 주식(마스터 STOCK)의 정정 가격이 호가 단위에 맞지 않으면 요청 없이 InvalidOrder 다",
+            "method": "editOrder",
+            "args": ["0000001", "005930/KRW", "limit", "buy", null, 70030],
+            "http": [],
+            "error": { "class": "InvalidOrder", "detail": "price-tick-invalid" }
+        },
+        {
+            "description": "editOrder 미국 amount 는 정정 뒤 총수량이다. 미체결 조회로 체결 + 잔량과 같은지 확인한 뒤 잔량과 단가로 정정한다",
             "now": 1774450800000,
             "method": "editOrder",
             "args": ["ORD-0101", "AAPL/USD", "limit", "buy", 2, 171],
             "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/trading/inquire-nccs?CANO=12345678&ACNT_PRDT_CD=01&OVRS_EXCG_CD=NASD&SORT_SQN=DS&CTX_AREA_FK200=&CTX_AREA_NK200=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTS3018R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_fk200": "",
+                            "ctx_area_nk200": "",
+                            "output": [
+                                {
+                                    "ord_dt": "20260325",
+                                    "ord_gno_brno": "01790",
+                                    "odno": "ORD-0101",
+                                    "orgn_odno": "",
+                                    "pdno": "AAPL",
+                                    "prdt_name": "APPLE INC",
+                                    "sll_buy_dvsn_cd": "02",
+                                    "sll_buy_dvsn_cd_name": "매수",
+                                    "ft_ord_qty": "2",
+                                    "ft_ord_unpr3": "170.50000000",
+                                    "ord_tmd": "103000",
+                                    "ft_ccld_qty": "0",
+                                    "ft_ccld_unpr3": "0.00000000",
+                                    "ft_ccld_amt3": "0.00000",
+                                    "nccs_qty": "2",
+                                    "ovrs_excg_cd": "NASD",
+                                    "dmst_ord_dt": "20260325",
+                                    "thco_ord_tmd": "233000"
+                                }
+                            ]
+                        }
+                    }
+                },
                 {
                     "request": {
                         "method": "POST",
@@ -7101,7 +7880,7 @@
             }
         },
         {
-            "description": "editOrder 미국은 수량이 없으면 미체결 조회에서 남은 수량을 찾는다",
+            "description": "editOrder 미국은 amount 가 없으면 미체결 조회에서 잔량을 찾아 정정하고, 확인한 총수량(체결 + 잔량)을 돌려준다",
             "now": 1774450800000,
             "method": "editOrder",
             "args": ["ORD-0101", "AAPL/USD", "limit", "buy", null, 171],
@@ -7183,7 +7962,7 @@
                 "symbol": "AAPL/USD",
                 "type": "limit",
                 "price": 171,
-                "amount": 4,
+                "amount": 5,
                 "status": "open",
                 "info": {
                     "rt_cd": "0",
@@ -7204,12 +7983,141 @@
             "error": { "class": "MarketClosed" }
         },
         {
+            "description": "editOrder 미국은 시초가 동시호가(09:27 ET)에 정정 요청 없이 MarketClosed 다",
+            "now": 1774445220000,
+            "method": "editOrder",
+            "args": ["ORD-0101", "AAPL/USD", "limit", "buy", null, 171, { "amount": "1" }],
+            "http": [],
+            "error": { "class": "MarketClosed" }
+        },
+        {
             "description": "editOrder 미국 모의투자는 수량이 없으면 ArgumentsRequired 다",
             "config": { "sandbox": true },
             "method": "editOrder",
             "args": ["ORD-0101", "AAPL/USD", "limit", "buy", null, 171],
             "http": [],
             "error": { "class": "ArgumentsRequired" }
+        },
+        {
+            "description": "editOrder 미국 amount 가 총수량(체결 + 잔량)과 다르면 미체결 조회 뒤 정정 요청 없이 NotSupported 다",
+            "now": 1774450800000,
+            "method": "editOrder",
+            "args": ["ORD-0101", "AAPL/USD", "limit", "buy", 3, 171],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/trading/inquire-nccs?CANO=12345678&ACNT_PRDT_CD=01&OVRS_EXCG_CD=NASD&SORT_SQN=DS&CTX_AREA_FK200=&CTX_AREA_NK200=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTS3018R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_fk200": "",
+                            "ctx_area_nk200": "",
+                            "output": [
+                                {
+                                    "ord_dt": "20260325",
+                                    "ord_gno_brno": "01790",
+                                    "odno": "ORD-0101",
+                                    "orgn_odno": "",
+                                    "pdno": "AAPL",
+                                    "prdt_name": "APPLE INC",
+                                    "sll_buy_dvsn_cd": "02",
+                                    "sll_buy_dvsn_cd_name": "매수",
+                                    "ft_ord_qty": "5",
+                                    "ft_ord_unpr3": "170.50000000",
+                                    "ord_tmd": "103000",
+                                    "ft_ccld_qty": "1",
+                                    "ft_ccld_unpr3": "170.50000000",
+                                    "ft_ccld_amt3": "170.50000",
+                                    "nccs_qty": "4",
+                                    "ovrs_excg_cd": "NASD",
+                                    "dmst_ord_dt": "20260325",
+                                    "thco_ord_tmd": "233000"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "error": { "class": "NotSupported" }
+        },
+        {
+            "description": "editOrder 미국 모의투자는 미체결 조회가 없어 amount 를 대조할 수 없으므로 요청 없이 NotSupported 다",
+            "config": { "sandbox": true },
+            "now": 1774450800000,
+            "method": "editOrder",
+            "args": ["ORD-0101", "AAPL/USD", "limit", "buy", 5, 171],
+            "http": [],
+            "error": { "class": "NotSupported" }
+        },
+        {
+            "description": "editOrder 미국 일부정정(params.partial)은 해외 정정 수량의 뜻을 확인하지 못해 요청 없이 NotSupported 다",
+            "now": 1774450800000,
+            "method": "editOrder",
+            "args": ["ORD-0101", "AAPL/USD", "limit", "buy", 1, 171, { "partial": true }],
+            "http": [],
+            "error": { "class": "NotSupported" }
+        },
+        {
+            "description": "editOrder 미국 모의투자는 params.amount(정정 수량 원값)를 원주문과 대조하지 않고 그대로 싣는다",
+            "config": { "sandbox": true },
+            "now": 1774450800000,
+            "method": "editOrder",
+            "args": ["ORD-0101", "AAPL/USD", "limit", "buy", null, 171, { "amount": "3" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapivts.koreainvestment.com:29443/uapi/overseas-stock/v1/trading/order-rvsecncl",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "VTTT1004U",
+                            "custtype": "P"
+                        },
+                        "body": "{\"CANO\":\"12345678\",\"ACNT_PRDT_CD\":\"01\",\"OVRS_EXCG_CD\":\"NASD\",\"PDNO\":\"AAPL\",\"ORGN_ODNO\":\"ORD-0101\",\"RVSE_CNCL_DVSN_CD\":\"01\",\"ORD_QTY\":\"3\",\"OVRS_ORD_UNPR\":\"171\",\"MGCO_APTM_ODNO\":\"\",\"ORD_SVR_DVSN_CD\":\"0\"}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "APBK0013",
+                            "msg1": "정정 주문 전송 완료",
+                            "output": { "KRX_FWDG_ORD_ORGNO": "01790", "ODNO": "ORD-0102", "ORD_TMD": "003000" }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "id": "ORD-0102",
+                "symbol": "AAPL/USD",
+                "type": "limit",
+                "price": 171,
+                "status": "open",
+                "info": {
+                    "rt_cd": "0",
+                    "msg_cd": "APBK0013",
+                    "msg1": "정정 주문 전송 완료",
+                    "output": { "KRX_FWDG_ORD_ORGNO": "01790", "ODNO": "ORD-0102", "ORD_TMD": "003000" }
+                },
+                "fees": [],
+                "trades": []
+            }
         },
         {
             "description": "cancelOrder 국내는 남은 수량 전체를 취소하고 orderOrgNo 를 원주문 조직번호로 싣는다",
@@ -7554,30 +8462,84 @@
             ],
             "output": [
                 {
-                    "id": "ORD-0021",
-                    "symbol": "005930/KRW",
-                    "status": "canceled",
                     "info": {
-                        "rt_cd": "0",
-                        "msg_cd": "APBK0013",
-                        "msg1": "취소 주문 전송 완료",
-                        "output": { "KRX_FWDG_ORD_ORGNO": "91252", "ODNO": "ORD-0012", "ORD_TMD": "102000" }
+                        "ord_gno_brno": "91252",
+                        "odno": "ORD-0021",
+                        "orgn_odno": "",
+                        "ord_dvsn_name": "지정가",
+                        "pdno": "005930",
+                        "prdt_name": "삼성전자",
+                        "rvse_cncl_dvsn_name": "",
+                        "ord_qty": "10",
+                        "ord_unpr": "70000",
+                        "ord_tmd": "093000",
+                        "tot_ccld_qty": "3",
+                        "tot_ccld_amt": "210000",
+                        "psbl_qty": "7",
+                        "sll_buy_dvsn_cd": "02",
+                        "ord_dvsn_cd": "00",
+                        "excg_id_dvsn_cd": "KRX",
+                        "cancelResponse": {
+                            "rt_cd": "0",
+                            "msg_cd": "APBK0013",
+                            "msg1": "취소 주문 전송 완료",
+                            "output": { "KRX_FWDG_ORD_ORGNO": "91252", "ODNO": "ORD-0012", "ORD_TMD": "102000" }
+                        }
                     },
-                    "fees": [],
-                    "trades": []
+                    "id": "ORD-0021",
+                    "timestamp": 1774398600000,
+                    "datetime": "2026-03-25T00:30:00.000Z",
+                    "symbol": "005930/KRW",
+                    "type": "limit",
+                    "side": "buy",
+                    "price": 70000,
+                    "average": 70000,
+                    "amount": 10,
+                    "filled": 3,
+                    "remaining": 7,
+                    "cost": 210000,
+                    "status": "canceled",
+                    "trades": [],
+                    "fees": []
                 },
                 {
-                    "id": "ORD-0022",
-                    "symbol": "005930/KRW",
-                    "status": "canceled",
                     "info": {
-                        "rt_cd": "0",
-                        "msg_cd": "APBK0013",
-                        "msg1": "취소 주문 전송 완료",
-                        "output": { "KRX_FWDG_ORD_ORGNO": "91252", "ODNO": "ORD-0012", "ORD_TMD": "102000" }
+                        "ord_gno_brno": "01790",
+                        "odno": "ORD-0022",
+                        "orgn_odno": "",
+                        "ord_dvsn_name": "시장가",
+                        "pdno": "005930",
+                        "prdt_name": "삼성전자",
+                        "ord_qty": "5",
+                        "ord_unpr": "0",
+                        "ord_tmd": "094500",
+                        "tot_ccld_qty": "0",
+                        "tot_ccld_amt": "0",
+                        "psbl_qty": "5",
+                        "sll_buy_dvsn_cd": "01",
+                        "ord_dvsn_cd": "01",
+                        "excg_id_dvsn_cd": "KRX",
+                        "cancelResponse": {
+                            "rt_cd": "0",
+                            "msg_cd": "APBK0013",
+                            "msg1": "취소 주문 전송 완료",
+                            "output": { "KRX_FWDG_ORD_ORGNO": "91252", "ODNO": "ORD-0012", "ORD_TMD": "102000" }
+                        }
                     },
+                    "id": "ORD-0022",
+                    "timestamp": 1774399500000,
+                    "datetime": "2026-03-25T00:45:00.000Z",
+                    "symbol": "005930/KRW",
+                    "type": "market",
+                    "side": "sell",
+                    "amount": 5,
+                    "filled": 0,
+                    "remaining": 5,
+                    "cost": 0,
+                    "status": "canceled",
+                    "trades": [],
                     "fees": [],
-                    "trades": []
+                    "timeInForce": "IOC"
                 }
             ]
         },
@@ -7738,38 +8700,84 @@
             ],
             "output": [
                 {
-                    "id": "ORD-0021",
-                    "symbol": "005930/KRW",
-                    "status": "canceled",
                     "info": {
-                        "rt_cd": "0",
-                        "msg_cd": "APBK0013",
-                        "msg1": "취소 주문 전송 완료",
-                        "output": {
-                            "KRX_FWDG_ORD_ORGNO": "91252",
-                            "ODNO": "ORD-0012",
-                            "ORD_TMD": "102000"
+                        "ord_gno_brno": "91252",
+                        "odno": "ORD-0021",
+                        "orgn_odno": "",
+                        "ord_dvsn_name": "지정가",
+                        "pdno": "005930",
+                        "prdt_name": "삼성전자",
+                        "rvse_cncl_dvsn_name": "",
+                        "ord_qty": "10",
+                        "ord_unpr": "70000",
+                        "ord_tmd": "093000",
+                        "tot_ccld_qty": "3",
+                        "tot_ccld_amt": "210000",
+                        "psbl_qty": "7",
+                        "sll_buy_dvsn_cd": "02",
+                        "ord_dvsn_cd": "00",
+                        "excg_id_dvsn_cd": "KRX",
+                        "cancelResponse": {
+                            "rt_cd": "0",
+                            "msg_cd": "APBK0013",
+                            "msg1": "취소 주문 전송 완료",
+                            "output": { "KRX_FWDG_ORD_ORGNO": "91252", "ODNO": "ORD-0012", "ORD_TMD": "102000" }
                         }
                     },
-                    "fees": [],
-                    "trades": []
+                    "id": "ORD-0021",
+                    "timestamp": 1774398600000,
+                    "datetime": "2026-03-25T00:30:00.000Z",
+                    "symbol": "005930/KRW",
+                    "type": "limit",
+                    "side": "buy",
+                    "price": 70000,
+                    "average": 70000,
+                    "amount": 10,
+                    "filled": 3,
+                    "remaining": 7,
+                    "cost": 210000,
+                    "status": "canceled",
+                    "trades": [],
+                    "fees": []
                 },
                 {
-                    "id": "ORD-0022",
-                    "symbol": "005930/KRW",
-                    "status": "canceled",
                     "info": {
-                        "rt_cd": "0",
-                        "msg_cd": "APBK0013",
-                        "msg1": "취소 주문 전송 완료",
-                        "output": {
-                            "KRX_FWDG_ORD_ORGNO": "91252",
-                            "ODNO": "ORD-0012",
-                            "ORD_TMD": "102000"
+                        "ord_gno_brno": "01790",
+                        "odno": "ORD-0022",
+                        "orgn_odno": "",
+                        "ord_dvsn_name": "시장가",
+                        "pdno": "005930",
+                        "prdt_name": "삼성전자",
+                        "ord_qty": "5",
+                        "ord_unpr": "0",
+                        "ord_tmd": "094500",
+                        "tot_ccld_qty": "0",
+                        "tot_ccld_amt": "0",
+                        "psbl_qty": "5",
+                        "sll_buy_dvsn_cd": "01",
+                        "ord_dvsn_cd": "01",
+                        "excg_id_dvsn_cd": "KRX",
+                        "cancelResponse": {
+                            "rt_cd": "0",
+                            "msg_cd": "APBK0013",
+                            "msg1": "취소 주문 전송 완료",
+                            "output": { "KRX_FWDG_ORD_ORGNO": "91252", "ODNO": "ORD-0012", "ORD_TMD": "102000" }
                         }
                     },
+                    "id": "ORD-0022",
+                    "timestamp": 1774399500000,
+                    "datetime": "2026-03-25T00:45:00.000Z",
+                    "symbol": "005930/KRW",
+                    "type": "market",
+                    "side": "sell",
+                    "amount": 5,
+                    "filled": 0,
+                    "remaining": 5,
+                    "cost": 0,
+                    "status": "canceled",
+                    "trades": [],
                     "fees": [],
-                    "trades": []
+                    "timeInForce": "IOC"
                 }
             ]
         },
@@ -8252,7 +9260,7 @@
             "error": { "class": "BadResponse" }
         },
         {
-            "description": "cancelAllOrders 는 하나라도 취소하지 못하면 나머지를 다 시도한 뒤 첫 실패를 던진다",
+            "description": "cancelAllOrders 는 일부를 취소하지 못해도 던지지 않고, 그 주문을 원래 상태(open)와 실패 사유(cancelError·cancelErrorDetail)로 돌려준다",
             "now": 1774400400000,
             "method": "cancelAllOrders",
             "args": ["005930/KRW"],
@@ -8360,7 +9368,84 @@
                     }
                 }
             ],
-            "error": { "class": "ExchangeError", "detail": "APBK1683" }
+            "output": [
+                {
+                    "info": {
+                        "ord_gno_brno": "91252",
+                        "odno": "ORD-0021",
+                        "orgn_odno": "",
+                        "ord_dvsn_name": "지정가",
+                        "pdno": "005930",
+                        "prdt_name": "삼성전자",
+                        "rvse_cncl_dvsn_name": "",
+                        "ord_qty": "10",
+                        "ord_unpr": "70000",
+                        "ord_tmd": "093000",
+                        "tot_ccld_qty": "3",
+                        "tot_ccld_amt": "210000",
+                        "psbl_qty": "7",
+                        "sll_buy_dvsn_cd": "02",
+                        "ord_dvsn_cd": "00",
+                        "excg_id_dvsn_cd": "KRX",
+                        "cancelError": "KIS API 비즈니스 오류 [APBK1683]: 정정/취소할 수량이 없습니다.",
+                        "cancelErrorDetail": "APBK1683"
+                    },
+                    "id": "ORD-0021",
+                    "timestamp": 1774398600000,
+                    "datetime": "2026-03-25T00:30:00.000Z",
+                    "symbol": "005930/KRW",
+                    "type": "limit",
+                    "side": "buy",
+                    "price": 70000,
+                    "average": 70000,
+                    "amount": 10,
+                    "filled": 3,
+                    "remaining": 7,
+                    "cost": 210000,
+                    "status": "open",
+                    "trades": [],
+                    "fees": []
+                },
+                {
+                    "info": {
+                        "ord_gno_brno": "91252",
+                        "odno": "ORD-0022",
+                        "orgn_odno": "",
+                        "ord_dvsn_name": "시장가",
+                        "pdno": "005930",
+                        "prdt_name": "삼성전자",
+                        "ord_qty": "5",
+                        "ord_unpr": "0",
+                        "ord_tmd": "094500",
+                        "tot_ccld_qty": "0",
+                        "tot_ccld_amt": "0",
+                        "psbl_qty": "5",
+                        "sll_buy_dvsn_cd": "01",
+                        "ord_dvsn_cd": "01",
+                        "excg_id_dvsn_cd": "KRX",
+                        "cancelResponse": {
+                            "rt_cd": "0",
+                            "msg_cd": "APBK0013",
+                            "msg1": "취소 주문 전송 완료",
+                            "output": { "KRX_FWDG_ORD_ORGNO": "91252", "ODNO": "ORD-0012", "ORD_TMD": "102000" }
+                        }
+                    },
+                    "id": "ORD-0022",
+                    "timestamp": 1774399500000,
+                    "datetime": "2026-03-25T00:45:00.000Z",
+                    "symbol": "005930/KRW",
+                    "type": "market",
+                    "side": "sell",
+                    "amount": 5,
+                    "filled": 0,
+                    "remaining": 5,
+                    "cost": 0,
+                    "status": "canceled",
+                    "trades": [],
+                    "fees": [],
+                    "timeInForce": "IOC"
+                }
+            ]
         },
         {
             "description": "cancelAllOrders 는 미체결이 없으면 빈 목록이다",
@@ -8459,17 +9544,40 @@
             ],
             "output": [
                 {
-                    "id": "ORD-0021",
-                    "symbol": "005930/KRW",
-                    "status": "canceled",
                     "info": {
-                        "rt_cd": "0",
-                        "msg_cd": "APBK0013",
-                        "msg1": "취소 주문 전송 완료",
-                        "output": { "KRX_FWDG_ORD_ORGNO": "91252", "ODNO": "ORD-0012", "ORD_TMD": "102000" }
+                        "odno": "ORD-0021",
+                        "orgn_odno": "",
+                        "pdno": "005930",
+                        "prdt_name": "삼성전자",
+                        "ord_qty": "10",
+                        "ord_unpr": "70000",
+                        "ord_tmd": "093000",
+                        "tot_ccld_qty": "0",
+                        "tot_ccld_amt": "0",
+                        "psbl_qty": "10",
+                        "sll_buy_dvsn_cd": "02",
+                        "ord_dvsn_cd": "00",
+                        "cancelResponse": {
+                            "rt_cd": "0",
+                            "msg_cd": "APBK0013",
+                            "msg1": "취소 주문 전송 완료",
+                            "output": { "KRX_FWDG_ORD_ORGNO": "91252", "ODNO": "ORD-0012", "ORD_TMD": "102000" }
+                        }
                     },
-                    "fees": [],
-                    "trades": []
+                    "id": "ORD-0021",
+                    "timestamp": 1774398600000,
+                    "datetime": "2026-03-25T00:30:00.000Z",
+                    "symbol": "005930/KRW",
+                    "type": "limit",
+                    "side": "buy",
+                    "price": 70000,
+                    "amount": 10,
+                    "filled": 0,
+                    "remaining": 10,
+                    "cost": 0,
+                    "status": "canceled",
+                    "trades": [],
+                    "fees": []
                 }
             ]
         },
@@ -8594,17 +9702,45 @@
             ],
             "output": [
                 {
-                    "id": "ORD-0101",
-                    "symbol": "AAPL/USD",
-                    "status": "canceled",
                     "info": {
-                        "rt_cd": "0",
-                        "msg_cd": "APBK0013",
-                        "msg1": "정정 주문 전송 완료",
-                        "output": { "KRX_FWDG_ORD_ORGNO": "01790", "ODNO": "ORD-0102", "ORD_TMD": "003000" }
+                        "ord_dt": "20260325",
+                        "ord_gno_brno": "01790",
+                        "odno": "ORD-0101",
+                        "orgn_odno": "",
+                        "pdno": "AAPL",
+                        "prdt_name": "APPLE INC",
+                        "sll_buy_dvsn_cd": "02",
+                        "ft_ord_qty": "5",
+                        "ft_ord_unpr3": "170.50000000",
+                        "ord_tmd": "103000",
+                        "ft_ccld_qty": "1",
+                        "ft_ccld_unpr3": "170.50000000",
+                        "ft_ccld_amt3": "170.50000",
+                        "nccs_qty": "4",
+                        "ovrs_excg_cd": "NASD",
+                        "dmst_ord_dt": "20260325",
+                        "thco_ord_tmd": "233000",
+                        "cancelResponse": {
+                            "rt_cd": "0",
+                            "msg_cd": "APBK0013",
+                            "msg1": "정정 주문 전송 완료",
+                            "output": { "KRX_FWDG_ORD_ORGNO": "01790", "ODNO": "ORD-0102", "ORD_TMD": "003000" }
+                        }
                     },
-                    "fees": [],
-                    "trades": []
+                    "id": "ORD-0101",
+                    "timestamp": 1774449000000,
+                    "datetime": "2026-03-25T14:30:00.000Z",
+                    "symbol": "AAPL/USD",
+                    "side": "buy",
+                    "price": 170.5,
+                    "average": 170.5,
+                    "amount": 5,
+                    "filled": 1,
+                    "remaining": 4,
+                    "cost": 170.5,
+                    "status": "canceled",
+                    "trades": [],
+                    "fees": []
                 }
             ]
         },

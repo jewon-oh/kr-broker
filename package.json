@@ -182,6 +182,10 @@
       "types": "./dist/krx-sell-tax.d.ts",
       "default": "./dist/krx-sell-tax.js"
     },
+    "./krx-tick-size": {
+      "types": "./dist/krx-tick-size.d.ts",
+      "default": "./dist/krx-tick-size.js"
+    },
     "./krx-trading-hours": {
       "types": "./dist/krx-trading-hours.d.ts",
       "default": "./dist/krx-trading-hours.js"

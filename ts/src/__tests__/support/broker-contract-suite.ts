@@ -15,11 +15,13 @@
  * 5. 장 시간 밖은 실패가 아니라 예정된 조건이다. `MarketClosed` 이고 **주문 요청이 증권사에 나가지 않는다**.
  * 6. 조회가 실패하면 빈 값이 아니라 던진다. 실패와 "없음"을 가른다.
  * 7. 정상 주문은 접수 결과(`Order`)를 돌려준다. 모의 주문이 없어서 그대로 부르면 주문 요청이 정확히 한 번 나간다.
+ * 8. 일괄 취소(`cancelAllOrders`)가 일부만 실패하면 던지지 않고 주문마다 결과를 돌려준다. 취소하지 못한 주문은 `canceled` 가 아니라
+ *    원래 상태(`open`)이고 실패 사유(`info.cancelError`)를 싣는다. 항목은 미체결 조회로 받은 주문이라 수량과 방향을 잃지 않는다.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
     BaseError, ExchangeError, MarketClosed, NetworkError, OrderOutcomeUnknown,
-    type Balances, type ErrorClass, type Order,
+    type Balances, type Dict, type ErrorClass, type Order,
 } from '../../base';
 
 /** 증권사가 실측한 업무 오류 하나. 이 상황을 만들면 이 오류 클래스(와 세부 원인)로 던져져야 한다. */
@@ -59,6 +61,10 @@ export interface BrokerContractHarness {
     orderRequestsSent(): number;
     /** 잔고 조회가 실패하게 한다. */
     wireBalanceFailure(): void;
+    /** `cancelAllWithOneRejected` 가 쓰는 미체결 주문 두 건의 주문번호. */
+    cancelAllTargets: { canceled: string; rejected: string };
+    /** 미체결 주문 두 건 가운데 하나는 취소되고 하나는 증권사가 거절하게 한 뒤 `cancelAllOrders` 를 부른다. */
+    cancelAllWithOneRejected(): Promise<Order[]>;
 }
 
 /** 던져진 값을 기다려 받는다. 던지지 않으면 실패로 취급한다. */
@@ -165,6 +171,25 @@ export function defineBrokerContractSuite(h: BrokerContractHarness): void {
                 h.wireBalanceFailure();
 
                 expect(await caught(h.fetchBalance())).toBeInstanceOf(BaseError);
+            });
+        });
+
+        describe('8. 일괄 취소의 일부 실패', () => {
+            it('던지지 않고 주문마다 결과를 돌려준다. 취소하지 못한 주문은 canceled 가 아니라 open 이고 사유를 싣는다', async () => {
+                const results = await h.cancelAllWithOneRejected();
+
+                const byId = new Map(results.map((order) => [order.id, order]));
+                const canceled = byId.get(h.cancelAllTargets.canceled);
+                const rejected = byId.get(h.cancelAllTargets.rejected);
+                expect(results).toHaveLength(2);
+                expect(canceled?.status).toBe('canceled');
+                expect((canceled?.info as Dict).cancelResponse).toBeDefined();
+                expect(rejected?.status).toBe('open');
+                expect(String((rejected?.info as Dict).cancelError ?? '')).not.toBe('');
+                for (const order of results) {
+                    expect(order.amount).toBeGreaterThan(0);
+                    expect(order.side).toBeDefined();
+                }
             });
         });
 

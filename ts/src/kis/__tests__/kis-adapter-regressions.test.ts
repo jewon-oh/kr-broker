@@ -7,19 +7,14 @@
  * 4. 국내 보합(prdy_ctrt=0)이면 전일대비가 0 이다.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
-
-vi.mock('../us-market-hours', () => ({
-    getUsMarketPhase: () => 'open',
-    formatEtWallClock: () => '10:00 ET',
-}) satisfies Partial<typeof import('../us-market-hours')>);
 global.fetch = mockFetch as unknown as typeof fetch;
 
 import { ArgumentsRequired, BadRequest } from '../../base/errors';
 import { KIS_MASTER_FIXTURE } from '../../__tests__/support/kis-master-fixture';
-import { bodyOf, dataOk, headersOf, newKis as newKisBase, tokenOk } from './support/kis-test-utils';
+import { bodyOf, dataOk, headersOf, MARKET_TIMES, newKis as newKisBase, tokenOk } from './support/kis-test-utils';
 
 /** 종목 마스터 픽스처를 넘긴 인스턴스. */
 const newKis = (config: Parameters<typeof newKisBase>[0] = {}) => newKisBase({ masterData: KIS_MASTER_FIXTURE, ...config });
@@ -191,6 +186,15 @@ describe('미국 보유 종목 — 실전은 NASD 한 번이 미국 전체다', 
 });
 
 describe('항목3 — 해외 실전 시장가(LOC) price 부재 차단', () => {
+    // 미국 주문 게이트는 인스턴스 시계를 읽으므로 미국 정규장으로 고정한다.
+    beforeEach(() => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(MARKET_TIMES.usRegular);
+    });
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
     it('실전 + type=market + price 없음 → LOC 단가0 대신 거부, HTTP 를 보내지 않는다', async () => {
         const broker = newKis({ sandbox: false });
 

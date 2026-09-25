@@ -4,59 +4,40 @@
  * 장 시간 밖은 실패가 아니라 예정된 조건이다. 마감 후 재시도마다 실패 거래가 쌓이지 않도록 `MarketClosed` 로 구분해 던지고 주문 요청은 보내지 않는다.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import type { UsMarketPhase } from '../../us-market-hours';
-import type { KrxMarketPhase } from '../../krx-trading-hours';
 
-const { mockFetch, mockTradable, mockPhase, mockUsPhase, mockExtended } = vi.hoisted(() => ({
-    mockFetch: vi.fn(),
-    mockTradable: vi.fn(() => ({ tradable: true, reason: '' })),
-    mockPhase: vi.fn((): KrxMarketPhase => 'open'),
-    mockUsPhase: vi.fn((): UsMarketPhase => 'open'),
-    mockExtended: vi.fn(() => false),
-}));
-
-vi.mock('../kis-trading-hours', () => ({
-    checkKRXTradingHours: () => mockTradable(),
-    getKrxMarketPhase: () => mockPhase(),
-    isNxtExtendedTradable: () => mockExtended(),
-    getNxtSession: () => (mockExtended() ? 'after-market' : 'closed'),
-}) satisfies Partial<typeof import('../kis-trading-hours')>);
-vi.mock('../us-market-hours', () => ({
-    getUsMarketPhase: () => mockUsPhase(),
-    formatEtWallClock: () => '10:00 ET',
-}) satisfies Partial<typeof import('../us-market-hours')>);
+const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 global.fetch = mockFetch as unknown as typeof fetch;
 
 import { logger } from '../../logger';
-import { ExchangeError, InvalidOrder, MarketClosed, OrderNotFound, ArgumentsRequired } from '../../base/errors';
+import { ExchangeError, InvalidOrder, MarketClosed, NotSupported, OrderNotFound, ArgumentsRequired } from '../../base/errors';
 import { KIS_MASTER_FIXTURE } from '../../__tests__/support/kis-master-fixture';
-import { bodyOf, businessError, dataOk, headersOf, newKis as newKisBase, tokenOk } from './support/kis-test-utils';
+import { bodyOf, businessError, dataOk, headersOf, MARKET_TIMES, newKis as newKisBase, tokenOk } from './support/kis-test-utils';
 
 /** 종목 마스터 픽스처를 넘긴 인스턴스. */
 const newKis = (config: Parameters<typeof newKisBase>[0] = {}) => newKisBase({ masterData: KIS_MASTER_FIXTURE, ...config });
 
+// 장 시간 게이트는 인스턴스 시계를 읽으므로 시각을 고정해 판정을 정한다. 기본은 KRX 정규장이다.
 beforeEach(() => {
     mockFetch.mockReset();
-    mockTradable.mockReturnValue({ tradable: true, reason: '' });
-    mockPhase.mockReturnValue('open');
-    mockUsPhase.mockReturnValue('open');
-    mockExtended.mockReturnValue(false);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(MARKET_TIMES.krxRegular);
 });
 
 afterEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
 });
 
 const buyKr = (broker = newKis()) => broker.createOrder('005930/KRW', 'limit', 'buy', 1, 70000);
 
 describe('세션 게이트가 MarketClosed 를 던진다', () => {
     it('★국내 거래시간 외 → MarketClosed, 주문 요청은 나가지 않는다', async () => {
-        mockTradable.mockReturnValue({ tradable: false, reason: '장 마감' });
+        vi.setSystemTime(MARKET_TIMES.krxClosed);
 
         const error = await buyKr().catch((e: unknown) => e) as Error;
 
         expect(error).toBeInstanceOf(MarketClosed);
-        expect(error.message).toBe('거래시간 외: 장 마감');
+        expect(error.message).toBe('거래시간 외: 장 마감 (현재: 21:30 KST, 마감: 15:30)');
         expect(mockFetch).not.toHaveBeenCalled();
     });
 
@@ -69,32 +50,55 @@ describe('세션 게이트가 MarketClosed 를 던진다', () => {
         expect(error).not.toBeInstanceOf(MarketClosed);
     });
 
-    it('종가 동시호가(15:20~15:30)의 신규 매수는 막고, 매도(청산)는 허용한다', async () => {
-        mockPhase.mockReturnValue('closing-auction');
+    it('★종가 동시호가(15:20~15:30)의 신규 매수는 시장이 받으므로 기본으로 보낸다', async () => {
+        vi.setSystemTime(MARKET_TIMES.krxClosingAuction);
+        mockFetch.mockResolvedValueOnce(tokenOk()).mockResolvedValueOnce(dataOk({ output: { ODNO: '8' } }));
 
-        await expect(buyKr()).rejects.toThrow(MarketClosed);
+        const bought = await buyKr();
+
+        expect(bought.id).toBe('8');
+    });
+
+    it('종가 동시호가의 신규 매수는 blockAuctionBuys 를 켜면 막고, 매도(청산)는 켜도 허용한다', async () => {
+        vi.setSystemTime(MARKET_TIMES.krxClosingAuction);
+        const guarded = newKis({ options: { blockAuctionBuys: true } });
+
+        await expect(buyKr(guarded)).rejects.toThrow(MarketClosed);
 
         mockFetch.mockResolvedValueOnce(tokenOk()).mockResolvedValueOnce(dataOk({ output: { ODNO: '9' } }));
-        const sold = await newKis().createOrder('005930', 'limit', 'sell', 1, 70000);
+        const sold = await guarded.createOrder('005930', 'limit', 'sell', 1, 70000);
         expect(sold.id).toBe('9');
     });
 
     it('미국장이 완전히 닫혀 있으면(closed) 양방향 모두 MarketClosed 다', async () => {
-        mockUsPhase.mockReturnValue('closed');
+        vi.setSystemTime(MARKET_TIMES.usClosed);
 
         await expect(newKis().createOrder('AAPL', 'limit', 'buy', 1, 150)).rejects.toThrow(MarketClosed);
         await expect(newKis().createOrder('AAPL', 'limit', 'sell', 1, 150)).rejects.toThrow(MarketClosed);
         expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it('미국 종가 동시호가의 신규 매수는 막는다', async () => {
-        mockUsPhase.mockReturnValue('closing-auction');
+    it('미국 종가 동시호가의 신규 매수는 blockAuctionBuys 를 켰을 때만 막는다', async () => {
+        vi.setSystemTime(MARKET_TIMES.usClosingAuction);
 
-        await expect(newKis().createOrder('AAPL', 'limit', 'buy', 1, 150)).rejects.toThrow('종가 동시호가');
+        await expect(newKis({ options: { blockAuctionBuys: true } }).createOrder('AAPL', 'limit', 'buy', 1, 150)).rejects.toThrow('종가 동시호가');
+
+        mockFetch.mockResolvedValueOnce(tokenOk()).mockResolvedValueOnce(dataOk({ output: { ODNO: 'U1' } }));
+        const bought = await newKis().createOrder('AAPL', 'limit', 'buy', 1, 150);
+        expect(bought.id).toBe('U1');
+    });
+
+    it('장 시간 게이트는 벽시계가 아니라 인스턴스 시계(milliseconds)를 읽는다', async () => {
+        vi.setSystemTime(MARKET_TIMES.krxClosed);
+        const broker = newKis();
+        broker.milliseconds = () => MARKET_TIMES.krxRegular.getTime();
+        mockFetch.mockResolvedValueOnce(tokenOk()).mockResolvedValueOnce(dataOk({ output: { ODNO: '7' } }));
+
+        await expect(buyKr(broker)).resolves.toMatchObject({ id: '7' });
     });
 
     it('MarketClosed 는 재시도 대상이 아니다(곧바로 다시 보내도 장은 닫혀 있다)', async () => {
-        mockTradable.mockReturnValue({ tradable: false, reason: '장 마감' });
+        vi.setSystemTime(MARKET_TIMES.krxClosed);
 
         const error = await buyKr().catch((e: unknown) => e) as MarketClosed;
 
@@ -151,8 +155,7 @@ describe('NXT 확장세션 — 정규장 게이트를 우회하고 SOR 로 낸�
     const newKis = (config: Parameters<typeof newKisBase>[0] = {}) => newKisBase({ masterData: KIS_MASTER_FIXTURE, options: { nxtRouting: true }, ...config });
 
     beforeEach(() => {
-        mockTradable.mockReturnValue({ tradable: false, reason: '장 마감' }); // 정규장 게이트는 닫혀 있다
-        mockExtended.mockReturnValue(true);
+        vi.setSystemTime(MARKET_TIMES.nxtAfterMarket); // 정규장 게이트는 닫혀 있고 NXT 애프터마켓이다
     });
 
     async function extendedOrder(symbol: string, side: 'buy' | 'sell', price: number) {
@@ -391,7 +394,7 @@ describe('취소', () => {
         expect(canceled.map((o) => o.id)).toEqual(['A']);
     });
 
-    it('★취소를 하나라도 못 하면 나머지를 시도한 뒤 던진다 — 살아 있을 수 있는 주문을 성공으로 돌려주지 않는다', async () => {
+    it('★일부를 취소하지 못해도 던지지 않는다 — 실패한 주문은 원래 상태(open)와 사유로 돌려주고 나머지도 시도한다', async () => {
         mockFetch.mockImplementation(async (url: string, init?: { body?: string }) => {
             const u = String(url);
             if (u.includes('/oauth2/')) return tokenOk();
@@ -405,8 +408,12 @@ describe('취소', () => {
             return dataOk({ output: { ODNO: 'X' } });
         });
 
-        await expect(newKis().cancelAllOrders()).rejects.toThrow(ExchangeError);
+        const results = await newKis().cancelAllOrders();
 
+        // 살아 있을 수 있는 주문을 canceled 로 적지 않는다.
+        expect(results.map((o) => [o.id, o.status])).toEqual([['A', 'open'], ['B', 'canceled']]);
+        expect(results[0]!.info).toMatchObject({ cancelErrorDetail: 'APBK0001' });
+        expect((results[0]!.info as { cancelError: string }).cancelError).toContain('취소 불가');
         // B 도 시도했다.
         const attempted = mockFetch.mock.calls.filter((c) => String(c[0]).includes('order-rvsecncl')).map((c) => JSON.parse((c[1] as { body: string }).body).ORGN_ODNO);
         expect(attempted.sort()).toEqual(['A', 'B']);
@@ -429,15 +436,55 @@ describe('정정', () => {
         expect(edited).toMatchObject({ id: '3', status: 'open', symbol: '005930/KRW', price: 71000 });
     });
 
-    it('국내 정정 — amount 를 주면 일부정정(QTY_ALL_ORD_YN: N)', async () => {
+    it('국내 일부정정은 params.partial 과 옮길 수량 amount 로 낸다(QTY_ALL_ORD_YN: N)', async () => {
         mockFetch.mockResolvedValueOnce(tokenOk()).mockResolvedValueOnce(dataOk({ output: { ODNO: '0000001' } }));
 
-        await newKis().editOrder('0000001', '005930/KRW', 'limit', 'buy', 5, 71000);
+        const edited = await newKis().editOrder('0000001', '005930/KRW', 'limit', 'buy', 5, 71000, { partial: true });
 
         expect(bodyOf(mockFetch, 1)).toMatchObject({ ORD_QTY: '5', ORD_UNPR: '71000', QTY_ALL_ORD_YN: 'N' });
+        expect(bodyOf(mockFetch, 1).partial).toBeUndefined();
+        expect(edited.amount).toBe(5);
+    });
+
+    it('일부정정(params.partial)에 amount 가 없으면 요청 없이 ArgumentsRequired', async () => {
+        await expect(newKis().editOrder('0000001', '005930/KRW', 'limit', 'buy', undefined, 71000, { partial: true })).rejects.toThrow(ArgumentsRequired);
+        expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    /** 원주문이 10주 가운데 3주 체결된 미체결 목록. */
+    const openRow = () => dataOk({ output: [
+        { odno: '0000001', pdno: '005930', sll_buy_dvsn_cd: '02', ord_qty: '10', ord_unpr: '70000', tot_ccld_qty: '3', psbl_qty: '7', ord_dvsn_cd: '00' },
+    ] });
+
+    it('★국내 amount 는 정정 뒤 총수량이다. 미체결 조회로 체결 + 잔량과 같은지 확인한 뒤 잔량 전부를 정정한다(QTY_ALL_ORD_YN: Y)', async () => {
+        mockFetch.mockImplementation(async (url: string) => {
+            const u = String(url);
+            if (u.includes('/oauth2/')) return tokenOk();
+            if (u.includes('inquire-psbl-rvsecncl')) return openRow();
+            return dataOk({ output: { ODNO: '2' } });
+        });
+
+        const edited = await newKis().editOrder('0000001', '005930/KRW', 'limit', 'buy', 10, 71000);
+
+        const call = mockFetch.mock.calls.find((c) => String(c[0]).includes('order-rvsecncl'))!;
+        expect(JSON.parse((call[1] as { body: string }).body)).toMatchObject({ ORD_QTY: '0', ORD_UNPR: '71000', QTY_ALL_ORD_YN: 'Y' });
+        expect(edited).toMatchObject({ id: '2', amount: 10 });
+    });
+
+    it('★국내 amount 로 수량을 바꾸는 정정은 한 요청으로 낼 수 없어 정정 요청 없이 NotSupported 다(주문이 두 가격으로 나뉘지 않는다)', async () => {
+        mockFetch.mockImplementation(async (url: string) => {
+            const u = String(url);
+            if (u.includes('/oauth2/')) return tokenOk();
+            if (u.includes('inquire-psbl-rvsecncl')) return openRow();
+            return dataOk({ output: { ODNO: '2' } });
+        });
+
+        await expect(newKis().editOrder('0000001', '005930/KRW', 'limit', 'buy', 5, 71000)).rejects.toThrow(NotSupported);
+        expect(mockFetch.mock.calls.some((c) => String(c[0]).includes('order-rvsecncl'))).toBe(false);
     });
 
     it('해외 정정 — 해외 정정 TR 로 낸다. 수량은 params.amount 로 받는다', async () => {
+        vi.setSystemTime(MARKET_TIMES.usRegular);
         mockFetch.mockResolvedValueOnce(tokenOk()).mockResolvedValueOnce(dataOk({ output: { ODNO: 'US-1' } }));
 
         const edited = await newKis({ sandbox: false }).editOrder('US-1', 'AAPL/USD', 'limit', 'buy', undefined, 226, { amount: '1' });
@@ -449,6 +496,7 @@ describe('정정', () => {
     });
 
     it('해외 정정 — 수량을 안 주면 미체결 조회에서 잔량을 찾는다', async () => {
+        vi.setSystemTime(MARKET_TIMES.usRegular);
         mockFetch.mockImplementation(async (url: string) => {
             const u = String(url);
             if (u.includes('/oauth2/')) return tokenOk();
@@ -464,5 +512,17 @@ describe('정정', () => {
 
     it('모의투자의 해외 정정은 미체결 조회가 없어 수량이 없으면 ArgumentsRequired', async () => {
         await expect(newKis({ sandbox: true }).editOrder('US-1', 'AAPL/USD', 'limit', 'buy', undefined, 226)).rejects.toThrow(ArgumentsRequired);
+    });
+
+    it('모의투자의 해외 정정은 amount 를 원주문과 대조할 수 없어 요청 없이 NotSupported 다(params.amount 로 준다)', async () => {
+        vi.setSystemTime(MARKET_TIMES.usRegular);
+
+        await expect(newKis({ sandbox: true }).editOrder('US-1', 'AAPL/USD', 'limit', 'buy', 5, 226)).rejects.toThrow(NotSupported);
+        expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('해외 정정의 일부정정(params.partial)은 요청 없이 NotSupported 다', async () => {
+        await expect(newKis({ sandbox: false }).editOrder('US-1', 'AAPL/USD', 'limit', 'buy', 1, 226, { partial: true })).rejects.toThrow(NotSupported);
+        expect(mockFetch).not.toHaveBeenCalled();
     });
 });

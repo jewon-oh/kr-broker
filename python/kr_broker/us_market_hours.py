@@ -8,7 +8,7 @@
 import calendar
 import datetime
 import logging
-from typing import NamedTuple, Optional
+from typing import NamedTuple, Optional, Sequence
 
 from kr_broker.base import functions as fn
 from kr_broker.market_calendar import is_market_closed_day
@@ -107,6 +107,26 @@ def get_us_market_phase(now_ms: Optional[int] = None) -> str:
     if minutes < closing_auction_start:
         return 'open'
     return 'closing-auction'
+
+
+def us_auction_buy_block_reason(now_ms: int, side: Optional[str]) -> Optional[str]:
+    """종가 동시호가(15:50~16:00 ET)의 신규 매수를 막는 사유. 매수가 아니거나 동시호가가 아니면 `None`.
+    `options['blockAuctionBuys']` 가 켜졌을 때만 쓴다."""
+    if side != 'buy' or get_us_market_phase(now_ms) != 'closing-auction':
+        return None
+    return f'종가 동시호가 (15:50-16:00 ET, {format_et_wall_clock(now_ms)}) — 신규 매수 진입 금지 (options.blockAuctionBuys)'
+
+
+def us_order_block_reason(now_ms: int, side: Optional[str] = None, block_auction_buys: bool = False,
+                          sessions: Sequence[str] = ('regular',)) -> Optional[str]:
+    """미국 주문을 지금 막는 사유. 보내도 되면 `None`. 세 증권사가 같은 시각에 같은 판정을 내도록 한 곳에 둔다.
+    `sessions` 는 주문을 받는 세션(`'regular'` 정규장 09:30~16:00 ET, `'opening-auction'` 시초가 동시호가 09:25~09:30 ET)이다.
+    동시호가 신규 매수 차단은 `block_auction_buys` 를 켰을 때만 건다."""
+    phase = get_us_market_phase(now_ms)
+    open_ = ('regular' in sessions and phase in ('open', 'closing-auction')) or ('opening-auction' in sessions and phase == 'pre-auction')
+    if not open_:
+        return f'미국장 정규장 외 ({format_et_wall_clock(now_ms)}, phase={phase})'
+    return us_auction_buy_block_reason(now_ms, side) if block_auction_buys else None
 
 
 def get_time_until_us_market_open(now_ms: Optional[int] = None) -> int:

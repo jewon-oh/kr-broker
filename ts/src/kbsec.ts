@@ -25,8 +25,8 @@
  * ## 옵션
  *
  * 전역 설정은 없고 인스턴스가 `options` 로 받는다. `tokenStore`(토큰 저장소), `nxtRouting`(정규장 안의 국내 주문을 SOR 로. 정규장 밖 주문은
- * 받지 않는다), `krwIntegratedMargin`(원마켓 계좌의 미국 주식 매수여력을 원화 환산분으로 보강, 환율은 `usdKrwRate`), `masterData`(해외 종목의
- * 상장 거래소 판별), `confirmBudget`(체결 확정 조회 예산)이다.
+ * 받지 않는다), `blockAuctionBuys`(종가 동시호가의 신규 매수를 막는다), `krwIntegratedMargin`(원마켓 계좌의 미국 주식 매수여력을 원화 환산분으로
+ * 보강, 환율은 `usdKrwRate`), `masterData`(해외 종목의 상장 거래소 판별과 국내 종목 유형), `confirmBudget`(체결 확정 조회 예산)이다.
  * 켜고 끄는 옵션은 불리언이거나 불리언을 돌려주는 함수다.
  *
  * ## 안전 계약
@@ -43,6 +43,9 @@ import { candlePeriodUtcMs, isDailyOrLongerTimeframe } from './broker-time';
 import { logger } from './logger';
 import type { UsdKrwRateOption } from './options';
 import { masterDataOf } from './kis/kis-master-data';
+import { getKRXStockByCode } from './kis/kis-stock-master';
+import { getKrxTickSize, KRX_TICK_INVALID_DETAIL, krxTickViolation } from './krx-tick-size';
+import { assertWholeRemainingEdit } from './edit-order-amount';
 import {
     ArgumentsRequired,
     AuthenticationError,
@@ -57,7 +60,11 @@ import {
     NotSupported,
     NullResponse,
     OrderNotFound,
+    NO_PADDING,
     Precise,
+    ROUND,
+    TICK_SIZE,
+    decimalToPrecision,
     numberToString,
     omit,
     safeDict,
@@ -1791,6 +1798,8 @@ export class kbsec extends Exchange {
                 // 켜고 끄는 옵션은 불리언이거나 불리언을 돌려주는 함수(값이 바뀔 수 있을 때)다. 기본은 꺼짐이다.
                 /** 정규장 안의 국내 주문을 SOR(KRX·NXT 중 유리한 쪽)로 보낸다. 정규장 밖 주문은 세션 게이트가 `MarketClosed` 로 막는다. */
                 nxtRouting: undefined,
+                /** 종가 동시호가(국내 15:20~15:30, 미국 15:50~16:00 ET)의 신규 매수를 막는다. 시장이 받는 주문이라 기본은 꺼짐이다. */
+                blockAuctionBuys: undefined,
                 /**
                  * 원마켓(통합증거금) 계좌의 미국 주식 매수여력을 원화 환산분으로 보강한다. 원마켓 계좌는 USD 로 미리 환전하지 않고 원화로 미국 주식을 산다.
                  * 켜면 `krw_exch_unty_ordr_psbl_amt`(원화환산 통합 주문가능금액)를 기준으로 읽고, 끄면 외화 예수금(`fcrncy_ordr_psbl_amt`)만 본다.
@@ -1995,6 +2004,34 @@ export class kbsec extends Exchange {
 
     private isUs(market: MarketInterface): boolean {
         return market.options?.country === 'US';
+    }
+
+    /** 국내 종목의 증권 유형(`STOCK`, `ETF` 등). `options.masterData` 에 없으면 `undefined` 다. */
+    private domesticSecurityType(market: MarketInterface): Str {
+        return getKRXStockByCode(masterDataOf(this.options), market.id as string)?.securityType;
+    }
+
+    /**
+     * 가격을 호가 단위에 맞춘 문자열. 국내는 가격대별 호가 단위 표(`krx-tick-size`)로 반올림한다. `options.masterData` 가 주식(`STOCK`)이 아니라고
+     * 알려 주면 표가 달라서 그대로 돌려준다. 미국은 기반 구현을 따른다. 주문 경로는 이 메서드로 가격을 바꾸지 않는다.
+     */
+    override priceToPrecision(symbol: Str, price: number | string | undefined): Str {
+        if (price === undefined) return undefined;
+        const market = this.market(symbol);
+        if (this.isUs(market)) return super.priceToPrecision(symbol, price);
+        const securityType = this.domesticSecurityType(market);
+        if (securityType !== undefined && securityType !== 'STOCK') return numberToString(price);
+        return decimalToPrecision(price, ROUND, getKrxTickSize(Number(price)), TICK_SIZE, NO_PADDING);
+    }
+
+    /**
+     * 국내 지정가가 호가 단위 표에 맞지 않으면 요청 전에 `InvalidOrder` 다. KB 는 종목 유형을 알려 주는 경로가 없어 `options.masterData` 가
+     * 주식(`STOCK`)이라고 알려 줄 때만 검사한다. 모르면 서버(`1896` 주문단가 오류)에 맡긴다.
+     */
+    private assertKrxTickAligned(market: MarketInterface, price: Num, method: string): void {
+        if (price === undefined || this.isUs(market) || this.domesticSecurityType(market) !== 'STOCK') return;
+        const violation = krxTickViolation(price);
+        if (violation !== null) throw new InvalidOrder(`${this.id} ${method}() ${violation} (${market.symbol})`, { detail: KRX_TICK_INVALID_DETAIL });
     }
 
     /** 종목기본정보(`SIQM4900`) 원문 한 행. `fetchStocks`·`fetchStockWarnings`가 함께 쓴다. 국내만 지원한다. */
@@ -4390,6 +4427,7 @@ export class kbsec extends Exchange {
             }
         }
         this.checkOrderArguments(market, type, side, amount, price, params);
+        if (type === 'limit') this.assertKrxTickAligned(market, price, 'createOrder');
         const isKr = !this.isUs(market);
         const base = market.id as string;
         const fractional = params.fractional === true;
@@ -4399,7 +4437,9 @@ export class kbsec extends Exchange {
         // 세션 게이트. 거래시간 밖 주문은 KB 로 보내지 않고 `MarketClosed` 로 막는다.
         // KRX 판정은 시장이 아는 사실이라 이 클래스가 자기 시간표를 갖지 않고 공용 술어에 맡긴다.
         if (isKr) await this.refreshMarketCalendar();
-        const closed = marketSessionBlockReason('kbsec', symbol, new Date(this.milliseconds()), masterDataOf(this.options));
+        const closed = marketSessionBlockReason('kbsec', symbol, new Date(this.milliseconds()), masterDataOf(this.options), {
+            side, blockAuctionBuys: await this.isOptionEnabled('blockAuctionBuys'),
+        });
         if (closed !== null) {
             logger.info({ symbol, side, reason: closed }, '[kbsec] 거래시간 외 주문 차단');
             throw new MarketClosed(closed);
@@ -4483,7 +4523,9 @@ export class kbsec extends Exchange {
         this.checkOrderArguments(market, 'limit', side, amount, price, params);
 
         if (isKr) await this.refreshMarketCalendar();
-        const closed = marketSessionBlockReason('kbsec', symbol, new Date(this.milliseconds()), masterDataOf(this.options));
+        const closed = marketSessionBlockReason('kbsec', symbol, new Date(this.milliseconds()), masterDataOf(this.options), {
+            side, blockAuctionBuys: await this.isOptionEnabled('blockAuctionBuys'),
+        });
         if (closed !== null) {
             logger.info({ symbol, side, reason: closed }, '[kbsec] 거래시간 외 주문 차단');
             throw new MarketClosed(closed);
@@ -4594,7 +4636,9 @@ export class kbsec extends Exchange {
         if (!this.isUs(market)) throw new NotSupported(`${this.id} createMarketBuyOrderWithCost() 는 미국 종목만 지원한다: ${symbol}`);
         if (!(cost > 0)) throw new ArgumentsRequired(`${this.id} createMarketBuyOrderWithCost() requires a cost argument above 0`);
 
-        const closed = marketSessionBlockReason('kbsec', symbol, new Date(this.milliseconds()), masterDataOf(this.options));
+        const closed = marketSessionBlockReason('kbsec', symbol, new Date(this.milliseconds()), masterDataOf(this.options), {
+            side: 'buy', blockAuctionBuys: await this.isOptionEnabled('blockAuctionBuys'),
+        });
         if (closed !== null) {
             logger.info({ symbol, cost, reason: closed }, '[kbsec] 거래시간 외 주문 차단');
             throw new MarketClosed(closed);
@@ -4663,8 +4707,12 @@ export class kbsec extends Exchange {
      *
      * - **정정하면 주문번호가 바뀐다.** 이후 취소는 반드시 새 번호(`order.id`)로 해야 한다. 옛 번호로 취소하면 주문이 살아남는다.
      * - 국내는 원주문과 **같은 라우팅**으로 보내야 한다(SOR 주문을 KRX 로 정정하면 거부된다).
-     * - 국내 전부정정(`params.partial` 이 아님)은 수량을 0 으로 보낸다. 수량을 실으면 거부된다. 수량을 바꾸려면 `params.partial: true` 와 `amount` 다.
-     * - 해외 정정은 가격만 바꾼다(`SKAM2102` 에 수량 필드가 없다). 수량을 바꾸려면 취소 후 재접수해야 한다.
+     * - `amount` 는 ccxt 와 같이 정정 뒤 주문의 총수량(체결분 포함)이다. 국내는 주면 미체결 목록으로 체결 수량과 잔량의 합과 대조하고, 같을 때만
+     *   잔량 전부를 정정한다. 다르면 정정 요청 없이 `NotSupported` 다. 조회가 실패하면 던진다. 해외는 원주문의 체결 수량을 믿을 만한 조회로
+     *   확인할 수 없어 `amount` 를 주면 요청 없이 `NotSupported` 다.
+     * - 국내 전부정정은 수량을 0 으로 보낸다. 수량을 실으면 거부된다. 잔량 일부만 새 가격으로 옮기는 일부정정은 `params.partial: true` 일 때만
+     *   보내고(`crct_clsf: '1'`), 이때 `amount` 는 옮길 수량이다.
+     * - 해외 정정은 잔량 전부의 가격만 바꾼다(`SKAM2102` 에 수량 필드가 없다). 일부정정은 `NotSupported` 다. 수량을 바꾸려면 취소 후 재접수해야 한다.
      * - **`price` 가 필요하다.** 국내·해외 모두 정정은 단가를 바꾸는 주문이라, 빼면 요청 없이 `ArgumentsRequired` 다(빼고 보내면 단가 `0` 이 나간다).
      */
     override async editOrder(
@@ -4676,7 +4724,15 @@ export class kbsec extends Exchange {
         if (price === undefined || price === null) {
             throw new ArgumentsRequired(`${this.id} editOrder() requires a price argument`);
         }
+        const isPartial = params.partial === true;
+        if (isPartial && amount === undefined) throw new ArgumentsRequired(`${this.id} editOrder() 의 일부정정(params.partial)에는 옮길 수량 amount 가 필요하다`);
         if (this.isUs(market)) {
+            if (isPartial) throw new NotSupported(`${this.id} editOrder() 의 일부정정(params.partial)은 해외 주문에서 지원하지 않는다(해외 정정은 가격만 바꾼다)`);
+            // 해외 원주문의 체결 수량은 체결내역과 체결현황을 맞춰 추정해야 한다. 체결 반영이 늦으면 잔량을 크게 잡으므로 amount 를 대조하지 않고 막는다.
+            if (amount !== undefined) {
+                throw new NotSupported(`${this.id} editOrder() 는 해외 주문의 amount 를 받지 않는다. 원주문의 체결 수량을 믿을 만한 조회로 확인할 수 없다. `
+                    + 'amount 를 빼면 잔량 전부의 가격만 정정하고, 수량을 바꾸려면 취소한 뒤 다시 주문한다');
+            }
             const response = await this.callTr(KBSEC_TR.AMEND_CANCEL_US, {
                 is_cd: base,
                 orgn_ordr_no: id,
@@ -4684,15 +4740,17 @@ export class kbsec extends Exchange {
                 crct_cncl_clsf: '1',
                 frgn_ordr_prc_p4: kbsecNum(price, 4),
             });
-            if (amount !== undefined) {
-                logger.warn({ orderId: id, symbol, amount }, '[kbsec] 해외 정정은 가격만 가능 — 수량 변경은 취소 후 재접수 필요');
-            }
             return this.editedOrder(response, market, price, undefined);
         }
-        const sor = await this.resolveOrderSor(id, symbol);
-        const isPartial = params.partial === true && amount !== undefined;
+        this.assertKrxTickAligned(market, price, 'editOrder');
+        let sor: string;
         if (!isPartial && amount !== undefined) {
-            logger.warn({ orderId: id, symbol, amount }, '[kbsec] params.partial 이 없어 전부정정한다 — 수량은 바꾸지 않고 잔량 전체의 가격만 바꾼다');
+            // 수량을 대조하므로 원주문 조회 실패를 발주 정책으로 덮지 않고 던진다.
+            const original = await this.findOpenOrder(id, symbol);
+            assertWholeRemainingEdit(this.id, id, amount, original);
+            sor = pickStr((original.info ?? {}) as Dict, 'sor_ordr_ccd') || await this.defaultOrderSor(symbol);
+        } else {
+            sor = await this.resolveOrderSor(id, symbol);
         }
         const response = await this.callTr(KBSEC_TR.AMEND_KR, buildKrOrderBody(
             { base, amount: isPartial ? amount : 0, price, sor, jbClsf: KBSEC_ORDER_SIDE_KR.AMEND },
@@ -4700,8 +4758,8 @@ export class kbsec extends Exchange {
         ));
         const newId = pickStr(response, 'ordr_no', 'odno');
         logger.info({ orderId: id, newOrderId: newId, symbol, price, sor, isPartial }, '[kbsec] ✅ 정정주문 — 주문번호가 바뀌었다');
-        // 전부정정은 수량을 보내지 않으므로 반환값에도 싣지 않는다(정정 뒤 수량은 잔량이고 이 응답으로는 알 수 없다).
-        return this.editedOrder(response, market, price, isPartial ? amount : undefined);
+        // 일부정정은 옮긴 수량, 전부정정은 대조한 총수량을 싣는다. `amount` 없이 부른 전부정정의 수량은 이 응답으로 알 수 없어 싣지 않는다.
+        return this.editedOrder(response, market, price, amount);
     }
 
     private editedOrder(response: Dict, market: MarketInterface, price: Num, amount: Num): Order {
@@ -4731,8 +4789,20 @@ export class kbsec extends Exchange {
         } catch (err) {
             logger.warn({ err, orderId, symbol }, '[kbsec] 원주문 라우팅 조회 실패 — 발주 정책으로 폴백');
         }
+        return this.defaultOrderSor(symbol);
+    }
+
+    /** 발주 때와 같은 라우팅 정책(`nxtRouting` 옵션과 NXT 미상장 캐시). */
+    private async defaultOrderSor(symbol: string): Promise<string> {
         return await this.isOptionEnabled('nxtRouting') && !this.nxtIneligible.has(kbsecBaseSymbol(symbol))
             ? KBSEC_SOR.SOR : KBSEC_SOR.KRX;
+    }
+
+    /** 정정할 국내 원주문을 미체결 목록에서 찾는다. 조회가 실패하면 던지고, 목록에 없으면 `OrderNotFound` 다. */
+    private async findOpenOrder(orderId: string, symbol: string): Promise<Order> {
+        const found = (await this.fetchOpenOrders(symbol)).find(order => order.id === orderId);
+        if (found === undefined) throw new OrderNotFound(`${this.id} editOrder() 미체결 주문을 찾지 못했다: ${orderId} (${symbol})`);
+        return found;
     }
 
     /**
@@ -4763,8 +4833,9 @@ export class kbsec extends Exchange {
     }
 
     /**
-     * 미체결 주문을 모두 취소한다(심볼을 주면 그 종목만). 취소를 시도한 주문마다 항목을 돌려준다. 취소된 항목은 `status: 'canceled'`,
-     * 실패한 항목은 `status: 'open'` 이고 `info.cancelError` 에 사유가 있다.
+     * 미체결 주문을 모두 취소한다(심볼을 주면 그 종목만). 취소를 시도한 주문마다 미체결 조회로 받은 주문을 항목으로 돌려준다.
+     * 취소된 항목은 `status: 'canceled'` 이고 취소 응답 원문이 `info.cancelResponse` 에 있다. 실패한 항목은 `status: 'open'` 이고
+     * `info.cancelError`(메시지)와 `info.cancelErrorDetail`(오류의 `detail`)이 있다. 일부가 실패해도 던지지 않는다.
      */
     override async cancelAllOrders(symbol: Str = undefined, params: Dict = {}): Promise<Order[]> {
         const open = await this.fetchOpenOrders(symbol, undefined, undefined, params);
@@ -4773,10 +4844,18 @@ export class kbsec extends Exchange {
             try {
                 // 목록 행의 라우팅을 넘겨 주문마다 미체결 목록을 다시 조회하지 않는다.
                 const sor = pickStr((order.info ?? {}) as Dict, 'sor_ordr_ccd');
-                results.push(await this.cancelOrder(order.id as string, order.symbol, sor !== '' ? { sor_ordr_ccd: sor } : {}));
+                const canceled = await this.cancelOrder(order.id as string, order.symbol, sor !== '' ? { sor_ordr_ccd: sor } : {});
+                results.push({ ...order, status: 'canceled', info: { ...order.info, cancelResponse: canceled.info } });
             } catch (err) {
                 logger.warn({ err, orderId: order.id }, '[kbsec] 주문 취소 실패');
-                results.push({ ...order, info: { ...order.info, cancelError: err instanceof Error ? err.message : String(err) } });
+                results.push({
+                    ...order,
+                    info: {
+                        ...order.info,
+                        cancelError: err instanceof Error ? err.message : String(err),
+                        cancelErrorDetail: err instanceof BaseError ? err.detail : undefined,
+                    },
+                });
             }
         }
         return results;

@@ -106,7 +106,7 @@ PR 본문은 [PR 템플릿](.github/pull_request_template.md)의 항목을 채�
 
 세 증권사는 같은 상황에서 같은 계약을 지켜야 합니다. 계약은 공통 스위트가 코드로 정의합니다. TypeScript 구현의 위치는 `ts/src/__tests__/support/broker-contract-suite.ts`입니다.
 
-계약은 일곱 가지입니다.
+계약은 여덟 가지입니다.
 
 1. 알려진 업무 오류는 증권사가 선언한 오류 클래스로 던지고, 세부 원인 코드는 `detail`에 남깁니다.
 2. 분류 밖의 업무 오류는 `ExchangeError` 그대로 던집니다. 하위 클래스로 추측해서 좁히지 않습니다.
@@ -115,6 +115,7 @@ PR 본문은 [PR 템플릿](.github/pull_request_template.md)의 항목을 채�
 5. 장 시간 밖의 주문은 `MarketClosed`를 던지고 주문 요청을 증권사에 보내지 않습니다.
 6. 조회가 실패하면 빈 값을 반환하지 않고 던집니다.
 7. 정상 주문은 접수 결과(`Order`)를 반환하고 주문 요청을 정확히 한 번 보냅니다.
+8. `cancelAllOrders`는 일부 주문을 취소하지 못해도 던지지 않고 주문마다 결과를 반환합니다. 취소하지 못한 주문은 원래 상태(`open`)와 실패 사유(`info.cancelError`)를 싣습니다.
 
 ### 새 증권사를 추가하는 규칙
 

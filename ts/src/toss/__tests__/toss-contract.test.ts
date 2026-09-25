@@ -60,6 +60,19 @@ const harness: BrokerContractHarness = {
     setMarketOpen: (open) => { orderable.value = open; },
     orderRequestsSent: () => state.server?.requestsTo('POST /api/v1/orders').length ?? 0,
     wireBalanceFailure: () => { state.balance = errorReply(500, 'internal-error'); },
+    cancelAllTargets: { canceled: 'OID-A', rejected: 'OID-B' },
+    async cancelAllWithOneRejected() {
+        const open = (orderId: string) => ({
+            orderId, symbol: '005930', side: 'BUY', orderType: 'LIMIT', status: 'PENDING', price: '70000', quantity: '1', currency: 'KRW',
+            orderedAt: '2026-03-25T01:00:00Z', execution: { filledQuantity: '0' },
+        });
+        state.server = installFakeToss({
+            'GET /api/v1/orders': jsonOk({ orders: [open('OID-A'), open('OID-B')] }),
+            'POST /api/v1/orders/OID-A/cancel': jsonOk({ orderId: 'OID-C' }),
+            'POST /api/v1/orders/OID-B/cancel': errorReply(422, 'something-new', '취소 거절'),
+        });
+        return makeToss().cancelAllOrders();
+    },
 };
 
 defineBrokerContractSuite(harness);

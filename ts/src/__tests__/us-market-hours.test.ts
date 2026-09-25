@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { applyMarketCalendar, resetMarketCalendar } from '../market-calendar';
-import { getUsMarketPhase, formatEtWallClock, getTimeUntilUsMarketOpen } from '../us-market-hours';
+import { getUsMarketPhase, formatEtWallClock, getTimeUntilUsMarketOpen, usOrderBlockReason } from '../us-market-hours';
 
 /** 증권사 캘린더 API 가 알려 준 2026년 평일 휴장일(Memorial Day, 독립기념일 관측일, 크리스마스). */
 const US_CLOSED_DAYS = ['20260525', '20260703', '20261225'];
@@ -185,5 +185,28 @@ describe('getTimeUntilUsMarketOpen', () => {
             // EDT(-4) 였다면 13:30 UTC 라 결과가 달라짐 → DST 인식 검증.
             expect(getTimeUntilUsMarketOpen(utc(2026, 12, 1, 22))).toBe(16.5 * HOUR);
         });
+    });
+});
+
+describe('usOrderBlockReason — 세 증권사 공용 주문 게이트', () => {
+    /** 2026-09-22(화) ET(서머타임, UTC-4) 시:분:초. */
+    const et = (hour: number, minute: number, second = 0) => new Date(Date.UTC(2026, 8, 22, hour + 4, minute, second));
+
+    it('★정규장(09:30~16:00)만 연다. 시초가 동시호가(09:25~09:30)는 기본으로 막는다', () => {
+        expect(usOrderBlockReason({ now: et(9, 24, 59) })).toMatch(/phase=closed/);
+        expect(usOrderBlockReason({ now: et(9, 25) })).toMatch(/phase=pre-auction/);
+        expect(usOrderBlockReason({ now: et(9, 30) })).toBeNull();
+        expect(usOrderBlockReason({ now: et(15, 55), side: 'buy' })).toBeNull();
+        expect(usOrderBlockReason({ now: et(16, 0) })).toMatch(/phase=closed/);
+    });
+
+    it('sessions 에 opening-auction 을 주면 09:25 부터 연다', () => {
+        expect(usOrderBlockReason({ now: et(9, 25), sessions: ['regular', 'opening-auction'] })).toBeNull();
+    });
+
+    it('blockAuctionBuys 를 켜면 15:50:00 부터 신규 매수만 막는다', () => {
+        expect(usOrderBlockReason({ now: et(15, 49, 59), side: 'buy', blockAuctionBuys: true })).toBeNull();
+        expect(usOrderBlockReason({ now: et(15, 50), side: 'buy', blockAuctionBuys: true })).toMatch(/종가 동시호가/);
+        expect(usOrderBlockReason({ now: et(15, 50), side: 'sell', blockAuctionBuys: true })).toBeNull();
     });
 });

@@ -26,7 +26,7 @@
  * ## 옵션
  *
  * 전역 설정은 없고 인스턴스가 `options` 로 받는다. `tokenStore`(여러 프로세스가 나눠 쓰는 토큰 저장소), `nxtRouting`(정규장 밖 주문·시세, 불리언 또는
- * 불리언을 돌려주는 함수), `masterData`(종목 마스터), `stockDirectory`(코스피·코스닥 구분),
+ * 불리언을 돌려주는 함수), `blockAuctionBuys`(종가 동시호가의 신규 매수를 막는다, 기본 꺼짐), `masterData`(종목 마스터), `stockDirectory`(코스피·코스닥 구분),
  * `htsId`(관심종목·조건검색 조회와 `watchOrders` 에 쓰는 HTS 사용자 ID)다. `confirmBudget` 은 선언만 있고 읽지 않는다.
  *
  * ## 유량
@@ -45,6 +45,7 @@
 import {
     Exchange,
     ArgumentsRequired,
+    BaseError,
     AuthenticationError,
     BadRequest,
     BadResponse,
@@ -94,9 +95,8 @@ import { krxSellTaxRate } from './krx-sell-tax';
 import { KisAuth } from './kis/kis-auth';
 import { KIS_EXCEPTIONS_EXACT } from './kis/kis-error-codes';
 import { acquireKisSlot } from './kis/kis-rate-limiter';
-import { checkKRXTradingHours, getKrxMarketPhase, getNxtSession, isNxtExtendedTradable } from './kis/kis-trading-hours';
-import { getUsMarketPhase, formatEtWallClock } from './kis/us-market-hours';
-import { etWallClockToUtcMs, etYmd } from './us-market-hours';
+import { isNxtExtendedTradable, krxOrderBlockReason } from './krx-trading-hours';
+import { etWallClockToUtcMs, etYmd, usOrderBlockReason } from './us-market-hours';
 import {
     KIS_API_DOMAINS,
     KIS_BROKERAGE_FEE,
@@ -108,9 +108,10 @@ import {
     KIS_PRESENT_BALANCE_PARAMS,
     KIS_WS_DOMAINS,
     KIS_WS_PATH,
-    getTickSize,
     isKrxDomesticCode,
 } from './kis/kis-types';
+import { getKrxTickSize, KRX_TICK_INVALID_DETAIL, krxTickViolation } from './krx-tick-size';
+import { assertWholeRemainingEdit, editOrderTotal } from './edit-order-amount';
 import {
     getOverseasMarketForCode,
     getOverseasStockByCode,
@@ -3769,6 +3770,8 @@ export class kis extends Exchange {
                 tokenStore: undefined,
                 /** 정규장 밖(NXT 프리·애프터) 주문과 시세를 연다. 불리언이거나 불리언을 돌려주는 함수다. 기본은 꺼짐. */
                 nxtRouting: undefined,
+                /** 종가 동시호가(국내 15:20~15:30, 미국 15:50~16:00 ET)의 신규 매수를 막는다. 불리언이거나 불리언을 돌려주는 함수다. 기본은 꺼짐. */
+                blockAuctionBuys: undefined,
                 /** 종목 검색과 해외 거래소 판별에 쓰는 KIS 마스터 데이터(`KisMasterData`). 없으면 빈 데이터다. */
                 masterData: undefined,
                 /** 국내 종목의 KOSPI·KOSDAQ 구분을 알려 주는 곳(`BrokerStockDirectory`). 없으면 마스터 데이터로 판별한다. */
@@ -4312,8 +4315,8 @@ export class kis extends Exchange {
     }
 
     /**
-     * 가격을 호가 단위에 맞춘 문자열. 국내 일반 주식은 가격대별 호가 단위 표(2천원 미만 1원 … 50만원 이상 1천원)로 반올림한다.
-     * ETF·ETN 은 표가 달라서 손대지 않고 그대로 돌려준다. 미국은 0.01 달러 단위다.
+     * 가격을 호가 단위에 맞춘 문자열. 국내 일반 주식은 가격대별 호가 단위 표(`krx-tick-size`)로 반올림한다.
+     * ETF·ETN 은 표가 달라서 손대지 않고 그대로 돌려준다. 미국은 0.01 달러 단위다. 주문 경로는 이 메서드를 거치지 않는다.
      */
     override priceToPrecision(symbol: Str, price: number | string | undefined): Str {
         if (price === undefined) return undefined;
@@ -4321,7 +4324,17 @@ export class kis extends Exchange {
         if (instrument.overseas) return decimalToPrecision(price, ROUND, 0.01, TICK_SIZE, NO_PADDING);
         const securityType = getKRXStockByCode(this.master(), instrument.code)?.securityType;
         if (securityType !== undefined && securityType !== 'STOCK') return numberToString(price);
-        return decimalToPrecision(price, ROUND, getTickSize(Number(price)), TICK_SIZE, NO_PADDING);
+        return decimalToPrecision(price, ROUND, getKrxTickSize(Number(price)), TICK_SIZE, NO_PADDING);
+    }
+
+    /**
+     * 국내 지정가가 호가 단위 표에 맞지 않으면 요청 전에 `InvalidOrder` 다. 가격은 바꾸지 않는다. 마스터가 일반 주식(`STOCK`)이라고 알려 줄 때만
+     * 검사하고, 종목 종류를 모르거나 ETF·ETN 이면 서버에 맡긴다.
+     */
+    private assertKrxTickAligned(instrument: KisInstrument, price: number, method: string): void {
+        if (instrument.overseas || getKRXStockByCode(this.master(), instrument.code)?.securityType !== 'STOCK') return;
+        const violation = krxTickViolation(price);
+        if (violation !== null) throw new InvalidOrder(`${this.id} ${method}() ${violation} (${instrument.symbol})`, { detail: KRX_TICK_INVALID_DETAIL });
     }
 
     /** 심볼(또는 종목코드)을 종목 식별 결과로 바꾼다. 국내는 마스터 없이도 되고, 해외는 마스터에서 거래소를 찾는다. */
@@ -4403,7 +4416,7 @@ export class kis extends Exchange {
 
     /** 국내 시세 조회의 상품구분. `nxtRouting` 옵션이 켜져 있고 NXT 확장세션이면 통합(`UN`)으로 애프터마켓 시세를 받는다. */
     private async quoteMarketDivision(): Promise<QuoteMarketDivision> {
-        return isNxtExtendedTradable() && await this.isOptionEnabled('nxtRouting') ? 'UN' : 'J';
+        return isNxtExtendedTradable(new Date(this.milliseconds())) && await this.isOptionEnabled('nxtRouting') ? 'UN' : 'J';
     }
 
     // ============ 시세 ============
@@ -4787,6 +4800,7 @@ export class kis extends Exchange {
             return this.createOverseasOrder(instrument, type, side, quantity, price, params);
         }
         this.checkOrderArguments(undefined, type, side, quantity, price, params);
+        if (type === 'limit' && price !== undefined) this.assertKrxTickAligned(instrument, price, 'createOrder');
         return this.createDomesticOrder(instrument, type, side, quantity, price, params);
     }
 
@@ -4816,7 +4830,7 @@ export class kis extends Exchange {
         params = this.omit(params, 'session');
         // 확장세션(NXT 프리 08:00~08:50, 애프터 15:30~20:00)은 정규장 게이트 대신 NXT 게이트를 거쳐 SOR 로 낸다. `nxtRouting` 옵션이 꺼져 있으면 정규장 규칙이다.
         const extended = session === 'nxt'
-            || (session === undefined && (await this.isOptionEnabled('nxtRouting')) && isNxtExtendedTradable());
+            || (session === undefined && (await this.isOptionEnabled('nxtRouting')) && isNxtExtendedTradable(new Date(this.milliseconds())));
         if (extended) {
             await this.assertNxtSessionOpen();
             await this.assertNxtTradable(instrument);
@@ -7079,7 +7093,7 @@ export class kis extends Exchange {
      * 주식 신용주문(`order-credit`, 매수 TR `TTTC0052U`, 매도 `TTTC0051U`). 신용유형(`creditType`)은 방향별로 설명에 적힌 코드만 받는다(매수 21, 23, 26, 28,
      * 매도 22, 24, 25, 27). 대출일자는 신용매수면 오늘(한국 날짜)이 기본이고, 신용매도는 매도할 종목의 대출일자(`loanDate`, `YYYYMMDD`)가 필수다.
      * 지정가는 주문구분 `00`에 가격을, 시장가는 `01`에 가격 `0`을 보낸다. 설명 없는 선택 입력은 예제처럼 보내지 않는다.
-     * `createOrder` 와 같은 정규장 게이트를 거친다(장 시간 밖과 종가 동시호가의 신규 매수는 `MarketClosed`).
+     * `createOrder` 와 같은 정규장 게이트를 거친다(장 시간 밖은 `MarketClosed`. `options.blockAuctionBuys` 를 켜면 종가 동시호가의 신규 매수도).
      */
     async createCreditOrder(
         symbol: string, type: OrderType, side: OrderSide, amount: number, price: Num, creditType: string, loanDate: Str = undefined, params: Dict = {},
@@ -9839,10 +9853,8 @@ export class kis extends Exchange {
      */
     private async assertNxtSessionOpen(): Promise<void> {
         await this.refreshMarketCalendar();
-        const phase = getNxtSession();
-        if (phase !== 'pre-market' && phase !== 'main' && phase !== 'after-market') {
-            throw new MarketClosed(`NXT 거래시간 외 (session=${phase})`);
-        }
+        const reason = krxOrderBlockReason({ now: new Date(this.milliseconds()), sessions: ['nxt'] });
+        if (reason !== null) throw new MarketClosed(reason);
     }
 
     /**
@@ -9851,29 +9863,27 @@ export class kis extends Exchange {
      */
     private async assertDomesticEditOpen(): Promise<void> {
         await this.refreshMarketCalendar();
-        const { tradable, reason } = checkKRXTradingHours();
-        if (tradable) return;
-        const phase = getNxtSession();
-        if (phase === 'pre-market' || phase === 'main' || phase === 'after-market') return;
-        throw new MarketClosed(`거래시간 외: ${reason} (NXT session=${phase})`);
+        const reason = krxOrderBlockReason({ now: new Date(this.milliseconds()), sessions: ['regular', 'nxt'] });
+        if (reason !== null) throw new MarketClosed(reason);
     }
 
-    /** 미국 정정 게이트. 주문과 같이 완전 마감(`closed`)만 막는다. 홍콩·일본·베트남은 대상이 아니다. */
+    /** 미국 정정 게이트. 주문과 같은 시간표(정규장과 종가 동시호가)를 쓴다. 홍콩·일본·베트남은 대상이 아니다. */
     private assertUsEditOpen(exchange: string): void {
-        if (US_ORDER_EXCHANGES.has(exchange) && getUsMarketPhase() === 'closed') {
-            throw new MarketClosed(`미국장 정규장 외 (${formatEtWallClock()}, phase=closed)`);
-        }
+        if (!US_ORDER_EXCHANGES.has(exchange)) return;
+        const reason = usOrderBlockReason({ now: new Date(this.milliseconds()) });
+        if (reason !== null) throw new MarketClosed(reason);
     }
 
-    /** 국내 정규장 게이트. 휴장일은 KIS 캘린더로 알아야 하므로 먼저 받는다. 종가 동시호가(15:20~15:30)의 신규 매수는 막는다. */
+    /**
+     * 국내 정규장 게이트. 휴장일은 KIS 캘린더로 알아야 하므로 먼저 받는다. 종가 동시호가(15:20~15:30)의 신규 매수는 `options.blockAuctionBuys` 가
+     * 켜졌을 때만 막는다. KRX 는 이 시간에도 호가를 받는다.
+     */
     private async assertDomesticSessionOpen(side: OrderSide): Promise<void> {
         await this.refreshMarketCalendar();
-        const { tradable, reason } = checkKRXTradingHours();
-        if (!tradable) throw new MarketClosed(`거래시간 외: ${reason}`);
-        // 동시호가는 호가 처리 방식이 달라 시장가 체결가가 예상과 크게 다를 수 있다. 청산(매도)은 진입보다 우선이라 막지 않는다.
-        if (getKrxMarketPhase() === 'closing-auction' && side === 'buy') {
-            throw new MarketClosed('종가 동시호가 (15:20-15:30) — 신규 매수 진입 금지');
-        }
+        const reason = krxOrderBlockReason({
+            now: new Date(this.milliseconds()), side, blockAuctionBuys: await this.isOptionEnabled('blockAuctionBuys'),
+        });
+        if (reason !== null) throw new MarketClosed(reason);
     }
 
     /**
@@ -9899,14 +9909,13 @@ export class kis extends Exchange {
         if (exchange === undefined) throw new BadSymbol(`해외 마스터에 없는 ticker: ${instrument.symbol}`);
         const slot = OVERSEAS_ORDER_TR[exchange];
         if (slot === undefined) throw new NotSupported(`미지원 거래소: ${exchange}`);
-        // 미국장 세션 게이트. 완전 마감(`closed`)은 양방향 모두 막는다(닫힌 시장에 낸 매도도 체결될 수 없다). 종가 동시호가의 신규 매수도 막는다.
-        // 홍콩·일본·베트남 같은 다른 해외 시장은 이 게이트의 대상이 아니다.
+        // 미국장 세션 게이트. 정규장(09:30~16:00 ET, 종가 동시호가 포함) 밖은 양방향 모두 막는다. 09:25~09:30 에 주문을 받는지는 확인하지 못해 연다고
+        // 보지 않는다. 종가 동시호가의 신규 매수는 `options.blockAuctionBuys` 가 켜졌을 때만 막는다. 홍콩·일본·베트남 같은 다른 해외 시장은 대상이 아니다.
         if (US_ORDER_EXCHANGES.has(exchange)) {
-            const phase = getUsMarketPhase();
-            if (phase === 'closed') throw new MarketClosed(`미국장 정규장 외 (${formatEtWallClock()}, phase=closed)`);
-            if (phase === 'closing-auction' && side === 'buy') {
-                throw new MarketClosed(`종가 동시호가 (15:50-16:00 ET, ${formatEtWallClock()}) — 신규 매수 진입 금지`);
-            }
+            const reason = usOrderBlockReason({
+                now: new Date(this.milliseconds()), side, blockAuctionBuys: await this.isOptionEnabled('blockAuctionBuys'),
+            });
+            if (reason !== null) throw new MarketClosed(reason);
         }
         // 모의투자는 지정가만 받는다. 실전은 시장가 의도를 장마감지정가(LOC)로 낸다.
         const ordDvsn = type === 'market' && !this.isSandboxModeEnabled ? KIS_OVERSEAS_ORD_DVSN.LOC : KIS_OVERSEAS_ORD_DVSN.LIMIT;
@@ -9996,9 +10005,14 @@ export class kis extends Exchange {
 
     /**
      * 정정. 취소와 같은 엔드포인트(`order-rvsecncl`)를 `RVSE_CNCL_DVSN_CD`로 나눈다(공식 예제: `01`=정정, `02`=취소).
-     * `price`가 필수다(정정은 단가를 바꾸는 주문이라 빼면 KB증권과 같은 이유로 위험하다). `amount`를 주면 그 수량으로
-     * 일부정정(`QTY_ALL_ORD_YN: 'N'`)하고, 안 주면 국내는 전량(`'Y'`)을 그대로 정정한다. 공식 예제는 정정 가능 수량이
-     * 원주문 수량을 넘지 못한다고 적었다. 국내는 KRX 정규장과 NXT 확장세션이 모두 닫혀 있으면, 미국은 완전 마감이면 `MarketClosed` 다.
+     * `price`가 필수다(정정은 단가를 바꾸는 주문이라 빼면 KB증권과 같은 이유로 위험하다).
+     *
+     * `amount` 는 ccxt 와 같이 정정 뒤 주문의 총수량(체결분 포함)이다. 주면 미체결 조회로 원주문의 체결 수량과 잔량을 확인하고, 둘의 합과 같을 때만
+     * 잔량 전부를 새 가격으로 정정한다. 수량을 바꾸는 조합은 한 요청으로 낼 수 없어 정정 요청 없이 `NotSupported` 다. 주지 않으면 확인 없이 잔량
+     * 전부를 정정한다(국내 `QTY_ALL_ORD_YN: 'Y'`). 잔량 일부만 새 가격으로 옮기는 국내 일부정정(`'N'`)은 `params.partial: true` 일 때만 보내고,
+     * 이때 `amount` 는 옮길 수량이다(나머지가 옛 가격에 남는다는 것은 공식 예제의 인자 설명에 기댄 추정이다). 반환 주문의 `amount` 는 정정 뒤 총수량이고,
+     * 일부정정이면 옮긴 수량이다. 확인하지 않은 값은 싣지 않는다.
+     * 국내는 KRX 정규장과 NXT 확장세션이 모두 닫혀 있으면, 미국은 정규장 밖이면 `MarketClosed` 다.
      */
     override async editOrder(
         id: string, symbol: string, _type: OrderType, _side: OrderSide, amount: Num = undefined, price: Num = undefined, params: Dict = {},
@@ -10006,42 +10020,62 @@ export class kis extends Exchange {
         if (price === undefined || price === null) {
             throw new ArgumentsRequired(`${this.id} editOrder() requires a price argument`);
         }
+        const partial = this.safeBool(params, 'partial', false) === true;
+        if (partial && amount === undefined) throw new ArgumentsRequired(`${this.id} editOrder() 의 일부정정(params.partial)에는 옮길 수량 amount 가 필요하다`);
+        params = this.omit(params, 'partial');
         const instrument = this.instrumentOf(symbol);
-        if (instrument.overseas) return this.editOverseasOrder(id, instrument, price, amount, params);
+        if (instrument.overseas) return this.editOverseasOrder(id, instrument, price, amount, partial, params);
+        this.assertKrxTickAligned(instrument, price, 'editOrder');
         await this.assertDomesticEditOpen();
+        if (!partial && amount !== undefined) assertWholeRemainingEdit(this.id, id, amount, await this.findOpenOrder(instrument, id));
         const response = await this.privatePostUapiDomesticStockV1TradingOrderRvsecncl(this.extend({
             ...this.accountParams(),
             KRX_FWDG_ORD_ORGNO: this.safeString(params, 'orderOrgNo', ''),
             ORGN_ODNO: id,
             ORD_DVSN: KIS_ORDER_TYPE.LIMIT,
             RVSE_CNCL_DVSN_CD: '01', // 정정
-            ORD_QTY: amount === undefined ? '0' : String(amount),
+            ORD_QTY: partial ? String(amount) : '0',
             ORD_UNPR: String(price),
-            QTY_ALL_ORD_YN: amount === undefined ? 'Y' : 'N',
+            QTY_ALL_ORD_YN: partial ? 'N' : 'Y',
             tr_id: this.tr('TTTC0803U'),
         }, this.omit(params, 'orderOrgNo')));
         const newId = this.safeString(this.safeDict(response, 'output', {}) as Dict, 'ODNO', id);
-        logger.info({ orderId: id, newOrderId: newId, symbol, price, amount }, '[kis] 주문 정정 성공');
+        logger.info({ orderId: id, newOrderId: newId, symbol, price, amount, partial }, '[kis] 주문 정정 성공');
         return this.safeOrder({
             id: newId, symbol: instrument.symbol, type: 'limit', price, amount, status: 'open', info: response,
         }, this.marketOf(instrument));
     }
 
+    /** 정정할 원주문을 미체결 목록에서 찾는다. 조회가 실패하면 던지고, 목록에 없으면 `OrderNotFound` 다. */
+    private async findOpenOrder(instrument: KisInstrument, id: string): Promise<Order> {
+        const open = (await this.fetchOpenOrders(instrument.symbol)).find((order) => order.id === id);
+        if (open === undefined) throw new OrderNotFound(`${this.id} 미체결 주문을 찾지 못했다: ${id} (${instrument.symbol})`);
+        return open;
+    }
+
     /**
-     * 해외 정정. `amount`나 `params.amount`가 없으면 미체결 조회에서 잔량을 찾는다(취소와 같은 정책). 모의투자는 미체결 조회가
-     * 없어 반드시 넘겨야 한다. 공식 예제는 정정 요청에 실제 수량과 실제 단가를 그대로 싣는다(취소처럼 `'0'`을 넣지 않는다).
+     * 해외 정정. 정정 수량(`ORD_QTY`)에는 미체결 조회로 찾은 잔량을 싣고, `amount` 를 주면 국내처럼 원주문의 총수량과 대조한다. `params.amount` 를
+     * 주면 조회와 대조 없이 그 값을 정정 수량으로 싣는다(취소와 같은 정책). 모의투자는 미국 미체결 조회가 없어 `params.amount` 가 필요하고,
+     * `amount` 는 대조할 수 없어 `NotSupported` 다. 해외 정정 수량의 뜻은 확인하지 못해 일부정정(`params.partial`)은 받지 않는다.
+     * 공식 예제는 정정 요청에 실제 수량과 실제 단가를 그대로 싣는다(취소처럼 `'0'`을 넣지 않는다).
      */
-    private async editOverseasOrder(id: string, instrument: KisInstrument, price: number, amount: Num, params: Dict): Promise<Order> {
+    private async editOverseasOrder(id: string, instrument: KisInstrument, price: number, amount: Num, partial: boolean, params: Dict): Promise<Order> {
         const exchange = instrument.orderExchange;
         if (exchange === undefined) throw new BadSymbol(`해외 마스터에 없는 ticker: ${instrument.symbol}`);
-        let quantity = this.safeString(params, 'amount') ?? (amount === undefined ? undefined : numberToString(amount));
+        if (partial) throw new NotSupported(`${this.id} editOrder() 의 일부정정(params.partial)은 미국 주문에서 지원하지 않는다`);
+        let quantity = this.safeString(params, 'amount');
         if (quantity === undefined && this.isSandboxModeEnabled) {
-            throw new ArgumentsRequired(`${this.id} 모의투자의 해외 주문 정정에는 amount나 params.amount(정정 수량)가 필요하다`);
+            if (amount !== undefined) {
+                throw new NotSupported(`${this.id} 모의투자는 미국 미체결 조회가 없어 editOrder() 의 amount 를 원주문과 대조할 수 없다. params.amount(정정 수량)로 준다`);
+            }
+            throw new ArgumentsRequired(`${this.id} 모의투자의 해외 주문 정정에는 params.amount(정정 수량)가 필요하다`);
         }
         this.assertUsEditOpen(exchange);
+        let total: number | undefined;
         if (quantity === undefined) {
-            const open = (await this.fetchOpenOrders(instrument.symbol)).find((order) => order.id === id);
-            if (open === undefined) throw new OrderNotFound(`${this.id} 미체결 해외 주문을 찾지 못했다: ${id}`);
+            const open = await this.findOpenOrder(instrument, id);
+            if (amount !== undefined) assertWholeRemainingEdit(this.id, id, amount, open);
+            total = editOrderTotal(open);
             quantity = numberToString(open.remaining ?? open.amount ?? 0);
         }
         const response = await this.privatePostUapiOverseasStockV1TradingOrderRvsecncl(this.extend({
@@ -10059,21 +10093,34 @@ export class kis extends Exchange {
         const newId = this.safeString(this.safeDict(response, 'output', {}) as Dict, 'ODNO', id);
         logger.info({ orderId: id, newOrderId: newId, symbol: instrument.symbol, price, quantity }, '[kis] 해외 주문 정정 성공');
         return this.safeOrder({
-            id: newId, symbol: instrument.symbol, type: 'limit', price, amount: Number(quantity), status: 'open', info: response,
+            id: newId, symbol: instrument.symbol, type: 'limit', price, amount: total, status: 'open', info: response,
         }, this.marketOf(instrument));
     }
 
     /**
-     * 미체결 주문을 모두 취소한다. 종목을 주면 그 종목만이다. 하나라도 취소하지 못하면 나머지를 다 시도한 뒤 첫 실패를 던진다.
-     * 살아 있을 수 있는 주문을 성공으로 돌려주지 않기 위해서다. 국내 취소에는 공식 예제처럼 미체결 행의 주문채번지점번호(`ord_gno_brno`)를
+     * 미체결 주문을 모두 취소한다. 종목을 주면 그 종목만이다. 취소를 시도한 주문마다 미체결 조회로 받은 주문을 항목으로 돌려준다.
+     * 취소된 항목은 `status: 'canceled'` 이고 취소 응답 원문이 `info.cancelResponse` 에 있다. 취소하지 못한 항목은 원래 상태(`open`)이고
+     * `info.cancelError`(메시지)와 `info.cancelErrorDetail`(오류의 `detail`)이 있다. 일부가 실패해도 던지지 않으므로 항목의 `status` 를 확인한다.
+     * 미체결 조회가 실패하거나 잘리면 하나도 취소하지 않고 던진다. 국내 취소에는 공식 예제처럼 미체결 행의 주문채번지점번호(`ord_gno_brno`)를
      * 원주문 조직번호로 싣는다.
      */
     override async cancelAllOrders(symbol: Str = undefined, params: Dict = {}): Promise<Order[]> {
         const open = await this.fetchOpenOrders(symbol, undefined, undefined, params);
         const results = await Promise.allSettled(open.map((order) => this.cancelOrder(order.id as string, order.symbol, this.cancelParamsOf(order))));
-        const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
-        if (failed !== undefined) throw failed.reason;
-        return results.map((r) => (r as PromiseFulfilledResult<Order>).value);
+        return results.map((result, index): Order => {
+            const order = open[index]!;
+            if (result.status === 'fulfilled') return { ...order, status: 'canceled', info: { ...order.info, cancelResponse: result.value.info } };
+            const err: unknown = result.reason;
+            logger.warn({ err, orderId: order.id }, '[kis] 주문 취소 실패');
+            return {
+                ...order,
+                info: {
+                    ...order.info,
+                    cancelError: err instanceof Error ? err.message : String(err),
+                    cancelErrorDetail: err instanceof BaseError ? err.detail : undefined,
+                },
+            };
+        });
     }
 
     /** `cancelAllOrders` 가 미체결 주문 하나를 취소할 때의 `params`. 해외 취소 요청에는 조직번호가 없어 아무것도 싣지 않는다. */

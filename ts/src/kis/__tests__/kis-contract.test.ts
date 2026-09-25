@@ -4,22 +4,14 @@
  *
  * 스위트 뒤에는 KIS 에만 해당하는 계약이 이어진다: 조회는 연결 오류를 몇 번 다시 보내고, 보유가 없는 잔고는 실패가 아니다.
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-const { mockFetch, tradable } = vi.hoisted(() => ({ mockFetch: vi.fn(), tradable: { value: true } }));
-
-vi.mock('../kis-trading-hours', () => ({
-    checkKRXTradingHours: () => (tradable.value ? { tradable: true, reason: '' } : { tradable: false, reason: '장 마감' }),
-    getKrxMarketPhase: () => 'open',
-    isNxtExtendedTradable: () => false,
-    getNxtSession: () => 'closed',
-}) satisfies Partial<typeof import('../kis-trading-hours')>);
-vi.mock('../us-market-hours', () => ({ getUsMarketPhase: () => 'open', formatEtWallClock: () => '10:00 ET' }) satisfies Partial<typeof import('../us-market-hours')>);
+const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 global.fetch = mockFetch as unknown as typeof fetch;
 
 import { NetworkError, RateLimitExceeded } from '../../base/errors';
 import { defineBrokerContractSuite, type BrokerContractHarness } from '../../__tests__/support/broker-contract-suite';
-import { businessError, dataOk, jsonResponse, newKis, tokenOk } from './support/kis-test-utils';
+import { businessError, dataOk, jsonResponse, MARKET_TIMES, newKis, tokenOk } from './support/kis-test-utils';
 
 const ORDER_PATH = '/trading/order-cash';
 const BALANCE_PATH = '/trading/inquire-balance';
@@ -61,7 +53,7 @@ const harness: BrokerContractHarness = {
         state.balanceFails = false;
         state.readFailure = undefined;
         state.orderRequests = 0;
-        tradable.value = true;
+        vi.setSystemTime(MARKET_TIMES.krxRegular);
         mockFetch.mockReset();
         route();
     },
@@ -75,10 +67,37 @@ const harness: BrokerContractHarness = {
     wireOrderNetworkFailure: (code) => { state.order = { type: 'network', code }; },
     wireReadNetworkFailure: (code) => { state.readFailure = code; },
     wireOrderAccepted: () => { state.order = { type: 'accepted' }; },
-    setMarketOpen: (open) => { tradable.value = open; },
+    setMarketOpen: (open) => { vi.setSystemTime(open ? MARKET_TIMES.krxRegular : MARKET_TIMES.krxClosed); },
     orderRequestsSent: () => state.orderRequests,
     wireBalanceFailure: () => { state.balanceFails = true; },
+    cancelAllTargets: { canceled: 'A', rejected: 'B' },
+    async cancelAllWithOneRejected() {
+        mockFetch.mockImplementation(async (url: string, init?: { body?: string }) => {
+            const u = String(url);
+            if (u.includes('/oauth2/tokenP')) return tokenOk('t');
+            if (u.includes('inquire-psbl-rvsecncl')) {
+                return dataOk({ output: [
+                    { odno: 'A', pdno: '005930', sll_buy_dvsn_cd: '02', ord_qty: '1', psbl_qty: '1', ord_unpr: '70000' },
+                    { odno: 'B', pdno: '005930', sll_buy_dvsn_cd: '02', ord_qty: '1', psbl_qty: '1', ord_unpr: '70000' },
+                ] });
+            }
+            if (u.includes('order-rvsecncl')) {
+                if (JSON.parse(init?.body ?? '{}').ORGN_ODNO === 'B') return businessError('APBK1683', '정정/취소할 수량이 없습니다.');
+                return dataOk({ output: { ODNO: 'X' } });
+            }
+            return dataOk({ output: {} });
+        });
+        return newKis().cancelAllOrders('005930/KRW');
+    },
 };
+
+// 장 시간 게이트는 인스턴스 시계를 읽으므로 시각을 고정한다(`reset` 과 `setMarketOpen` 이 정한다).
+beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+});
+afterEach(() => {
+    vi.useRealTimers();
+});
 
 defineBrokerContractSuite(harness);
 

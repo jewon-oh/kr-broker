@@ -29,6 +29,7 @@ from kr_broker.kis_master_search_rank import rank_master_matches
 from kr_broker.kis_overseas_master import search_overseas_stocks, to_order_market_code
 from kr_broker.kis_stock_master import get_krx_stock_by_code, search_krx_stocks
 from kr_broker.kis_types import get_tick_size
+from kr_broker.krx_tick_size import get_krx_tick_size, krx_tick_violation
 from kr_broker.kis_yahoo_candles import (
     align_tail_to_series_grid, dedupe_by_timestamp_keep_last, fetch_yahoo_candles, to_yahoo_range, to_yahoo_ticker,
 )
@@ -530,6 +531,12 @@ def test_order_market_code() -> None:
 def test_tick_size_table() -> None:
     assert [get_tick_size(p) for p in (1999, 2000, 4999, 5000, 19999, 20000, 49999, 50000, 199999, 200000, 499999, 500000)] == [
         1, 5, 5, 10, 10, 50, 50, 100, 100, 500, 500, 1000]
+    # 옛 이름은 공용 표의 함수를 그대로 가리킨다.
+    assert get_tick_size is get_krx_tick_size
+    assert krx_tick_violation(70000) is None
+    assert krx_tick_violation(70000.0) is None
+    assert '100원' in (krx_tick_violation(70030) or '')
+    assert krx_tick_violation(70000.5) is not None and krx_tick_violation(0) is not None
 
 
 def test_instrument_and_price_precision() -> None:

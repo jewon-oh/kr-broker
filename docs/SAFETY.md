@@ -28,7 +28,7 @@ const broker = new kis({ apiKey, secret, uid, sandbox: true });
 - 요청 간격이 500ms로 늘어납니다. 소스 주석은 모의투자의 상한을 초당 2건으로 적었습니다.
 - 캐시한 접근 토큰을 버립니다.
 - 모의투자가 지원하지 않는 조회는 `NotSupported`를 던집니다. 예를 들어 휴장일 조회(`fetchMarketCalendar`)가 있습니다.
-- 미국 주문 취소에는 `params.amount`(취소 수량)가 필요합니다.
+- 미국 주문 취소와 정정에는 `params.amount`(취소나 정정 수량)가 필요합니다. `editOrder`에 `amount`(정정 뒤 총수량)를 주면, 미체결 조회가 없어 원주문과 대조할 수 없으므로 `NotSupported`를 던집니다.
 - 미국 주식 시장가 주문은 장마감지정가(LOC)가 아니라 지정가로 나갑니다.
 
 모의투자 앱키는 실전 앱키와 따로 발급받습니다. 발급 절차는 [앱키 발급 가이드](guides/credentials.md)에 있습니다.
@@ -49,20 +49,49 @@ const broker = new kis({ apiKey, secret, uid, sandbox: true });
 
 장 시간 밖에서 주문하면 라이브러리가 `MarketClosed`를 던지고 주문 요청을 보내지 않습니다. 시험은 장 시간 안에서 하십시오.
 
+### 세 증권사의 장 시간 게이트
+
+세 증권사는 같은 판정 함수(`krxOrderBlockReason`, `usOrderBlockReason`)로 장 시간을 판정합니다. 판정 시각은 인스턴스 시계(`milliseconds()`)입니다. 아래 표의 구분 열에서 "시장 규칙"은 시장이 주문을 받지 않는 시간이라 늘 막는다는 뜻입니다. "옵션"은 시장은 주문을 받지만, 호출하는 쪽이 막을지 고르는 정책이라는 뜻입니다.
+
+| 시각 | 한국투자증권 | 토스증권 | KB증권 | 구분 |
+|---|---|---|---|---|
+| 국내 정규장(09:00~15:30) 밖과 휴장일 | 막습니다 | 막습니다. 확장세션은 아래 행을 봅니다 | 막습니다 | 시장 규칙 |
+| 국내 15:20~15:30의 신규 매수 | `options.blockAuctionBuys`를 켜면 막습니다 | 같습니다 | 같습니다 | 옵션(기본 꺼짐) |
+| 국내 확장세션 | `nxtRouting`을 켜거나 `session: 'nxt'`를 주면 NXT 프리마켓(08:00~08:50), 메인마켓(09:00~15:20), 애프터마켓(15:30~20:00)에 엽니다 | `nxtRouting`을 켜면 장 운영 캘린더의 프리마켓과 애프터마켓에 지정가만 엽니다 | 막습니다 | 증권사별 |
+| 미국 정규장(09:30~16:00 ET) 밖과 휴장일 | 막습니다 | 장 운영 캘린더로 판정합니다. 주간거래, 프리마켓, 애프터마켓에는 정수 수량 지정가만 엽니다 | 막습니다 | 시장 규칙 |
+| 미국 09:25~09:30(ET) | 막습니다 | 장 운영 캘린더를 따릅니다(프리마켓) | 막습니다 | 주문을 받는지 확인하지 못한 시간대 |
+| 미국 15:50~16:00(ET)의 신규 매수 | `options.blockAuctionBuys`를 켜면 막습니다 | 같습니다 | 같습니다 | 옵션(기본 꺼짐) |
+| 정정(`editOrder`) | 국내는 KRX 정규장과 NXT 세션이 모두 닫혔을 때, 미국은 정규장 밖에서 막습니다 | 게이트가 없습니다 | 게이트가 없습니다 | |
+
+토스증권은 장 운영 캘린더를 받지 못하면 정적 시간표로 판정합니다. 국내는 KRX 정규장, 미국은 정규장만 엽니다.
+
+KRX 15:20~15:30은 종가 단일가 매매 시간이고, 이 시간에도 호가를 받습니다. 단일가라서 시장가의 체결가가 예상과 크게 다를 수 있습니다. 진입을 피하려면 `blockAuctionBuys`를 켭니다. 매도(청산)는 옵션을 켜도 막지 않습니다.
+
 ### 한국투자증권의 경로별 장 시간 게이트
 
 한국투자증권은 주문 경로마다 게이트가 다릅니다. 아래 표에서 "없음"인 경로는 라이브러리가 시각을 보지 않고 요청을 보냅니다. 장 시간 판단은 증권사 응답에 맡깁니다.
 
 | 경로 | 막는 시각 |
 |---|---|
-| `createOrder` 국내 정규장, `createTriggerOrder`, `createCreditOrder` | KRX 정규장(09:00~15:30) 밖과 휴장일. 15:20~15:30 에는 신규 매수만 막습니다 |
+| `createOrder` 국내 정규장, `createTriggerOrder`, `createCreditOrder` | KRX 정규장(09:00~15:30) 밖과 휴장일. `blockAuctionBuys`를 켜면 15:20~15:30의 신규 매수도 막습니다 |
 | `createOrder` 국내 확장세션(`session: 'nxt'` 또는 `nxtRouting` 자동 판정) | NXT 프리마켓(08:00~08:50), 메인마켓(09:00~15:20), 애프터마켓(15:30~20:00) 밖과 휴장일 |
-| `createOrder` 미국 | 완전 마감. 15:50~16:00(ET)에는 신규 매수만 막습니다 |
+| `createOrder` 미국 | 정규장(09:30~16:00 ET) 밖. `blockAuctionBuys`를 켜면 15:50~16:00(ET)의 신규 매수도 막습니다 |
 | `editOrder` 국내 | KRX 정규장과 NXT 확장세션이 모두 닫힌 시각과 휴장일 |
-| `editOrder` 미국 | 완전 마감 |
+| `editOrder` 미국 | 정규장(09:30~16:00 ET) 밖 |
 | `cancelOrder`, `cancelAllOrders` | 없음 |
 | `createDaytimeOrder`, `createDerivativeOrder`, `createBondOrder`, `createOverseasDerivativeOrder` | 없음. 이 시장들의 시간표는 라이브러리에 없습니다 |
 | 예약주문(`createReservedOrder`, `createOverseasReservedOrder`) | 없음. 장 밖에 내는 주문입니다 |
+
+## cancelAllOrders는 항목의 status로 확인합니다
+
+`cancelAllOrders()`는 미체결 주문을 조회해 하나씩 취소합니다. 일부를 취소하지 못해도 던지지 않습니다. 세 증권사 모두 미체결 조회로 받은 주문을 항목으로 반환합니다.
+
+- 취소된 주문은 `status`가 `canceled`이고, 취소 응답 원문이 `info.cancelResponse`에 있습니다.
+- 취소하지 못한 주문은 원래 상태(`open`)로 남습니다. 오류 메시지는 `info.cancelError`에, 오류의 `detail`은 `info.cancelErrorDetail`에 있습니다.
+- 토스증권은 취소하려는 사이에 끝난 주문을 원인 코드대로 `closed`, `canceled`, `rejected`로 옮깁니다.
+- 미체결 조회가 실패하거나 쪽 상한에서 잘리면 하나도 취소하지 않고 던집니다.
+
+반환값을 보지 않으면 취소되지 않은 주문을 놓칩니다. `status`가 `open`인 항목이 남았는지 확인하십시오.
 
 ## OrderOutcomeUnknown이 나오면 재주문하지 않습니다
 

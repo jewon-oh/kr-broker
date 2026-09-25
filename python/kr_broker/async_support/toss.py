@@ -21,12 +21,15 @@ ccxt 와 같은 모양으로 다룬다. 실시간(`watch_*`)은 이 클래스를
     `timeInForce`(`DAY`·`CLS`·`OPG`), `triggerPrice`(있으면 조건주문), `conditionalType`(`SINGLE`·`OCO`·`OTO`), `second`(둘째 조건),
     `expireDate`(조건주문 만료일), `confirmExecution`(`False` 면 체결 조회를 하지 않는다)를 읽는다. 접수 뒤에는 주문 상세를 짧게 조회해
     체결 수량·평균가·수수료를 확정하고, 확정하지 못하면 `filled` 를 비워 둔다. 확정한 값은 `order['info']['execution']` 에도 있다.
+    일반 주문은 이 키를 뺀 나머지를 요청 본문 끝에 합친다(ccxt 와 같다). 라이브러리가 인자로 채우는 필드(`symbol`·`side`·`orderType`·
+    `quantity`·`orderAmount`·`price`·`confirmHighValueOrder`)를 `params` 로 주면 요청 없이 `BadRequest` 다. ccxt 조건 인자(`stopPrice` 등)는
+    요청 없이 `NotSupported` 다. `edit_order` 의 일반 정정도 같은 규칙이다.
 
 옵션
     `tokenStore`(토큰 저장소), `nxtRouting`(국내 확장세션 주문), `usExtendedLimit`(미국 확장세션 시장가를 지정가로),
-    `krwIntegratedMargin`(켜면 `fetch_balance({'currency': 'USD'})` 의 USD 에 원화 매수 여력의 달러 환산액을 늘 더한다. 환율은 토스 조회,
+    `blockAuctionBuys`(정규장 종가 동시호가의 신규 매수를 막는다), `krwIntegratedMargin`(켜면 `fetch_balance({'currency': 'USD'})` 의 USD 에 원화 매수 여력의 달러 환산액을 늘 더한다. 환율은 토스 조회,
     실패하면 `usdKrwRate`), `confirmBudget`(체결 확정 조회 예산), `confirmExecution`(접수 뒤 체결 확정 조회).
-    `nxtRouting`·`usExtendedLimit`·`krwIntegratedMargin` 은 불리언이거나 불리언을 돌려주는 함수이고 기본은 꺼짐이다. `confirmExecution` 은 기본이
+    `nxtRouting`·`usExtendedLimit`·`blockAuctionBuys`·`krwIntegratedMargin` 은 불리언이거나 불리언을 돌려주는 함수이고 기본은 꺼짐이다. `confirmExecution` 은 기본이
     켜짐이고 `False` 일 때만 꺼지므로 함수를 넘기면 늘 켜진다.
 
 오류
@@ -46,7 +49,7 @@ from kr_broker.async_support.base.token_store import LegacyKeyTokenStore, refres
 from kr_broker.async_support.execution_confirm import confirm_execution
 from kr_broker.async_support.extended_session_limit import build_extended_session_limit
 from kr_broker.base import functions as fn
-from kr_broker.base.decimal_to_precision import DECIMAL_PLACES, TICK_SIZE, TRUNCATE, decimal_to_precision
+from kr_broker.base.decimal_to_precision import DECIMAL_PLACES, NO_PADDING, ROUND, TICK_SIZE, TRUNCATE, decimal_to_precision
 from kr_broker.base.errors import (
     AccountNotEnabled, ArgumentsRequired, AuthenticationError, BadRequest, BadResponse, BadSymbol, DuplicateOrderId, ExchangeError,
     ExchangeNotAvailable, InsufficientFunds, InvalidOrder, ManualInteractionNeeded, MarketClosed, NotSupported, NullResponse,
@@ -58,6 +61,9 @@ from kr_broker.base.token_store import BrokerTokenStore, legacy_token_store_key,
 from kr_broker.base.types import ApiName, Int, Num, Str, Strings
 from kr_broker.broker_market_group import symbol_base_code
 from kr_broker.broker_time import candle_period_utc_ms, is_daily_or_longer_timeframe
+from kr_broker.edit_order_amount import assert_whole_remaining_edit, edit_order_total
+from kr_broker.krx_tick_size import KRX_TICK_INVALID_DETAIL, get_krx_tick_size, krx_tick_violation
+from kr_broker.krx_trading_hours import krx_auction_buy_block_reason
 from kr_broker.market_calendar import apply_market_calendar
 from kr_broker.toss_fee import pick_commission_rate
 from kr_broker.toss_trading_hours import (
@@ -68,6 +74,7 @@ from kr_broker.toss_types import (
     TOSS_BROKERAGE_FEE, TOSS_HIGH_VALUE_THRESHOLD_KRW, TOSS_HIGH_VALUE_THRESHOLD_USD, TOSS_US_BROKERAGE_FEE,
     get_toss_effective_fee_rate, toss_market_country,
 )
+from kr_broker.us_market_hours import us_auction_buy_block_reason
 
 logger = logging.getLogger('kr_broker')
 
@@ -94,6 +101,16 @@ LISTED_MARKETS = ['KOSPI', 'KOSDAQ', 'KR_ETC', 'NYSE', 'NASDAQ', 'AMEX', 'US_ETC
 KR_LISTED_MARKETS = frozenset(['KOSPI', 'KOSDAQ', 'KR_ETC'])
 # 더 이상 체결이 늘지 않는 주문 상태. `REPLACED` 는 체결 정보가 대체 주문으로 옮겨 간다.
 TERMINAL_ORDER_STATUSES = frozenset(['FILLED', 'CANCELED', 'REJECTED', 'CANCEL_REJECTED', 'REPLACE_REJECTED', 'REPLACED'])
+# ccxt 조건 인자. 조건주문은 `triggerPrice` 로만 내므로, 이 키를 버리고 일반 주문을 내지 않게 요청 전에 막는다.
+UNSUPPORTED_CONDITIONAL_PARAMS = ('stopPrice', 'stopLossPrice', 'takeProfitPrice', 'stopLoss', 'takeProfit')
+# 일반 주문 경로가 `params` 에서 읽는 키. 본문에 합치지 않는다.
+ORDER_HANDLED_PARAMS = ['triggerPrice', 'cost', 'clientOrderId', 'timeInForce', 'confirmExecution']
+# 라이브러리가 인자로 채우는 주문 본문 필드. `params` 로 덮으면 돌려주는 주문과 실제 요청이 어긋나므로 받지 않는다.
+ORDER_COMPUTED_FIELDS = ('symbol', 'side', 'orderType', 'quantity', 'orderAmount', 'price', 'confirmHighValueOrder')
+# 일반 정정 경로가 `params` 에서 읽는 키. 본문에 합치지 않는다.
+EDIT_HANDLED_PARAMS = ['trigger', 'stop', 'partial']
+# 라이브러리가 인자로 채우는 정정 본문 필드(`orderId` 는 경로에 실린다).
+EDIT_COMPUTED_FIELDS = ('orderId', 'orderType', 'quantity', 'price', 'confirmHighValueOrder')
 # 미국 소수점 수량의 최대 자릿수.
 US_FRACTION_DIGITS = 6
 US_FRACTION_SCALE = 10 ** US_FRACTION_DIGITS
@@ -494,13 +511,15 @@ class toss(Exchange, ImplicitAPI):
             },
             'precisionMode': TICK_SIZE,
             'options': {
-                # 아래 세 옵션은 불리언이거나 불리언을 돌려주는 함수(값이 바뀔 수 있을 때)다. 기본은 꺼짐이다.
+                # 아래 네 옵션은 불리언이거나 불리언을 돌려주는 함수(값이 바뀔 수 있을 때)다. 기본은 꺼짐이다.
                 # `fetch_balance({'currency': 'USD'})` 의 USD 에 원화 매수 여력의 달러 환산액을 늘 더한다. 환율은 토스 조회, 실패하면 `usdKrwRate` 다.
                 'krwIntegratedMargin': None,
                 # 국내 확장세션(프리·애프터) 주문을 연다.
                 'nxtRouting': None,
                 # 미국 확장세션에서 시장가를 지정가로 바꿔 낸다.
                 'usExtendedLimit': None,
+                # 정규장 종가 동시호가(국내 15:20~15:30, 미국 15:50~16:00 ET)의 신규 매수를 막는다. 시장이 받는 주문이라 기본은 꺼짐이다.
+                'blockAuctionBuys': None,
                 # 토큰과 발급 락을 여러 프로세스가 나눠 쓰는 저장소(BrokerTokenStore). 없으면 프로세스 메모리 캐시만 쓴다.
                 'tokenStore': None,
                 # 토스의 환율 조회가 실패했을 때 쓰는 환율 함수. 1달러당 원화를 돌려준다.
@@ -773,6 +792,35 @@ class toss(Exchange, ImplicitAPI):
     @staticmethod
     def _country_of(market: Dict[str, Any]) -> str:
         return 'KR' if market.get('quote') == 'KRW' else 'US'
+
+    def price_to_precision(self, symbol: Str, price: Any) -> Str:
+        """가격을 호가 단위에 맞춘 문자열. 국내는 가격대별 호가 단위 표(`krx_tick_size`)로 반올림한다. 불러온 종목의 유형
+        (`market['options']['securityType']`)이 주식(`STOCK`)이 아니면 표가 달라서 그대로 돌려준다. 미국은 기반 구현을 따른다.
+        주문 경로는 이 메서드로 가격을 바꾸지 않는다."""
+        if price is None:
+            return None
+        market = self.market(symbol)
+        if self._country_of(market) != 'KR':
+            return super().price_to_precision(symbol, price)
+        security_type = self.safe_string(market.get('options'), 'securityType')
+        if security_type is not None and security_type != 'STOCK':
+            return fn.number_to_string(price)
+        return decimal_to_precision(price, ROUND, get_krx_tick_size(fn.js_number(price)), TICK_SIZE, NO_PADDING)
+
+    def _assert_krx_tick_aligned(self, market: Dict[str, Any], price: Any, method: str) -> None:
+        """국내 지정가가 호가 단위 표에 맞지 않으면 요청 전에 `InvalidOrder` 다. 불러온 종목이 주식(`STOCK`)일 때만 검사하고, 종목 유형을
+        모르거나(`load_markets` 전) ETF·ETN 이면 서버에 맡긴다. 서버도 같은 경우를 `price-tick-invalid` 로 거절한다."""
+        if self._country_of(market) != 'KR' or self.safe_string(market.get('options'), 'securityType') != 'STOCK':
+            return
+        violation = krx_tick_violation(price)
+        if violation is not None:
+            raise InvalidOrder(f'{self.id} {method}() {violation} ({market["symbol"]})', detail=KRX_TICK_INVALID_DETAIL)
+
+    def _order_price_string(self, market: Dict[str, Any], price: Any) -> Str:
+        """요청 본문의 지정가. 국내는 호가에 맞추지 않고 그대로 보낸다(맞지 않는 가격은 `_assert_krx_tick_aligned` 가 막거나 서버가 거절한다)."""
+        if price is None:
+            return None
+        return fn.number_to_string(price) if self._country_of(market) == 'KR' else self.price_to_precision(market['symbol'], price)
 
     async def fetch_stock_warnings(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """종목 유의사항(정리매매·투자경고·투자위험·단기과열·VI·신주인수권) 원본(`GET /stocks/{symbol}/warnings`)."""
@@ -1140,14 +1188,12 @@ class toss(Exchange, ImplicitAPI):
             raise InvalidOrder(f"{self.id} createOrder() side must be 'buy' or 'sell'")
         if type not in ('limit', 'market'):
             raise InvalidOrder(f"{self.id} createOrder() type must be 'limit' or 'market'")
-        # 조건주문은 `triggerPrice` 로만 낸다. 다른 ccxt 조건 인자를 버리면 조건 없는 일반 주문이 바로 나가므로 요청 전에 막는다.
-        for key in ('stopPrice', 'stopLossPrice', 'takeProfitPrice', 'stopLoss', 'takeProfit'):
-            if self.safe_value(params, key) is not None:
-                raise NotSupported(f'{self.id} createOrder() 는 조건 인자 {key} 를 받지 않는다. 조건주문은 params.triggerPrice 나 createTriggerOrder() 로 낸다')
+        self._assert_no_conditional_params('createOrder', params)
         market = self.market(symbol)
         country = self._country_of(market)
         if self.safe_value(params, 'triggerPrice') is not None:
             return await self._create_conditional_order(market, type, side, amount, price, params)
+        self._assert_no_computed_params('createOrder', params, ORDER_COMPUTED_FIELDS)
 
         is_market = type == 'market'
         cost = self.safe_number(params, 'cost')
@@ -1155,6 +1201,8 @@ class toss(Exchange, ImplicitAPI):
         use_amount_based = is_market and side == 'buy' and country == 'US' and cost is not None and cost > 0
         if not use_amount_based and type == 'limit' and price is None:
             raise ArgumentsRequired(f'{self.id} createOrder() requires a price argument for a limit order')
+        if type == 'limit' and price is not None:
+            self._assert_krx_tick_aligned(market, price, 'createOrder')
         quantity = 0 if use_amount_based else self.normalize_quantity(symbol, type, side, amount)
         client_order_id = self.safe_string(params, 'clientOrderId')
         time_in_force = self._parse_time_in_force(params)
@@ -1180,7 +1228,7 @@ class toss(Exchange, ImplicitAPI):
         # 거래시간 검사: 국내는 캘린더의 세션, 미국은 캘린더의 네 세션으로 판정한다. 실주문 직전의 마지막 방어선이다.
         gate = await self._check_orderable_session(symbol, country, {
             'isMarket': effective_type == 'market', 'useAmountBased': use_amount_based, 'quantity': quantity,
-        })
+        }, side)
         if gate is not None:
             logger.info('[toss] 거래시간 밖이라 주문을 보내지 않는다(%s %s): %s', symbol, side, gate)
             raise MarketClosed(gate)
@@ -1199,7 +1247,7 @@ class toss(Exchange, ImplicitAPI):
         else:
             body['quantity'] = self.number_to_string(quantity)
         if effective_type == 'limit':
-            body['price'] = self.price_to_precision(symbol, effective_price)
+            body['price'] = self._order_price_string(market, effective_price)
 
         # 고액주문 확인 표시. 명목가를 알 수 있을 때만 붙인다(수량 기준 시장가는 서버의 400 이 마지막 방어선이다).
         if use_amount_based:
@@ -1210,7 +1258,7 @@ class toss(Exchange, ImplicitAPI):
             body['confirmHighValueOrder'] = True
             logger.warning('[toss] 고액주문이라 confirmHighValueOrder 를 켠다(%s %s %s)', symbol, notional, country)
 
-        response = self.unwrap(await self.private_account_post_orders(body))
+        response = self.unwrap(await self.private_account_post_orders(self.extend(body, self.omit(params, ORDER_HANDLED_PARAMS))))
         order_id = self.safe_string(response, 'orderId')
         if order_id is None:
             raise OrderOutcomeUnknown(f'{self.id} 주문 접수 응답에 orderId 가 없다. 접수 여부를 주문 조회로 확인해야 한다')
@@ -1241,9 +1289,11 @@ class toss(Exchange, ImplicitAPI):
 
     async def edit_order(self, id: str, symbol: str, type: str, side: str, amount: Num = None, price: Num = None,
                    params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """주문을 정정한다. 국내는 가격과 수량을 함께(`amount` 필수), 미국은 가격만 정정한다(`amount` 를 주면 `NotSupported`).
-        미국은 고액주문 확인에 쓸 남은 수량을 정정 전에 주문 상세(`GET /orders/{orderId}`)로 읽는다.
-        정정하면 새 주문번호가 나온다. `params['trigger']` 가 `True` 면 조건주문 정정이고, 조건 전체를 등록과 같은 인자로 다시 선언한다."""
+        """주문을 정정한다. 잔량 전부를 새 가격으로 옮긴다. 국내는 정정 본문의 수량(`quantity`)에 주문 상세(`GET /orders/{orderId}`)로 읽은
+        잔량을 싣고, 미국은 가격만 보낸다. `amount` 는 ccxt 와 같이 정정 뒤 주문의 총수량(체결분 포함)이고, 주면 주문 상세로 대조해 총수량과
+        다르면 정정 요청 없이 `NotSupported` 다. 명세의 `quantity` 뜻이 정해지지 않아 국내는 체결 없는 주문만 정정하고, 일부 체결된 주문은
+        `NotSupported` 다. 일부정정(`params['partial']`)은 받지 않는다. 주문 상세 조회가 실패하면 던진다(미국에서 `amount` 가 없으면 조회는
+        고액주문 확인에만 쓰므로 실패해도 정정한다). 정정하면 새 주문번호가 나온다. `params['trigger']` 가 `True` 면 조건주문 정정이고, 조건 전체를 등록과 같은 인자로 다시 선언한다."""
         params = {} if params is None else params
         amount, price = fn.decimal_to_float(amount), fn.decimal_to_float(price)
         if self.safe_bool_2(params, 'trigger', 'stop', False) is True:
@@ -1252,29 +1302,39 @@ class toss(Exchange, ImplicitAPI):
             return await self._modify_conditional_order(id, self.market(symbol), type, side, amount, price, params)
         if type not in ('limit', 'market'):
             raise InvalidOrder(f"{self.id} editOrder() type must be 'limit' or 'market'")
+        self._assert_no_conditional_params('editOrder', params)
+        self._assert_no_computed_params('editOrder', params, EDIT_COMPUTED_FIELDS)
         market = self.market(symbol)
         country = self._country_of(market)
         if type == 'limit' and price is None:
             raise ArgumentsRequired(f'{self.id} editOrder() requires a price argument for a limit order')
-        if country == 'US' and amount is not None:
-            raise NotSupported(f'{self.id} editOrder() 는 미국 종목의 수량 정정을 지원하지 않는다(가격만 가능)')
-        if country == 'KR' and amount is None:
-            raise ArgumentsRequired(f'{self.id} editOrder() 는 국내 종목의 수량 정정에 amount 인자가 필요하다')
+        if self.safe_bool(params, 'partial', False) is True:
+            raise NotSupported(f'{self.id} editOrder() 의 일부정정(params.partial)은 지원하지 않는다. 토스 정정은 잔량 전부를 새 가격으로 옮긴다')
+        if type == 'limit' and price is not None:
+            self._assert_krx_tick_aligned(market, price, 'editOrder')
+
+        # 국내는 정정 수량을 싣기 위해, `amount` 를 주면 대조하기 위해 원주문을 조회한다. 이때 조회가 실패하면 던진다.
+        original = await self._edit_original(id) if country == 'KR' or amount is not None else None
+        if country == 'KR' and original is not None and original['filled'] > 0:
+            raise NotSupported(f"{self.id} editOrder() 는 일부 체결된 국내 주문({id}, 체결 {fn.js_string(original['filled'])})을 정정하지 않는다. "
+                               '정정 수량(quantity)이 정정 뒤 총수량인지 옮길 수량인지 확인하지 못했다. 취소한 뒤 다시 주문한다')
+        if amount is not None:
+            assert_whole_remaining_edit(self.id, id, amount, original if original is not None else {})
 
         body: Dict[str, Any] = {'orderId': id, 'orderType': 'MARKET' if type == 'market' else 'LIMIT'}
-        if country == 'KR':
-            body['quantity'] = self.number_to_string(self.normalize_quantity(symbol, type, side, amount))
+        if country == 'KR' and original is not None:
+            body['quantity'] = self.number_to_string(original['remaining'])
         if type == 'limit':
-            body['price'] = self.price_to_precision(symbol, price)
-        # 국내 명목가는 정정 수량 × 가격이다. 미국 정정은 수량을 받지 않으므로 주문 상세의 남은 수량 × 가격으로 본다.
-        if country == 'KR':
-            notional = (amount if amount is not None else 0) * (price if price is not None else 0)
+            body['price'] = self._order_price_string(market, price)
+        # 명목가는 잔량 × 가격이다. 미국에서 원주문을 조회하지 않았으면 고액주문 확인용으로만 읽는다.
+        if original is not None:
+            notional = original['remaining'] * (price if price is not None else 0)
         else:
             notional = await self._us_edit_notional(id, price)
         if await self._is_high_value(notional, country):
             body['confirmHighValueOrder'] = True
 
-        response = self.unwrap(await self.private_account_post_orders_orderid_modify(body))
+        response = self.unwrap(await self.private_account_post_orders_orderid_modify(self.extend(body, self.omit(params, EDIT_HANDLED_PARAMS))))
         new_order_id = self.safe_string(response, 'orderId')
         if new_order_id is None:
             raise OrderOutcomeUnknown(f'{self.id} 정정 응답에 orderId 가 없다. 정정 여부를 주문 조회로 확인해야 한다')
@@ -1289,10 +1349,21 @@ class toss(Exchange, ImplicitAPI):
             'type': type,
             'side': side,
             'price': price,
-            'amount': amount,
+            # 정정 뒤 총수량. 국내는 조회한 잔량을 실었으므로 알고, 미국에서 `amount` 를 주지 않았으면 확인하지 않았으므로 비운다.
+            'amount': amount if amount is not None else (edit_order_total(original) if country == 'KR' and original is not None else None),
             'status': 'open',
             'trades': [],
         }, market)
+
+    async def _edit_original(self, order_id: str) -> Dict[str, Any]:
+        """정정할 원주문의 체결 수량과 잔량(주문 상세). 조회가 실패하면 던지고, 없거나 잔량이 없으면 `OrderNotFound` 다."""
+        order = self.unwrap(await self.private_account_get_orders_orderid({'orderId': order_id}))
+        quantity = self.safe_number(order, 'quantity')
+        filled = self.safe_number(self.safe_dict(order, 'execution'), 'filledQuantity', 0)
+        remaining = fn.js_number(Precise.string_sub(self.number_to_string(quantity), self.number_to_string(filled))) if quantity is not None else None
+        if remaining is None or not remaining > 0:
+            raise OrderNotFound(f'{self.id} editOrder() 정정할 잔량이 있는 주문을 찾지 못했다: {order_id}')
+        return {'filled': filled, 'remaining': remaining}
 
     async def _us_edit_notional(self, order_id: str, price: Num) -> float:
         """미국 정정의 명목가. 주문 상세(`GET /orders/{orderId}`)의 남은 수량(주문 수량 − 체결 수량)에 새 가격을 곱한다.
@@ -1322,6 +1393,18 @@ class toss(Exchange, ImplicitAPI):
             raise NotSupported(f'{self.id} createMarketBuyOrderWithCost() 는 미국 종목만 지원한다: {symbol}')
         return await self.create_order(symbol, 'market', 'buy', 0, None, self.extend(params, {'cost': cost}))
 
+    def _assert_no_conditional_params(self, method: str, params: Dict[str, Any]) -> None:
+        """ccxt 조건 인자가 있으면 요청 전에 `NotSupported` 다. 본문에 합치거나 버리면 조건 없는 주문이 나간다."""
+        for key in UNSUPPORTED_CONDITIONAL_PARAMS:
+            if self.safe_value(params, key) is not None:
+                raise NotSupported(f'{self.id} {method}() 는 조건 인자 {key} 를 받지 않는다. 조건주문은 params.triggerPrice 나 createTriggerOrder() 로 낸다')
+
+    def _assert_no_computed_params(self, method: str, params: Dict[str, Any], fields: Tuple[str, ...]) -> None:
+        """라이브러리가 인자로 채우는 본문 필드가 `params` 에 있으면 요청 전에 `BadRequest` 다. 나머지 키는 본문에 합친다."""
+        for key in fields:
+            if key in params:
+                raise BadRequest(f'{self.id} {method}() 의 params.{key} 는 받지 않는다. 인자로 정하는 필드다')
+
     def _parse_time_in_force(self, params: Dict[str, Any]) -> Str:
         """`params['timeInForce']` 를 토스의 값(`DAY`·`CLS`·`OPG`)으로 확인한다. 없으면 `None`(서버 기본 `DAY`)."""
         value = self.safe_string_upper(params, 'timeInForce')
@@ -1331,15 +1414,21 @@ class toss(Exchange, ImplicitAPI):
             raise InvalidOrder(f"{self.id} createOrder() timeInForce must be one of {', '.join(ORDER_TIME_IN_FORCE)}")
         return value
 
-    async def _check_orderable_session(self, symbol: str, country: str, form: Dict[str, Any]) -> Optional[str]:
+    async def _check_orderable_session(self, symbol: str, country: str, form: Dict[str, Any], side: str) -> Optional[str]:
         """주문 접수 가능 시간과 형태를 검사한다. 막는 사유(한국어)이고, 접수할 수 있으면 `None`.
         캘린더를 받지 못하면 정적 시간표(`is_toss_orderable`)로 판정한다. 그 폴백에서 국내 휴장일은 공용 캘린더가 알 때만 막고(모르면 연다),
-        미국 확장세션은 막는다(좁히는 쪽)."""
+        미국 확장세션은 막는다(좁히는 쪽). 정규장의 종가 동시호가 신규 매수는 `options['blockAuctionBuys']` 가 켜졌을 때만 막는다."""
         now = _now_ms()
+
+        async def auction() -> Optional[str]:
+            if not await self.is_option_enabled('blockAuctionBuys'):
+                return None
+            return krx_auction_buy_block_reason(now, side) if country == 'KR' else us_auction_buy_block_reason(now, side)
+
         if country == 'KR':
             session = await self.current_kr_session(now)
             if session is None:
-                return None if is_toss_orderable(symbol) else 'KRX 거래시간 외 (09:00-15:30 KST 평일, 캘린더 조회 실패)'
+                return await auction() if is_toss_orderable(symbol, now) else 'KRX 거래시간 외 (09:00-15:30 KST 평일, 캘린더 조회 실패)'
             if session == 'closed':
                 return 'KRX 휴장·정규장 외'
             if session != 'regularMarket':
@@ -1347,15 +1436,17 @@ class toss(Exchange, ImplicitAPI):
                 if not await self.is_option_enabled('nxtRouting'):
                     return f'KRX {session} 세션 — 확장세션 주문은 nxtRouting 옵션이 켜져 있어야 한다'
                 return kr_session_order_restriction(session, form)
-            return None
+            return await auction()
         session = await self.current_us_session(now)
         if session is None:
-            return None if is_toss_orderable(symbol) else '미국 정규장 외 (장 운영 캘린더 조회 실패)'
+            return await auction() if is_toss_orderable(symbol, now) else '미국 정규장 외 (장 운영 캘린더 조회 실패)'
         if session == 'closed':
             return '미국장 휴장·세션 외'
         regular_close_ms = find_us_regular_close_ms(self._us_calendar_value(), now)
         cutoff = {'nowMs': now, 'regularCloseMs': regular_close_ms} if regular_close_ms is not None else None
         restriction = us_session_order_restriction(session, form, cutoff)
+        if restriction is None and session == 'regularMarket':
+            restriction = await auction()
         if restriction is not None:
             return restriction
         logger.info('[toss] 미국 세션을 확인했다. 주문을 접수할 수 있다(%s %s)', symbol, session)
@@ -1661,6 +1752,7 @@ class toss(Exchange, ImplicitAPI):
             'CANCELED': 'canceled',
             'REPLACED': 'canceled',
             'REJECTED': 'rejected',
+            # 명세: 거절된 취소·정정 요청을 기록한 별도 레코드의 상태다. 원주문은 이전 상태로 돌아가 제 상태로 따로 조회된다.
             'CANCEL_REJECTED': 'rejected',
             'REPLACE_REJECTED': 'rejected',
         }
@@ -1912,8 +2004,9 @@ class toss(Exchange, ImplicitAPI):
 
     async def cancel_all_orders(self, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """미체결 주문을 모두 취소한다(토스에는 전체 취소가 없어 조회한 주문을 하나씩 취소한다). `params['includeTrigger']` 면 조건주문도 취소한다.
-        돌려주는 목록은 대상 주문 전부다. 취소된 것은 `status: 'canceled'`, 취소하지 못한 것은 원래 상태에 `info['cancelError']` 가 실린다.
-        취소하려는 사이에 끝난 주문은 원인 코드(`info['cancelErrorDetail']`)대로 옮긴다(`already-filled` 는 `closed`, `already-canceled` 는
+        돌려주는 목록은 대상 주문 전부이고, 항목은 미체결 조회로 받은 주문이다. 취소된 것은 `status: 'canceled'` 이고 취소 응답 원문이
+        `info['cancelResponse']` 에 있다. 취소하지 못한 것은 원래 상태에 `info['cancelError']`(메시지)와 `info['cancelErrorDetail']`(오류의 `detail`)이
+        실린다. 일부가 실패해도 던지지 않는다. 취소하려는 사이에 끝난 주문은 원인 코드(`info['cancelErrorDetail']`)대로 옮긴다(`already-filled` 는 `closed`, `already-canceled` 는
         `canceled`, `already-rejected` 는 `rejected`). 정정으로 대체된 주문과 원인을 모르는 경우는 새 주문이 살아 있을 수 있어 원래 상태로 둔다."""
         include_trigger = self.safe_bool(params, 'includeTrigger', False) is True
         orders = await self.fetch_open_orders(symbol, None, None, {'includeTrigger': True} if include_trigger else {})
@@ -1921,8 +2014,8 @@ class toss(Exchange, ImplicitAPI):
         for order in orders:
             trigger = self.safe_string(order.get('info'), 'conditionalOrderId') is not None
             try:
-                await self.cancel_order(order['id'], order.get('symbol'), {'trigger': trigger})
-                results.append(self.extend(order, {'status': 'canceled'}))
+                canceled = await self.cancel_order(order['id'], order.get('symbol'), {'trigger': trigger})
+                results.append(self.extend(order, {'status': 'canceled', 'info': self.extend(order.get('info'), {'cancelResponse': canceled.get('info')})}))
             except OrderNotFound as error:
                 detail = getattr(error, 'detail', None)
                 info = self.extend(order.get('info'), {'alreadyGone': True, 'cancelError': str(error), 'cancelErrorDetail': detail})
@@ -1936,6 +2029,7 @@ class toss(Exchange, ImplicitAPI):
                 else:
                     results.append(self.extend(order, {'info': info}))
             except Exception as error:
-                results.append(self.extend(order, {'info': self.extend(order.get('info'), {'cancelError': str(error)})}))
+                info = self.extend(order.get('info'), {'cancelError': str(error), 'cancelErrorDetail': getattr(error, 'detail', None)})
+                results.append(self.extend(order, {'info': info}))
         logger.info('[toss] 미체결 주문을 취소했다(%d건 중 %d건)', len(orders), sum(1 for order in results if order.get('status') == 'canceled'))
         return results

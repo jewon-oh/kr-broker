@@ -136,7 +136,7 @@ asyncio.run(main())
 ```
 
 - `async with` 를 쓰지 않으면 다 쓴 뒤 `await kis.close()` 로 HTTP 세션을 닫습니다. 설정에 `session` 으로 넘긴 세션은 닫지 않습니다(동기 판도 같습니다). `close()` 는 기다리지 않고 띄운 작업(토큰 저장소 정리 등)을 5초까지 기다리고, 그때까지 안 끝난 작업은 취소합니다.
-- 켜고 끄는 옵션(`nxtRouting`, `krwIntegratedMargin`, `usExtendedLimit`)과 `usdKrwRate`, `stockDirectory.find_kr_market` 에는 비동기 판에서 코루틴 함수도 넘길 수 있습니다.
+- 켜고 끄는 옵션(`nxtRouting`, `blockAuctionBuys`, `krwIntegratedMargin`, `usExtendedLimit`)과 `usdKrwRate`, `stockDirectory.find_kr_market` 에는 비동기 판에서 코루틴 함수도 넘길 수 있습니다.
 - 여러 코루틴이 동시에 `load_markets()` 를 부르면 조회는 한 번만 나가고 결과를 함께 씁니다.
 - 동기 판은 비동기 판 소스에서 만들므로 요청과 응답 해석이 같습니다. 요청 픽스처를 두 판으로 모두 돌립니다.
 - 토큰 저장소는 메서드가 값을 돌려주는 동기 구현과 코루틴을 돌려주는 비동기 구현(예: `redis.asyncio`)을 모두 받습니다.

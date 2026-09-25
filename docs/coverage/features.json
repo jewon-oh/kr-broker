@@ -598,7 +598,7 @@
       "cells": {
         "kis": {
           "status": "지원",
-          "constraint": "정정 구분(RVSE_CNCL_DVSN_CD=01)으로 취소와 같은 엔드포인트를 씁니다. `amount`를 주면 일부정정, 안 주면 전량정정입니다",
+          "constraint": "정정 구분(RVSE_CNCL_DVSN_CD=01)으로 취소와 같은 엔드포인트를 씁니다. `amount`는 정정 뒤 총수량이고, 미체결 조회로 대조한 뒤 잔량 전부를 정정합니다. 국내 일부정정은 `params.partial: true`로 냅니다",
           "apis": [
             "examples_llm/domestic_stock/order_rvsecncl",
             "examples_llm/overseas_stock/order_rvsecncl"
@@ -606,7 +606,7 @@
         },
         "toss": {
           "status": "지원",
-          "constraint": "국내는 수량과 가격을 함께(`amount` 필수), 미국은 가격만(`amount`를 주면 `NotSupported`) 정정합니다. 조건주문 정정(`params.trigger: true`)은 조건 전체를 다시 보내는 재설정이라 새 conditionalOrderId가 발급됩니다",
+          "constraint": "잔량 전부를 새 가격으로 정정합니다. 국내는 주문 상세로 읽은 잔량을 수량으로 싣고, 일부 체결된 주문은 `NotSupported`입니다. 미국은 가격만 정정합니다. `amount`는 정정 뒤 총수량입니다. 조건주문 정정(`params.trigger: true`)은 조건 전체를 다시 보내는 재설정이라 새 conditionalOrderId가 발급됩니다",
           "methods": [
             "editOrder"
           ],
@@ -617,7 +617,7 @@
         },
         "kbsec": {
           "status": "부분",
-          "constraint": "미국은 가격만 정정합니다. `price`가 없으면 요청 전에 `ArgumentsRequired`를 던집니다",
+          "constraint": "국내는 `amount`(정정 뒤 총수량)를 미체결 목록과 대조한 뒤 전부정정하고, 일부정정은 `params.partial: true`로 냅니다. 미국은 잔량 전부의 가격만 정정하고 `amount`를 주면 `NotSupported`입니다. `price`가 없으면 요청 전에 `ArgumentsRequired`를 던집니다",
           "apis": [
             "SSAM1805",
             "SKAM2102"

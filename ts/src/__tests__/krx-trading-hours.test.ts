@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { applyMarketCalendar, resetMarketCalendar } from '../market-calendar';
 import {
     getTimeUntilKrxOpen, getKrxMarketPhase, getNxtSession, isNxtExtendedTradable,
-    isKrxBusinessDayKst,
+    isKrxBusinessDayKst, krxOrderBlockReason,
 } from '../krx-trading-hours';
 
 /**
@@ -230,5 +230,34 @@ describe('isKrxBusinessDayKst — 영업일 판정', () => {
         expect(isKrxBusinessDayKst('')).toBe(false);
         // 2026-02-31 은 존재하지 않는다 — Date 롤오버로 3/3 이 되어 true 가 되면 안 된다.
         expect(isKrxBusinessDayKst('20260231')).toBe(false);
+    });
+});
+
+describe('krxOrderBlockReason — 세 증권사 공용 주문 게이트', () => {
+    /** 2026-09-22(화) KST 시:분:초. */
+    const kst = (hour: number, minute: number, second = 0) => new Date(Date.UTC(2026, 8, 22, hour - 9, minute, second));
+
+    it('정규장은 열고, 장 밖과 휴장일은 막는다', () => {
+        expect(krxOrderBlockReason({ now: kst(10, 0) })).toBeNull();
+        expect(krxOrderBlockReason({ now: kst(21, 30) })).toBe('거래시간 외: 장 마감 (현재: 21:30 KST, 마감: 15:30)');
+        expect(krxOrderBlockReason({ now: new Date(Date.UTC(2026, 8, 24, 1)) })).toMatch(/^거래시간 외: 공휴일/);
+    });
+
+    it('★종가 동시호가의 신규 매수는 시장이 받으므로 기본으로 연다', () => {
+        expect(krxOrderBlockReason({ now: kst(15, 25), side: 'buy' })).toBeNull();
+    });
+
+    it('blockAuctionBuys 를 켜면 15:20:00 부터 신규 매수만 막는다', () => {
+        expect(krxOrderBlockReason({ now: kst(15, 19, 59), side: 'buy', blockAuctionBuys: true })).toBeNull();
+        expect(krxOrderBlockReason({ now: kst(15, 20), side: 'buy', blockAuctionBuys: true })).toMatch(/종가 동시호가/);
+        expect(krxOrderBlockReason({ now: kst(15, 20), side: 'sell', blockAuctionBuys: true })).toBeNull();
+        expect(krxOrderBlockReason({ now: kst(15, 20), blockAuctionBuys: true })).toBeNull();
+    });
+
+    it('sessions 에 nxt 를 주면 NXT 세션으로 판정하고, 둘을 주면 하나라도 열려 있을 때 연다', () => {
+        expect(krxOrderBlockReason({ now: kst(16, 30), sessions: ['nxt'] })).toBeNull();
+        expect(krxOrderBlockReason({ now: kst(15, 25), sessions: ['nxt'] })).toBe('NXT 거래시간 외 (session=krx-closing-auction)');
+        expect(krxOrderBlockReason({ now: kst(16, 30), sessions: ['regular', 'nxt'] })).toBeNull();
+        expect(krxOrderBlockReason({ now: kst(21, 30), sessions: ['regular', 'nxt'] })).toMatch(/\(NXT session=closed\)$/);
     });
 });

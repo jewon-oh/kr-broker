@@ -1829,6 +1829,184 @@
             }
         },
         {
+            "description": "createOrder 는 처리하지 않은 params 키를 본문 끝에 합치고, 읽은 키(clientOrderId·timeInForce·confirmExecution)는 합치지 않는다",
+            "now": 1774400400000,
+            "method": "createOrder",
+            "args": [
+                "005930",
+                "limit",
+                "buy",
+                1,
+                70000,
+                { "clientOrderId": "cid-001", "timeInForce": "day", "confirmExecution": false, "tossExtraField": "x" }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/market-calendar/KR",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "previousBusinessDay": {
+                                    "date": "2026-03-24",
+                                    "integrated": {
+                                        "preMarket": { "startTime": "2026-03-24T08:00:00+09:00", "endTime": "2026-03-24T08:50:00+09:00" },
+                                        "regularMarket": { "startTime": "2026-03-24T09:00:00+09:00", "endTime": "2026-03-24T15:30:00+09:00" },
+                                        "afterMarket": { "startTime": "2026-03-24T15:30:00+09:00", "endTime": "2026-03-24T20:00:00+09:00" }
+                                    }
+                                },
+                                "today": {
+                                    "date": "2026-03-25",
+                                    "integrated": {
+                                        "preMarket": { "startTime": "2026-03-25T08:00:00+09:00", "endTime": "2026-03-25T08:50:00+09:00" },
+                                        "regularMarket": { "startTime": "2026-03-25T09:00:00+09:00", "endTime": "2026-03-25T15:30:00+09:00" },
+                                        "afterMarket": { "startTime": "2026-03-25T15:30:00+09:00", "endTime": "2026-03-25T20:00:00+09:00" }
+                                    }
+                                },
+                                "nextBusinessDay": {
+                                    "date": "2026-03-26",
+                                    "integrated": {
+                                        "preMarket": { "startTime": "2026-03-26T08:00:00+09:00", "endTime": "2026-03-26T08:50:00+09:00" },
+                                        "regularMarket": { "startTime": "2026-03-26T09:00:00+09:00", "endTime": "2026-03-26T15:30:00+09:00" },
+                                        "afterMarket": { "startTime": "2026-03-26T15:30:00+09:00", "endTime": "2026-03-26T20:00:00+09:00" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001", "Content-Type": "application/json" },
+                        "body": "{\"symbol\":\"005930\",\"side\":\"BUY\",\"orderType\":\"LIMIT\",\"clientOrderId\":\"cid-001\",\"timeInForce\":\"DAY\",\"quantity\":\"1\",\"price\":\"70000\",\"tossExtraField\":\"x\"}"
+                    },
+                    "response": { "status": 200, "body": { "result": { "orderId": "ORD-0041" } } }
+                }
+            ],
+            "output": {
+                "info": { "orderId": "ORD-0041" },
+                "id": "ORD-0041",
+                "timestamp": 1774400400000,
+                "datetime": "2026-03-25T01:00:00.000Z",
+                "symbol": "005930/KRW",
+                "type": "limit",
+                "timeInForce": "DAY",
+                "side": "buy",
+                "price": 70000,
+                "amount": 1,
+                "status": "open",
+                "trades": [],
+                "fees": [],
+                "postOnly": false,
+                "clientOrderId": "cid-001"
+            }
+        },
+        {
+            "description": "createOrder 는 불러온 종목이 주식(STOCK)이면 호가 단위에 맞지 않는 국내 지정가를 요청 없이 InvalidOrder 로 막는다. 가격을 바꿔 내지 않는다",
+            "config": {
+                "markets": [
+                    {
+                        "id": "005930",
+                        "symbol": "005930/KRW",
+                        "base": "005930",
+                        "quote": "KRW",
+                        "baseId": "005930",
+                        "quoteId": "KRW",
+                        "type": "spot",
+                        "spot": true,
+                        "active": true,
+                        "precision": { "amount": 1 },
+                        "options": { "country": "KR", "market": "KOSPI", "securityType": "STOCK" }
+                    }
+                ]
+            },
+            "method": "createOrder",
+            "args": ["005930/KRW", "limit", "buy", 1, 70030],
+            "http": [],
+            "error": { "class": "InvalidOrder", "detail": "price-tick-invalid" }
+        },
+        {
+            "description": "createOrder 는 종목 유형을 모르면 국내 지정가를 호가에 맞추지 않고 그대로 보내고, 서버의 호가 단위 거절을 InvalidOrder 로 옮긴다",
+            "now": 1774400400000,
+            "method": "createOrder",
+            "args": ["005930", "limit", "buy", 1, 70030, { "confirmExecution": false }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/market-calendar/KR",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "previousBusinessDay": {
+                                    "date": "2026-03-24",
+                                    "integrated": {
+                                        "preMarket": { "startTime": "2026-03-24T08:00:00+09:00", "endTime": "2026-03-24T08:50:00+09:00" },
+                                        "regularMarket": { "startTime": "2026-03-24T09:00:00+09:00", "endTime": "2026-03-24T15:30:00+09:00" },
+                                        "afterMarket": { "startTime": "2026-03-24T15:30:00+09:00", "endTime": "2026-03-24T20:00:00+09:00" }
+                                    }
+                                },
+                                "today": {
+                                    "date": "2026-03-25",
+                                    "integrated": {
+                                        "preMarket": { "startTime": "2026-03-25T08:00:00+09:00", "endTime": "2026-03-25T08:50:00+09:00" },
+                                        "regularMarket": { "startTime": "2026-03-25T09:00:00+09:00", "endTime": "2026-03-25T15:30:00+09:00" },
+                                        "afterMarket": { "startTime": "2026-03-25T15:30:00+09:00", "endTime": "2026-03-25T20:00:00+09:00" }
+                                    }
+                                },
+                                "nextBusinessDay": {
+                                    "date": "2026-03-26",
+                                    "integrated": {
+                                        "preMarket": { "startTime": "2026-03-26T08:00:00+09:00", "endTime": "2026-03-26T08:50:00+09:00" },
+                                        "regularMarket": { "startTime": "2026-03-26T09:00:00+09:00", "endTime": "2026-03-26T15:30:00+09:00" },
+                                        "afterMarket": { "startTime": "2026-03-26T15:30:00+09:00", "endTime": "2026-03-26T20:00:00+09:00" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001", "Content-Type": "application/json" },
+                        "body": "{\"symbol\":\"005930\",\"side\":\"BUY\",\"orderType\":\"LIMIT\",\"quantity\":\"1\",\"price\":\"70030\"}"
+                    },
+                    "response": {
+                        "status": 400,
+                        "body": { "error": { "code": "invalid-request", "message": "호가 단위에 맞지 않는 가격입니다", "data": { "tickSize": "100" } } }
+                    }
+                }
+            ],
+            "error": { "class": "InvalidOrder", "detail": "price-tick-invalid" }
+        },
+        {
+            "description": "createOrder 에 라이브러리가 채우는 본문 필드(quantity)를 params 로 주면 요청 없이 BadRequest 다",
+            "method": "createOrder",
+            "args": ["005930", "limit", "buy", 1, 70000, { "quantity": "5" }],
+            "http": [],
+            "error": { "class": "BadRequest" }
+        },
+        {
+            "description": "createMarketBuyOrderWithCost 는 국내 종목이면 금액 주문 API 가 없어 요청 없이 NotSupported 다",
+            "method": "createMarketBuyOrderWithCost",
+            "args": ["005930/KRW", 100000],
+            "http": [],
+            "error": { "class": "NotSupported" }
+        },
+        {
             "description": "createOrder 국내 1억원 이상은 confirmHighValueOrder 를 켜고, confirmExecution false 면 체결 조회를 하지 않는다",
             "now": 1774400400000,
             "method": "createOrder",
@@ -2585,6 +2763,171 @@
             "error": { "class": "MarketClosed" }
         },
         {
+            "description": "createOrder 국내 종가 동시호가(15:25 KST)의 신규 매수는 기본으로 낸다",
+            "now": 1774419900000,
+            "method": "createOrder",
+            "args": ["005930", "limit", "buy", 1, 70000, { "confirmExecution": false }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/market-calendar/KR",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "previousBusinessDay": {
+                                    "date": "2026-03-24",
+                                    "integrated": {
+                                        "preMarket": { "startTime": "2026-03-24T08:00:00+09:00", "endTime": "2026-03-24T08:50:00+09:00" },
+                                        "regularMarket": { "startTime": "2026-03-24T09:00:00+09:00", "endTime": "2026-03-24T15:30:00+09:00" },
+                                        "afterMarket": { "startTime": "2026-03-24T15:30:00+09:00", "endTime": "2026-03-24T20:00:00+09:00" }
+                                    }
+                                },
+                                "today": {
+                                    "date": "2026-03-25",
+                                    "integrated": {
+                                        "preMarket": { "startTime": "2026-03-25T08:00:00+09:00", "endTime": "2026-03-25T08:50:00+09:00" },
+                                        "regularMarket": { "startTime": "2026-03-25T09:00:00+09:00", "endTime": "2026-03-25T15:30:00+09:00" },
+                                        "afterMarket": { "startTime": "2026-03-25T15:30:00+09:00", "endTime": "2026-03-25T20:00:00+09:00" }
+                                    }
+                                },
+                                "nextBusinessDay": {
+                                    "date": "2026-03-26",
+                                    "integrated": {
+                                        "preMarket": { "startTime": "2026-03-26T08:00:00+09:00", "endTime": "2026-03-26T08:50:00+09:00" },
+                                        "regularMarket": { "startTime": "2026-03-26T09:00:00+09:00", "endTime": "2026-03-26T15:30:00+09:00" },
+                                        "afterMarket": { "startTime": "2026-03-26T15:30:00+09:00", "endTime": "2026-03-26T20:00:00+09:00" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001", "Content-Type": "application/json" },
+                        "body": "{\"symbol\":\"005930\",\"side\":\"BUY\",\"orderType\":\"LIMIT\",\"quantity\":\"1\",\"price\":\"70000\"}"
+                    },
+                    "response": { "status": 200, "body": { "result": { "orderId": "ORD-0003" } } }
+                }
+            ],
+            "output": {
+                "info": { "orderId": "ORD-0003" },
+                "id": "ORD-0003",
+                "timestamp": 1774419900000,
+                "datetime": "2026-03-25T06:25:00.000Z",
+                "symbol": "005930/KRW",
+                "type": "limit",
+                "side": "buy",
+                "price": 70000,
+                "amount": 1,
+                "status": "open",
+                "trades": [],
+                "fees": []
+            }
+        },
+        {
+            "description": "createOrder 는 options.blockAuctionBuys 를 켜면 국내 종가 동시호가(15:25 KST)의 신규 매수를 주문 요청 없이 MarketClosed 로 막는다",
+            "config": { "options": { "blockAuctionBuys": true } },
+            "now": 1774419900000,
+            "method": "createOrder",
+            "args": ["005930", "limit", "buy", 1, 70000, { "confirmExecution": false }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/market-calendar/KR",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "previousBusinessDay": {
+                                    "date": "2026-03-24",
+                                    "integrated": {
+                                        "preMarket": { "startTime": "2026-03-24T08:00:00+09:00", "endTime": "2026-03-24T08:50:00+09:00" },
+                                        "regularMarket": { "startTime": "2026-03-24T09:00:00+09:00", "endTime": "2026-03-24T15:30:00+09:00" },
+                                        "afterMarket": { "startTime": "2026-03-24T15:30:00+09:00", "endTime": "2026-03-24T20:00:00+09:00" }
+                                    }
+                                },
+                                "today": {
+                                    "date": "2026-03-25",
+                                    "integrated": {
+                                        "preMarket": { "startTime": "2026-03-25T08:00:00+09:00", "endTime": "2026-03-25T08:50:00+09:00" },
+                                        "regularMarket": { "startTime": "2026-03-25T09:00:00+09:00", "endTime": "2026-03-25T15:30:00+09:00" },
+                                        "afterMarket": { "startTime": "2026-03-25T15:30:00+09:00", "endTime": "2026-03-25T20:00:00+09:00" }
+                                    }
+                                },
+                                "nextBusinessDay": {
+                                    "date": "2026-03-26",
+                                    "integrated": {
+                                        "preMarket": { "startTime": "2026-03-26T08:00:00+09:00", "endTime": "2026-03-26T08:50:00+09:00" },
+                                        "regularMarket": { "startTime": "2026-03-26T09:00:00+09:00", "endTime": "2026-03-26T15:30:00+09:00" },
+                                        "afterMarket": { "startTime": "2026-03-26T15:30:00+09:00", "endTime": "2026-03-26T20:00:00+09:00" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            ],
+            "error": { "class": "MarketClosed" }
+        },
+        {
+            "description": "createOrder 는 options.blockAuctionBuys 를 켜면 미국 정규장 종가 동시호가(15:55 ET)의 신규 매수를 주문 요청 없이 MarketClosed 로 막는다",
+            "config": { "options": { "blockAuctionBuys": true } },
+            "now": 1774468500000,
+            "method": "createOrder",
+            "args": ["AAPL", "limit", "buy", 1, 229.5, { "confirmExecution": false }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/market-calendar/US",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "previousBusinessDay": {
+                                    "date": "2026-03-24",
+                                    "dayMarket": { "startTime": "2026-03-24T09:00:00+09:00", "endTime": "2026-03-24T16:50:00+09:00" },
+                                    "preMarket": { "startTime": "2026-03-24T17:00:00+09:00", "endTime": "2026-03-24T22:30:00+09:00" },
+                                    "regularMarket": { "startTime": "2026-03-24T22:30:00+09:00", "endTime": "2026-03-25T05:00:00+09:00" },
+                                    "afterMarket": { "startTime": "2026-03-25T05:00:00+09:00", "endTime": "2026-03-25T07:00:00+09:00" }
+                                },
+                                "today": {
+                                    "date": "2026-03-25",
+                                    "dayMarket": { "startTime": "2026-03-25T09:00:00+09:00", "endTime": "2026-03-25T16:50:00+09:00" },
+                                    "preMarket": { "startTime": "2026-03-25T17:00:00+09:00", "endTime": "2026-03-25T22:30:00+09:00" },
+                                    "regularMarket": { "startTime": "2026-03-25T22:30:00+09:00", "endTime": "2026-03-26T05:00:00+09:00" },
+                                    "afterMarket": { "startTime": "2026-03-26T05:00:00+09:00", "endTime": "2026-03-26T07:00:00+09:00" }
+                                },
+                                "nextBusinessDay": {
+                                    "date": "2026-03-26",
+                                    "dayMarket": { "startTime": "2026-03-26T09:00:00+09:00", "endTime": "2026-03-26T16:50:00+09:00" },
+                                    "preMarket": { "startTime": "2026-03-26T17:00:00+09:00", "endTime": "2026-03-26T22:30:00+09:00" },
+                                    "regularMarket": { "startTime": "2026-03-26T22:30:00+09:00", "endTime": "2026-03-27T05:00:00+09:00" },
+                                    "afterMarket": { "startTime": "2026-03-27T05:00:00+09:00", "endTime": "2026-03-27T07:00:00+09:00" }
+                                }
+                            }
+                        }
+                    }
+                }
+            ],
+            "error": { "class": "MarketClosed" }
+        },
+        {
             "description": "createOrder 미국 고액주문 기준은 참고 환율로 계산한다(7만 달러 미만이어도 켠다)",
             "now": 1774449000000,
             "method": "createOrder",
@@ -3068,11 +3411,37 @@
             "error": { "class": "InvalidOrder" }
         },
         {
-            "description": "editOrder 국내는 가격과 수량을 함께 정정하고 새 주문번호를 돌려준다",
+            "description": "editOrder 국내는 주문 상세의 잔량을 수량으로 싣고 가격을 정정해 새 주문번호를 돌려준다. amount 는 정정 뒤 총수량이다",
             "now": 1774400400000,
             "method": "editOrder",
             "args": ["ORD-0011", "005930", "limit", "buy", 3, 70500],
             "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders/ORD-0011",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "orderId": "ORD-0011",
+                                "symbol": "005930",
+                                "side": "BUY",
+                                "orderType": "LIMIT",
+                                "timeInForce": "DAY",
+                                "status": "PENDING",
+                                "price": "70000",
+                                "quantity": "3",
+                                "currency": "KRW",
+                                "orderedAt": "2026-03-25T01:00:00Z",
+                                "execution": { "filledQuantity": "0" }
+                            }
+                        }
+                    }
+                },
                 {
                     "request": {
                         "method": "POST",
@@ -3099,11 +3468,251 @@
             }
         },
         {
-            "description": "editOrder 미국은 수량 정정을 NotSupported 로 막는다",
+            "description": "editOrder 국내는 amount 없이도 주문 상세의 잔량 전부를 정정하고, 확인한 총수량을 돌려준다",
+            "now": 1774400400000,
             "method": "editOrder",
-            "args": ["ORD-0013", "AAPL", "limit", "buy", 3, 228],
+            "args": ["ORD-0011", "005930", "limit", "buy", null, 70500],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders/ORD-0011",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "orderId": "ORD-0011",
+                                "symbol": "005930",
+                                "side": "BUY",
+                                "orderType": "LIMIT",
+                                "timeInForce": "DAY",
+                                "status": "PENDING",
+                                "price": "70000",
+                                "quantity": "3",
+                                "currency": "KRW",
+                                "orderedAt": "2026-03-25T01:00:00Z",
+                                "execution": { "filledQuantity": "0" }
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders/ORD-0011/modify",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001", "Content-Type": "application/json" },
+                        "body": "{\"orderType\":\"LIMIT\",\"quantity\":\"3\",\"price\":\"70500\"}"
+                    },
+                    "response": { "status": 200, "body": { "result": { "orderId": "ORD-0012" } } }
+                }
+            ],
+            "output": {
+                "info": { "orderId": "ORD-0012" },
+                "id": "ORD-0012",
+                "timestamp": 1774400400000,
+                "datetime": "2026-03-25T01:00:00.000Z",
+                "symbol": "005930/KRW",
+                "type": "limit",
+                "side": "buy",
+                "price": 70500,
+                "amount": 3,
+                "status": "open",
+                "trades": [],
+                "fees": []
+            }
+        },
+        {
+            "description": "editOrder 국내 amount 로 수량을 바꾸는 정정은 주문 상세를 확인한 뒤 정정 요청 없이 NotSupported 다",
+            "method": "editOrder",
+            "args": ["ORD-0011", "005930", "limit", "buy", 2, 70500],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders/ORD-0011",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "orderId": "ORD-0011",
+                                "symbol": "005930",
+                                "side": "BUY",
+                                "orderType": "LIMIT",
+                                "timeInForce": "DAY",
+                                "status": "PENDING",
+                                "price": "70000",
+                                "quantity": "3",
+                                "currency": "KRW",
+                                "orderedAt": "2026-03-25T01:00:00Z",
+                                "execution": { "filledQuantity": "0" }
+                            }
+                        }
+                    }
+                }
+            ],
+            "error": { "class": "NotSupported" }
+        },
+        {
+            "description": "editOrder 국내 일부 체결된 주문은 quantity 의 뜻을 확인하기 전까지 정정 요청 없이 NotSupported 다",
+            "method": "editOrder",
+            "args": ["ORD-0011", "005930", "limit", "buy", 3, 70500],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders/ORD-0011",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "orderId": "ORD-0011",
+                                "symbol": "005930",
+                                "side": "BUY",
+                                "orderType": "LIMIT",
+                                "timeInForce": "DAY",
+                                "status": "PARTIAL_FILLED",
+                                "price": "70000",
+                                "quantity": "3",
+                                "currency": "KRW",
+                                "orderedAt": "2026-03-25T01:00:00Z",
+                                "execution": { "filledQuantity": "1" }
+                            }
+                        }
+                    }
+                }
+            ],
+            "error": { "class": "NotSupported" }
+        },
+        {
+            "description": "editOrder 일부정정(params.partial)은 토스 정정이 잔량 전부를 옮기므로 요청 없이 NotSupported 다",
+            "method": "editOrder",
+            "args": ["ORD-0011", "005930", "limit", "buy", 1, 70500, { "partial": true }],
             "http": [],
             "error": { "class": "NotSupported" }
+        },
+        {
+            "description": "editOrder 는 불러온 종목이 주식(STOCK)이면 호가 단위에 맞지 않는 국내 정정 가격을 요청 없이 InvalidOrder 로 막는다",
+            "config": {
+                "markets": [
+                    {
+                        "id": "005930",
+                        "symbol": "005930/KRW",
+                        "base": "005930",
+                        "quote": "KRW",
+                        "baseId": "005930",
+                        "quoteId": "KRW",
+                        "type": "spot",
+                        "spot": true,
+                        "active": true,
+                        "precision": { "amount": 1 },
+                        "options": { "country": "KR", "market": "KOSPI", "securityType": "STOCK" }
+                    }
+                ]
+            },
+            "method": "editOrder",
+            "args": ["ORD-0011", "005930/KRW", "limit", "buy", 3, 70030],
+            "http": [],
+            "error": { "class": "InvalidOrder", "detail": "price-tick-invalid" }
+        },
+        {
+            "description": "editOrder 미국 amount 가 총수량(체결 + 잔량)과 다르면 주문 상세를 확인한 뒤 정정 요청 없이 NotSupported 다",
+            "method": "editOrder",
+            "args": ["ORD-0013", "AAPL", "limit", "buy", 3, 228],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders/ORD-0013",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "orderId": "ORD-0013",
+                                "symbol": "AAPL",
+                                "side": "BUY",
+                                "orderType": "LIMIT",
+                                "timeInForce": "DAY",
+                                "status": "PENDING",
+                                "price": "227",
+                                "quantity": "5",
+                                "currency": "USD",
+                                "orderedAt": "2026-03-25T01:00:00Z",
+                                "execution": { "filledQuantity": "0" }
+                            }
+                        }
+                    }
+                }
+            ],
+            "error": { "class": "NotSupported" }
+        },
+        {
+            "description": "editOrder 미국 amount 가 총수량과 같으면 가격만 정정하고 그 총수량을 돌려준다",
+            "now": 1774449000000,
+            "method": "editOrder",
+            "args": ["ORD-0028", "AAPL", "limit", "buy", 3, 229.5],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders/ORD-0028",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "orderId": "ORD-0028",
+                                "symbol": "AAPL",
+                                "side": "BUY",
+                                "orderType": "LIMIT",
+                                "timeInForce": "DAY",
+                                "status": "PARTIAL_FILLED",
+                                "price": "228",
+                                "quantity": "3",
+                                "currency": "USD",
+                                "orderedAt": "2026-03-25T14:00:00Z",
+                                "execution": { "filledQuantity": "1" }
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders/ORD-0028/modify",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001", "Content-Type": "application/json" },
+                        "body": "{\"orderType\":\"LIMIT\",\"price\":\"229.5\"}"
+                    },
+                    "response": { "status": 200, "body": { "result": { "orderId": "ORD-0029" } } }
+                }
+            ],
+            "output": {
+                "info": { "orderId": "ORD-0029" },
+                "id": "ORD-0029",
+                "timestamp": 1774449000000,
+                "datetime": "2026-03-25T14:30:00.000Z",
+                "symbol": "AAPL/USD",
+                "type": "limit",
+                "side": "buy",
+                "price": 229.5,
+                "amount": 3,
+                "status": "open",
+                "trades": [],
+                "fees": []
+            }
         },
         {
             "description": "editOrder 미국은 주문 상세로 남은 수량을 확인한 뒤 가격만 정정한다. 명목가가 기준 아래면 고액주문 표시를 붙이지 않는다",
@@ -3301,6 +3910,76 @@
             "error": { "class": "OrderOutcomeUnknown" }
         },
         {
+            "description": "editOrder 는 처리하지 않은 params 키를 정정 본문 끝에 합친다",
+            "now": 1774449000000,
+            "method": "editOrder",
+            "args": ["ORD-0028", "AAPL", "limit", "buy", null, 229.5, { "tossExtraField": "x" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders/ORD-0028",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "orderId": "ORD-0028",
+                                "symbol": "AAPL",
+                                "side": "BUY",
+                                "orderType": "LIMIT",
+                                "timeInForce": "DAY",
+                                "status": "PARTIAL_FILLED",
+                                "price": "228",
+                                "quantity": "3",
+                                "currency": "USD",
+                                "orderedAt": "2026-03-25T14:00:00Z",
+                                "execution": { "filledQuantity": "1" }
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders/ORD-0028/modify",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001", "Content-Type": "application/json" },
+                        "body": "{\"orderType\":\"LIMIT\",\"price\":\"229.5\",\"tossExtraField\":\"x\"}"
+                    },
+                    "response": { "status": 200, "body": { "result": { "orderId": "ORD-0029" } } }
+                }
+            ],
+            "output": {
+                "info": { "orderId": "ORD-0029" },
+                "id": "ORD-0029",
+                "timestamp": 1774449000000,
+                "datetime": "2026-03-25T14:30:00.000Z",
+                "symbol": "AAPL/USD",
+                "type": "limit",
+                "side": "buy",
+                "price": 229.5,
+                "status": "open",
+                "trades": [],
+                "fees": []
+            }
+        },
+        {
+            "description": "editOrder 에 정정 본문 필드(price)를 params 로 주면 요청 없이 BadRequest 다",
+            "method": "editOrder",
+            "args": ["ORD-0028", "AAPL", "limit", "buy", null, 229.5, { "price": "230" }],
+            "http": [],
+            "error": { "class": "BadRequest" }
+        },
+        {
+            "description": "editOrder 에 조건 인자(stopPrice)를 주면 본문에 합치지 않고 요청 없이 NotSupported 다",
+            "method": "editOrder",
+            "args": ["ORD-0028", "AAPL", "limit", "buy", null, 229.5, { "stopPrice": 220 }],
+            "http": [],
+            "error": { "class": "NotSupported" }
+        },
+        {
             "description": "editOrder 에 trigger 를 주면 조건 전체를 다시 선언해 조건주문을 정정한다",
             "now": 1774400400000,
             "method": "editOrder",
@@ -3491,9 +4170,8 @@
                         "quantity": "5",
                         "currency": "KRW",
                         "orderedAt": "2026-03-25T01:00:00Z",
-                        "execution": {
-                            "filledQuantity": "0"
-                        }
+                        "execution": { "filledQuantity": "0" },
+                        "cancelResponse": { "orderId": "ORD-0019" }
                     },
                     "id": "ORD-0016",
                     "timestamp": 1774400400000,
@@ -3524,9 +4202,7 @@
                         "quantity": "5",
                         "currency": "KRW",
                         "orderedAt": "2026-03-25T01:01:00Z",
-                        "execution": {
-                            "filledQuantity": "0"
-                        },
+                        "execution": { "filledQuantity": "0" },
                         "alreadyGone": true,
                         "cancelError": "토스 API 오류: 409 {\"error\":{\"code\":\"already-filled\",\"message\":\"이미 체결\"}}",
                         "cancelErrorDetail": "already-filled"
@@ -3559,10 +4235,9 @@
                         "quantity": "5",
                         "currency": "KRW",
                         "orderedAt": "2026-03-25T01:02:00Z",
-                        "execution": {
-                            "filledQuantity": "0"
-                        },
-                        "cancelError": "토스 API 오류: 422 {\"error\":{\"code\":\"cancel-restricted\",\"message\":\"취소 불가\"}}"
+                        "execution": { "filledQuantity": "0" },
+                        "cancelError": "토스 API 오류: 422 {\"error\":{\"code\":\"cancel-restricted\",\"message\":\"취소 불가\"}}",
+                        "cancelErrorDetail": "cancel-restricted"
                     },
                     "id": "ORD-0018",
                     "timestamp": 1774400520000,
@@ -3678,7 +4353,8 @@
                         "quantity": "2",
                         "orderType": "MARKET",
                         "createdAt": "2026-03-25T00:40:00Z",
-                        "first": { "orderSide": "SELL", "triggerPrice": "65000" }
+                        "first": { "orderSide": "SELL", "triggerPrice": "65000" },
+                        "cancelResponse": {}
                     },
                     "id": "COND-0012",
                     "timestamp": 1774399200000,
@@ -3708,7 +4384,8 @@
                         "quantity": "5",
                         "currency": "KRW",
                         "orderedAt": "2026-03-25T01:05:00Z",
-                        "execution": { "filledQuantity": "0" }
+                        "execution": { "filledQuantity": "0" },
+                        "cancelResponse": { "orderId": "ORD-0032" }
                     },
                     "id": "ORD-0031",
                     "timestamp": 1774400700000,
@@ -3807,6 +4484,70 @@
                 "trades": [],
                 "fees": [{ "currency": "KRW", "cost": 889 }],
                 "remaining": 0,
+                "postOnly": false
+            }
+        },
+        {
+            "description": "fetchOrder 는 거절된 취소 요청의 레코드(CANCEL_REJECTED)를 rejected 로 옮긴다. 원주문은 이전 상태로 따로 조회된다",
+            "method": "fetchOrder",
+            "args": ["ORD-0031"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders/ORD-0031",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "orderId": "ORD-0031",
+                                "symbol": "005930",
+                                "side": "BUY",
+                                "orderType": "LIMIT",
+                                "timeInForce": "DAY",
+                                "status": "CANCEL_REJECTED",
+                                "price": "70000",
+                                "quantity": "3",
+                                "currency": "KRW",
+                                "orderedAt": "2026-03-25T01:00:00Z",
+                                "execution": { "filledQuantity": "0" }
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "info": {
+                    "orderId": "ORD-0031",
+                    "symbol": "005930",
+                    "side": "BUY",
+                    "orderType": "LIMIT",
+                    "timeInForce": "DAY",
+                    "status": "CANCEL_REJECTED",
+                    "price": "70000",
+                    "quantity": "3",
+                    "currency": "KRW",
+                    "orderedAt": "2026-03-25T01:00:00Z",
+                    "execution": { "filledQuantity": "0" }
+                },
+                "id": "ORD-0031",
+                "timestamp": 1774400400000,
+                "datetime": "2026-03-25T01:00:00.000Z",
+                "symbol": "005930/KRW",
+                "type": "limit",
+                "timeInForce": "DAY",
+                "side": "buy",
+                "price": 70000,
+                "amount": 3,
+                "filled": 0,
+                "cost": 0,
+                "status": "rejected",
+                "trades": [],
+                "fees": [],
+                "remaining": 3,
                 "postOnly": false
             }
         },

@@ -8,7 +8,8 @@
  */
 
 import { isTradingHours, getTimeUntilMarketOpen } from '../trading-hours';
-import { getUsMarketPhase } from '../us-market-hours';
+import { krxOrderBlockReason } from '../krx-trading-hours';
+import { usOrderBlockReason } from '../us-market-hours';
 import { expandBusinessDays, type CalendarDay } from '../market-calendar';
 import {
     tossMarketCountry,
@@ -178,17 +179,13 @@ export function timeUntilTossOpen(now: Date = new Date()): number {
 }
 
 /**
- * 종목의 시장 기준으로 지금 주문할 수 있는 시간대인가. 캘린더를 받지 못했을 때의 폴백이다.
+ * 종목의 시장 기준으로 지금 주문할 수 있는 시간대인가. 캘린더를 받지 못했을 때의 폴백이고, 세 증권사 공용 게이트의 시장 규칙과 같다.
  *
  * - 국내: KRX 정규장(평일 09:00~15:30). 휴장일은 공용 캘린더가 알 때만 막고, 모르는 평일은 열린 것으로 본다.
  * - 미국: 미국 정규장과 종가 단일가만. 토스가 운영하는 주간거래·프리마켓·애프터마켓은 이 판정에 보이지 않아 좁게 막힌다.
  */
 export function isTossOrderable(symbol: string, now: Date = new Date()): boolean {
-    if (tossMarketCountry(symbol) === 'US') {
-        const phase = getUsMarketPhase(now);
-        return phase === 'open' || phase === 'closing-auction';
-    }
-    return isTossTradingOpen(now);
+    return tossMarketCountry(symbol) === 'US' ? usOrderBlockReason({ now }) === null : krxOrderBlockReason({ now }) === null;
 }
 
 /** 토스 캘린더의 `YYYY-MM-DD` 를 공용 캘린더의 `YYYYMMDD` 로 바꾼다. */

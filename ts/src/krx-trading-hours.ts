@@ -260,6 +260,52 @@ export function isNxtExtendedTradable(now: Date = new Date()): boolean {
     return session === 'pre-market' || session === 'after-market';
 }
 
+// ============ 주문 게이트 ============
+
+/** KRX 주문 게이트가 여는 세션. `regular` 는 KRX 정규장(09:00~15:30), `nxt` 는 NXT 프리마켓·메인마켓·애프터마켓이다. */
+export type KrxOrderSession = 'regular' | 'nxt';
+
+/** KRX 주문 게이트의 입력. */
+export interface KrxOrderGate {
+    /** 판정 시각. 증권사 클래스는 인스턴스 시계(`new Date(this.milliseconds())`)를 넘긴다. */
+    now: Date;
+    /** 신규 주문의 방향. 정정처럼 신규 진입이 아닌 주문은 비운다. */
+    side?: string | undefined;
+    /** 종가 동시호가(15:20~15:30)의 신규 매수를 막는다. 시장 규칙이 아니라 진입 정책이라 기본은 `false` 다. */
+    blockAuctionBuys?: boolean | undefined;
+    /** 주문을 받는 세션. 하나라도 열려 있으면 보낸다. 기본은 정규장만이다. */
+    sessions?: readonly KrxOrderSession[] | undefined;
+}
+
+/**
+ * 종가 동시호가(15:20~15:30)의 신규 매수를 막는 사유. 매수가 아니거나 동시호가가 아니면 `null`.
+ *
+ * KRX 는 이 시간에도 호가를 받는다(시장 규칙으로 막히는 주문이 아니다). 단일가라 시장가 체결가가 예상과 크게 다를 수 있어 진입을
+ * 피하려는 호출하는 쪽의 정책이므로, 증권사 클래스는 `options.blockAuctionBuys` 가 켜졌을 때만 이 판정을 건다.
+ */
+export function krxAuctionBuyBlockReason(now: Date, side: string | undefined): string | null {
+    if (side !== 'buy' || getKrxMarketPhase(now) !== 'closing-auction') return null;
+    return '종가 동시호가 (15:20-15:30) — 신규 매수 진입 금지 (options.blockAuctionBuys)';
+}
+
+/**
+ * KRX 주문을 지금 막는 사유. 보내도 되면 `null`. 세 증권사가 같은 시각에 같은 판정을 내도록 한 곳에 둔다.
+ *
+ * 시장 규칙(정규장·NXT 세션, 휴장일)은 늘 판정한다. 휴장일은 공용 캘린더가 아는 날만 막으므로 호출하는 쪽이 캘린더를 먼저 받는다.
+ * 동시호가 신규 매수 차단은 `blockAuctionBuys` 를 켰을 때만 건다.
+ */
+export function krxOrderBlockReason(gate: KrxOrderGate): string | null {
+    const { now, side, blockAuctionBuys = false, sessions = ['regular'] } = gate;
+    const regular = sessions.includes('regular') ? checkKRXTradingHoursAt(now) : undefined;
+    const nxt = sessions.includes('nxt') ? getNxtSession(now) : undefined;
+    const nxtOpen = nxt === 'pre-market' || nxt === 'main' || nxt === 'after-market';
+    if (regular?.tradable !== true && !nxtOpen) {
+        if (regular === undefined) return `NXT 거래시간 외 (session=${nxt ?? 'closed'})`;
+        return nxt === undefined ? `거래시간 외: ${regular.reason}` : `거래시간 외: ${regular.reason} (NXT session=${nxt})`;
+    }
+    return blockAuctionBuys ? krxAuctionBuyBlockReason(now, side) : null;
+}
+
 // ============ 영업일 판정 ============
 
 /**

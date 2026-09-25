@@ -2,37 +2,33 @@
  * `kis.createOrder` — 심볼 라우팅 회귀.
  *
  * 접미사(`/KRW`)를 떼지 않으면 '005930/KRW' 풀형식이 해외 주문으로 오라우팅되어 "해외 마스터에 없는 ticker" 로 실패한다.
- * 국내는 order-cash(PDNO=base), 해외는 overseas order(PDNO=base) 로 가야 한다. 거래시간 게이트는 실시간 의존이라 '거래 가능'으로 고정하고
+ * 국내는 order-cash(PDNO=base), 해외는 overseas order(PDNO=base) 로 가야 한다. 거래시간 게이트는 시각을 그 시장의 정규장으로 고정하고
  * 라우팅만 본다.
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
-
-vi.mock('../kis-trading-hours', () => ({
-    checkKRXTradingHours: () => ({ tradable: true, reason: '' }),
-    getKrxMarketPhase: () => 'open',
-    isNxtExtendedTradable: () => false, // 정규장 라우팅 회귀 테스트 — 확장시간 아님
-    getNxtSession: () => 'main',
-}) satisfies Partial<typeof import('../kis-trading-hours')>);
-vi.mock('../us-market-hours', () => ({
-    getUsMarketPhase: () => 'open',
-    formatEtWallClock: () => '10:00 ET',
-}) satisfies Partial<typeof import('../us-market-hours')>);
 global.fetch = mockFetch as unknown as typeof fetch;
 
 import { KIS_MASTER_FIXTURE } from '../../__tests__/support/kis-master-fixture';
-import { bodyOf, dataOk, headersOf, newKis as newKisBase, tokenOk } from './support/kis-test-utils';
+import { bodyOf, dataOk, headersOf, MARKET_TIMES, newKis as newKisBase, tokenOk } from './support/kis-test-utils';
 
 /** 종목 마스터 픽스처를 넘긴 인스턴스. */
 const newKis = (config: Parameters<typeof newKisBase>[0] = {}) => newKisBase({ masterData: KIS_MASTER_FIXTURE, ...config });
 
 beforeEach(() => {
     mockFetch.mockReset();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(MARKET_TIMES.krxRegular);
 });
 
-/** 주문을 내고 주문 요청(호출 1번)의 URL·본문을 돌려준다. */
+afterEach(() => {
+    vi.useRealTimers();
+});
+
+/** 주문을 내고 주문 요청(호출 1번)의 URL·본문을 돌려준다. 시각은 그 종목 시장의 정규장이다. */
 async function routeOrder(symbol: string, side: 'buy' | 'sell', amount: number, price: number) {
+    vi.setSystemTime(/^\d/.test(symbol) ? MARKET_TIMES.krxRegular : MARKET_TIMES.usRegular);
     mockFetch.mockResolvedValueOnce(tokenOk()).mockResolvedValueOnce(dataOk({ output: { ODNO: '0000000001', ORD_TMD: '093000' } }));
 
     const order = await newKis().createOrder(symbol, 'limit', side, amount, price);
