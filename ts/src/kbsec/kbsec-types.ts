@@ -17,7 +17,9 @@
  * `docs/coverage/kbsec.json` 의 `verified` 를 본다.
  */
 
+import { ExchangeError } from '../base/errors';
 import { isKrxDomesticCode } from '../broker-krx-code';
+import { isKrxBusinessDayKst } from '../krx-trading-hours';
 
 // ============ 접속 상수 ============
 
@@ -471,35 +473,31 @@ export function kbsecDateUsEastern(at: Date): string {
 }
 
 /** KST 오프셋을 더한 Date — `getUTC*` 가 곧 한국 시각/요일이 된다. */
-function kstNow(): Date {
-    const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
-    return new Date(Date.now() + KST_OFFSET_MS);
-}
-
 /**
  * 조회 기준일(`ordr_dt`) — **KB 의 `현재일자` 는 영업일**이라 주말·휴장일엔 직전 영업일에 머문다.
  *
  * 캘린더 날짜를 그대로 보내면 그날 조회가 **전량 거부**된다:
  * `주문일자가 현재일자보다 큽니다 [processCode=2854]`. 같은 TR 을 쓰는 **체결 조회**도 함께 실패한다.
  *
- * 공휴일은 여기서 모델링하지 않는다(주말만 되감는다) — 호출부가 `2854` 를 만나면 한 칸씩 더
+ * 주말과 KRX 휴장일(`isKrxBusinessDayKst`)을 건너뛴다. 휴장일 표에 없는 휴장일은 호출부가 `2854` 를 만나면 한 칸씩 더
  * 되감아 재시도하고, 그때 WARN 을 남겨 **모르는 휴장일을 사후에 알 수 있게** 한다.
  *
  * @param stepsBack 0 = 오늘 기준 가장 최근 영업일, 1 = 그 직전 영업일, …
+ * @param now 기준 시각. 증권사 인스턴스는 자기 시계(`milliseconds()`)를 넘긴다.
  */
-export function kbsecBusinessDateKst(stepsBack = 0): string {
-    const d = kstNow();
+export function kbsecBusinessDateKst(stepsBack = 0, now: Date = new Date()): string {
+    const d = new Date(now.getTime() + 9 * 60 * 60 * 1000);   // 한국 날짜를 UTC 필드로 읽는다
     let remaining = stepsBack;
-    for (;;) {
-        const dow = d.getUTCDay();            // KST 오프셋을 더했으므로 한국 요일
-        const isWeekend = dow === 0 || dow === 6;
-        if (!isWeekend) {
-            if (remaining === 0) break;
+    // 휴장일 표가 잘못되어 모든 날이 휴장으로 보여도 멈추게 상한을 둔다. 1년이면 어떤 연휴도 넘는다.
+    for (let days = 0; days < 366 + stepsBack * 7; days++) {
+        const ymd = d.toISOString().slice(0, 10).replace(/-/g, '');
+        if (isKrxBusinessDayKst(ymd)) {
+            if (remaining === 0) return ymd;
             remaining -= 1;
         }
         d.setUTCDate(d.getUTCDate() - 1);
     }
-    return d.toISOString().slice(0, 10).replace(/-/g, '');
+    throw new ExchangeError(`KB 조회 기준일을 찾지 못했다: 최근 1년에 KRX 영업일이 없다(stepsBack=${stepsBack})`);
 }
 
 /** {@link kbsecBusinessDateKst} 의 미국 현지 날짜판 — 해외 조회의 `ordr_dt` 축이다. 주말만 되감는다. */
