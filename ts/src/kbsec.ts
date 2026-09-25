@@ -1683,7 +1683,7 @@ interface HoldingRow {
 const NO_ORDER_ID = '';
 
 /** 조건(스톱) 주문을 뜻하는 `createOrder` 인자. `createOrder` 는 조건 인자를 받지 않으므로 하나라도 있으면 거절한다. 스탑지정가는 `createTriggerOrder` 로 낸다. */
-const UNSUPPORTED_CONDITIONAL_PARAMS = ['triggerPrice', 'stopPrice', 'stopLossPrice', 'takeProfitPrice'] as const;
+const UNSUPPORTED_CONDITIONAL_PARAMS = ['triggerPrice', 'stopPrice', 'stopLossPrice', 'takeProfitPrice', 'stopLoss', 'takeProfit'] as const;
 
 export class kbsec extends Exchange {
     /** 발급한 토큰을 들고 있는 인증 객체. 앱키·시크릿이 바뀌면 다시 만든다. */
@@ -4406,7 +4406,7 @@ export class kbsec extends Exchange {
      * - 접수 뒤에는 체결 조회로 체결가·수량을 확정한다. 확정하지 못하면 `order.info.fillConfirmed` 가 `false` 이고 `filled` 는 비어 있다.
      * - `params.fractional` 이 참이면 국내 소수점 주문이다(수량을 소수 6자리로 보내고 체결 확정을 하지 않는다).
      * - `params.sor` 는 국내 라우팅(`K` KRX · `N` NXT · `S` SOR)이다. 생략하면 `options.nxtRouting` 을 따른다.
-     * - **조건 인자는 받지 않는다.** `params` 에 `triggerPrice`·`stopPrice`·`stopLossPrice`·`takeProfitPrice` 가 있으면 요청 없이 `NotSupported` 다.
+     * - **조건 인자는 받지 않는다.** `params` 에 `triggerPrice`·`stopPrice`·`stopLossPrice`·`takeProfitPrice`·`stopLoss`·`takeProfit` 가 있으면 요청 없이 `NotSupported` 다.
      *   버리고 일반 주문으로 내면 조건 주문을 의도한 호출이 곧바로 체결된다. 스탑지정가는 `createTriggerOrder` 로 낸다.
      *
      * 시간 초과나 연결 끊김은 `OrderOutcomeUnknown` 이다. 다시 보내지 말고 `fetchMyTrades` 로 접수 여부를 확인한다.
@@ -4431,7 +4431,7 @@ export class kbsec extends Exchange {
         // 세션 게이트. 거래시간 밖 주문은 KB 로 보내지 않고 `MarketClosed` 로 막는다.
         // KRX 판정은 시장이 아는 사실이라 이 클래스가 자기 시간표를 갖지 않고 공용 술어에 맡긴다.
         if (isKr) await this.refreshMarketCalendar();
-        const closed = marketSessionBlockReason('kbsec', symbol, undefined, masterDataOf(this.options));
+        const closed = marketSessionBlockReason('kbsec', symbol, new Date(this.milliseconds()), masterDataOf(this.options));
         if (closed !== null) {
             logger.info({ symbol, side, reason: closed }, '[kbsec] 거래시간 외 주문 차단');
             throw new MarketClosed(closed);
@@ -4515,7 +4515,7 @@ export class kbsec extends Exchange {
         this.checkOrderArguments(market, 'limit', side, amount, price, params);
 
         if (isKr) await this.refreshMarketCalendar();
-        const closed = marketSessionBlockReason('kbsec', symbol, undefined, masterDataOf(this.options));
+        const closed = marketSessionBlockReason('kbsec', symbol, new Date(this.milliseconds()), masterDataOf(this.options));
         if (closed !== null) {
             logger.info({ symbol, side, reason: closed }, '[kbsec] 거래시간 외 주문 차단');
             throw new MarketClosed(closed);
@@ -4626,7 +4626,7 @@ export class kbsec extends Exchange {
         if (!this.isUs(market)) throw new NotSupported(`${this.id} createMarketBuyOrderWithCost() 는 미국 종목만 지원한다: ${symbol}`);
         if (!(cost > 0)) throw new ArgumentsRequired(`${this.id} createMarketBuyOrderWithCost() requires a cost argument above 0`);
 
-        const closed = marketSessionBlockReason('kbsec', symbol, undefined, masterDataOf(this.options));
+        const closed = marketSessionBlockReason('kbsec', symbol, new Date(this.milliseconds()), masterDataOf(this.options));
         if (closed !== null) {
             logger.info({ symbol, cost, reason: closed }, '[kbsec] 거래시간 외 주문 차단');
             throw new MarketClosed(closed);

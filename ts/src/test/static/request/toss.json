@@ -1766,6 +1766,24 @@
             "error": { "class": "InvalidOrder" }
         },
         {
+            "description": "createOrder 에 triggerPrice 가 아닌 조건 인자(stopPrice)를 주면 조건 없는 일반 주문을 내지 않고 요청 없이 NotSupported 다",
+            "method": "createOrder",
+            "args": [
+                "005930",
+                "limit",
+                "sell",
+                1,
+                70000,
+                {
+                    "stopPrice": 65000
+                }
+            ],
+            "http": [],
+            "error": {
+                "class": "NotSupported"
+            }
+        },
+        {
             "description": "createOrder 국내 1억원 이상은 confirmHighValueOrder 를 켜고, confirmExecution false 면 체결 조회를 하지 않는다",
             "now": 1774400400000,
             "method": "createOrder",

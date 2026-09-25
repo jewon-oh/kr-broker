@@ -3540,6 +3540,9 @@ const KIS_INDEX_MINUTE_SECONDS: Readonly<Record<string, string>> = { '30s': '30'
 /** `since`가 없을 때 봉 개수로 잡는 조회 구간에 곱하는 휴장일 여유. */
 const KIS_INDEX_RANGE_MARGIN = 1.5;
 
+/** `createOrder` 가 받지 않는 ccxt 조건 인자. 본문에 합치면 조건 없는 일반 주문이 바로 나갈 수 있어 요청 전에 막는다. */
+const CONDITIONAL_ORDER_PARAMS = ['triggerPrice', 'stopPrice', 'stopLossPrice', 'takeProfitPrice', 'stopLoss', 'takeProfit'] as const;
+
 /** 일 단위 봉의 시각. `KISCandleService`의 국내 일봉과 같게 장 시작(09:00 KST)으로 둔다. */
 const KIS_DAILY_CANDLE_HMS = '090000';
 
@@ -5031,12 +5034,19 @@ export class kis extends Exchange {
      * - `session`: `'regular'` 이나 `'nxt'`. 다른 값은 `BadRequest` 다. 생략하면 `options.nxtRouting` 과 NXT 확장세션 시각으로 자동 판정한다(국내).
      *   `'nxt'` 는 NXT 프리마켓(08:00~08:50), 메인마켓(09:00~15:20), 애프터마켓(15:30~20:00)에만 낸다. 그 밖의 시각과 휴장일은 `MarketClosed` 다.
      *   확장세션이면 종목이 NXT 에서 거래되는지 먼저 확인하고, 아니면 `MarketClosed` 를 던진다(실전만).
+     * - 조건 인자(`triggerPrice`, `stopPrice`, `stopLossPrice`, `takeProfitPrice`, `stopLoss`, `takeProfit`)는 요청 없이 `NotSupported` 다. 본문에 합치면 조건 없는
+     *   일반 주문이 바로 나갈 수 있다. 스탑지정가는 `createTriggerOrder` 로 낸다.
      * - 그 밖의 키는 요청 본문에 그대로 합친다.
      *
      * 국내 시장가는 `ORD_DVSN=01`, 지정가는 `00` 이다. 미국은 지정가만 낼 수 있고, 실전에서 `market` 을 주면 장마감지정가(LOC)로 낸다.
      * 두 경우 모두 미국은 `price` 가 필요하다. 응답은 접수 결과이므로 체결은 알 수 없다(`filled` 가 비어 있다). 체결은 `fetchOrder`·`fetchMyTrades` 로 확인한다.
      */
     override async createOrder(symbol: string, type: OrderType, side: OrderSide, amount: number, price: Num = undefined, params: Dict = {}): Promise<Order> {
+        for (const key of CONDITIONAL_ORDER_PARAMS) {
+            if (this.safeValue(params, key) !== undefined) {
+                throw new NotSupported(`${this.id} createOrder() 는 조건 인자 ${key} 를 받지 않는다. 스탑지정가는 createTriggerOrder() 로 낸다`);
+            }
+        }
         const instrument = this.instrumentOf(symbol);
         const quantity = this.normalizeQuantity(instrument, side, amount);
         if (instrument.overseas) {
