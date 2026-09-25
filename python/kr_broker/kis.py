@@ -1129,6 +1129,13 @@ class kis(Exchange, ImplicitAPI):
         quote_exchange = get_overseas_market_for_code(master, code)
         return KisInstrument(f"{code.replace('/', '.', 1)}/USD", code, True, 'USD', quote_exchange, to_order_market_code(quote_exchange))
 
+    def market(self, symbol: Str) -> Dict[str, Any]:
+        """종목. `load_markets` 로 받은 종목에 있으면 그것을, 없으면 심볼 모양으로 만든 종목을 돌려준다. 시세와 주문 메서드와 같은 판별이라
+        마스터 데이터 없이도 `amount_to_precision` 같은 도우미가 동작한다. 해외 종목은 마스터 데이터가 없으면 상장 거래소를 모르는 종목이 된다."""
+        if symbol is None or (self.markets is not None and (symbol in self.markets or symbol in (self.markets_by_id or {}))):
+            return super().market(symbol)
+        return self._market_of(self._instrument_of(symbol))
+
     def _market_of(self, instrument: KisInstrument) -> Dict[str, Any]:
         """`load_markets()` 로 받은 종목이 있으면 그것을, 없으면 마스터 행(또는 모양)으로 종목을 만든다."""
         known = (self.markets or {}).get(instrument.symbol)

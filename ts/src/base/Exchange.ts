@@ -1747,6 +1747,9 @@ export class Exchange {
         throw new NotSupported(`${this.id} fetchMyTrades() is not supported yet`);
     }
 
+    /** 연결과 구독을 닫는다. 실시간 연결이 없는 증권사는 할 일이 없다. ccxt 처럼 모든 증권사에 있어 같은 코드로 정리할 수 있다. */
+    async close(): Promise<void> {}
+
     async fetchTradingFee(_symbol: string, _params: Dict = {}): Promise<TradingFeeInterface> {
         throw new NotSupported(`${this.id} fetchTradingFee() is not supported yet`);
     }

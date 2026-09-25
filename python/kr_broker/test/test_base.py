@@ -371,3 +371,23 @@ def test_kis_change_sign_falls_back_to_the_sign_code_when_the_rate_rounds_to_zer
     assert _signed_change('50', '0.00', '2') == '50'
     assert _signed_change('500', '-0.71', '2') == '-500'
     assert _signed_change('0', '0.00', '3') == '0'
+
+
+def test_kis_market_works_without_master_data() -> None:
+    broker = kr_broker.kis({'apiKey': 'k', 'secret': 's', 'uid': '12345678-01'})
+    assert broker.market('005930/KRW')['symbol'] == '005930/KRW'
+    broker.load_markets()
+    assert broker.amount_to_precision('005930/KRW', 3.7) == '3'
+    assert broker.market('AAPL/USD')['quote'] == 'USD'
+
+
+def test_toss_domestic_cost_order_is_not_supported_before_any_request() -> None:
+    from kr_broker.base.errors import NotSupported
+    broker = kr_broker.toss({'apiKey': 'k', 'secret': 's'})
+    with pytest.raises(NotSupported):
+        broker.create_market_buy_order_with_cost('005930', 100000)
+
+
+def test_exchange_closed_by_user_is_an_exchange_error() -> None:
+    from kr_broker.base.errors import ExchangeClosedByUser, ExchangeError
+    assert issubclass(ExchangeClosedByUser, ExchangeError) and kr_broker.ExchangeClosedByUser is ExchangeClosedByUser

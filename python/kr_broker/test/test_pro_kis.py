@@ -19,7 +19,7 @@ from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 import kr_broker.async_support
-from kr_broker.base.errors import ArgumentsRequired, ExchangeError
+from kr_broker.base.errors import ArgumentsRequired, ExchangeClosedByUser, ExchangeError
 from kr_broker.kis_realtime_columns import KIS_REALTIME_COLUMNS, KIS_REALTIME_TR_ALIASES, kis_realtime_columns
 from kr_broker.kis_realtime_parser import KisOrderbookRecord, KisTradeRecord, is_ping_pong, parse_kis_realtime_frame, to_stream_symbol
 from kr_broker.pro import kis as pro_kis_module
@@ -607,7 +607,7 @@ def test_close_stops_the_stream_rejects_waiters_and_closes_the_http_session() ->
         pending = asyncio.ensure_future(rig.ex.watch_ticker('005930/KRW'))
         await settle()
         await rig.ex.close()
-        with pytest.raises(ExchangeError):
+        with pytest.raises(ExchangeClosedByUser):
             await pending
         assert rig.stream.stopped == 1
         assert session is not None and session.closed and rig.ex.session is None

@@ -24,6 +24,62 @@
             "output": { "result": { "rate": "1385.5" } }
         },
         {
+            "description": "fetchTrades 는 당일 최근 체결을 count 로 받아 방향 없는 거래로 옮기고 since 로 거른다",
+            "method": "fetchTrades",
+            "args": [
+                "005930/KRW",
+                1774400410000,
+                2
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/trades?symbol=005930&count=2",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": [
+                                {
+                                    "price": "70100",
+                                    "volume": "3",
+                                    "timestamp": "2026-03-25T10:00:05+09:00",
+                                    "currency": "KRW"
+                                },
+                                {
+                                    "price": "70200",
+                                    "volume": "1",
+                                    "timestamp": "2026-03-25T10:00:20+09:00",
+                                    "currency": "KRW"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "info": {
+                        "price": "70200",
+                        "volume": "1",
+                        "timestamp": "2026-03-25T10:00:20+09:00",
+                        "currency": "KRW"
+                    },
+                    "timestamp": 1774400420000,
+                    "datetime": "2026-03-25T01:00:20.000Z",
+                    "symbol": "005930/KRW",
+                    "price": 70200,
+                    "amount": 1,
+                    "cost": 70200,
+                    "fee": {},
+                    "fees": []
+                }
+            ]
+        },
+        {
             "description": "계좌 API 는 계좌 순번 헤더를 더한다",
             "method": "privateAccountGetHoldings",
             "args": [{}],

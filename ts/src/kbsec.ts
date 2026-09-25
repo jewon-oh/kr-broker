@@ -1758,6 +1758,7 @@ export class kbsec extends Exchange {
                 fetchClosedOrders: true,
                 fetchCanceledOrders: false,
                 fetchMyTrades: true,
+                fetchTrades: true,
                 // KB 에 수수료 조회 TR 이 없어 공시 요율로 추정한다.
                 fetchTradingFee: 'emulated',
                 fetchStatus: false,

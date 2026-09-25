@@ -59,6 +59,7 @@ import {
     BadSymbol,
     DuplicateOrderId,
     ExchangeError,
+    ExchangeClosedByUser,
     ExchangeNotAvailable,
     InsufficientFunds,
     InvalidOrder,
@@ -428,6 +429,7 @@ export class toss extends Exchange {
                 fetchClosedOrders: true,
                 fetchCanceledOrders: true,
                 fetchMyTrades: 'emulated',
+                fetchTrades: true,
                 fetchMarketCalendar: true,
                 fetchStockWarnings: true,
                 fetchInvestorTrading: true,
@@ -1706,8 +1708,11 @@ export class toss extends Exchange {
         return this.createOrder(symbol, type, side, amount, price, this.extend(params, { triggerPrice }));
     }
 
-    /** 미국 주식 시장가 매수를 금액으로 낸다(`createOrder` 의 `params.cost`). */
+    /** 미국 주식 시장가 매수를 금액으로 낸다(`createOrder` 의 `params.cost`). 국내는 금액 주문 API 가 없어 요청 없이 `NotSupported` 다. */
     async createMarketBuyOrderWithCost(symbol: string, cost: number, params: Dict = {}): Promise<Order> {
+        if (this.countryOf(this.market(symbol)) !== 'US') {
+            throw new NotSupported(`${this.id} createMarketBuyOrderWithCost() 는 미국 종목만 지원한다: ${symbol}`);
+        }
         return this.createOrder(symbol, 'market', 'buy', 0, undefined, this.extend(params, { cost }));
     }
 
@@ -2453,10 +2458,10 @@ export class toss extends Exchange {
     }
 
     /** 실시간 연결을 닫고 기다리던 `watch*` 를 거절한다. */
-    async close(): Promise<void> {
+    override async close(): Promise<void> {
         this.watchSocket?.stop();
         this.watchSocket = undefined;
         this.watchSubs.clear();
-        this.watchHub.reject(new ExchangeError(`${this.id} 실시간 연결을 닫았다`));
+        this.watchHub.reject(new ExchangeClosedByUser(`${this.id} 실시간 연결을 닫았다`));
     }
 }

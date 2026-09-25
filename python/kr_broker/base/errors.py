@@ -39,7 +39,7 @@ from typing import Optional
 
 __all__ = [
     'BaseError', 'ExchangeError', 'AuthenticationError', 'PermissionDenied', 'AccountNotEnabled', 'AccountSuspended',
-    'ArgumentsRequired', 'BadRequest', 'BadSymbol', 'OperationRejected', 'NoChange', 'ManualInteractionNeeded', 'MarketClosed',
+    'ArgumentsRequired', 'BadRequest', 'BadSymbol', 'ExchangeClosedByUser', 'OperationRejected', 'NoChange', 'ManualInteractionNeeded', 'MarketClosed',
     'InsufficientFunds', 'InvalidOrder', 'OrderNotFound', 'DuplicateOrderId', 'NotSupported', 'OperationFailed', 'NetworkError',
     'DDoSProtection', 'RateLimitExceeded', 'ExchangeNotAvailable', 'OnMaintenance', 'RequestTimeout', 'OrderOutcomeUnknown',
     'BadResponse', 'NullResponse', 'TossTokenRejected', 'TossRateLimited', 'OrderNotSent',
@@ -87,6 +87,10 @@ class BadRequest(ExchangeError):
 
 class BadSymbol(BadRequest):
     pass
+
+
+class ExchangeClosedByUser(ExchangeError):
+    """사용자가 `close()` 로 연결을 닫아 기다리던 `watch_*` 를 끝낸다. ccxt 와 같다."""
 
 
 class OperationRejected(ExchangeError):

@@ -12,7 +12,7 @@ vi.mock('../toss-trading-hours', async (importOriginal) => ({
     isTossOrderable: () => orderable.value,
 }));
 
-import { ArgumentsRequired, InvalidOrder, MarketClosed, OrderOutcomeUnknown } from '../../base';
+import { ArgumentsRequired, InvalidOrder, MarketClosed, NotSupported, OrderOutcomeUnknown } from '../../base';
 import { OrderNotSent } from '../toss-errors';
 import { errorReply, installFakeToss, jsonOk, makeToss, networkFailure, type FakeToss, type Route } from './support/toss-fake';
 
@@ -150,6 +150,12 @@ describe('수량 규칙', () => {
         });
         await makeToss().createOrder('AAPL', 'limit', 'sell', 2.7, 150, { confirmExecution: false });
         expect(postedOrder(fake).quantity).toBe('2');
+    });
+
+    it('★국내 금액 주문(createMarketBuyOrderWithCost)은 수량 검사 오류가 아니라 요청 없이 NotSupported 다', async () => {
+        const fake = installFakeToss({});
+        await expect(makeToss().createMarketBuyOrderWithCost('005930', 100000)).rejects.toBeInstanceOf(NotSupported);
+        expect(fake.requests()).toHaveLength(0);
     });
 
     it('미국 소수점 시장가 매수는 내린 뒤 0 이라 던지고 금액 주문을 안내한다', async () => {
