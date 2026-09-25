@@ -45,6 +45,27 @@ export function newKis(config: { sandbox?: boolean; rateLimit?: boolean; masterD
     });
 }
 
+/**
+ * 장 시간 게이트를 시각으로 고정할 때 쓰는 시각. 2026-09-22(화)는 KRX 와 미국 모두 평일이다. 테스트는 `vi.useFakeTimers({ toFake: ['Date'] })` 를
+ * 켠 뒤 `vi.setSystemTime` 으로 고정한다. 휴장일 캘린더는 모의투자에서 받지 않으므로 이 날은 열린 날로 본다.
+ */
+export const MARKET_TIMES = {
+    /** 10:00 KST. KRX 정규장(NXT 메인마켓). */
+    krxRegular: new Date('2026-09-22T01:00:00Z'),
+    /** 15:25 KST. KRX 종가 동시호가(NXT 정지). */
+    krxClosingAuction: new Date('2026-09-22T06:25:00Z'),
+    /** 16:30 KST. KRX 는 닫혔고 NXT 애프터마켓이다. */
+    nxtAfterMarket: new Date('2026-09-22T07:30:00Z'),
+    /** 21:30 KST. KRX 와 NXT 모두 닫혔다. */
+    krxClosed: new Date('2026-09-22T12:30:00Z'),
+    /** 10:00 ET(서머타임). 미국 정규장. */
+    usRegular: new Date('2026-09-22T14:00:00Z'),
+    /** 15:55 ET. 미국 종가 동시호가. */
+    usClosingAuction: new Date('2026-09-22T19:55:00Z'),
+    /** 20:30 ET. 미국 정규장 밖. */
+    usClosed: new Date('2026-09-23T00:30:00Z'),
+} as const;
+
 /** 데이터 호출 URL 목록(토큰 호출 제외). */
 export function dataUrls(mockFetch: { mock: { calls: unknown[][] } }): string[] {
     return mockFetch.mock.calls.map((c) => String(c[0])).filter((u) => !u.includes('/oauth2/'));

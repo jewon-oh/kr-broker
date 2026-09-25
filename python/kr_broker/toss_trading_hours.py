@@ -11,8 +11,9 @@ from typing import Any, Callable, Dict, Iterable, List, Optional
 from kr_broker.base import functions as fn
 from kr_broker.market_calendar import expand_business_days
 from kr_broker.toss_types import toss_market_country
+from kr_broker.krx_trading_hours import krx_order_block_reason
 from kr_broker.trading_hours import get_time_until_market_open, is_trading_hours
-from kr_broker.us_market_hours import get_us_market_phase
+from kr_broker.us_market_hours import us_order_block_reason
 
 # 캘린더를 훑는 순서. 경계 시각(22:30 등)은 앞선 세션에 귀속된다.
 US_SESSION_ORDER = ('regularMarket', 'preMarket', 'dayMarket', 'afterMarket')
@@ -136,11 +137,12 @@ def time_until_toss_open(now_ms: Optional[int] = None) -> int:
 
 
 def is_toss_orderable(symbol: str, now_ms: Optional[int] = None) -> bool:
-    """종목의 시장 기준으로 지금 주문할 수 있는 시간대인가. 캘린더를 받지 못했을 때의 폴백이다.
+    """종목의 시장 기준으로 지금 주문할 수 있는 시간대인가. 캘린더를 받지 못했을 때의 폴백이고, 세 증권사 공용 게이트의 시장 규칙과 같다.
     국내는 KRX 정규장, 미국은 정규장과 종가 동시호가만 본다(확장세션은 모르므로 좁게 막힌다)."""
+    now = _now(now_ms)
     if toss_market_country(symbol) == 'US':
-        return get_us_market_phase(now_ms) in ('open', 'closing-auction')
-    return is_toss_trading_open(now_ms)
+        return us_order_block_reason(now) is None
+    return krx_order_block_reason(now) is None
 
 
 def _to_ymd(date: Any) -> str:

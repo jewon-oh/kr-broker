@@ -244,6 +244,16 @@ describe('createOrder — 장 시간', () => {
 
         expect(calledTrs(mockFetch)).toContain(KBSEC_TR.MARKET_STATUS.toLowerCase());
     });
+
+    it('종가 동시호가(15:25 KST)의 신규 매수는 기본으로 내고, blockAuctionBuys 를 켜면 막는다. 매도는 켜도 낸다', async () => {
+        routeTr(mockFetch, { [TR_BUY]: { ordr_no: 'A1' }, [TR_SELL]: { ordr_no: 'S1' } });
+        vi.setSystemTime(new Date('2026-08-19T06:25:00Z'));
+        const guarded = () => new kbsec({ ...CREDS, rateLimit: 0, options: { blockAuctionBuys: true, confirmBudget: { intervalMs: 0 } } });
+
+        await expect(newExchange().createOrder('005930/KRW', 'limit', 'buy', 1, 70000)).resolves.toMatchObject({ id: 'A1' });
+        await expect(guarded().createOrder('005930/KRW', 'limit', 'buy', 1, 70000)).rejects.toThrow(/종가 동시호가/);
+        await expect(guarded().createOrder('005930/KRW', 'limit', 'sell', 1, 70000)).resolves.toMatchObject({ id: 'S1' });
+    });
 });
 
 describe('createOrder — 해외', () => {

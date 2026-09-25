@@ -12,8 +12,8 @@ import { isKrxDomesticCode } from './kis/kis-types';
 // 이 마스터는 KIS 가 배포하는 파일에서 왔지만 내용은 **미국 상장 거래소 정보**다(어디서 얻었는지와 무엇을 다루는지는 별개다).
 import { getOverseasMarketForCode } from './kis/kis-overseas-master';
 import { EMPTY_KIS_MASTER_DATA, type KisMasterData } from './kis/kis-master-data';
-import { checkKRXTradingHoursAt, getTimeUntilKrxOpen } from './krx-trading-hours';
-import { getUsMarketPhase, formatEtWallClock } from './us-market-hours';
+import { checkKRXTradingHoursAt, getTimeUntilKrxOpen, krxAuctionBuyBlockReason } from './krx-trading-hours';
+import { usOrderBlockReason } from './us-market-hours';
 
 /**
  * 현재 시각에 거래소가 운영 중인지 확인.
@@ -49,40 +49,49 @@ export function getTimeUntilMarketOpen(exchangeId: string, now: Date = new Date(
     return getTimeUntilKrxOpen(now);
 }
 
+/** `marketSessionBlockReason` 의 주문 정책. 시장 규칙이 아니라 호출하는 쪽이 고르는 값이다. */
+export interface MarketSessionOrderPolicy {
+    /** 주문 방향. 동시호가 신규 매수 차단에 쓴다. */
+    side?: string | undefined;
+    /** 종가 동시호가(국내 15:20~15:30, 미국 15:50~16:00 ET)의 신규 매수를 막는다. 기본은 `false` 다. */
+    blockAuctionBuys?: boolean | undefined;
+}
+
 /**
  * 지금 이 심볼이 주문을 받지 않는 이유 — 받으면 `null`.
  *
  * 판정 축은 통화나 심볼 모양이 아니라 **상장 거래소**다. 해외 종목은 마스터 데이터에서 상장 거래소를 찾고 `marketGroupOf` 로 그룹을 얻는다.
  * 그룹을 모르면 미국으로 추정하지 않고 막는다. `masterData` 가 없으면 모든 해외 티커를 막는다.
+ * 시간표는 세 증권사 공용 게이트(`krxOrderBlockReason`·`usOrderBlockReason`)와 같다.
  *
  * @param exchangeId 거래소 ID — 이 패키지가 모르는 거래소면 항상 `null`(제한 없음)
  * @param symbol 주문 심볼 (`005930/KRW`, `AAPL/USD`, `AAPL` 모두 허용)
  * @param now 기준 시각
  * @param masterData 해외 종목의 상장 거래소를 찾는 마스터 데이터(`options.masterData`). 없으면 빈 데이터라 모든 해외 티커가 "거래소 미상"이다.
+ * @param policy 동시호가 신규 매수 차단. 생략하면 막지 않는다.
  */
 export function marketSessionBlockReason(
     exchangeId: string,
     symbol: string,
     now: Date = new Date(),
     masterData: KisMasterData = EMPTY_KIS_MASTER_DATA,
+    policy: MarketSessionOrderPolicy = {},
 ): string | null {
     if (!isStockBrokerExchange(exchangeId)) return null;
+    const { side, blockAuctionBuys = false } = policy;
 
     const [code = ''] = symbol.split('/');
     const base = code.trim().toUpperCase();
-    if (isKrxDomesticCode(base)) return tradingHoursBlockReason(exchangeId, now);
+    const krx = (): string | null => tradingHoursBlockReason(exchangeId, now) ?? (blockAuctionBuys ? krxAuctionBuyBlockReason(now, side) : null);
+    if (isKrxDomesticCode(base)) return krx();
 
     // 해외 — **거래소를 먼저 판정한다**. 심볼 모양으로 미국을 추정하지 않는다.
     const venue = getOverseasMarketForCode(masterData, base);
     const group = marketGroupOf(venue);
 
-    if (group === 'KR') return tradingHoursBlockReason(exchangeId, now);
-    if (group === 'US') {
-        // 미국장: 정규장 + 종가 동시호가만 접수. 프리/애프터는 브로커 계약이 달라 여기서 막는다.
-        const phase = getUsMarketPhase(now);
-        if (phase === 'open' || phase === 'closing-auction') return null;
-        return `미국장 정규장 외 (${formatEtWallClock(now)}, phase=${phase})`;
-    }
+    if (group === 'KR') return krx();
+    // 미국장: 정규장 + 종가 동시호가만 접수. 프리/애프터는 브로커 계약이 달라 여기서 막는다.
+    if (group === 'US') return usOrderBlockReason({ now, side, blockAuctionBuys });
 
     // fail-closed — 상장 거래소를 모르면 어느 세션을 적용할지도 모른다.
     return venue

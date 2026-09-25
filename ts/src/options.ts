@@ -47,7 +47,7 @@ export interface BrokerTokenStore {
 /** `options.tokenStore` 의 값. 저장소이거나, 호출 때마다 저장소(지금 쓸 수 없으면 `null`)를 돌려주는 함수다. */
 export type TokenStoreOption = BrokerTokenStore | (() => BrokerTokenStore | null) | null | undefined;
 
-/** 켜고 끄는 옵션(`nxtRouting`, `krwIntegratedMargin`, `usExtendedLimit`)의 값. 불리언이거나 불리언을 돌려주는 함수다. */
+/** 켜고 끄는 옵션(`nxtRouting`, `blockAuctionBuys`, `krwIntegratedMargin`, `usExtendedLimit`)의 값. 불리언이거나 불리언을 돌려주는 함수다. */
 export type FlagOption = boolean | (() => boolean | Promise<boolean>) | undefined;
 
 /** `options.usdKrwRate` 의 값. 1달러당 원화를 돌려준다. 조회에 실패하면 던질 수 있고, 부르는 쪽이 실패를 다룬다. */

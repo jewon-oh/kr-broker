@@ -309,6 +309,7 @@ await broker.close();
 | `orderTimeout` | 주문 상한 | 주문 요청 시간 상한(ms). 넘으면 `OrderOutcomeUnknown` |
 | `options.tokenStore` | 없음 | 접근 토큰과 발급 잠금을 여러 프로세스가 나눠 쓰는 저장소(`BrokerTokenStore`)입니다. 없으면 프로세스 메모리 캐시만 사용합니다. 함수를 전달하면 사용할 때마다 호출합니다 |
 | `options.nxtRouting` | `false` | 정규장 밖(넥스트레이드 프리마켓과 애프터마켓) 국내 주문을 허용합니다(한국투자증권과 토스증권). 시장가 주문은 현재가 지정가로 바꿔 냅니다. KB증권에서는 정규장 안에서 주문을 SOR로 보내는 데만 사용하고 정규장 밖은 허용하지 않습니다. 불리언이거나 불리언을 반환하는 함수입니다 |
+| `options.blockAuctionBuys` | `false` | 종가 동시호가(국내 15:20~15:30, 미국 15:50~16:00 ET)의 신규 매수를 요청 전에 `MarketClosed`로 막습니다(세 증권사). 시장은 이 시간에도 주문을 받으므로 기본은 꺼져 있습니다. 불리언이거나 불리언을 반환하는 함수입니다 |
 | `options.krwIntegratedMargin` | `false` | 통합증거금 계좌의 미국 주식 매수여력을 원화 예수금 환산분으로 보강합니다(토스증권과 KB증권) |
 | `options.usExtendedLimit` | `false` | 미국 정규장 밖에서 시장가 주문을 지정가 주문으로 변환해 냅니다(토스증권) |
 | `options.usdKrwRate` | 없음 | 1달러당 원화를 반환하는 `() => Promise<number>`입니다. 원화 환산에 사용합니다(토스증권과 KB증권) |

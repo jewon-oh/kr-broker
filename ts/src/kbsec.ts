@@ -25,8 +25,8 @@
  * ## 옵션
  *
  * 전역 설정은 없고 인스턴스가 `options` 로 받는다. `tokenStore`(토큰 저장소), `nxtRouting`(정규장 안의 국내 주문을 SOR 로. 정규장 밖 주문은
- * 받지 않는다), `krwIntegratedMargin`(원마켓 계좌의 미국 주식 매수여력을 원화 환산분으로 보강, 환율은 `usdKrwRate`), `masterData`(해외 종목의
- * 상장 거래소 판별), `confirmBudget`(체결 확정 조회 예산)이다.
+ * 받지 않는다), `blockAuctionBuys`(종가 동시호가의 신규 매수를 막는다), `krwIntegratedMargin`(원마켓 계좌의 미국 주식 매수여력을 원화 환산분으로
+ * 보강, 환율은 `usdKrwRate`), `masterData`(해외 종목의 상장 거래소 판별과 국내 종목 유형), `confirmBudget`(체결 확정 조회 예산)이다.
  * 켜고 끄는 옵션은 불리언이거나 불리언을 돌려주는 함수다.
  *
  * ## 안전 계약
@@ -1797,6 +1797,8 @@ export class kbsec extends Exchange {
                 // 켜고 끄는 옵션은 불리언이거나 불리언을 돌려주는 함수(값이 바뀔 수 있을 때)다. 기본은 꺼짐이다.
                 /** 정규장 안의 국내 주문을 SOR(KRX·NXT 중 유리한 쪽)로 보낸다. 정규장 밖 주문은 세션 게이트가 `MarketClosed` 로 막는다. */
                 nxtRouting: undefined,
+                /** 종가 동시호가(국내 15:20~15:30, 미국 15:50~16:00 ET)의 신규 매수를 막는다. 시장이 받는 주문이라 기본은 꺼짐이다. */
+                blockAuctionBuys: undefined,
                 /**
                  * 원마켓(통합증거금) 계좌의 미국 주식 매수여력을 원화 환산분으로 보강한다. 원마켓 계좌는 USD 로 미리 환전하지 않고 원화로 미국 주식을 산다.
                  * 켜면 `krw_exch_unty_ordr_psbl_amt`(원화환산 통합 주문가능금액)를 기준으로 읽고, 끄면 외화 예수금(`fcrncy_ordr_psbl_amt`)만 본다.
@@ -4434,7 +4436,9 @@ export class kbsec extends Exchange {
         // 세션 게이트. 거래시간 밖 주문은 KB 로 보내지 않고 `MarketClosed` 로 막는다.
         // KRX 판정은 시장이 아는 사실이라 이 클래스가 자기 시간표를 갖지 않고 공용 술어에 맡긴다.
         if (isKr) await this.refreshMarketCalendar();
-        const closed = marketSessionBlockReason('kbsec', symbol, new Date(this.milliseconds()), masterDataOf(this.options));
+        const closed = marketSessionBlockReason('kbsec', symbol, new Date(this.milliseconds()), masterDataOf(this.options), {
+            side, blockAuctionBuys: await this.isOptionEnabled('blockAuctionBuys'),
+        });
         if (closed !== null) {
             logger.info({ symbol, side, reason: closed }, '[kbsec] 거래시간 외 주문 차단');
             throw new MarketClosed(closed);
@@ -4518,7 +4522,9 @@ export class kbsec extends Exchange {
         this.checkOrderArguments(market, 'limit', side, amount, price, params);
 
         if (isKr) await this.refreshMarketCalendar();
-        const closed = marketSessionBlockReason('kbsec', symbol, new Date(this.milliseconds()), masterDataOf(this.options));
+        const closed = marketSessionBlockReason('kbsec', symbol, new Date(this.milliseconds()), masterDataOf(this.options), {
+            side, blockAuctionBuys: await this.isOptionEnabled('blockAuctionBuys'),
+        });
         if (closed !== null) {
             logger.info({ symbol, side, reason: closed }, '[kbsec] 거래시간 외 주문 차단');
             throw new MarketClosed(closed);
@@ -4629,7 +4635,9 @@ export class kbsec extends Exchange {
         if (!this.isUs(market)) throw new NotSupported(`${this.id} createMarketBuyOrderWithCost() 는 미국 종목만 지원한다: ${symbol}`);
         if (!(cost > 0)) throw new ArgumentsRequired(`${this.id} createMarketBuyOrderWithCost() requires a cost argument above 0`);
 
-        const closed = marketSessionBlockReason('kbsec', symbol, new Date(this.milliseconds()), masterDataOf(this.options));
+        const closed = marketSessionBlockReason('kbsec', symbol, new Date(this.milliseconds()), masterDataOf(this.options), {
+            side: 'buy', blockAuctionBuys: await this.isOptionEnabled('blockAuctionBuys'),
+        });
         if (closed !== null) {
             logger.info({ symbol, cost, reason: closed }, '[kbsec] 거래시간 외 주문 차단');
             throw new MarketClosed(closed);

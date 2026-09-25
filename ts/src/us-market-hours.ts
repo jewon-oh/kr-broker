@@ -124,6 +124,43 @@ export function getUsMarketPhase(now: Date = new Date()): UsMarketPhase {
     return 'closing-auction';
 }
 
+/** 미국 주문 게이트가 여는 세션. `regular` 는 정규장(09:30~16:00 ET), `opening-auction` 은 시초가 동시호가(09:25~09:30 ET)다. */
+export type UsOrderSession = 'regular' | 'opening-auction';
+
+/** 미국 주문 게이트의 입력. */
+export interface UsOrderGate {
+    /** 판정 시각. 증권사 클래스는 인스턴스 시계(`new Date(this.milliseconds())`)를 넘긴다. */
+    now: Date;
+    /** 신규 주문의 방향. 정정처럼 신규 진입이 아닌 주문은 비운다. */
+    side?: string | undefined;
+    /** 종가 동시호가(15:50~16:00 ET)의 신규 매수를 막는다. 시장 규칙이 아니라 진입 정책이라 기본은 `false` 다. */
+    blockAuctionBuys?: boolean | undefined;
+    /**
+     * 주문을 받는 세션. 기본은 정규장만이다. 09:25~09:30 에 주문을 받는다고 증권사별로 확인한 경우에만 `opening-auction` 을 더한다.
+     * 토스증권의 주간거래·프리마켓·애프터마켓은 시간표가 아니라 장 운영 캘린더로 판정하므로 여기서 다루지 않는다.
+     */
+    sessions?: readonly UsOrderSession[] | undefined;
+}
+
+/** 종가 동시호가(15:50~16:00 ET)의 신규 매수를 막는 사유. 매수가 아니거나 동시호가가 아니면 `null`. `options.blockAuctionBuys` 가 켜졌을 때만 쓴다. */
+export function usAuctionBuyBlockReason(now: Date, side: string | undefined): string | null {
+    if (side !== 'buy' || getUsMarketPhase(now) !== 'closing-auction') return null;
+    return `종가 동시호가 (15:50-16:00 ET, ${formatEtWallClock(now)}) — 신규 매수 진입 금지 (options.blockAuctionBuys)`;
+}
+
+/**
+ * 미국 주문을 지금 막는 사유. 보내도 되면 `null`. 세 증권사가 같은 시각에 같은 판정을 내도록 한 곳에 둔다.
+ * 정규장(종가 동시호가 포함)만 열고, 휴장일은 공용 캘린더가 아는 날만 막는다. 동시호가 신규 매수 차단은 `blockAuctionBuys` 를 켰을 때만 건다.
+ */
+export function usOrderBlockReason(gate: UsOrderGate): string | null {
+    const { now, side, blockAuctionBuys = false, sessions = ['regular'] } = gate;
+    const phase = getUsMarketPhase(now);
+    const open = (sessions.includes('regular') && (phase === 'open' || phase === 'closing-auction'))
+        || (sessions.includes('opening-auction') && phase === 'pre-auction');
+    if (!open) return `미국장 정규장 외 (${formatEtWallClock(now)}, phase=${phase})`;
+    return blockAuctionBuys ? usAuctionBuyBlockReason(now, side) : null;
+}
+
 /**
  * `now` 기준 다음 미국 정규장 개장(09:30 ET)까지의 밀리초. KRX 용 `getTimeUntilKrxOpen()` 의
  * NYSE/NASDAQ 대응. 정규장/동시호가 윈도우(pre-auction·open·closing-auction) 중이면 0 반환.

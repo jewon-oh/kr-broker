@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isTradingHours, getTimeUntilMarketOpen, tradingHoursBlockReason } from '../trading-hours';
+import { isTradingHours, getTimeUntilMarketOpen, marketSessionBlockReason, tradingHoursBlockReason } from '../trading-hours';
 
 /**
  * UTC 기준 Date 헬퍼.
@@ -92,5 +92,15 @@ describe('getTimeUntilMarketOpen', () => {
         const expected = 65 * 60 * 60 * 1000;
         expect(ms).toBeGreaterThanOrEqual(expected - 60_000);
         expect(ms).toBeLessThanOrEqual(expected + 60_000);
+    });
+});
+
+describe('marketSessionBlockReason — 동시호가 정책', () => {
+    const closingAuction = new Date('2026-09-22T06:25:00Z'); // 15:25 KST
+
+    it('종가 동시호가의 신규 매수는 기본으로 열고, blockAuctionBuys 를 켜면 매수만 막는다', () => {
+        expect(marketSessionBlockReason('kbsec', '005930/KRW', closingAuction)).toBeNull();
+        expect(marketSessionBlockReason('kbsec', '005930/KRW', closingAuction, undefined, { side: 'buy', blockAuctionBuys: true })).toMatch(/종가 동시호가/);
+        expect(marketSessionBlockReason('kbsec', '005930/KRW', closingAuction, undefined, { side: 'sell', blockAuctionBuys: true })).toBeNull();
     });
 });

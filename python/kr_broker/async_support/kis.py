@@ -33,7 +33,8 @@
     주문은 재시도하지 않고, 시간 초과나 연결 끊김이면 접수 여부를 모르므로 `OrderOutcomeUnknown` 을 던진다.
 
 옵션
-    `tokenStore`(토큰 저장소), `nxtRouting`(정규장 밖 NXT 주문과 시세, 불리언이거나 불리언을 돌려주는 함수), `masterData`(종목 마스터),
+    `tokenStore`(토큰 저장소), `nxtRouting`(정규장 밖 NXT 주문과 시세, 불리언이거나 불리언을 돌려주는 함수), `blockAuctionBuys`(종가 동시호가의
+    신규 매수를 막는다, 기본 꺼짐), `masterData`(종목 마스터),
     `stockDirectory`(코스피·코스닥 구분을 알려 주는 `find_kr_market(code)` 객체), `orderableProbeCode`(주문가능현금 조회에 쓰는 종목)다.
 
 한계
@@ -80,8 +81,8 @@ from kr_broker.kis_types import (
 )
 from kr_broker.krx_sell_tax import krx_sell_tax_rate
 from kr_broker.krx_tick_size import KRX_TICK_INVALID_DETAIL, get_krx_tick_size, krx_tick_violation
-from kr_broker.krx_trading_hours import check_krx_trading_hours, get_krx_market_phase, get_nxt_session, is_nxt_extended_tradable
-from kr_broker.us_market_hours import et_wall_clock_to_utc_ms, et_ymd, format_et_wall_clock, get_us_market_phase
+from kr_broker.krx_trading_hours import is_nxt_extended_tradable, krx_order_block_reason
+from kr_broker.us_market_hours import et_wall_clock_to_utc_ms, et_ymd, us_order_block_reason
 
 logger = logging.getLogger('kr_broker')
 
@@ -881,6 +882,8 @@ class kis(Exchange, ImplicitAPI):
                 'tokenStore': None,
                 # 정규장 밖(NXT 프리·애프터) 주문과 시세를 연다. 불리언이거나 불리언을 돌려주는 함수다. 기본은 꺼짐이다.
                 'nxtRouting': None,
+                # 종가 동시호가(국내 15:20~15:30, 미국 15:50~16:00 ET)의 신규 매수를 막는다. 불리언이거나 불리언을 돌려주는 함수다. 기본은 꺼짐.
+                'blockAuctionBuys': None,
                 # 종목 검색과 해외 거래소 판별에 쓰는 KIS 마스터 데이터(`kis_master_data` 참고). 없으면 빈 데이터다.
                 'masterData': None,
                 # 국내 종목의 코스피·코스닥 구분을 알려 주는 곳(`find_kr_market(code)` 가 있는 객체). 없으면 마스터 데이터로 판별한다.
@@ -1213,7 +1216,7 @@ class kis(Exchange, ImplicitAPI):
 
     async def _quote_market_division(self) -> str:
         """국내 시세 조회의 상품구분. `nxtRouting` 옵션이 켜져 있고 NXT 확장세션이면 통합(`UN`)으로 애프터마켓 시세를 받는다."""
-        return 'UN' if is_nxt_extended_tradable() and await self.is_option_enabled('nxtRouting') else 'J'
+        return 'UN' if is_nxt_extended_tradable(self.milliseconds()) and await self.is_option_enabled('nxtRouting') else 'J'
 
     # ============ 시세 ============
 
@@ -1811,7 +1814,7 @@ class kis(Exchange, ImplicitAPI):
             raise BadRequest(f"{self.id} createOrder() 의 params.session 은 'regular' 이나 'nxt' 여야 한다: {session}")
         params = self.omit(params, 'session')
         # 확장세션(NXT 프리 08:00~08:50, 애프터 15:30~20:00)은 정규장 게이트 대신 NXT 게이트를 거쳐 SOR 로 낸다. `nxtRouting` 이 꺼져 있으면 정규장 규칙이다.
-        extended = session == 'nxt' or (session is None and await self.is_option_enabled('nxtRouting') and is_nxt_extended_tradable())
+        extended = session == 'nxt' or (session is None and await self.is_option_enabled('nxtRouting') and is_nxt_extended_tradable(self.milliseconds()))
         if extended:
             await self._assert_nxt_session_open()
             await self._assert_nxt_tradable(instrument)
@@ -1905,36 +1908,33 @@ class kis(Exchange, ImplicitAPI):
         """NXT 확장세션 게이트. 프리마켓, 메인마켓, 애프터마켓에만 낸다. 휴장일과 새벽, NXT 가 멈추는 시간(08:50~09:00, KRX 종가 동시호가
         15:20~15:30)은 막는다. 휴장일은 KIS 캘린더로 알아야 해서 먼저 받는다."""
         await self.refresh_market_calendar()
-        phase = get_nxt_session()
-        if phase not in ('pre-market', 'main', 'after-market'):
-            raise MarketClosed(f'NXT 거래시간 외 (session={phase})')
+        reason = krx_order_block_reason(self.milliseconds(), sessions=('nxt',))
+        if reason is not None:
+            raise MarketClosed(reason)
 
     async def _assert_domestic_edit_open(self) -> None:
         """국내 정정 게이트. KRX 정규장과 NXT 확장세션이 모두 닫혀 있으면 막는다. 정정은 신규 진입이 아니라서 동시호가의 매수 제한은 걸지 않는다.
         원주문이 어느 시장에 걸려 있는지는 정정 요청에 없으므로 둘 중 하나라도 열려 있으면 보낸다."""
         await self.refresh_market_calendar()
-        hours = check_krx_trading_hours()
-        if hours['tradable']:
-            return
-        phase = get_nxt_session()
-        if phase in ('pre-market', 'main', 'after-market'):
-            return
-        raise MarketClosed(f"거래시간 외: {_tpl(hours.get('reason'))} (NXT session={phase})")
+        reason = krx_order_block_reason(self.milliseconds(), sessions=('regular', 'nxt'))
+        if reason is not None:
+            raise MarketClosed(reason)
 
     def _assert_us_edit_open(self, exchange: str) -> None:
-        """미국 정정 게이트. 주문과 같이 완전 마감(`closed`)만 막는다. 홍콩·일본·베트남은 대상이 아니다."""
-        if exchange in US_ORDER_EXCHANGES and get_us_market_phase() == 'closed':
-            raise MarketClosed(f'미국장 정규장 외 ({format_et_wall_clock()}, phase=closed)')
+        """미국 정정 게이트. 주문과 같은 시간표(정규장과 종가 동시호가)를 쓴다. 홍콩·일본·베트남은 대상이 아니다."""
+        if exchange not in US_ORDER_EXCHANGES:
+            return
+        reason = us_order_block_reason(self.milliseconds())
+        if reason is not None:
+            raise MarketClosed(reason)
 
     async def _assert_domestic_session_open(self, side: str) -> None:
-        """국내 정규장 게이트. 휴장일은 KIS 캘린더로 알아야 해서 먼저 받는다. 종가 동시호가(15:20~15:30)의 신규 매수는 막는다."""
+        """국내 정규장 게이트. 휴장일은 KIS 캘린더로 알아야 해서 먼저 받는다. 종가 동시호가(15:20~15:30)의 신규 매수는
+        `options['blockAuctionBuys']` 가 켜졌을 때만 막는다. KRX 는 이 시간에도 호가를 받는다."""
         await self.refresh_market_calendar()
-        hours = check_krx_trading_hours()
-        if not hours['tradable']:
-            raise MarketClosed(f"거래시간 외: {_tpl(hours.get('reason'))}")
-        # 동시호가는 체결가가 예상과 크게 다를 수 있다. 청산(매도)은 진입보다 우선이라 막지 않는다.
-        if get_krx_market_phase() == 'closing-auction' and side == 'buy':
-            raise MarketClosed('종가 동시호가 (15:20-15:30) — 신규 매수 진입 금지')
+        reason = krx_order_block_reason(self.milliseconds(), side, await self.is_option_enabled('blockAuctionBuys'))
+        if reason is not None:
+            raise MarketClosed(reason)
 
     async def _extended_session_limit_price(self, symbol: str, side: str) -> float:
         """확장세션 시장가를 지정가로 바꾸는 가격. 확장세션은 지정가만 받는다. 같은 방향 미체결이 있거나 기준가를 못 구하면 던진다.
@@ -1956,14 +1956,12 @@ class kis(Exchange, ImplicitAPI):
         slot = OVERSEAS_ORDER_TR.get(exchange)
         if slot is None:
             raise NotSupported(f'미지원 거래소: {exchange}')
-        # 미국장 세션 게이트. 완전 마감은 양방향 모두 막고(닫힌 시장의 매도도 체결될 수 없다) 종가 동시호가의 신규 매수도 막는다.
-        # 홍콩·일본·베트남 같은 다른 해외 시장은 이 게이트의 대상이 아니다.
+        # 미국장 세션 게이트. 정규장(09:30~16:00 ET, 종가 동시호가 포함) 밖은 양방향 모두 막는다. 09:25~09:30 에 주문을 받는지는 확인하지 못해
+        # 연다고 보지 않는다. 종가 동시호가의 신규 매수는 `options['blockAuctionBuys']` 가 켜졌을 때만 막는다. 다른 해외 시장은 대상이 아니다.
         if exchange in US_ORDER_EXCHANGES:
-            phase = get_us_market_phase()
-            if phase == 'closed':
-                raise MarketClosed(f'미국장 정규장 외 ({format_et_wall_clock()}, phase=closed)')
-            if phase == 'closing-auction' and side == 'buy':
-                raise MarketClosed(f'종가 동시호가 (15:50-16:00 ET, {format_et_wall_clock()}) — 신규 매수 진입 금지')
+            reason = us_order_block_reason(self.milliseconds(), side, await self.is_option_enabled('blockAuctionBuys'))
+            if reason is not None:
+                raise MarketClosed(reason)
         # 모의투자는 지정가만 받는다. 실전은 시장가 의도를 장마감지정가(LOC)로 낸다.
         ord_dvsn = KIS_OVERSEAS_ORD_DVSN['LOC'] if type == 'market' and not self.isSandboxModeEnabled else KIS_OVERSEAS_ORD_DVSN['LIMIT']
         buy = side == 'buy'

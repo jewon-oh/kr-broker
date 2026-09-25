@@ -42,9 +42,10 @@
  * ## 옵션
  *
  * 전역 설정은 없고 인스턴스가 `options` 로 받는다. `tokenStore`(토큰 저장소), `nxtRouting`(국내 확장세션 주문), `usExtendedLimit`(미국 확장세션 시장가를 지정가로),
+ * `blockAuctionBuys`(정규장 종가 동시호가의 신규 매수를 막는다),
  * `krwIntegratedMargin`(켜면 `fetchBalance({ currency: 'USD' })` 의 USD 에 원화 매수 여력의 달러 환산액을 늘 더한다. 환율은 토스 조회, 실패하면 `usdKrwRate`),
  * `confirmBudget`(체결 확정 조회 예산), `confirmExecution`(접수 뒤 체결 확정 조회)이다.
- * `nxtRouting`·`usExtendedLimit`·`krwIntegratedMargin` 은 불리언이거나 불리언을 돌려주는 함수이고 기본은 꺼짐이다. `confirmExecution` 은 기본이 켜짐이고
+ * `nxtRouting`·`usExtendedLimit`·`blockAuctionBuys`·`krwIntegratedMargin` 은 불리언이거나 불리언을 돌려주는 함수이고 기본은 꺼짐이다. `confirmExecution` 은 기본이 켜짐이고
  * `false` 일 때만 꺼지므로 함수를 넘기면 늘 켜진다.
  *
  * ## 오류
@@ -116,6 +117,8 @@ import { candlePeriodUtcMs, isDailyOrLongerTimeframe } from './broker-time';
 import { logger } from './logger';
 import type { UsdKrwRateOption } from './options';
 import { applyMarketCalendar } from './market-calendar';
+import { krxAuctionBuyBlockReason } from './krx-trading-hours';
+import { usAuctionBuyBlockReason } from './us-market-hours';
 import { getKrxTickSize, KRX_TICK_INVALID_DETAIL, krxTickViolation } from './krx-tick-size';
 import { TossAuth, type TossIssuedToken } from './toss/toss-auth';
 import { OrderNotSent, TossRateLimited, TossTokenRejected } from './toss/toss-errors';
@@ -566,13 +569,15 @@ export class toss extends Exchange {
             },
             precisionMode: TICK_SIZE,
             options: {
-                // 아래 세 옵션은 불리언이거나 불리언을 돌려주는 함수(값이 바뀔 수 있을 때)다. 기본은 꺼짐이다.
+                // 아래 네 옵션은 불리언이거나 불리언을 돌려주는 함수(값이 바뀔 수 있을 때)다. 기본은 꺼짐이다.
                 /** `fetchBalance({ currency: 'USD' })` 의 USD 에 원화 매수 여력의 달러 환산액을 늘 더한다. 환율은 토스 조회, 실패하면 `usdKrwRate` 다. */
                 krwIntegratedMargin: undefined,
                 /** 국내 확장세션(프리·애프터) 주문을 연다. */
                 nxtRouting: undefined,
                 /** 미국 확장세션에서 시장가를 지정가로 바꿔 낸다. */
                 usExtendedLimit: undefined,
+                /** 정규장 종가 동시호가(국내 15:20~15:30, 미국 15:50~16:00 ET)의 신규 매수를 막는다. 시장이 받는 주문이라 기본은 꺼짐이다. */
+                blockAuctionBuys: undefined,
                 /** 토큰과 발급 락을 여러 프로세스가 나눠 쓰는 저장소(`BrokerTokenStore`). 없으면 프로세스 메모리 캐시만 쓴다. */
                 tokenStore: undefined,
                 /** 토스의 환율 조회가 실패했을 때 쓰는 환율 조회 함수. 1달러당 원화를 돌려주는 `() => Promise<number>` 다. */
@@ -1566,7 +1571,7 @@ export class toss extends Exchange {
         }
 
         // 거래시간 검사: 국내는 캘린더의 세션, 미국은 캘린더의 네 세션으로 판정한다. 실주문 직전의 마지막 방어선이다.
-        const gate = await this.checkOrderableSession(symbol, country, { isMarket: effectiveType === 'market', useAmountBased, quantity });
+        const gate = await this.checkOrderableSession(symbol, country, { isMarket: effectiveType === 'market', useAmountBased, quantity }, side);
         if (gate !== null) {
             logger.info({ symbol, side, reason: gate }, '[toss] 거래시간 밖이라 주문을 보내지 않는다');
             throw new MarketClosed(gate);
@@ -1756,7 +1761,8 @@ export class toss extends Exchange {
      *
      * 미국은 네 세션을 캘린더로 판정하고, 정규장 밖에서는 정규장 전용인 주문 형태(금액 주문·소수점 수량·시장가)를 막는다. 정규장 안에서도 종료 1시간 전 이후에는
      * 금액 주문과 소수점 수량 주문이 접수되지 않는다. 캘린더를 받지 못하면 정적 시간표(`isTossOrderable`)로 판정한다. 그 폴백에서 국내 휴장일은
-     * 공용 캘린더가 알 때만 막고(모르면 연다), 미국 확장세션은 막는다(좁히는 쪽).
+     * 공용 캘린더가 알 때만 막고(모르면 연다), 미국 확장세션은 막는다(좁히는 쪽). 정규장의 종가 동시호가 신규 매수는 `options.blockAuctionBuys` 가
+     * 켜졌을 때만 막는다(세 증권사 공용 판정 `krxAuctionBuyBlockReason`·`usAuctionBuyBlockReason`).
      *
      * @returns 막는 사유(한국어). 접수할 수 있으면 `null`.
      */
@@ -1764,11 +1770,16 @@ export class toss extends Exchange {
         symbol: string,
         country: StockMarketGroup,
         form: { isMarket: boolean; useAmountBased: boolean; quantity: number },
+        side: OrderSide,
     ): Promise<string | null> {
         const now = new Date(this.milliseconds());
+        const auction = async (): Promise<string | null> => {
+            if (!(await this.isOptionEnabled('blockAuctionBuys'))) return null;
+            return country === 'KR' ? krxAuctionBuyBlockReason(now, side) : usAuctionBuyBlockReason(now, side);
+        };
         if (country === 'KR') {
             const session = await this.currentKrSession(now);
-            if (session === null) return isTossOrderable(symbol) ? null : 'KRX 거래시간 외 (09:00-15:30 KST 평일, 캘린더 조회 실패)';
+            if (session === null) return isTossOrderable(symbol, now) ? auction() : 'KRX 거래시간 외 (09:00-15:30 KST 평일, 캘린더 조회 실패)';
             if (session === 'closed') return 'KRX 휴장·정규장 외';
             if (session !== 'regularMarket') {
                 // 확장세션(프리 08:00~08:50, 애프터 15:30~20:00)은 기능 옵션 `nxtRouting` 이 켜져 있을 때만 연다.
@@ -1777,15 +1788,15 @@ export class toss extends Exchange {
                 }
                 return krSessionOrderRestriction(session, form);
             }
-            return null;
+            return auction();
         }
         const session = await this.currentUsSession(now);
-        if (session === null) return isTossOrderable(symbol) ? null : '미국 정규장 외 (장 운영 캘린더 조회 실패)';
+        if (session === null) return isTossOrderable(symbol, now) ? auction() : '미국 정규장 외 (장 운영 캘린더 조회 실패)';
         if (session === 'closed') return '미국장 휴장·세션 외';
         const regularCloseMs = findUsRegularCloseMs(this.calendars.US?.value, now);
         const restriction = usSessionOrderRestriction(
             session, form, regularCloseMs !== null ? { nowMs: now.getTime(), regularCloseMs } : undefined,
-        );
+        ) ?? (session === 'regularMarket' ? await auction() : null);
         if (restriction !== null) return restriction;
         logger.info({ symbol, session }, '[toss] 미국 세션을 확인했다. 주문을 접수할 수 있다');
         return null;

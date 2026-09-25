@@ -7,7 +7,7 @@
 import calendar
 import datetime
 import re
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Sequence
 
 from kr_broker.base import functions as fn
 from kr_broker.market_calendar import is_market_closed_day
@@ -153,6 +153,31 @@ def get_nxt_session(now_ms: Optional[int] = None) -> str:
 def is_nxt_extended_tradable(now_ms: Optional[int] = None) -> bool:
     """NXT 확장 거래 시간(프리마켓 08:00~08:50, 애프터마켓 15:30~20:00)인가."""
     return get_nxt_session(now_ms) in ('pre-market', 'after-market')
+
+
+def krx_auction_buy_block_reason(now_ms: int, side: Optional[str]) -> Optional[str]:
+    """종가 동시호가(15:20~15:30)의 신규 매수를 막는 사유. 매수가 아니거나 동시호가가 아니면 `None`.
+    KRX 는 이 시간에도 호가를 받는다. 진입을 피하려는 정책이라 증권사 클래스는 `options['blockAuctionBuys']` 가 켜졌을 때만 건다."""
+    if side != 'buy' or get_krx_market_phase(now_ms) != 'closing-auction':
+        return None
+    return '종가 동시호가 (15:20-15:30) — 신규 매수 진입 금지 (options.blockAuctionBuys)'
+
+
+def krx_order_block_reason(now_ms: int, side: Optional[str] = None, block_auction_buys: bool = False,
+                           sessions: Sequence[str] = ('regular',)) -> Optional[str]:
+    """KRX 주문을 지금 막는 사유. 보내도 되면 `None`. 세 증권사가 같은 시각에 같은 판정을 내도록 한 곳에 둔다.
+    `sessions` 는 주문을 받는 세션(`'regular'` KRX 정규장, `'nxt'` NXT 프리·메인·애프터마켓)이고 하나라도 열려 있으면 보낸다.
+    시장 규칙은 늘 판정하고, 동시호가 신규 매수 차단은 `block_auction_buys` 를 켰을 때만 건다."""
+    regular = check_krx_trading_hours_at(now_ms) if 'regular' in sessions else None
+    nxt = get_nxt_session(now_ms) if 'nxt' in sessions else None
+    nxt_open = nxt in ('pre-market', 'main', 'after-market')
+    if not (regular is not None and regular['tradable']) and not nxt_open:
+        if regular is None:
+            return f"NXT 거래시간 외 (session={nxt if nxt is not None else 'closed'})"
+        if nxt is None:
+            return f"거래시간 외: {regular.get('reason')}"
+        return f"거래시간 외: {regular.get('reason')} (NXT session={nxt})"
+    return krx_auction_buy_block_reason(now_ms, side) if block_auction_buys else None
 
 
 def is_krx_business_day_kst(ymd: str) -> bool:

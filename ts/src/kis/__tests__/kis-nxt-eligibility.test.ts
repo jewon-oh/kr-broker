@@ -4,21 +4,13 @@
  * NXT 거래 대상이 아니거나 NXT 에서 거래정지인 종목은 KIS 가 주문을 거절한다. 그런 주문은 보내지 않고 `MarketClosed` 로 알린다.
  * 확인은 실전에서만 한다(종목정보 조회가 모의투자를 지원하지 않는다). 확인이 실패하면 막지 않고 주문 응답이 판단하게 둔다.
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-const { mockFetch, mockExtended } = vi.hoisted(() => ({ mockFetch: vi.fn(), mockExtended: vi.fn(() => true) }));
-
-vi.mock('../kis-trading-hours', () => ({
-    checkKRXTradingHours: () => ({ tradable: false, reason: '장 마감' }), // 정규장은 닫혀 있다
-    getKrxMarketPhase: () => 'closed',
-    isNxtExtendedTradable: () => mockExtended(),
-    getNxtSession: () => (mockExtended() ? 'after-market' : 'closed'),
-}) satisfies Partial<typeof import('../kis-trading-hours')>);
-vi.mock('../us-market-hours', () => ({ getUsMarketPhase: () => 'open', formatEtWallClock: () => '10:00 ET' }) satisfies Partial<typeof import('../us-market-hours')>);
+const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 global.fetch = mockFetch as unknown as typeof fetch;
 
 import { MarketClosed } from '../../base/errors';
-import { bodyOf, businessError, dataOk, headersOf, newKis as newKisBase, tokenOk } from './support/kis-test-utils';
+import { bodyOf, businessError, dataOk, headersOf, MARKET_TIMES, newKis as newKisBase, tokenOk } from './support/kis-test-utils';
 
 /** `nxtRouting` 옵션을 켠 인스턴스. */
 const newKis = (config: Parameters<typeof newKisBase>[0] = {}) => newKisBase({ options: { nxtRouting: true }, ...config });
@@ -41,9 +33,15 @@ const infoOf = (output: Record<string, string>) => () => dataOk({ output });
 const callsTo = (fragment: string) => mockFetch.mock.calls.filter((c) => String(c[0]).includes(fragment));
 const placeExtended = (broker = newKis({ sandbox: false }), symbol = '005930') => broker.createOrder(symbol, 'limit', 'buy', 3, 70000);
 
+// 정규장은 닫혔고 NXT 애프터마켓인 시각으로 고정한다.
 beforeEach(() => {
     mockFetch.mockReset();
-    mockExtended.mockReturnValue(true);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(MARKET_TIMES.nxtAfterMarket);
+});
+
+afterEach(() => {
+    vi.useRealTimers();
 });
 
 describe('확장세션 주문 전 종목정보 확인', () => {
@@ -134,10 +132,10 @@ describe('확인하지 않는 경우', () => {
     });
 
     it('정규장 주문은 확인하지 않는다', async () => {
-        mockExtended.mockReturnValue(false);
+        vi.setSystemTime(MARKET_TIMES.krxClosed);
         serve(infoOf({ cptt_trad_tr_psbl_yn: 'N' }));
 
-        // 정규장 게이트는 이 파일에서 닫혀 있으므로 MarketClosed 로 끝나지만, 그전에 종목정보를 부르지 않아야 한다.
+        // NXT 도 닫힌 시각이라 정규장 게이트를 거치고, 정규장도 닫혀 있으므로 MarketClosed 로 끝나지만, 그전에 종목정보를 부르지 않아야 한다.
         await placeExtended().catch(() => undefined);
 
         expect(callsTo(INFO_PATH)).toHaveLength(0);

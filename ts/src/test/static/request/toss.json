@@ -2763,6 +2763,171 @@
             "error": { "class": "MarketClosed" }
         },
         {
+            "description": "createOrder 국내 종가 동시호가(15:25 KST)의 신규 매수는 기본으로 낸다",
+            "now": 1774419900000,
+            "method": "createOrder",
+            "args": ["005930", "limit", "buy", 1, 70000, { "confirmExecution": false }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/market-calendar/KR",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "previousBusinessDay": {
+                                    "date": "2026-03-24",
+                                    "integrated": {
+                                        "preMarket": { "startTime": "2026-03-24T08:00:00+09:00", "endTime": "2026-03-24T08:50:00+09:00" },
+                                        "regularMarket": { "startTime": "2026-03-24T09:00:00+09:00", "endTime": "2026-03-24T15:30:00+09:00" },
+                                        "afterMarket": { "startTime": "2026-03-24T15:30:00+09:00", "endTime": "2026-03-24T20:00:00+09:00" }
+                                    }
+                                },
+                                "today": {
+                                    "date": "2026-03-25",
+                                    "integrated": {
+                                        "preMarket": { "startTime": "2026-03-25T08:00:00+09:00", "endTime": "2026-03-25T08:50:00+09:00" },
+                                        "regularMarket": { "startTime": "2026-03-25T09:00:00+09:00", "endTime": "2026-03-25T15:30:00+09:00" },
+                                        "afterMarket": { "startTime": "2026-03-25T15:30:00+09:00", "endTime": "2026-03-25T20:00:00+09:00" }
+                                    }
+                                },
+                                "nextBusinessDay": {
+                                    "date": "2026-03-26",
+                                    "integrated": {
+                                        "preMarket": { "startTime": "2026-03-26T08:00:00+09:00", "endTime": "2026-03-26T08:50:00+09:00" },
+                                        "regularMarket": { "startTime": "2026-03-26T09:00:00+09:00", "endTime": "2026-03-26T15:30:00+09:00" },
+                                        "afterMarket": { "startTime": "2026-03-26T15:30:00+09:00", "endTime": "2026-03-26T20:00:00+09:00" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001", "Content-Type": "application/json" },
+                        "body": "{\"symbol\":\"005930\",\"side\":\"BUY\",\"orderType\":\"LIMIT\",\"quantity\":\"1\",\"price\":\"70000\"}"
+                    },
+                    "response": { "status": 200, "body": { "result": { "orderId": "ORD-0003" } } }
+                }
+            ],
+            "output": {
+                "info": { "orderId": "ORD-0003" },
+                "id": "ORD-0003",
+                "timestamp": 1774419900000,
+                "datetime": "2026-03-25T06:25:00.000Z",
+                "symbol": "005930/KRW",
+                "type": "limit",
+                "side": "buy",
+                "price": 70000,
+                "amount": 1,
+                "status": "open",
+                "trades": [],
+                "fees": []
+            }
+        },
+        {
+            "description": "createOrder 는 options.blockAuctionBuys 를 켜면 국내 종가 동시호가(15:25 KST)의 신규 매수를 주문 요청 없이 MarketClosed 로 막는다",
+            "config": { "options": { "blockAuctionBuys": true } },
+            "now": 1774419900000,
+            "method": "createOrder",
+            "args": ["005930", "limit", "buy", 1, 70000, { "confirmExecution": false }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/market-calendar/KR",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "previousBusinessDay": {
+                                    "date": "2026-03-24",
+                                    "integrated": {
+                                        "preMarket": { "startTime": "2026-03-24T08:00:00+09:00", "endTime": "2026-03-24T08:50:00+09:00" },
+                                        "regularMarket": { "startTime": "2026-03-24T09:00:00+09:00", "endTime": "2026-03-24T15:30:00+09:00" },
+                                        "afterMarket": { "startTime": "2026-03-24T15:30:00+09:00", "endTime": "2026-03-24T20:00:00+09:00" }
+                                    }
+                                },
+                                "today": {
+                                    "date": "2026-03-25",
+                                    "integrated": {
+                                        "preMarket": { "startTime": "2026-03-25T08:00:00+09:00", "endTime": "2026-03-25T08:50:00+09:00" },
+                                        "regularMarket": { "startTime": "2026-03-25T09:00:00+09:00", "endTime": "2026-03-25T15:30:00+09:00" },
+                                        "afterMarket": { "startTime": "2026-03-25T15:30:00+09:00", "endTime": "2026-03-25T20:00:00+09:00" }
+                                    }
+                                },
+                                "nextBusinessDay": {
+                                    "date": "2026-03-26",
+                                    "integrated": {
+                                        "preMarket": { "startTime": "2026-03-26T08:00:00+09:00", "endTime": "2026-03-26T08:50:00+09:00" },
+                                        "regularMarket": { "startTime": "2026-03-26T09:00:00+09:00", "endTime": "2026-03-26T15:30:00+09:00" },
+                                        "afterMarket": { "startTime": "2026-03-26T15:30:00+09:00", "endTime": "2026-03-26T20:00:00+09:00" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            ],
+            "error": { "class": "MarketClosed" }
+        },
+        {
+            "description": "createOrder 는 options.blockAuctionBuys 를 켜면 미국 정규장 종가 동시호가(15:55 ET)의 신규 매수를 주문 요청 없이 MarketClosed 로 막는다",
+            "config": { "options": { "blockAuctionBuys": true } },
+            "now": 1774468500000,
+            "method": "createOrder",
+            "args": ["AAPL", "limit", "buy", 1, 229.5, { "confirmExecution": false }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/market-calendar/US",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "previousBusinessDay": {
+                                    "date": "2026-03-24",
+                                    "dayMarket": { "startTime": "2026-03-24T09:00:00+09:00", "endTime": "2026-03-24T16:50:00+09:00" },
+                                    "preMarket": { "startTime": "2026-03-24T17:00:00+09:00", "endTime": "2026-03-24T22:30:00+09:00" },
+                                    "regularMarket": { "startTime": "2026-03-24T22:30:00+09:00", "endTime": "2026-03-25T05:00:00+09:00" },
+                                    "afterMarket": { "startTime": "2026-03-25T05:00:00+09:00", "endTime": "2026-03-25T07:00:00+09:00" }
+                                },
+                                "today": {
+                                    "date": "2026-03-25",
+                                    "dayMarket": { "startTime": "2026-03-25T09:00:00+09:00", "endTime": "2026-03-25T16:50:00+09:00" },
+                                    "preMarket": { "startTime": "2026-03-25T17:00:00+09:00", "endTime": "2026-03-25T22:30:00+09:00" },
+                                    "regularMarket": { "startTime": "2026-03-25T22:30:00+09:00", "endTime": "2026-03-26T05:00:00+09:00" },
+                                    "afterMarket": { "startTime": "2026-03-26T05:00:00+09:00", "endTime": "2026-03-26T07:00:00+09:00" }
+                                },
+                                "nextBusinessDay": {
+                                    "date": "2026-03-26",
+                                    "dayMarket": { "startTime": "2026-03-26T09:00:00+09:00", "endTime": "2026-03-26T16:50:00+09:00" },
+                                    "preMarket": { "startTime": "2026-03-26T17:00:00+09:00", "endTime": "2026-03-26T22:30:00+09:00" },
+                                    "regularMarket": { "startTime": "2026-03-26T22:30:00+09:00", "endTime": "2026-03-27T05:00:00+09:00" },
+                                    "afterMarket": { "startTime": "2026-03-27T05:00:00+09:00", "endTime": "2026-03-27T07:00:00+09:00" }
+                                }
+                            }
+                        }
+                    }
+                }
+            ],
+            "error": { "class": "MarketClosed" }
+        },
+        {
             "description": "createOrder 미국 고액주문 기준은 참고 환율로 계산한다(7만 달러 미만이어도 켠다)",
             "now": 1774449000000,
             "method": "createOrder",

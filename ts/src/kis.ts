@@ -26,7 +26,7 @@
  * ## 옵션
  *
  * 전역 설정은 없고 인스턴스가 `options` 로 받는다. `tokenStore`(여러 프로세스가 나눠 쓰는 토큰 저장소), `nxtRouting`(정규장 밖 주문·시세, 불리언 또는
- * 불리언을 돌려주는 함수), `masterData`(종목 마스터), `stockDirectory`(코스피·코스닥 구분),
+ * 불리언을 돌려주는 함수), `blockAuctionBuys`(종가 동시호가의 신규 매수를 막는다, 기본 꺼짐), `masterData`(종목 마스터), `stockDirectory`(코스피·코스닥 구분),
  * `htsId`(관심종목·조건검색 조회와 `watchOrders` 에 쓰는 HTS 사용자 ID)다. `confirmBudget` 은 선언만 있고 읽지 않는다.
  *
  * ## 유량
@@ -95,9 +95,8 @@ import { krxSellTaxRate } from './krx-sell-tax';
 import { KisAuth } from './kis/kis-auth';
 import { KIS_EXCEPTIONS_EXACT } from './kis/kis-error-codes';
 import { acquireKisSlot } from './kis/kis-rate-limiter';
-import { checkKRXTradingHours, getKrxMarketPhase, getNxtSession, isNxtExtendedTradable } from './kis/kis-trading-hours';
-import { getUsMarketPhase, formatEtWallClock } from './kis/us-market-hours';
-import { etWallClockToUtcMs, etYmd } from './us-market-hours';
+import { isNxtExtendedTradable, krxOrderBlockReason } from './krx-trading-hours';
+import { etWallClockToUtcMs, etYmd, usOrderBlockReason } from './us-market-hours';
 import {
     KIS_API_DOMAINS,
     KIS_BROKERAGE_FEE,
@@ -3770,6 +3769,8 @@ export class kis extends Exchange {
                 tokenStore: undefined,
                 /** 정규장 밖(NXT 프리·애프터) 주문과 시세를 연다. 불리언이거나 불리언을 돌려주는 함수다. 기본은 꺼짐. */
                 nxtRouting: undefined,
+                /** 종가 동시호가(국내 15:20~15:30, 미국 15:50~16:00 ET)의 신규 매수를 막는다. 불리언이거나 불리언을 돌려주는 함수다. 기본은 꺼짐. */
+                blockAuctionBuys: undefined,
                 /** 종목 검색과 해외 거래소 판별에 쓰는 KIS 마스터 데이터(`KisMasterData`). 없으면 빈 데이터다. */
                 masterData: undefined,
                 /** 국내 종목의 KOSPI·KOSDAQ 구분을 알려 주는 곳(`BrokerStockDirectory`). 없으면 마스터 데이터로 판별한다. */
@@ -4414,7 +4415,7 @@ export class kis extends Exchange {
 
     /** 국내 시세 조회의 상품구분. `nxtRouting` 옵션이 켜져 있고 NXT 확장세션이면 통합(`UN`)으로 애프터마켓 시세를 받는다. */
     private async quoteMarketDivision(): Promise<QuoteMarketDivision> {
-        return isNxtExtendedTradable() && await this.isOptionEnabled('nxtRouting') ? 'UN' : 'J';
+        return isNxtExtendedTradable(new Date(this.milliseconds())) && await this.isOptionEnabled('nxtRouting') ? 'UN' : 'J';
     }
 
     // ============ 시세 ============
@@ -4828,7 +4829,7 @@ export class kis extends Exchange {
         params = this.omit(params, 'session');
         // 확장세션(NXT 프리 08:00~08:50, 애프터 15:30~20:00)은 정규장 게이트 대신 NXT 게이트를 거쳐 SOR 로 낸다. `nxtRouting` 옵션이 꺼져 있으면 정규장 규칙이다.
         const extended = session === 'nxt'
-            || (session === undefined && (await this.isOptionEnabled('nxtRouting')) && isNxtExtendedTradable());
+            || (session === undefined && (await this.isOptionEnabled('nxtRouting')) && isNxtExtendedTradable(new Date(this.milliseconds())));
         if (extended) {
             await this.assertNxtSessionOpen();
             await this.assertNxtTradable(instrument);
@@ -7091,7 +7092,7 @@ export class kis extends Exchange {
      * 주식 신용주문(`order-credit`, 매수 TR `TTTC0052U`, 매도 `TTTC0051U`). 신용유형(`creditType`)은 방향별로 설명에 적힌 코드만 받는다(매수 21, 23, 26, 28,
      * 매도 22, 24, 25, 27). 대출일자는 신용매수면 오늘(한국 날짜)이 기본이고, 신용매도는 매도할 종목의 대출일자(`loanDate`, `YYYYMMDD`)가 필수다.
      * 지정가는 주문구분 `00`에 가격을, 시장가는 `01`에 가격 `0`을 보낸다. 설명 없는 선택 입력은 예제처럼 보내지 않는다.
-     * `createOrder` 와 같은 정규장 게이트를 거친다(장 시간 밖과 종가 동시호가의 신규 매수는 `MarketClosed`).
+     * `createOrder` 와 같은 정규장 게이트를 거친다(장 시간 밖은 `MarketClosed`. `options.blockAuctionBuys` 를 켜면 종가 동시호가의 신규 매수도).
      */
     async createCreditOrder(
         symbol: string, type: OrderType, side: OrderSide, amount: number, price: Num, creditType: string, loanDate: Str = undefined, params: Dict = {},
@@ -9851,10 +9852,8 @@ export class kis extends Exchange {
      */
     private async assertNxtSessionOpen(): Promise<void> {
         await this.refreshMarketCalendar();
-        const phase = getNxtSession();
-        if (phase !== 'pre-market' && phase !== 'main' && phase !== 'after-market') {
-            throw new MarketClosed(`NXT 거래시간 외 (session=${phase})`);
-        }
+        const reason = krxOrderBlockReason({ now: new Date(this.milliseconds()), sessions: ['nxt'] });
+        if (reason !== null) throw new MarketClosed(reason);
     }
 
     /**
@@ -9863,29 +9862,27 @@ export class kis extends Exchange {
      */
     private async assertDomesticEditOpen(): Promise<void> {
         await this.refreshMarketCalendar();
-        const { tradable, reason } = checkKRXTradingHours();
-        if (tradable) return;
-        const phase = getNxtSession();
-        if (phase === 'pre-market' || phase === 'main' || phase === 'after-market') return;
-        throw new MarketClosed(`거래시간 외: ${reason} (NXT session=${phase})`);
+        const reason = krxOrderBlockReason({ now: new Date(this.milliseconds()), sessions: ['regular', 'nxt'] });
+        if (reason !== null) throw new MarketClosed(reason);
     }
 
-    /** 미국 정정 게이트. 주문과 같이 완전 마감(`closed`)만 막는다. 홍콩·일본·베트남은 대상이 아니다. */
+    /** 미국 정정 게이트. 주문과 같은 시간표(정규장과 종가 동시호가)를 쓴다. 홍콩·일본·베트남은 대상이 아니다. */
     private assertUsEditOpen(exchange: string): void {
-        if (US_ORDER_EXCHANGES.has(exchange) && getUsMarketPhase() === 'closed') {
-            throw new MarketClosed(`미국장 정규장 외 (${formatEtWallClock()}, phase=closed)`);
-        }
+        if (!US_ORDER_EXCHANGES.has(exchange)) return;
+        const reason = usOrderBlockReason({ now: new Date(this.milliseconds()) });
+        if (reason !== null) throw new MarketClosed(reason);
     }
 
-    /** 국내 정규장 게이트. 휴장일은 KIS 캘린더로 알아야 하므로 먼저 받는다. 종가 동시호가(15:20~15:30)의 신규 매수는 막는다. */
+    /**
+     * 국내 정규장 게이트. 휴장일은 KIS 캘린더로 알아야 하므로 먼저 받는다. 종가 동시호가(15:20~15:30)의 신규 매수는 `options.blockAuctionBuys` 가
+     * 켜졌을 때만 막는다. KRX 는 이 시간에도 호가를 받는다.
+     */
     private async assertDomesticSessionOpen(side: OrderSide): Promise<void> {
         await this.refreshMarketCalendar();
-        const { tradable, reason } = checkKRXTradingHours();
-        if (!tradable) throw new MarketClosed(`거래시간 외: ${reason}`);
-        // 동시호가는 호가 처리 방식이 달라 시장가 체결가가 예상과 크게 다를 수 있다. 청산(매도)은 진입보다 우선이라 막지 않는다.
-        if (getKrxMarketPhase() === 'closing-auction' && side === 'buy') {
-            throw new MarketClosed('종가 동시호가 (15:20-15:30) — 신규 매수 진입 금지');
-        }
+        const reason = krxOrderBlockReason({
+            now: new Date(this.milliseconds()), side, blockAuctionBuys: await this.isOptionEnabled('blockAuctionBuys'),
+        });
+        if (reason !== null) throw new MarketClosed(reason);
     }
 
     /**
@@ -9911,14 +9908,13 @@ export class kis extends Exchange {
         if (exchange === undefined) throw new BadSymbol(`해외 마스터에 없는 ticker: ${instrument.symbol}`);
         const slot = OVERSEAS_ORDER_TR[exchange];
         if (slot === undefined) throw new NotSupported(`미지원 거래소: ${exchange}`);
-        // 미국장 세션 게이트. 완전 마감(`closed`)은 양방향 모두 막는다(닫힌 시장에 낸 매도도 체결될 수 없다). 종가 동시호가의 신규 매수도 막는다.
-        // 홍콩·일본·베트남 같은 다른 해외 시장은 이 게이트의 대상이 아니다.
+        // 미국장 세션 게이트. 정규장(09:30~16:00 ET, 종가 동시호가 포함) 밖은 양방향 모두 막는다. 09:25~09:30 에 주문을 받는지는 확인하지 못해 연다고
+        // 보지 않는다. 종가 동시호가의 신규 매수는 `options.blockAuctionBuys` 가 켜졌을 때만 막는다. 홍콩·일본·베트남 같은 다른 해외 시장은 대상이 아니다.
         if (US_ORDER_EXCHANGES.has(exchange)) {
-            const phase = getUsMarketPhase();
-            if (phase === 'closed') throw new MarketClosed(`미국장 정규장 외 (${formatEtWallClock()}, phase=closed)`);
-            if (phase === 'closing-auction' && side === 'buy') {
-                throw new MarketClosed(`종가 동시호가 (15:50-16:00 ET, ${formatEtWallClock()}) — 신규 매수 진입 금지`);
-            }
+            const reason = usOrderBlockReason({
+                now: new Date(this.milliseconds()), side, blockAuctionBuys: await this.isOptionEnabled('blockAuctionBuys'),
+            });
+            if (reason !== null) throw new MarketClosed(reason);
         }
         // 모의투자는 지정가만 받는다. 실전은 시장가 의도를 장마감지정가(LOC)로 낸다.
         const ordDvsn = type === 'market' && !this.isSandboxModeEnabled ? KIS_OVERSEAS_ORD_DVSN.LOC : KIS_OVERSEAS_ORD_DVSN.LIMIT;

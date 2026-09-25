@@ -28,9 +28,9 @@ ccxt 와 같은 모양으로 다룬다. 실시간(`watch_*`)은 이 클래스를
 
 옵션
     `tokenStore`(토큰 저장소), `nxtRouting`(국내 확장세션 주문), `usExtendedLimit`(미국 확장세션 시장가를 지정가로),
-    `krwIntegratedMargin`(켜면 `fetch_balance({'currency': 'USD'})` 의 USD 에 원화 매수 여력의 달러 환산액을 늘 더한다. 환율은 토스 조회,
+    `blockAuctionBuys`(정규장 종가 동시호가의 신규 매수를 막는다), `krwIntegratedMargin`(켜면 `fetch_balance({'currency': 'USD'})` 의 USD 에 원화 매수 여력의 달러 환산액을 늘 더한다. 환율은 토스 조회,
     실패하면 `usdKrwRate`), `confirmBudget`(체결 확정 조회 예산), `confirmExecution`(접수 뒤 체결 확정 조회).
-    `nxtRouting`·`usExtendedLimit`·`krwIntegratedMargin` 은 불리언이거나 불리언을 돌려주는 함수이고 기본은 꺼짐이다. `confirmExecution` 은 기본이
+    `nxtRouting`·`usExtendedLimit`·`blockAuctionBuys`·`krwIntegratedMargin` 은 불리언이거나 불리언을 돌려주는 함수이고 기본은 꺼짐이다. `confirmExecution` 은 기본이
     켜짐이고 `False` 일 때만 꺼지므로 함수를 넘기면 늘 켜진다.
 
 오류
@@ -63,6 +63,7 @@ from kr_broker.base.types import ApiName, Int, Num, Str, Strings
 from kr_broker.broker_market_group import symbol_base_code
 from kr_broker.broker_time import candle_period_utc_ms, is_daily_or_longer_timeframe
 from kr_broker.krx_tick_size import KRX_TICK_INVALID_DETAIL, get_krx_tick_size, krx_tick_violation
+from kr_broker.krx_trading_hours import krx_auction_buy_block_reason
 from kr_broker.market_calendar import apply_market_calendar
 from kr_broker.toss_fee import pick_commission_rate
 from kr_broker.toss_trading_hours import (
@@ -73,6 +74,7 @@ from kr_broker.toss_types import (
     TOSS_BROKERAGE_FEE, TOSS_HIGH_VALUE_THRESHOLD_KRW, TOSS_HIGH_VALUE_THRESHOLD_USD, TOSS_US_BROKERAGE_FEE,
     get_toss_effective_fee_rate, toss_market_country,
 )
+from kr_broker.us_market_hours import us_auction_buy_block_reason
 
 logger = logging.getLogger('kr_broker')
 
@@ -509,13 +511,15 @@ class toss(Exchange, ImplicitAPI):
             },
             'precisionMode': TICK_SIZE,
             'options': {
-                # 아래 세 옵션은 불리언이거나 불리언을 돌려주는 함수(값이 바뀔 수 있을 때)다. 기본은 꺼짐이다.
+                # 아래 네 옵션은 불리언이거나 불리언을 돌려주는 함수(값이 바뀔 수 있을 때)다. 기본은 꺼짐이다.
                 # `fetch_balance({'currency': 'USD'})` 의 USD 에 원화 매수 여력의 달러 환산액을 늘 더한다. 환율은 토스 조회, 실패하면 `usdKrwRate` 다.
                 'krwIntegratedMargin': None,
                 # 국내 확장세션(프리·애프터) 주문을 연다.
                 'nxtRouting': None,
                 # 미국 확장세션에서 시장가를 지정가로 바꿔 낸다.
                 'usExtendedLimit': None,
+                # 정규장 종가 동시호가(국내 15:20~15:30, 미국 15:50~16:00 ET)의 신규 매수를 막는다. 시장이 받는 주문이라 기본은 꺼짐이다.
+                'blockAuctionBuys': None,
                 # 토큰과 발급 락을 여러 프로세스가 나눠 쓰는 저장소(BrokerTokenStore). 없으면 프로세스 메모리 캐시만 쓴다.
                 'tokenStore': None,
                 # 토스의 환율 조회가 실패했을 때 쓰는 환율 함수. 1달러당 원화를 돌려준다.
@@ -1224,7 +1228,7 @@ class toss(Exchange, ImplicitAPI):
         # 거래시간 검사: 국내는 캘린더의 세션, 미국은 캘린더의 네 세션으로 판정한다. 실주문 직전의 마지막 방어선이다.
         gate = self._check_orderable_session(symbol, country, {
             'isMarket': effective_type == 'market', 'useAmountBased': use_amount_based, 'quantity': quantity,
-        })
+        }, side)
         if gate is not None:
             logger.info('[toss] 거래시간 밖이라 주문을 보내지 않는다(%s %s): %s', symbol, side, gate)
             raise MarketClosed(gate)
@@ -1391,15 +1395,21 @@ class toss(Exchange, ImplicitAPI):
             raise InvalidOrder(f"{self.id} createOrder() timeInForce must be one of {', '.join(ORDER_TIME_IN_FORCE)}")
         return value
 
-    def _check_orderable_session(self, symbol: str, country: str, form: Dict[str, Any]) -> Optional[str]:
+    def _check_orderable_session(self, symbol: str, country: str, form: Dict[str, Any], side: str) -> Optional[str]:
         """주문 접수 가능 시간과 형태를 검사한다. 막는 사유(한국어)이고, 접수할 수 있으면 `None`.
         캘린더를 받지 못하면 정적 시간표(`is_toss_orderable`)로 판정한다. 그 폴백에서 국내 휴장일은 공용 캘린더가 알 때만 막고(모르면 연다),
-        미국 확장세션은 막는다(좁히는 쪽)."""
+        미국 확장세션은 막는다(좁히는 쪽). 정규장의 종가 동시호가 신규 매수는 `options['blockAuctionBuys']` 가 켜졌을 때만 막는다."""
         now = _now_ms()
+
+        def auction() -> Optional[str]:
+            if not self.is_option_enabled('blockAuctionBuys'):
+                return None
+            return krx_auction_buy_block_reason(now, side) if country == 'KR' else us_auction_buy_block_reason(now, side)
+
         if country == 'KR':
             session = self.current_kr_session(now)
             if session is None:
-                return None if is_toss_orderable(symbol) else 'KRX 거래시간 외 (09:00-15:30 KST 평일, 캘린더 조회 실패)'
+                return auction() if is_toss_orderable(symbol, now) else 'KRX 거래시간 외 (09:00-15:30 KST 평일, 캘린더 조회 실패)'
             if session == 'closed':
                 return 'KRX 휴장·정규장 외'
             if session != 'regularMarket':
@@ -1407,15 +1417,17 @@ class toss(Exchange, ImplicitAPI):
                 if not self.is_option_enabled('nxtRouting'):
                     return f'KRX {session} 세션 — 확장세션 주문은 nxtRouting 옵션이 켜져 있어야 한다'
                 return kr_session_order_restriction(session, form)
-            return None
+            return auction()
         session = self.current_us_session(now)
         if session is None:
-            return None if is_toss_orderable(symbol) else '미국 정규장 외 (장 운영 캘린더 조회 실패)'
+            return auction() if is_toss_orderable(symbol, now) else '미국 정규장 외 (장 운영 캘린더 조회 실패)'
         if session == 'closed':
             return '미국장 휴장·세션 외'
         regular_close_ms = find_us_regular_close_ms(self._us_calendar_value(), now)
         cutoff = {'nowMs': now, 'regularCloseMs': regular_close_ms} if regular_close_ms is not None else None
         restriction = us_session_order_restriction(session, form, cutoff)
+        if restriction is None and session == 'regularMarket':
+            restriction = auction()
         if restriction is not None:
             return restriction
         logger.info('[toss] 미국 세션을 확인했다. 주문을 접수할 수 있다(%s %s)', symbol, session)
