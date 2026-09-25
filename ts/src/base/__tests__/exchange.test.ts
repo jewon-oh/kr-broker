@@ -12,6 +12,8 @@ import {
 import { deepExtend } from '../functions/generic';
 import type { Dict, MarketInterface, Order } from '../types';
 import { FakeExchange, hanging, json, marketOf, stubFetch, text } from './support/fake-exchange';
+import { noopLogger, setLogger, type BrokerLogger } from '../../logger';
+import { redactBodyForLog, redactHeadersForLog } from '../Exchange';
 
 const CREDENTIALS = { apiKey: 'key', secret: 'secret', uid: '12345678-01' };
 
@@ -1093,5 +1095,34 @@ describe('통합 메서드 기본 구현', () => {
         expect(() => ex.checkOrderArguments(undefined, 'limit', 'buy', -1, 100)).toThrow(ArgumentsRequired);
         expect(() => ex.checkOrderArguments(undefined, 'limit', 'buy', NaN, 100)).toThrow(ArgumentsRequired);
         expect(() => ex.checkOrderArguments(undefined, 'limit', 'buy', undefined, 100)).toThrow(ArgumentsRequired);
+    });
+});
+
+
+describe('verbose 로그의 비밀 가리기', () => {
+    it('★요청과 응답 로그에서 비밀 헤더와 본문 필드의 값을 가린다', async () => {
+        const debug = vi.fn();
+        setLogger({ debug, info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as BrokerLogger);
+        try {
+            stubFetch(json({ access_token: 'tok-secret-value', expires_in: 86400 }));
+            const ex = new FakeExchange({ ...CREDENTIALS, verbose: true });
+            await ex.fetch('https://example.invalid/oauth2/token', 'POST', { appkey: 'APPKEY-VALUE', appsecret: 'SECRET-VALUE', Authorization: 'Bearer x' },
+                JSON.stringify({ grant_type: 'client_credentials', appsecret: 'SECRET-VALUE' }));
+            const logged = JSON.stringify(debug.mock.calls);
+            expect(logged).not.toContain('SECRET-VALUE');
+            expect(logged).not.toContain('APPKEY-VALUE');
+            expect(logged).not.toContain('tok-secret-value');
+            expect(logged).toContain('client_credentials');
+        } finally {
+            setLogger(noopLogger);
+        }
+    });
+
+    it('JSON 과 폼 본문, 대소문자를 가리지 않는 헤더 이름을 처리하고 읽을 수 없는 본문은 그대로 둔다', () => {
+        expect(redactHeadersForLog({ AppKey: 'a', 'Content-Type': 'application/json' })).toEqual({ AppKey: '***', 'Content-Type': 'application/json' });
+        expect(JSON.parse(redactBodyForLog('{"appSecret":"s","nested":{"approval_key":"k"},"rows":[{"access_token":"t"}]}') as string))
+            .toEqual({ appSecret: '***', nested: { approval_key: '***' }, rows: [{ access_token: '***' }] });
+        expect(redactBodyForLog('grant_type=client_credentials&client_id=id&client_secret=s')).toBe('grant_type=client_credentials&client_id=id&client_secret=***');
+        expect(redactBodyForLog('<html>maintenance</html>')).toBe('<html>maintenance</html>');
     });
 });

@@ -20,7 +20,7 @@ from kr_broker.base import functions as fn
 from kr_broker.base.errors import (
     BaseError, NetworkError, NotSupported, NullResponse, OperationFailed, OrderOutcomeUnknown, RequestTimeout,
 )
-from kr_broker.base.exchange import Exchange as BaseExchange
+from kr_broker.base.exchange import Exchange as BaseExchange, redact_body_for_log, redact_headers_for_log
 from kr_broker.base.types import ApiName, Int, Num, Str, Strings
 
 logger = logging.getLogger('kr_broker')
@@ -149,7 +149,7 @@ class Exchange(BaseExchange):
         timeout_ms = self.timeout if timeout_ms is None else timeout_ms
         request_headers = self.prepare_request_headers(headers)
         if self.verbose:
-            self.log(f'{self.id} {method} {url}', {'headers': request_headers, 'body': body})
+            self.log(f'{self.id} {method} {url}', {'headers': redact_headers_for_log(request_headers), 'body': redact_body_for_log(body)})
         response = await self.http_request(method, url, request_headers, body, timeout_ms)
         return self.handle_rest_response(response, url, method, request_headers, body)
 

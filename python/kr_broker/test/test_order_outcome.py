@@ -1,6 +1,7 @@
 """주문 요청이 어떤 실패에서 `OrderOutcomeUnknown`(접수 미상)이 되는지 동기 판과 비동기 판에서 본다. TS 판 `exchange.test.ts` 의 '주문 요청' 절과 같은 규칙이다."""
 
 import asyncio
+import logging
 from typing import Any, Dict, List, Optional
 
 import pytest
@@ -151,3 +152,19 @@ def test_sync_http_request_disables_redirects() -> None:
 
     SyncExchange({'session': Session()}).http_request('GET', 'https://example.invalid/x')
     assert seen['allow_redirects'] is False
+
+
+def test_verbose_log_redacts_secrets(caplog: pytest.LogCaptureFixture) -> None:
+    ex = SyncFake([_Response(200, '{"access_token": "tok-secret-value", "expires_in": 86400}')], {'verbose': True})
+    with caplog.at_level(logging.DEBUG, logger='kr_broker'):
+        ex.fetch('https://example.invalid/oauth2/token', 'POST', {'appkey': 'APPKEY-VALUE', 'appsecret': 'SECRET-VALUE'},
+                 '{"grant_type": "client_credentials", "appsecret": "SECRET-VALUE"}')
+    logged = caplog.text + ' '.join(str(r.args) for r in caplog.records)
+    assert 'SECRET-VALUE' not in logged and 'APPKEY-VALUE' not in logged and 'tok-secret-value' not in logged
+
+
+def test_redact_helpers_match_ts() -> None:
+    from kr_broker.base.exchange import redact_body_for_log, redact_headers_for_log
+    assert redact_headers_for_log({'AppKey': 'a', 'Content-Type': 'application/json'}) == {'AppKey': '***', 'Content-Type': 'application/json'}
+    assert redact_body_for_log('grant_type=client_credentials&client_id=id&client_secret=s') == 'grant_type=client_credentials&client_id=id&client_secret=***'
+    assert redact_body_for_log('<html>maintenance</html>') == '<html>maintenance</html>'

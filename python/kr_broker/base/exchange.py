@@ -47,6 +47,43 @@ from kr_broker.execution_confirm import resolve_confirm_budget
 
 logger = logging.getLogger('kr_broker')
 
+# verbose 로그에서 값을 가리는 헤더와 본문 필드(소문자로 비교). TS 판 `SECRET_LOG_FIELDS` 와 같다.
+_SECRET_LOG_FIELDS = frozenset(['authorization', 'appkey', 'appsecret', 'secretkey', 'client_secret', 'access_token', 'approval_key',
+                                'refresh_token'])
+_REDACTED = '***'
+_FORM_BODY = re.compile(r'[^=&\s]+=[^&]*(&[^=&\s]+=[^&]*)*')
+
+
+def redact_headers_for_log(headers: Optional[Dict[str, str]]) -> Optional[Dict[str, str]]:
+    """로그에 남길 헤더. 비밀 헤더의 값을 가린다."""
+    if headers is None:
+        return None
+    return {key: _REDACTED if str(key).lower() in _SECRET_LOG_FIELDS else value for key, value in dict(headers).items()}
+
+
+def redact_body_for_log(body: Str) -> Str:
+    """로그에 남길 본문. JSON 이나 폼 본문의 비밀 필드 값을 가린다. 읽을 수 없는 본문은 그대로 둔다."""
+    if not body:
+        return body
+
+    def redact(value: Any) -> Any:
+        if isinstance(value, list):
+            return [redact(v) for v in value]
+        if isinstance(value, dict):
+            return {k: _REDACTED if str(k).lower() in _SECRET_LOG_FIELDS else redact(v) for k, v in value.items()}
+        return value
+
+    trimmed = body.strip()
+    if trimmed[:1] in ('{', '['):
+        try:
+            return json.dumps(redact(json.loads(trimmed)), ensure_ascii=False, separators=(',', ':'))
+        except ValueError:
+            return body
+    if _FORM_BODY.fullmatch(trimmed):
+        pairs = [part.split('=', 1) for part in trimmed.split('&')]
+        return '&'.join(f'{k}={_REDACTED}' if k.lower() in _SECRET_LOG_FIELDS else f'{k}={v}' for k, v in pairs)
+    return body
+
 DEFAULT_TIMEOUT_MS = 10_000
 DEFAULT_RATE_LIMIT_MS = 50
 DEFAULT_CURRENCY_TICK = '1e-8'
@@ -408,7 +445,7 @@ class Exchange:
         timeout_ms = self.timeout if timeout_ms is None else timeout_ms
         request_headers = self.prepare_request_headers(headers)
         if self.verbose:
-            self.log(f'{self.id} {method} {url}', {'headers': request_headers, 'body': body})
+            self.log(f'{self.id} {method} {url}', {'headers': redact_headers_for_log(request_headers), 'body': redact_body_for_log(body)})
         response = self.http_request(method, url, request_headers, body, timeout_ms)
         return self.handle_rest_response(response, url, method, request_headers, body)
 
@@ -449,7 +486,8 @@ class Exchange:
         self.last_http_response = response_body
         self.last_json_response = parsed_body
         if self.verbose:
-            self.log(f'{self.id} {method} {url} -> {response.status_code}', {'headers': response_headers, 'body': response_body})
+            self.log(f'{self.id} {method} {url} -> {response.status_code}',
+                     {'headers': redact_headers_for_log(response_headers), 'body': redact_body_for_log(response_body)})
         handled = self.handle_errors(response.status_code, response.reason or '', url, method, response_headers, response_body,
                                      parsed_body, request_headers, request_body)
         if handled is None:

@@ -70,6 +70,42 @@ import type {
     FetchSignal, MarketInterface, Num, OHLCV, Order, OrderBook, OrderSide, OrderType, Status, Str, Strings, Ticker, Tickers, Trade, TradingFeeInterface,
 } from './types';
 
+/** verbose 로그에서 값을 가리는 헤더와 본문 필드(소문자로 비교). */
+const SECRET_LOG_FIELDS = new Set(['authorization', 'appkey', 'appsecret', 'secretkey', 'client_secret', 'access_token', 'approval_key', 'refresh_token']);
+const REDACTED = '***';
+
+/** 로그에 남길 헤더. 비밀 헤더의 값을 가린다. */
+export function redactHeadersForLog(headers: Dictionary<string> | undefined): Dictionary<string> | undefined {
+    if (headers === undefined) return undefined;
+    const out: Dictionary<string> = {};
+    for (const [key, value] of Object.entries(headers)) out[key] = SECRET_LOG_FIELDS.has(key.toLowerCase()) ? REDACTED : value;
+    return out;
+}
+
+/** 로그에 남길 본문. JSON 이나 폼 본문의 비밀 필드 값을 가린다. 읽을 수 없는 본문은 그대로 둔다. */
+export function redactBodyForLog(body: string | undefined): string | undefined {
+    if (body === undefined || body === '') return body;
+    const redact = (value: unknown): unknown => {
+        if (Array.isArray(value)) return value.map(redact);
+        if (value === null || typeof value !== 'object') return value;
+        return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, SECRET_LOG_FIELDS.has(k.toLowerCase()) ? REDACTED : redact(v)]));
+    };
+    const trimmed = body.trim();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        try {
+            return JSON.stringify(redact(JSON.parse(trimmed)));
+        } catch {
+            return body;
+        }
+    }
+    if (/^[^=&\s]+=[^&]*(&[^=&\s]+=[^&]*)*$/.test(trimmed)) {
+        const form = new URLSearchParams(trimmed);
+        for (const key of [...form.keys()]) if (SECRET_LOG_FIELDS.has(key.toLowerCase())) form.set(key, REDACTED);
+        return form.toString();
+    }
+    return body;
+}
+
 /** HTTP 상태만 보고 만든 오류와 그 상태 코드. 증권사 오류 코드로 분류하지 못한 5xx 인지 가리는 데 쓴다. */
 const httpStatusErrors = new WeakMap<object, number>();
 
@@ -532,7 +568,7 @@ export class Exchange {
         if (this.userAgent !== undefined) requestHeaders = extend({ 'User-Agent': this.userAgent }, requestHeaders);
         const fetchImplementation = globalThis.fetch;
         if (typeof fetchImplementation !== 'function') throw new NotSupported(`${this.id} 이 실행 환경에는 fetch 가 없다`);
-        if (this.verbose) this.log(`${this.id} ${method} ${url}`, { headers: requestHeaders, body });
+        if (this.verbose) this.log(`${this.id} ${method} ${url}`, { headers: redactHeadersForLog(requestHeaders), body: redactBodyForLog(body) });
 
         const controller = new AbortController();
         let timer: ReturnType<typeof setTimeout> | undefined;
@@ -579,7 +615,7 @@ export class Exchange {
         this.last_response_headers = responseHeaders;
         this.last_http_response = responseBody;
         this.last_json_response = parsedBody;
-        if (this.verbose) this.log(`${this.id} ${method} ${url} -> ${response.status}`, { headers: responseHeaders, body: responseBody });
+        if (this.verbose) this.log(`${this.id} ${method} ${url} -> ${response.status}`, { headers: redactHeadersForLog(responseHeaders), body: redactBodyForLog(responseBody) });
         const handled = this.handleErrors(
             response.status, response.statusText, url, method, responseHeaders, responseBody, parsedBody, requestHeaders, requestBody,
         );
