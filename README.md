@@ -114,19 +114,19 @@ new kis({}).has.fetchOHLCV; // true, false, 'emulated' 중 하나
 npm에는 아직 게시하지 않았습니다. GitHub 주소로 설치하면 설치 중에 `prepare`가 `dist/`를 빌드합니다.
 
 ```bash
-npm install github:jewon-oh/kr-broker
+npm install github:jewon-oh/kr-broker#v0.5.0
 # 또는
-pnpm add github:jewon-oh/kr-broker
+pnpm add github:jewon-oh/kr-broker#v0.5.0
 ```
 
-pnpm은 의존성의 빌드 스크립트를 기본으로 막습니다. pnpm 10은 `pnpm-workspace.yaml`의 `onlyBuiltDependencies`에 `kr-broker`를 넣고, pnpm 11은 설치 때 안내하는 `allowBuilds` 항목을 넣습니다. 특정 버전에 고정하려면 주소 뒤에 `#<커밋 또는 태그>`를 붙입니다.
+pnpm은 의존성의 빌드 스크립트를 기본으로 막습니다. pnpm 10은 `pnpm-workspace.yaml`의 `onlyBuiltDependencies`에 `kr-broker`를 넣고, pnpm 11은 설치 때 안내하는 `allowBuilds` 항목을 넣습니다. 위 명령은 태그 `v0.5.0`에 고정합니다. 다른 버전은 `#` 뒤의 태그를 바꾸고, `main`의 최신 커밋을 받으려면 `#` 뒤를 뺍니다. 버전 목록은 GitHub의 Releases에 있습니다.
 
 Node.js 22 이상이 필요합니다.
 
 Python 판도 PyPI 대신 GitHub 주소로 설치합니다. Python 3.10 이상이 필요합니다.
 
 ```bash
-pip install "kr-broker @ git+https://github.com/jewon-oh/kr-broker.git#subdirectory=python"
+pip install "kr-broker @ git+https://github.com/jewon-oh/kr-broker.git@v0.5.0#subdirectory=python"
 ```
 
 ## 빠른 시작
@@ -326,7 +326,7 @@ await broker.close();
 `python/`에 같은 라이브러리의 Python 판이 있습니다. ccxt Python 판처럼 증권사 클래스에 설정 사전을 넘기고, 메서드는 snake_case 이름과 camelCase 이름으로 모두 부를 수 있습니다.
 
 ```bash
-pip install "kr-broker @ git+https://github.com/jewon-oh/kr-broker.git#subdirectory=python"
+pip install "kr-broker @ git+https://github.com/jewon-oh/kr-broker.git@v0.5.0#subdirectory=python"
 ```
 
 ```python

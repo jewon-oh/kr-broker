@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-25
+
+0.1.0 다음으로 태그를 붙인 첫 버전입니다. 저장소의 버전 번호는 태그 없이 0.4.0까지 올랐고, 그 사이의 변경도 모두 이 절에 적었습니다.
+
 ### 바뀜(호환되지 않음)
 
 - `package.json`의 `exports`에서 내부 모듈 경로 세 개를 뺐습니다. `kr-broker/kis/kis-auth`, `kr-broker/kis/kis-candle-pagination`, `kr-broker/kbsec/kbsec-fill-row`는 증권사 클래스가 안에서 쓰는 도우미라 대신할 경로가 없습니다. 인증과 연속조회, 체결 행 해석은 `kis`와 `kbsec` 클래스의 메서드가 처리합니다.
@@ -147,7 +151,7 @@
 
 ## [0.1.0] - 2026-09-21
 
-첫 공개 버전입니다.
+첫 공개 버전입니다. 이 버전에는 태그를 만들지 않았습니다.
 
 ### 추가
 
@@ -155,5 +159,5 @@
 - ccxt식 통합 자료 구조(`Market`, `Ticker`, `Order`, `Trade`, `Balances`)와 오류 계층(`ExchangeError` 계열)을 따랐고, 주문 접수 여부를 모를 때 던지는 `OrderOutcomeUnknown`을 추가했습니다.
 - 증권사 캘린더 API로 받는 휴장일, 토큰 발급 잠금, 증권사별 호출 한도를 넣었습니다.
 
-[Unreleased]: https://github.com/jewon-oh/kr-broker/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/jewon-oh/kr-broker/releases/tag/v0.1.0
+[Unreleased]: https://github.com/jewon-oh/kr-broker/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/jewon-oh/kr-broker/releases/tag/v0.5.0
