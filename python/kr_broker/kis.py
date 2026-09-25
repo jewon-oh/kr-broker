@@ -59,6 +59,7 @@ from kr_broker.kis_yahoo_candles import fetch_yahoo_candles
 from kr_broker.market_calendar import refresh_market_calendar as refresh_shared_market_calendar
 from kr_broker.base import functions as fn
 from kr_broker.base.decimal_to_precision import NO_PADDING, ROUND, TICK_SIZE, decimal_to_precision
+from kr_broker.base.exchange import kst_timestamp_of
 from kr_broker.base.errors import (
     ArgumentsRequired, AuthenticationError, BadRequest, BadResponse, BadSymbol, ExchangeError, InvalidOrder, MarketClosed, NotSupported,
     NullResponse, OrderNotFound, RateLimitExceeded, RequestTimeout,
@@ -179,8 +180,6 @@ class KisInstrument(NamedTuple):
 
 
 _SUFFIXED_SYMBOL = re.compile(r'(.+)/(KRW|USD)')
-_YMD = re.compile(r'[0-9]{8}')
-_HMS = re.compile(r'[0-9]{6}')
 
 
 def kst_ymd(ms: int) -> str:
@@ -189,11 +188,8 @@ def kst_ymd(ms: int) -> str:
 
 
 def kst_timestamp(ymd: Str, hms: Str) -> Int:
-    """`YYYYMMDD` 와 `HHMMSS`(한국 시각)를 UTC 밀리초로 바꾼다. 날짜를 못 읽으면 None, 시각을 못 읽으면 그날 0시다."""
-    if ymd is None or _YMD.fullmatch(ymd) is None:
-        return None
-    clock = hms if hms is not None and _HMS.fullmatch(hms) is not None else '000000'
-    return fn.js_date_parse_iso(f'{ymd[0:4]}-{ymd[4:6]}-{ymd[6:8]}T{clock[0:2]}:{clock[2:4]}:{clock[4:6]}+09:00')
+    """`YYYYMMDD` 와 `HHMMSS`(한국 시각)를 UTC 밀리초로 바꾼다. 읽는 규칙은 `kst_stamp` 와 같다(`kst_timestamp_of`)."""
+    return kst_timestamp_of(ymd, hms)
 
 
 def et_timestamp(ymd: Str, hms: Str) -> Int:

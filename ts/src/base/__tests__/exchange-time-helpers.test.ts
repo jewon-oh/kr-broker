@@ -61,6 +61,13 @@ describe('kstStamp, msStamp', () => {
         }
     });
 
+    it('범위를 넘는 시각은 다음 시각으로 넘기지 않고 그날 0시로 읽는다', () => {
+        const midnight = Date.parse('2026-09-21T15:00:00Z');
+        for (const hms of ['9300', '250000', '126000', '120060', 'abcdef']) {
+            expect(ex().kstStamp('20260922', hms).timestamp, hms).toBe(midnight);
+        }
+    });
+
     it('msStamp 는 이미 있는 ms 로 datetime 을 채운다', () => {
         expect(ex().msStamp(Date.parse('2026-09-22T06:30:00Z'))).toEqual({ timestamp: Date.parse('2026-09-22T06:30:00Z'), datetime: '2026-09-22T06:30:00.000Z' });
         expect(ex().msStamp(undefined)).toEqual({ timestamp: undefined, datetime: undefined });

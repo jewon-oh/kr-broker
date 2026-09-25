@@ -3,6 +3,7 @@
  */
 
 import { NotSupported } from '../base/errors';
+import { kstTimestampOf } from '../base/Exchange';
 import { etWallClockToUtcMs } from '../us-market-hours';
 import { KBSEC_CHART_KIND } from './kbsec-types';
 
@@ -51,28 +52,26 @@ export function kbsecBarMs(timeframe: string): number {
     return DAY_MS;
 }
 
-const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
-
 /**
  * 국내 봉의 `dt`(YYYYMMDD)와 `tm`(HHMMSS) → UTC 밀리초. 두 값은 한국 시각이다. `long` 형이라 앞의 0 이 빠져 올 수 있어 자리를 채운다.
- * 일자를 읽을 수 없으면 `undefined` 다. 일봉은 시각이 없거나 0 이라 자정(KST)이 된다.
+ * 일자를 읽을 수 없거나 달력에 없는 날짜면 `undefined` 다. 일봉은 시각이 없거나 0 이라 자정(KST)이 된다.
  */
 export function kbsecCandleTimestamp(dt: string, tm: string): number | undefined {
-    const date = /^(\d{4})(\d{2})(\d{2})$/.exec(dt.trim());
-    if (!date) return undefined;
-    const time = /^(\d{2})(\d{2})(\d{2})$/.exec(tm.trim() === '' ? '000000' : tm.trim().padStart(6, '0'));
-    if (!time) return undefined;
-    return Date.UTC(Number(date[1]), Number(date[2]) - 1, Number(date[3]), Number(time[1]), Number(time[2]), Number(time[3])) - KST_OFFSET_MS;
+    // 시각을 읽을 수 없는 봉은 0시로 두지 않고 버린다. 날짜 읽기와 달력 검증은 `kstTimestampOf` 가 한다.
+    const time = tm.trim() === '' ? '000000' : tm.trim().padStart(6, '0');
+    if (!/^\d{6}$/.test(time)) return undefined;
+    return kstTimestampOf(dt.trim(), time);
 }
 
 /**
  * 해외 차트(`GSC10060`) 봉의 `dt`와 `tm` → UTC 밀리초. 두 값은 미국 동부 현지 시각이다(조회시간 `inq_tm`만 한국 시각이다).
  * 서머타임은 `etWallClockToUtcMs`가 반영한다. 일봉은 시각이 비어 현지 자정이 된다.
- * 일자를 읽을 수 없으면 `undefined` 다.
+ * 일자를 읽을 수 없거나 달력에 없는 날짜면 `undefined` 다.
  */
 export function kbsecUsCandleTimestamp(dt: string, tm: string): number | undefined {
     const date = /^(\d{4})(\d{2})(\d{2})$/.exec(dt.trim());
-    if (!date) return undefined;
+    // 달력에 없는 날짜는 `etWallClockToUtcMs` 가 다른 날로 넘기므로 버린다(검증만 `kstTimestampOf` 에 맡긴다).
+    if (!date || kstTimestampOf(dt.trim()) === undefined) return undefined;
     const time = /^(\d{2})(\d{2})(\d{2})$/.exec(tm.trim() === '' ? '000000' : tm.trim().padStart(6, '0'));
     if (!time) return undefined;
     return etWallClockToUtcMs(Number(date[1]), Number(date[2]), Number(date[3]), Number(time[1]), Number(time[2])) + Number(time[3]) * 1000;

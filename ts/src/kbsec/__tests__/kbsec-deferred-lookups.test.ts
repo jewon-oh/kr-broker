@@ -10,7 +10,7 @@ global.fetch = mockFetch as unknown as typeof fetch;
 
 import { kbsec } from '../../kbsec';
 import { ArgumentsRequired, NotSupported } from '../../base/errors';
-import { kbsecUsCandleTimestamp } from '../kbsec-chart';
+import { kbsecCandleTimestamp, kbsecUsCandleTimestamp } from '../kbsec-chart';
 import { KBSEC_ORDER_TR_CODES, KBSEC_TR } from '../kbsec-types';
 import { __resetKbsecTokenBreaker } from '../kbsec-token-breaker';
 import { CREDS, calledTrs, routeTr, trBody } from './support/kbsec-fetch';
@@ -125,6 +125,16 @@ describe('fetchOverseasCandles', () => {
         expect(kbsecUsCandleTimestamp('20260115', '093015')).toBe(Date.UTC(2026, 0, 15, 14, 30, 15));
         expect(kbsecUsCandleTimestamp('20260115', '')).toBe(Date.UTC(2026, 0, 15, 5, 0, 0));
         expect(kbsecUsCandleTimestamp('', '093000')).toBeUndefined();
+        // 달력에 없는 날짜는 다른 날로 넘기지 않고 버린다.
+        expect(kbsecUsCandleTimestamp('20261332', '093000')).toBeUndefined();
+        expect(kbsecUsCandleTimestamp('20260230', '')).toBeUndefined();
+    });
+
+    it('국내 봉 시각은 한국 시각으로 읽고, 달력에 없는 날짜나 읽을 수 없는 시각의 봉은 버린다', () => {
+        expect(kbsecCandleTimestamp('20260922', '93000')).toBe(Date.UTC(2026, 8, 22, 0, 30, 0));
+        expect(kbsecCandleTimestamp('20260922', '')).toBe(Date.UTC(2026, 8, 21, 15, 0, 0));
+        expect(kbsecCandleTimestamp('20261332', '100000')).toBeUndefined();
+        expect(kbsecCandleTimestamp('20260922', 'abc')).toBeUndefined();
     });
 
     it('국내 종목과 모르는 차트구분은 요청 없이 거절한다', async () => {

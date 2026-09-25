@@ -19,7 +19,7 @@ import { refreshTokenWithLock } from '../token-refresh-lock';
 import { logger } from '../logger';
 import type { BrokerTokenStore } from '../options';
 import { legacyTokenStoreKey, tokenStoreKey, withLegacyTokenKeys } from '../token-store-key';
-import { RequestTimeout } from '../base/errors';
+import { BaseError, ExchangeNotAvailable, NetworkError, RateLimitExceeded, RequestTimeout } from '../base/errors';
 import type { FetchSignal } from '../base/types';
 
 
@@ -59,6 +59,16 @@ function flatBody(creds: KBSecCredentials): unknown {
     };
 }
 
+/** KB 봉투(`dataHeader.processCode`)의 업무 코드. JSON 이 아니거나 코드가 비었으면 `undefined` 다. */
+function kbsecProcessCodeOf(text: string): string | undefined {
+    try {
+        const code = (JSON.parse(text) as KBSecResponseEnvelope<unknown>)?.dataHeader?.processCode;
+        return typeof code === 'string' && code.trim() !== '' ? code : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
 /**
  * 토큰 발급·폐기 요청의 시간 상한(ms). 조회 상한(20초)보다 짧다. 토큰 요청이 응답 없이 멈추면 그 뒤의 모든 TR 이 같이 멈추기 때문이다
  * (TR 은 `getAccessToken()` 을 기다린 다음에야 나간다). 상한에 걸려도 즉시 재발급을 되풀이하지 않는다. KB 는 발급 빈도를 제한하고 반복
@@ -68,6 +78,7 @@ const AUTH_TIMEOUT_MS = 10_000;
 
 /**
  * JSON 을 POST 하고 본문까지 읽는다. 상한에 걸리면 **요청 자체를 끊고**(`AbortSignal`) `RequestTimeout` 을 던진다.
+ * 연결 실패는 `NetworkError` 로 던진다. 전송 계층의 `TypeError` 를 그대로 올리면 호출부가 자격증명 오류(`AuthenticationError`)로 감싼다.
  *
  * 응답 헤더만 오고 본문이 안 오는 경우도 무한정 기다리게 되므로 본문 읽기까지 상한이 덮는다. `Promise.race` 는 전송 계층이 신호를 안 듣는
  * 경우의 백스톱이다. 버려진 promise 의 늦은 실패는 삼켜 `unhandledRejection` 으로 프로세스가 종료되지 않게 한다.
@@ -106,7 +117,8 @@ async function postJson(op: string, url: string, body: unknown): Promise<{ res: 
     } catch (err) {
         // 취소가 먼저 걸려 전송 계층이 AbortError 로 실패한 경우도 같은 오류로 통일한다.
         if (timedOut && !(err instanceof RequestTimeout)) throw timeout();
-        throw err;
+        if (err instanceof BaseError) throw err;
+        throw new NetworkError(`kbsec ${op} 요청 실패: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
     } finally {
         if (timer) clearTimeout(timer);
         if (timedOut) logger.warn({ op, timeoutMs: AUTH_TIMEOUT_MS }, '[KBSecAuth] 요청 상한 초과 — 요청을 취소했다');
@@ -351,6 +363,9 @@ export class KBSecAuth {
                 this.workingShape = shape;
                 return token;
             } catch (err) {
+                // 연결 실패, 시간 초과, 5xx, 429 는 본문 형태와 관계없다. 다른 형태로 다시 보내면 KB 가 제한하는 발급 요청만 늘므로
+                // 그 오류를 그대로 던진다. 호출부는 자격증명 오류가 아니라 일시 장애로 읽는다.
+                if (err instanceof NetworkError) throw err;
                 failures.push(`${shape}: ${String(err)}`);
                 logger.warn(
                     { shape, err: String(err) },
@@ -370,7 +385,11 @@ export class KBSecAuth {
         const { res, text } = await postJson(`oauth2/token:${shape}`, `${this.baseUrl}${KBSEC_TOKEN_PATH}`, body);
 
         if (!res.ok) {
-            throw new Error(`KB증권 토큰 발급 오류: ${res.status} ${text.slice(0, 300)}`);
+            const message = `KB증권 토큰 발급 오류: ${res.status} ${text.slice(0, 300)}`;
+            if (res.status === 429) throw new RateLimitExceeded(message);
+            // KB 는 자격증명 오류(E021 등)도 HTTP 500 과 봉투의 processCode 로 준다. 업무 코드가 없는 5xx 만 일시 장애다.
+            if (res.status >= 500 && kbsecProcessCodeOf(text) === undefined) throw new ExchangeNotAvailable(message);
+            throw new Error(message);
         }
 
         let parsed: KBSecResponseEnvelope<KBSecTokenResponse> & KBSecTokenResponse;

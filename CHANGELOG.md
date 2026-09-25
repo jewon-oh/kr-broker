@@ -6,6 +6,7 @@
 
 ### 바뀜(호환되지 않음)
 
+- KB증권 토큰 발급이 연결 실패나 시간 초과, 업무 코드 없는 5xx, 429로 끝나면 `AuthenticationError` 대신 `NetworkError` 계열(`NetworkError`, `RequestTimeout`, `ExchangeNotAvailable`, `RateLimitExceeded`)을 던집니다. 예전에는 일시 장애도 자격증명 오류처럼 보였습니다. 이때는 다른 본문 형태로 다시 보내지 않습니다. 봉투에 업무 코드가 있는 실패(E021 등)는 그대로 `AuthenticationError`입니다.
 - 한국투자증권 캔들의 야후 조회가 404 가 아닌 4xx(조회 폭 초과 422 등)로 끝나면 `BadRequest`를 던집니다. 예전에는 일시 장애처럼 보이는 `ExchangeNotAvailable`이었습니다. 5xx 와 재시도를 다 쓴 실패는 그대로 `ExchangeNotAvailable`입니다.
 - 요청 주소가 `https`가 아니면 보내기 전에 `BadRequest`를 던집니다. 루프백 주소는 예외입니다. 프록시 시험 등으로 평문 주소가 필요하면 `options.allowInsecureUrl`을 켭니다.
 - `fetchOHLCV(symbol, timeframe, since, limit)`에 `since`를 주면 세 증권사 모두 `since`부터 앞에서 `limit`개를 돌려줍니다(ccxt 규칙). 예전에는 `since`를 줘도 가장 최근 `limit`개였습니다. `since`가 없으면 예전처럼 최근 `limit`개입니다. 한국투자증권은 받은 봉을 `since`와 `params.until`로 거릅니다. 예전에는 `until` 뒤 봉이 섞였습니다.
@@ -64,6 +65,7 @@
 
 ### 고침
 
+- 한국투자증권의 주문, 체결, 잔고 시각과 KB증권 캔들 시각을 `kstStamp`와 같은 규칙으로 읽습니다. 예전에는 달력에 없는 날짜(`20260230`)를 다른 날로 넘겼고, 한국투자증권은 앞의 0이 빠진 시각(`93000`)을 그날 0시로 읽었습니다. 이제 달력에 없는 날짜는 `undefined`이고, 빠진 0은 채워 읽습니다. 범위를 넘는 시각(`250000`)은 다음 시각으로 넘기지 않고 그날 0시로 읽습니다(Python 판도 같습니다).
 - KB증권 응답의 숫자 필드가 공백으로만 채워져 오면 0으로 읽고 다음 후보 필드를 보지 않던 것을 고쳤습니다. 이제 공백만 있는 값은 빈 값으로 보고 다음 후보를 읽습니다. 체결 행과 보유, 잔고를 읽는 `pickNum` 계열이 정산 행 파서와 같은 규칙을 씁니다.
 - Python 판이 응답의 숫자 문자열을 TypeScript 판(JavaScript `Number`)과 같게 읽습니다. 예전에는 `'1_000'`을 1000으로, `'inf'`를 무한대로 읽고 `'0x10'`은 읽지 못했습니다. 이제 앞의 둘은 `NaN`이고 `'0x10'`은 16입니다.
 - Python 판 주문 메서드가 숫자 인자(`amount`, `price`, `trigger_price`)와 `params`의 숫자 값에 `Decimal`을 받습니다(ccxt와 같습니다). 예전에는 `Decimal`을 숫자로 읽지 못해, 한국투자증권은 `Decimal` 수량을 `InvalidOrder`로 거절했고 토스는 조건주문 가격과 `params['cost']`를 빠진 값으로 읽었습니다.
