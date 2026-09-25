@@ -10,3 +10,6 @@ __pycache__/
 .venv/
 *.egg-info/
 .pytest_cache/
+
+# 로컬 에이전트 도구의 설정
+.claude/
