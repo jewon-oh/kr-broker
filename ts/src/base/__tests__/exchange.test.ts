@@ -1118,12 +1118,15 @@ describe('verbose 로그의 비밀 가리기', () => {
         }
     });
 
-    it('JSON 과 폼 본문, 대소문자를 가리지 않는 헤더 이름을 처리하고 읽을 수 없는 본문은 그대로 둔다', () => {
+    it('JSON 과 폼 본문, 대소문자를 가리지 않는 헤더 이름을 처리하고 읽을 수 없는 본문은 길이만 남긴다', () => {
         expect(redactHeadersForLog({ AppKey: 'a', 'Content-Type': 'application/json' })).toEqual({ AppKey: '***', 'Content-Type': 'application/json' });
         expect(JSON.parse(redactBodyForLog('{"appSecret":"s","nested":{"approval_key":"k"},"rows":[{"access_token":"t"}]}') as string))
             .toEqual({ appSecret: '***', nested: { approval_key: '***' }, rows: [{ access_token: '***' }] });
         expect(redactBodyForLog('grant_type=client_credentials&client_id=id&client_secret=s')).toBe('grant_type=client_credentials&client_id=id&client_secret=***');
-        expect(redactBodyForLog('<html>maintenance</html>')).toBe('<html>maintenance</html>');
+        expect(redactBodyForLog('<html>maintenance</html>')).toBe('<본문 24자, 해석하지 못해 생략>');
+        // ★깨진 JSON 에 비밀 필드가 있어도 원문이 로그에 가지 않는다.
+        expect(redactBodyForLog('{"client_secret":"SECRET-VALUE"')).not.toContain('SECRET-VALUE');
+        expect(redactBodyForLog('')).toBe('');
     });
 });
 

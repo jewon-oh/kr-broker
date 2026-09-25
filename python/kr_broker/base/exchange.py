@@ -62,9 +62,9 @@ def redact_headers_for_log(headers: Optional[Dict[str, str]]) -> Optional[Dict[s
 
 
 def redact_body_for_log(body: Str) -> Str:
-    """로그에 남길 본문. JSON 이나 폼 본문의 비밀 필드 값을 가린다. 읽을 수 없는 본문은 그대로 둔다."""
+    """로그에 남길 본문. JSON 이나 폼 본문의 비밀 필드 값을 가린다. 읽을 수 없는 본문은 비밀이 섞여 있을 수 있어 길이만 남긴다."""
     if not body:
-        return body
+        return None if body is None else ''
 
     def redact(value: Any) -> Any:
         if isinstance(value, list):
@@ -73,16 +73,17 @@ def redact_body_for_log(body: Str) -> Str:
             return {k: _REDACTED if str(k).lower() in _SECRET_LOG_FIELDS else redact(v) for k, v in value.items()}
         return value
 
+    unreadable = f'<본문 {len(body)}자, 해석하지 못해 생략>'
     trimmed = body.strip()
     if trimmed[:1] in ('{', '['):
         try:
             return json.dumps(redact(json.loads(trimmed)), ensure_ascii=False, separators=(',', ':'))
         except ValueError:
-            return body
+            return unreadable
     if _FORM_BODY.fullmatch(trimmed):
         pairs = [part.split('=', 1) for part in trimmed.split('&')]
         return '&'.join(f'{k}={_REDACTED}' if k.lower() in _SECRET_LOG_FIELDS else f'{k}={v}' for k, v in pairs)
-    return body
+    return unreadable
 
 DEFAULT_TIMEOUT_MS = 10_000
 DEFAULT_RATE_LIMIT_MS = 50
