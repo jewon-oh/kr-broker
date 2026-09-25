@@ -37,7 +37,7 @@ ccxt 와 같은 모양으로 다룬다. 실시간(`watch_*`)은 이 클래스를
 import json
 import logging
 import math
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Set, Tuple
 
 from kr_broker.abstract.toss import ImplicitAPI
 from kr_broker.async_support.base.exchange import Exchange
@@ -131,6 +131,20 @@ def is_order_info_peak_window(now_ms: Optional[int] = None) -> bool:
     now = _now_ms() if now_ms is None else now_ms
     kst_minutes = ((now // 60_000) % (24 * 60) + 9 * 60) % (24 * 60)
     return PEAK_WINDOW_START_MIN <= kst_minutes < PEAK_WINDOW_END_MIN
+
+
+def _unseen_rows(rows: List[Dict[str, Any]], id_key: str, seen: Set[str]) -> List[Dict[str, Any]]:
+    """커서로 받은 쪽에서 아직 담지 않은 행만 고른다. 서버가 커서를 무시하고 같은 쪽을 다시 주면 같은 주문이 두 번 담긴다.
+    식별자가 없는 행은 가를 수 없으므로 담는다."""
+    out = []
+    for row in rows:
+        row_id = row.get(id_key) if isinstance(row, dict) else None
+        if row_id is None:
+            out.append(row)
+        elif row_id not in seen:
+            seen.add(row_id)
+            out.append(row)
+    return out
 
 
 def _is_finite_number(value: Any) -> bool:
@@ -1716,13 +1730,19 @@ class toss(Exchange, ImplicitAPI):
             request['symbol'] = market['id']
         max_pages = self.safe_integer(self.options, 'conditionalOrdersMaxPages', MAX_CONDITIONAL_ORDER_PAGES)
         collected: List[Dict[str, Any]] = []
+        seen: Set[str] = set()
+        requested: Set[str] = set()
         cursor = None
         for _ in range(max_pages):
             response = self.unwrap(await self.private_account_get_conditional_orders(self.extend(request, {'cursor': cursor})))
-            collected.extend(self.safe_list(response, 'conditionalOrders', []) or [])
+            collected.extend(_unseen_rows(self.safe_list(response, 'conditionalOrders', []) or [], 'conditionalOrderId', seen))
             if not self.safe_value(response, 'hasNext') or not self.safe_value(response, 'nextCursor'):
                 return collected
+            if response['nextCursor'] in requested:
+                logger.warning('[toss] 미체결 조건주문의 다음 커서가 이미 요청한 커서다. 같은 쪽을 되풀이하지 않고 멈춘다(%d건)', len(collected))
+                return collected
             cursor = response['nextCursor']
+            requested.add(cursor)
         logger.warning('[toss] 미체결 조건주문이 페이지 상한을 넘어 나머지는 자른다(%d건, %d쪽)', len(collected), max_pages)
         return collected
 
@@ -1768,16 +1788,22 @@ class toss(Exchange, ImplicitAPI):
         query = self.omit(params, 'until')
         max_pages = self.safe_integer(self.options, 'closedOrdersMaxPages', MAX_CLOSED_ORDER_PAGES)
         collected: List[Dict[str, Any]] = []
+        seen: Set[str] = set()
+        requested: Set[str] = set()
         cursor = None
         for _ in range(max_pages):
             response = self.unwrap(await self.private_account_get_orders(self.extend(request, {'cursor': cursor}, query)))
-            collected.extend(row for row in (self.safe_list(response, 'orders', []) or []) if keep(row))
+            collected.extend(row for row in _unseen_rows(self.safe_list(response, 'orders', []) or [], 'orderId', seen) if keep(row))
             if not self.safe_value(response, 'hasNext') or not self.safe_value(response, 'nextCursor'):
                 return collected
             # 시각 조건 없이 개수만 정했다면(가장 최근 `limit` 건) 그만큼 모았을 때 멈춘다.
             if since is None and limit is not None and len(collected) >= limit:
                 return collected
+            if response['nextCursor'] in requested:
+                logger.warning('[toss] 종료된 주문의 다음 커서가 이미 요청한 커서다. 같은 쪽을 되풀이하지 않고 멈춘다(%d건)', len(collected))
+                return collected
             cursor = response['nextCursor']
+            requested.add(cursor)
         logger.warning('[toss] 체결 완료 주문이 페이지 상한을 넘어 오래된 주문은 자른다(%d건)', len(collected))
         return collected
 

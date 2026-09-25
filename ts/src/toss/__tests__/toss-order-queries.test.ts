@@ -216,12 +216,26 @@ describe('조건주문 목록 페이지', () => {
     it('쪽 수 상한을 넘으면 거기까지만 받고 무한히 이어 받지 않는다', async () => {
         const fake = installFakeToss({
             'GET /api/v1/orders': jsonOk({ orders: [] }),
-            'GET /api/v1/conditional-orders': () => jsonOk({ conditionalOrders: [cond('C-1')], hasNext: true, nextCursor: 'same' }),
+            // 쪽마다 새 커서를 준다. 같은 커서를 되풀이하면 상한에 닿기 전에 멈춘다.
+            'GET /api/v1/conditional-orders': (request) =>
+                jsonOk({ conditionalOrders: [cond('C-1')], hasNext: true, nextCursor: `c${Number(request.query.get('cursor')?.slice(1) ?? 0) + 1}` }),
         });
 
         await makeToss({ options: { conditionalOrdersMaxPages: 3 } }).fetchOpenOrders(undefined, undefined, undefined, { includeTrigger: true });
 
         expect(fake.requestsTo('GET /api/v1/conditional-orders')).toHaveLength(3);
+    });
+
+    it('다음 커서가 이미 요청한 커서면 같은 쪽을 되풀이하지 않고 멈춘다', async () => {
+        const fake = installFakeToss({
+            'GET /api/v1/orders': jsonOk({ orders: [] }),
+            'GET /api/v1/conditional-orders': () => jsonOk({ conditionalOrders: [cond('C-1')], hasNext: true, nextCursor: 'same' }),
+        });
+
+        const orders = await makeToss().fetchOpenOrders(undefined, undefined, undefined, { includeTrigger: true });
+
+        expect(fake.requestsTo('GET /api/v1/conditional-orders')).toHaveLength(2);
+        expect(orders.map((o) => o.id)).toEqual(['C-1']);
     });
 
     it('일반 미체결(GET /orders?status=OPEN)은 전량을 한 번에 돌려주므로 limit·cursor 를 보내지 않는다', async () => {
@@ -294,7 +308,10 @@ describe('체결 완료 주문과 체결 내역', () => {
     });
 
     it('페이지 상한을 넘으면 거기서 자른다', async () => {
-        const fake = installFakeToss({ 'GET /api/v1/orders': jsonOk({ orders: [closed('X')], hasNext: true, nextCursor: 'MORE' }) });
+        const fake = installFakeToss({
+            'GET /api/v1/orders': (request) =>
+                jsonOk({ orders: [closed('X')], hasNext: true, nextCursor: `c${Number(request.query.get('cursor')?.slice(1) ?? 0) + 1}` }),
+        });
         await makeToss().fetchClosedOrders();
         expect(fake.requestsTo('GET /api/v1/orders')).toHaveLength(10);
     });
