@@ -112,6 +112,25 @@ export function redactBodyForLog(body: string | undefined): string | undefined {
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 /**
+ * 한국 날짜(`YYYYMMDD`)와 시각(`HHMMSS`)을 UTC 밀리초로 바꾼다. 세 증권사와 Python 판(`kst_timestamp_of`)이 같은 규칙을 쓴다.
+ *
+ * - 날짜를 못 읽거나 달력에 없는 날짜(`00000000`, 달 `13`, `0230`)면 `undefined` 다. `Date.UTC` 와 `Date.parse` 는 다른 날로 넘긴다.
+ * - 시각은 앞의 0 이 빠져 올 수 있어(`93000`) 여섯 자리로 채운다. 비었거나 숫자가 아니거나 범위(`235959`)를 넘으면 그날 0시다.
+ */
+export function kstTimestampOf(ymd: Str, hms: Str = undefined): number | undefined {
+    const date = /^(\d{4})(\d{2})(\d{2})$/.exec(ymd ?? '');
+    if (date === null) return undefined;
+    const [year, month, day] = [Number(date[1]), Number(date[2]), Number(date[3])];
+    const probe = new Date(Date.UTC(year, month - 1, day));
+    if (year < 1 || probe.getUTCFullYear() !== year || probe.getUTCMonth() !== month - 1 || probe.getUTCDate() !== day) return undefined;
+    const time = /^(\d{2})(\d{2})(\d{2})$/.exec(hms !== undefined && hms !== '' ? hms.padStart(6, '0') : '000000');
+    // 범위를 넘는 시각(`009300` 의 93분 등)은 `Date.UTC` 가 다음 시각으로 넘기므로 읽지 못한 시각으로 본다.
+    const [hh, mm, ss] = time !== null && Number(time[1]) < 24 && Number(time[2]) < 60 && Number(time[3]) < 60
+        ? [Number(time[1]), Number(time[2]), Number(time[3])] : [0, 0, 0];
+    return Date.UTC(year, month - 1, day, hh, mm, ss) - KST_OFFSET_MS;
+}
+
+/**
  * 요청 주소가 `https:` 가 아니면 보내기 전에 `BadRequest` 를 던진다. 평문으로 보내면 앱키와 시크릿, 토큰이 경로 위에 드러난다.
  * 루프백 주소와 `allowInsecure`(`options.allowInsecureUrl`)만 예외다. 주소를 읽지 못하면 전송 계층이 실패하게 둔다.
  */
@@ -1546,17 +1565,8 @@ export class Exchange {
 
     /** 한국 날짜(`YYYYMMDD`)와 시각(`HHMMSS`)으로 ccxt 의 `timestamp`, `datetime` 을 만든다. 시각이 없으면 그날 0시이고, 날짜를 못 읽으면 둘 다 비운다. */
     kstStamp(ymd: Str, hms: Str = undefined): KrTimestamped {
-        const date = /^(\d{4})(\d{2})(\d{2})$/.exec(ymd ?? '');
-        if (date === null) return { timestamp: undefined, datetime: undefined };
-        // 달력에 없는 날짜(`00000000`, 달 `13`, `0230`)는 `Date.UTC` 가 다른 날로 넘기므로 비운다. Python 판과 같다.
-        const [year, month, day] = [Number(date[1]), Number(date[2]), Number(date[3])];
-        const probe = new Date(Date.UTC(year, month - 1, day));
-        if (year < 1 || probe.getUTCFullYear() !== year || probe.getUTCMonth() !== month - 1 || probe.getUTCDate() !== day) {
-            return { timestamp: undefined, datetime: undefined };
-        }
-        const time = /^(\d{2})(\d{2})(\d{2})$/.exec(hms !== undefined && hms !== '' ? hms.padStart(6, '0') : '000000') ?? [];
-        const timestamp = Date.UTC(Number(date[1]), Number(date[2]) - 1, Number(date[3]), Number(time[1] ?? 0), Number(time[2] ?? 0), Number(time[3] ?? 0)) - KST_OFFSET_MS;
-        return { timestamp, datetime: iso8601(timestamp) };
+        const timestamp = kstTimestampOf(ymd, hms);
+        return timestamp === undefined ? { timestamp: undefined, datetime: undefined } : { timestamp, datetime: iso8601(timestamp) };
     }
 
     filterByLimit(array: Dict[], limit: Int = undefined, key: IndexType = 'timestamp', fromStart = false): any[] {

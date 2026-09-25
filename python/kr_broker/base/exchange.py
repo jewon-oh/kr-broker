@@ -100,6 +100,23 @@ KST_OFFSET_MS = 9 * 60 * 60 * 1000
 _LOOPBACK_HOSTS = frozenset(['localhost', '127.0.0.1', '::1'])
 
 
+def kst_timestamp_of(ymd: Str, hms: Str = None) -> Optional[int]:
+    """한국 날짜(`YYYYMMDD`)와 시각(`HHMMSS`)을 UTC 밀리초로 바꾼다. TypeScript 판 `kstTimestampOf` 와 같다.
+
+    날짜를 못 읽거나 달력에 없는 날짜면 `None` 이다. 시각은 앞의 0 이 빠져 올 수 있어 여섯 자리로 채우고, 비었거나 숫자가 아니거나
+    범위(`235959`)를 넘으면 그날 0시다.
+    """
+    date = re.fullmatch(r'(\d{4})(\d{2})(\d{2})', ymd or '')
+    if date is None or not _is_calendar_date(int(date.group(1)), int(date.group(2)), int(date.group(3))):
+        return None
+    clock = re.fullmatch(r'(\d{2})(\d{2})(\d{2})', hms.rjust(6, '0') if hms else '000000')
+    hh, mm, ss = (int(clock.group(1)), int(clock.group(2)), int(clock.group(3))) if clock else (0, 0, 0)
+    if hh > 23 or mm > 59 or ss > 59:
+        # `calendar.timegm` 은 범위를 넘는 시각(93분 등)을 다음 시각으로 넘기므로 읽지 못한 시각으로 본다.
+        hh, mm, ss = 0, 0, 0
+    return calendar.timegm((int(date.group(1)), int(date.group(2)), int(date.group(3)), hh, mm, ss, 0, 0, 0)) * 1000 - KST_OFFSET_MS
+
+
 def assert_secure_url(exchange_id: str, url: str, allow_insecure: bool) -> None:
     """요청 주소가 `https:` 가 아니면 보내기 전에 `BadRequest` 를 던진다. 평문으로 보내면 앱키와 시크릿, 토큰이 경로 위에 드러난다.
     루프백 주소와 `allow_insecure`(`options['allowInsecureUrl']`)만 예외다. TypeScript 판 `assertSecureUrl` 과 같다."""
@@ -1329,14 +1346,8 @@ class Exchange:
 
     def kst_stamp(self, ymd: Str, hms: Str = None) -> Dict[str, Any]:
         """한국 날짜(`YYYYMMDD`)와 시각(`HHMMSS`)으로 `timestamp`·`datetime` 을 만든다. 날짜를 못 읽으면 둘 다 비운다."""
-        date = re.fullmatch(r'(\d{4})(\d{2})(\d{2})', ymd or '')
-        if date is None or not _is_calendar_date(int(date.group(1)), int(date.group(2)), int(date.group(3))):
-            return {'timestamp': None, 'datetime': None}
-        time_text = hms.rjust(6, '0') if hms else '000000'
-        clock = re.fullmatch(r'(\d{2})(\d{2})(\d{2})', time_text)
-        hh, mm, ss = (int(clock.group(1)), int(clock.group(2)), int(clock.group(3))) if clock else (0, 0, 0)
-        timestamp = calendar.timegm((int(date.group(1)), int(date.group(2)), int(date.group(3)), hh, mm, ss, 0, 0, 0)) * 1000 - KST_OFFSET_MS
-        return {'timestamp': timestamp, 'datetime': fn.iso8601(timestamp)}
+        timestamp = kst_timestamp_of(ymd, hms)
+        return {'timestamp': None, 'datetime': None} if timestamp is None else {'timestamp': timestamp, 'datetime': fn.iso8601(timestamp)}
 
     def filter_by_limit(self, array: List[Any], limit: Int = None, key: Any = 'timestamp', from_start: bool = False) -> List[Any]:
         if limit is None or len(array) == 0:

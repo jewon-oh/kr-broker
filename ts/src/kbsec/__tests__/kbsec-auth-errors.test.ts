@@ -15,6 +15,9 @@
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { KBSecAuth } from '../kbsec-auth';
+import { kbsec } from '../../kbsec';
+import { AuthenticationError, ExchangeNotAvailable, NetworkError, RateLimitExceeded } from '../../base/errors';
+import { __resetKbsecTokenBreaker } from '../kbsec-token-breaker';
 
 const CREDS = { appKey: 'AK', appSecret: 'AS' };
 
@@ -86,5 +89,52 @@ describe('KBSecAuth 토큰 발급 오류 보고', () => {
         const auth = new KBSecAuth(CREDS);
         await expect(auth.getAccessToken()).resolves.toBe('TOK');
         expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('KBSecAuth 토큰 발급의 일시 장애', () => {
+    const e021 = {
+        dataHeader: { processFlag: 'B', processCode: 'E021', processMessage: '앱키로 앱정보 추출 중 오류가 발생했습니다.' },
+        dataBody: { access_token: '', token_type: '', expires_in: 0 },
+    };
+
+    it('연결이 실패하면 NetworkError 이고, 다른 본문 형태로 다시 보내지 않는다', async () => {
+        vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('fetch failed'); }));
+
+        const error = await new KBSecAuth(CREDS).getAccessToken().catch((e: unknown) => e);
+
+        expect(error).toBeInstanceOf(NetworkError);
+        expect(String((error as Error).message)).toContain('oauth2/token:envelope');
+        expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+    });
+
+    it('업무 코드가 없는 5xx 는 ExchangeNotAvailable, 429 는 RateLimitExceeded 이고 한 번만 보낸다', async () => {
+        vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 503, text: async () => '<html>Service Unavailable</html>' })));
+        await expect(new KBSecAuth(CREDS).getAccessToken()).rejects.toBeInstanceOf(ExchangeNotAvailable);
+        expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+
+        vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 429, text: async () => '' })));
+        await expect(new KBSecAuth(CREDS).getAccessToken()).rejects.toBeInstanceOf(RateLimitExceeded);
+        expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+    });
+
+    it('HTTP 500 이어도 봉투에 업무 코드(E021)가 있으면 일시 장애가 아니고 두 형태를 모두 시도한다', async () => {
+        mockFetch(() => ({ status: 500, body: e021 }));
+
+        const error = await new KBSecAuth(CREDS).getAccessToken().catch((e: unknown) => e);
+
+        expect(error).not.toBeInstanceOf(NetworkError);
+        expect(String((error as Error).message)).toContain('E021');
+        expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
+    });
+
+    it('비공개 호출은 토큰 요청의 연결 실패를 AuthenticationError 가 아니라 NetworkError 로 받는다', async () => {
+        __resetKbsecTokenBreaker();
+        vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('fetch failed'); }));
+
+        const error = await new kbsec({ apiKey: 'kb-app-key-123456', secret: 'kb-secret', rateLimit: 0 }).privatePostSsqm0004({}).catch((e: unknown) => e);
+
+        expect(error).toBeInstanceOf(NetworkError);
+        expect(error).not.toBeInstanceOf(AuthenticationError);
     });
 });

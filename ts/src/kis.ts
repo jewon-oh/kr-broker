@@ -85,6 +85,7 @@ import {
     type ApiName,
     type Market,
 } from './base';
+import { kstTimestampOf } from './base/Exchange';
 import { logger } from './logger';
 import { buildExtendedSessionLimit } from './extended-session-limit';
 import { refreshMarketCalendar as refreshSharedMarketCalendar } from './market-calendar';
@@ -3513,12 +3514,9 @@ function kstHms(ms: number): string {
     return new Date(ms + KST_OFFSET_MS).toISOString().slice(11, 19).replace(/:/g, '');
 }
 
-/** `YYYYMMDD` + `HHMMSS`(KST) → 밀리초. 날짜를 못 읽으면 `undefined`, 시각을 못 읽으면 그날 0시다. */
+/** `YYYYMMDD` + `HHMMSS`(KST) → 밀리초. 읽는 규칙은 `kstStamp` 와 같다(`kstTimestampOf`). */
 function kstTimestamp(ymd: Str, hms: Str): Int {
-    if (ymd === undefined || !/^\d{8}$/.test(ymd)) return undefined;
-    const time = hms !== undefined && /^\d{6}$/.test(hms) ? hms : '000000';
-    const parsed = Date.parse(`${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6, 8)}T${time.slice(0, 2)}:${time.slice(2, 4)}:${time.slice(4, 6)}+09:00`);
-    return Number.isNaN(parsed) ? undefined : parsed;
+    return kstTimestampOf(ymd, hms);
 }
 
 /** `YYYYMMDD` + `HHMMSS`(미국 동부 시각, 서머타임 반영) → 밀리초. 읽는 규칙은 `kstTimestamp` 와 같다. */

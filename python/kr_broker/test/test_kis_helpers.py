@@ -464,11 +464,14 @@ def test_minute_candles_keep_cursor_bar_once() -> None:
 
 # ============ 시각 ============
 
-def test_kst_timestamp_follows_javascript_date_parse() -> None:
+def test_kst_timestamp_follows_kst_stamp() -> None:
     assert kst_timestamp('20260325', '093000') == utc('2026-03-25T00:30:00')
     assert kst_timestamp('20260325', None) == utc('2026-03-24T15:00:00')
-    assert kst_timestamp('20260325', '9300') == utc('2026-03-24T15:00:00')
-    assert kst_timestamp('20260230', None) == utc('2026-03-01T15:00:00')  # 2월 30일은 3월 2일로 넘어간다
+    assert kst_timestamp('20260325', '93000') == utc('2026-03-25T00:30:00')  # 앞의 0 이 빠진 시각은 채운다
+    assert kst_timestamp('20260325', '9300') == utc('2026-03-24T15:00:00')  # 채우면 93분이라 읽지 못한 시각이다
+    assert kst_timestamp('20260325', '250000') == utc('2026-03-24T15:00:00')
+    assert kst_timestamp('20260230', None) is None  # 달력에 없는 날짜를 다른 날로 넘기지 않는다
+    assert kst_timestamp('20261301', None) is None
     assert kst_timestamp('20260132', None) is None
     assert kst_timestamp('2026032', None) is None
     assert kst_timestamp(None, '093000') is None
