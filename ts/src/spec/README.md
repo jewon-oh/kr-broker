@@ -5,8 +5,9 @@
 증권사 API 를 TypeScript 판과 Python 판이 함께 부른다. 두 판이 경로·HTTP 메서드·비용·버킷·주문 여부를 각자 적으면 조용히 어긋난다.
 `spec/*.json` 은 이 값들을 한 곳에 모은 표다.
 
-- TypeScript 판: 표가 `describe().api` 와 같은지 `__tests__/spec-parity.test.ts` 가 양쪽으로 대조한다. `describe().api` 에 엔드포인트를 더하면
-  이 테스트가 실패하며 표에 넣을 줄을 알려 준다.
+- TypeScript 판: `node scripts/gen-ts-abstract.mjs` 가 이 표로 `ts/src/abstract/<증권사>.ts` 를 만든다. 증권사 클래스는 이 모듈의 API 트리 상수를
+  `describe().api` 로 쓰고, 암묵 메서드 인터페이스(`KisImplicitApi` 등)를 선언 병합으로 받는다. 엔드포인트를 더하려면 이 표에 넣고 생성기를 돌린다.
+  CI 가 `--check` 로 생성물이 표와 같은지 본다.
 - Python 판: `node scripts/gen-python-abstract.mjs` 가 이 표로 `python/<패키지>/abstract/<증권사>.py` 를 만든다(ccxt 의 `abstract/` 와 같은 모양).
   CI 가 `--check` 로 생성물이 표와 같은지 본다.
 
@@ -44,4 +45,3 @@ EndpointSpec {
 
 - `tr_id` 는 문자열 하나(조회)와 `{ real, demo }`(주문) 두 모양이다. 주문류 TR 을 표에 넣을 때 한 모양으로 맞출지 정한다.
 - `docs/coverage/*.json`(지원 현황)과 이 표는 따로 관리한다. 지원 현황은 엔드포인트가 아니라 증권사 API 문서 단위라 항목이 1:1 로 맞지 않는다.
-- `describe().api` 는 아직 이 표에서 파생하지 않고 각 증권사 클래스에 그대로 있다. 대조 테스트가 둘이 같음을 보장한다.

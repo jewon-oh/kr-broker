@@ -32,7 +32,10 @@ export function pythonPackageName(pyRoot = PY_ROOT) {
 const CAPITALIZE = (s) => (s.length ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 const PATH_DELIMITER = /[^a-zA-Z0-9]/;
 
-/** `ts/src/spec/spec-validate.ts` 의 `implicitMethodNames` 와 같은 규칙이다. 두 구현이 같은지는 테스트가 본다. */
+/**
+ * `ts/src/spec/spec-validate.ts` 의 `implicitMethodNames` 와 같은 규칙이다(camelCase 는 `Exchange.ts` 의 `implicitMethodName`).
+ * 생성기는 TypeScript 를 불러올 수 없어 사본을 둔다. TypeScript 판 생성기(`gen-ts-abstract.mjs`)도 이 사본을 쓰고, 두 구현이 같은지는 테스트가 본다.
+ */
 export function implicitMethodNames(ep) {
     const parts = ep.path.split(PATH_DELIMITER);
     const method = ep.method.toLowerCase();
@@ -54,7 +57,7 @@ function pyLiteral(value) {
 }
 
 /** 엔드포인트 설정(`describe().api` 의 잎과 같은 값). */
-function endpointConfig(ep) {
+export function endpointConfig(ep) {
     const config = { cost: ep.cost };
     for (const key of ['bucket', 'order', 'peak']) if (ep[key] !== undefined) config[key] = ep[key];
     return config;

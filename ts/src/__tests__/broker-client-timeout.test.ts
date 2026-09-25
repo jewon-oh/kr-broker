@@ -23,6 +23,7 @@ import { toss } from '../toss';
 import { OrderOutcomeUnknown, RequestTimeout, type Exchange } from '../base';
 import { __resetKbsecTokenBreaker } from '../kbsec/kbsec-token-breaker';
 
+// 메서드 문법이라 각 증권사 칸이 자기 클래스를 인자로 받아도 된다(암묵 메서드는 증권사 클래스에만 있다).
 interface BrokerCase {
     name: string;
     make(): Exchange;
@@ -36,20 +37,20 @@ const CASES: BrokerCase[] = [
     {
         name: 'kis',
         make: () => new kis({ apiKey: 'kis-app-key-123456', secret: 'kis-secret', uid: '12345678-01', enableRateLimit: false }),
-        read: (x) => x.privateGetUapiDomesticStockV1QuotationsInquirePrice({ tr_id: 'FHKST01010100' }),
-        order: (x) => x.privatePostUapiDomesticStockV1TradingOrderCash({ tr_id: 'TTTC0802U' }),
+        read: (x: kis) => x.privateGetUapiDomesticStockV1QuotationsInquirePrice({ tr_id: 'FHKST01010100' }),
+        order: (x: kis) => x.privatePostUapiDomesticStockV1TradingOrderCash({ tr_id: 'TTTC0802U' }),
     },
     {
         name: 'toss',
         make: () => new toss({ apiKey: 'toss-client-id-123456', secret: 'toss-secret', uid: 'ACC-001', enableRateLimit: false }),
-        read: (x) => x.privateMarketGetPrices({ symbols: '005930' }),
-        order: (x) => x.privateAccountPostOrders({ symbol: '005930' }),
+        read: (x: toss) => x.privateMarketGetPrices({ symbols: '005930' }),
+        order: (x: toss) => x.privateAccountPostOrders({ symbol: '005930' }),
     },
     {
         name: 'kbsec',
         make: () => new kbsec({ apiKey: 'kb-app-key-123456', secret: 'kb-secret', enableRateLimit: false }),
-        read: (x) => x.privatePostSsqm1801({}),
-        order: (x) => x.privatePostSsam1802({}),
+        read: (x: kbsec) => x.privatePostSsqm1801({}),
+        order: (x: kbsec) => x.privatePostSsam1802({}),
     },
 ];
 

@@ -85,7 +85,7 @@ describe('describe() — 선언', () => {
     });
 
     it('암묵 메서드가 만들어진다 — privatePostSsqm0004 식이다', () => {
-        for (const method of ['privatePostSsqm0004', 'privatePostSsam1802', 'privatePostSzqm0771', 'privatePostSpqm2226']) {
+        for (const method of ['privatePostSsqm0004', 'privatePostSsam1802', 'privatePostSzqm0771', 'privatePostSpqm2226'] as const) {
             expect(typeof exchange[method], method).toBe('function');
         }
     });

@@ -301,7 +301,7 @@ export interface ConstructorArgs {
     [key: string]: any;
 }
 
-/** 암묵 API 메서드(`privateGetFoo`)의 모양. 증권사 클래스가 `declare` 로 선언해 타입을 좁힐 때 쓴다. */
+/** 암묵 API 메서드(`privateGetFoo`)의 모양. 생성 선언(`abstract/<id>.ts`)과, 표 없이 `api` 트리를 적은 서브클래스의 `declare` 가 쓴다. */
 export type ImplicitApiMethod = (params?: Dict) => Promise<any>;
 
 /**

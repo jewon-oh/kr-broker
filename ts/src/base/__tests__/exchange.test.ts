@@ -10,7 +10,7 @@ import {
     NetworkError, NotSupported, NullResponse, OperationFailed, OrderNotFound, OrderOutcomeUnknown, RateLimitExceeded, RequestTimeout,
 } from '../errors';
 import { deepExtend } from '../functions/generic';
-import type { Dict, MarketInterface, Order } from '../types';
+import type { Dict, ImplicitApiMethod, MarketInterface, Order } from '../types';
 import { FakeExchange, hanging, json, marketOf, stubFetch, text } from './support/fake-exchange';
 import { noopLogger, setLogger, type BrokerLogger } from '../../logger';
 import { redactBodyForLog, redactHeadersForLog } from '../Exchange';
@@ -112,8 +112,14 @@ describe('암묵 API 메서드', () => {
             'privateDeleteOrdersId',
             'traderPrivateGetV2Assets',
         ]) {
-            expect(typeof ex[name], name).toBe('function');
+            expect(ex.implicitApiMethod(name), name).toBeTypeOf('function');
         }
+    });
+
+    it('implicitApiMethod 는 없는 이름과 메서드가 아닌 속성에 undefined 를 돌려준다', () => {
+        const ex = new FakeExchange();
+        expect(ex.implicitApiMethod('publicGetMarketAl')).toBeUndefined();
+        expect(ex.implicitApiMethod('id')).toBeUndefined();
     });
 
     it('옛 배열 형식(경로 목록)과 숫자 비용도 받는다', () => {
@@ -127,9 +133,9 @@ describe('암묵 API 메서드', () => {
             }
         }
         const ex = new Legacy();
-        expect(typeof ex.publicGetStatus).toBe('function');
-        expect(typeof ex.publicGetTimeNow).toBe('function');
-        expect(typeof ex.publicPostABCD).toBe('function');
+        expect(ex.implicitApiMethod('publicGetStatus')).toBeTypeOf('function');
+        expect(ex.implicitApiMethod('publicGetTimeNow')).toBeTypeOf('function');
+        expect(ex.implicitApiMethod('publicPostABCD')).toBeTypeOf('function');
     });
 
     it('잎이 객체·숫자가 아니면 생성에서 NotSupported', () => {
@@ -265,6 +271,8 @@ describe('fetch2 파이프라인', () => {
 
     it('sign 을 override 하지 않은 기본 구현은 urls.api 가 없으면 ExchangeError', async () => {
         class Bare extends Exchange {
+            declare publicGetX: ImplicitApiMethod;
+
             override describe(): Dict {
                 return deepExtend(super.describe(), { id: 'bare', api: { public: { get: { x: 1 } } } });
             }

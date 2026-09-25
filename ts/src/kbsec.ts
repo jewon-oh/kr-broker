@@ -67,7 +67,8 @@ import type {
     Balances, Dict, Dictionary, Int, KrTimestamped, MarketInterface, Num, OHLCV, Order, OrderBook, OrderSide, OrderType, Str, Ticker, Trade,
     TradingFeeInterface,
 } from './base';
-import { assertSecureUrl } from './base/Exchange';
+import { assertSecureUrl, implicitMethodName } from './base/Exchange';
+import { KBSEC_API_TREE, type KbsecImplicitApi } from './abstract/kbsec';
 import { confirmExecution, fillDeviationBps, tradeListProbe } from './execution-confirm';
 import { expandBusinessDays, refreshMarketCalendar as refreshSharedMarketCalendar, type CalendarDay } from './market-calendar';
 import { marketSessionBlockReason } from './trading-hours';
@@ -115,7 +116,6 @@ import {
     KBSEC_ORDER_SIDE_US,
     KBSEC_ORDER_TYPE_KR,
     KBSEC_ORDER_TYPE_US,
-    KBSEC_ORDER_TR_CODES,
     KBSEC_SESSION_REGULAR,
     KBSEC_SOR,
     KBSEC_STD_CURRENCY_FOREIGN,
@@ -154,41 +154,6 @@ const RATE_LIMIT_MS = 400;
 
 /** 휴장일 캘린더를 다시 받기까지의 시간. 장운영상태 TR 은 전·기준·익영업일만 줘서 자주 받아야 한다. */
 const CALENDAR_TTL_MS = 6 * 60 * 60 * 1000;
-
-/**
- * `describe().api` 의 잎 목록이다. 이 클래스가 부르는 TR 이며, 주문을 바꾸는 TR 은 `order: true` 다.
- * 주문 TR 목록(`KBSEC_ORDER_TR_CODES`)에서 가져오므로 주문 TR 을 추가하고 이 표에서 빠뜨리는 일이 없다.
- */
-function kbsecApiEndpoints(): Record<string, { cost: number; order?: boolean }> {
-    const wired = [
-        KBSEC_TR.QUOTE_KR, KBSEC_TR.ORDERBOOK_KR, KBSEC_TR.CHART_KR, KBSEC_TR.TRADES_TIMELINE_KR, KBSEC_TR.MARKET_STATUS, KBSEC_TR.SECURITY_INFO,
-        KBSEC_TR.HOLIDAYS_US,
-        KBSEC_TR.INVESTOR_TRADING,
-        KBSEC_TR.RANK_FLUCTUATION, KBSEC_TR.RANK_VOLUME, KBSEC_TR.RANK_PROGRAM_TRADING, KBSEC_TR.RANK_TRADING_VALUE, KBSEC_TR.RANK_OPEN_CHANGE_RATE,
-        KBSEC_TR.EXCHANGE_RATES, KBSEC_TR.WORLD_INDICES, KBSEC_TR.COMPANY_PROFILE, KBSEC_TR.NEW_HIGH_LOW, KBSEC_TR.INVESTOR_RANKING,
-        KBSEC_TR.MARKET_FUND_FLOW, KBSEC_TR.RANK_EXTENDED_HOURS_CHANGE_RATE, KBSEC_TR.RANK_SURGE_PLUNGE,
-        KBSEC_TR.FOREIGN_BROKERS, KBSEC_TR.PROGRAM_TRADING_TREND, KBSEC_TR.MARKET_OVERVIEW,
-        KBSEC_TR.THEME_GROUPS, KBSEC_TR.RANK_SECTOR,
-        KBSEC_TR.QUOTE_US, KBSEC_TR.ORDERBOOK_US, KBSEC_TR.CHART_US, KBSEC_TR.TRADES_TIMELINE_US,
-        KBSEC_TR.DEPOSIT, KBSEC_TR.HOLDINGS, KBSEC_TR.ASSET_EVAL, KBSEC_TR.UNREALIZED_PNL, KBSEC_TR.FRAC_HOLDINGS_KR, KBSEC_TR.LEDGER, KBSEC_TR.LEDGER_CMA, KBSEC_TR.WITHDRAWABLE, KBSEC_TR.COUPONS, KBSEC_TR.PNL_PERIOD,
-        KBSEC_TR.LEDGER_DETAIL, KBSEC_TR.DEPOSIT_DETAIL, KBSEC_TR.ONEMARKET_MARGIN_USAGE, KBSEC_TR.ONEMARKET_SETTLEMENT_DETAIL,
-        KBSEC_TR.BUYABLE_KR, KBSEC_TR.BUY_KR, KBSEC_TR.SELL_KR, KBSEC_TR.AMEND_KR, KBSEC_TR.CANCEL_KR,
-        KBSEC_TR.TRADES_KR, KBSEC_TR.SETTLEMENT_KR, KBSEC_TR.FRAC_BUY_KR, KBSEC_TR.FRAC_SELL_KR, KBSEC_TR.FRAC_BUYABLE_KR,
-        KBSEC_TR.FRAC_TRADES_KR, KBSEC_TR.FRAC_ORDERS_KR,
-        KBSEC_TR.RESERVED_ORDER_KR, KBSEC_TR.RESERVED_RESULTS_KR, KBSEC_TR.RESERVED_ORDERS_KR, KBSEC_TR.CORPORATE_ACTIONS,
-        KBSEC_TR.ORDER_US, KBSEC_TR.AMEND_CANCEL_US, KBSEC_TR.FRAC_ORDER_US, KBSEC_TR.ORDERS_US,
-        KBSEC_TR.FRAC_BUYABLE_US, KBSEC_TR.FRAC_HOLDINGS_US, KBSEC_TR.FRAC_ORDERS_US,
-        KBSEC_TR.RESERVED_ORDER_US, KBSEC_TR.RESERVED_CANCEL_US, KBSEC_TR.ORDER_HISTORY_US,
-        KBSEC_TR.ONEMARKET_BUYABLE, KBSEC_TR.ONEMARKET_MARGIN, KBSEC_TR.HOLDINGS_US, KBSEC_TR.SETTLEMENT_US,
-        KBSEC_TR.ONEMARKET_BUYABLE_ALL, KBSEC_TR.BUYABLE_US, KBSEC_TR.ORDER_STATUS_US,
-        KBSEC_TR.ACCOUNT_SUMMARY, KBSEC_TR.ASSET_EVAL_REALTIME, KBSEC_TR.INTEGRATED_BALANCE, KBSEC_TR.PNL_DAILY, KBSEC_TR.PNL_BY_SYMBOL, KBSEC_TR.FRAC_ORDER_HISTORY_US,
-    ];
-    const endpoints: Record<string, { cost: number; order?: boolean }> = {};
-    for (const code of wired) {
-        endpoints[code.toLowerCase()] = KBSEC_ORDER_TR_CODES.has(code) ? { cost: 1, order: true } : { cost: 1 };
-    }
-    return endpoints;
-}
 
 // ============ 결과 타입 ============
 
@@ -1685,6 +1650,10 @@ const NO_ORDER_ID = '';
 /** 조건(스톱) 주문을 뜻하는 `createOrder` 인자. `createOrder` 는 조건 인자를 받지 않으므로 하나라도 있으면 거절한다. 스탑지정가는 `createTriggerOrder` 로 낸다. */
 const UNSUPPORTED_CONDITIONAL_PARAMS = ['triggerPrice', 'stopPrice', 'stopLossPrice', 'takeProfitPrice', 'stopLoss', 'takeProfit'] as const;
 
+// 암묵 API 메서드(`privatePostIvu10140` 등)의 선언이다. `abstract/kbsec.ts` 가 엔드포인트 표(`spec/kbsec.json`)에서 만든다.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
+export interface kbsec extends KbsecImplicitApi {}
+
 export class kbsec extends Exchange {
     /** 발급한 토큰을 들고 있는 인증 객체. 앱키·시크릿이 바뀌면 다시 만든다. */
     private authInstance: KbsecAuth | undefined = undefined;
@@ -1779,11 +1748,9 @@ export class kbsec extends Exchange {
                 www: 'https://openapi.kbsec.com',
                 doc: ['https://openapi.kbsec.com', 'https://github.com/kbsecurities/kb-openapi'],
             },
-            api: {
-                private: {
-                    post: kbsecApiEndpoints(),
-                },
-            },
+            // 엔드포인트 표(`spec/kbsec.json`)에서 만든 트리다. 이 클래스가 부르는 TR 이고, 주문을 바꾸는 TR 은 `order: true` 다.
+            // TR 은 표에 더한다. 주문 TR 목록(`KBSEC_ORDER_TR_CODES`)과 `order` 표시가 맞는지는 테스트가 본다.
+            api: KBSEC_API_TREE,
             requiredCredentials: {
                 apiKey: true,
                 secret: true,
@@ -1984,9 +1951,8 @@ export class kbsec extends Exchange {
 
     /** TR 을 호출하고 봉투에서 `dataBody` 를 꺼낸다. 오류는 `handleErrors` 가 던진다. */
     private async callTr(trCode: string, dataBody: Dict = {}): Promise<Dict> {
-        const methodName = `privatePost${trCode.charAt(0).toUpperCase()}${trCode.slice(1).toLowerCase()}`;
-        const implicitMethod = this[methodName] as ((params: Dict) => Promise<unknown>) | undefined;
-        if (typeof implicitMethod !== 'function') throw new NotSupported(`${this.id} 에 없는 TR 이다: ${trCode}`);
+        const implicitMethod = this.implicitApiMethod(implicitMethodName(['private'], 'POST', trCode.toLowerCase()));
+        if (implicitMethod === undefined) throw new NotSupported(`${this.id} 에 없는 TR 이다: ${trCode}`);
         const response = await implicitMethod(dataBody);
         return safeDict(response, 'dataBody', {}) ?? {};
     }

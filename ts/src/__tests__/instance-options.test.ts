@@ -166,7 +166,8 @@ describe('masterData — 인스턴스마다 자기 종목 데이터를 갖는다
 describe('usdKrwRate — options.usdKrwRate', () => {
     it('KB 는 옵션이 없으면 원마켓 환산을 하지 못하고 던진다 — 환율을 지어내지 않는다', async () => {
         const broker = new kbsec({ apiKey: 'a', secret: 's', options: { krwIntegratedMargin: true } });
-        const call = vi.spyOn(broker, 'callTr' as never).mockImplementation((async () => ({ ordr_psbl_csh: '1000' })) as never);
+        // `callTr` 은 비공개 메서드라 그 모양만 적어 가로챈다.
+        const call = vi.spyOn(broker as unknown as { callTr: () => Promise<unknown> }, 'callTr').mockImplementation(async () => ({ ordr_psbl_csh: '1000' }));
         vi.spyOn(broker, 'fetchOneMarketMargin').mockResolvedValue({ krwEquivalentForeign: 1_450_000 } as never);
 
         await expect(broker.fetchBalance()).rejects.toThrow('usdKrwRate');

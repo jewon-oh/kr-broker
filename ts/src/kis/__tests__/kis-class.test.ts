@@ -9,7 +9,6 @@ vi.mock('../yahoo-finance-candles', () => ({ fetchYahooCandles: mockYahoo }));
 global.fetch = mockFetch as unknown as typeof fetch;
 
 import { kis } from '../../kis';
-import type { Exchange } from '../../base';
 import { BadSymbol, ExchangeNotAvailable, NotSupported } from '../../base/errors';
 import { KisCandleService } from '../kis-candle-service';
 import { krxSellTaxRate } from '../../krx-sell-tax';
@@ -266,7 +265,7 @@ describe('candles() — KIS 원본 캔들', () => {
                 },
             };
 
-            const candles = await new KisCandleService(fake as unknown as Exchange).fetchOverseasDailyOHLCV('AAPL', 'NAS', '1d', 150);
+            const candles = await new KisCandleService(fake as unknown as kis).fetchOverseasDailyOHLCV('AAPL', 'NAS', '1d', 150);
 
             expect(bymds).toEqual(['20260324', '20251214']);
             expect(candles).toHaveLength(101);
@@ -291,7 +290,7 @@ describe('candles() — KIS 원본 캔들', () => {
             },
         };
 
-        const candles = await new KisCandleService(fake as unknown as Exchange).fetchOverseasDailyOHLCV('AAPL', 'NAS', '1d', 150, since);
+        const candles = await new KisCandleService(fake as unknown as kis).fetchOverseasDailyOHLCV('AAPL', 'NAS', '1d', 150, since);
 
         // 첫 기준일은 지금이 아니라 since 에서 150개를 덮는 날(since + 232일)이고, 한 쪽을 다 받아도 since 에 못 닿았으면 더 넘긴다.
         expect(bymds).toEqual(['20250820', '20250512']);
@@ -308,7 +307,7 @@ describe('candles() — KIS 원본 캔들', () => {
                 return { output2: [] };
             },
         };
-        const service = new KisCandleService(fake as unknown as Exchange);
+        const service = new KisCandleService(fake as unknown as kis);
 
         await service.fetchDailyOHLCV('005930', 'D', 10);
         await service.fetchDailyOHLCVPaged('005930', 'D', 1);
@@ -326,7 +325,7 @@ describe('candles() — KIS 원본 캔들', () => {
         const pagesFor = () => [{ output2: page1 }, { output2: page2 }];
         const fakeWith = (pages: Array<{ output2: unknown[] }>) => ({
             privateGetUapiDomesticStockV1QuotationsInquireTimeItemchartprice: async () => pages.shift(),
-        }) as unknown as Exchange;
+        }) as unknown as kis;
 
         const oneMinute = await new KisCandleService(fakeWith(pagesFor())).fetchMinuteOHLCV('005930', 1, 100);
         const tenMinute = await new KisCandleService(fakeWith(pagesFor())).fetchMinuteOHLCV('005930', 10, 100);

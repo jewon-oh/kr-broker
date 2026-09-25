@@ -3,6 +3,7 @@
  * (이 패키지는 의존성을 `ws` 하나로 유지한다).
  */
 import type { Dict } from '../base/types';
+import { implicitMethodName } from '../base/Exchange';
 import type { BrokerSpec, EndpointSpec, SpecHttpMethod } from './spec-types';
 
 const HTTP_METHODS: readonly SpecHttpMethod[] = ['GET', 'POST', 'PUT', 'DELETE'];
@@ -11,20 +12,18 @@ function isNonEmptyString(value: unknown): value is string {
     return typeof value === 'string' && value.length > 0;
 }
 
-const CAPITALIZE = (s: string): string => (s.length ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 const PATH_DELIMITER = /[^a-zA-Z0-9]/;
 
 /**
- * 엔드포인트의 암묵 메서드 이름. `Exchange.defineRestApiEndpoint` 와 ccxt Python 의 `define_rest_api_endpoint` 규칙을 그대로 따른다.
- * `camel` 은 `이름들 + HTTP 메서드 + 경로 조각`(첫 글자만 대문자로)이고, `snake` 는 같은 조각을 소문자로 `_` 로 잇는다.
+ * 엔드포인트의 암묵 메서드 이름. `camel` 은 `Exchange.defineRestApiEndpoint` 가 붙이는 이름(`implicitMethodName`)이고, `snake` 는 ccxt Python 의
+ * `define_rest_api_endpoint` 규칙대로 같은 조각을 소문자로 `_` 로 잇는다(Python 판이 쓴다).
  */
 export function implicitMethodNames(ep: Pick<EndpointSpec, 'api' | 'method' | 'path'>): { camel: string; snake: string } {
-    const parts = ep.path.split(PATH_DELIMITER);
     const method = ep.method.toLowerCase();
-    const camel = [ep.api[0]].concat(ep.api.slice(1).map(CAPITALIZE)).join('') + CAPITALIZE(method) + CAPITALIZE(parts.map(CAPITALIZE).join(''));
     const apiParts = [ep.api[0]].concat(ep.api.slice(1).flatMap((name) => name.split(PATH_DELIMITER)));
-    const snake = [...apiParts, method, ...parts.filter((p) => p.length > 0).map((p) => p.toLowerCase())].join('_');
-    return { camel, snake };
+    const pathParts = ep.path.split(PATH_DELIMITER).filter((p) => p.length > 0).map((p) => p.toLowerCase());
+    const snake = [...apiParts, method, ...pathParts].join('_');
+    return { camel: implicitMethodName(ep.api, ep.method, ep.path), snake };
 }
 
 /** 구조가 어긋나면 던진다. 통과하면 아무것도 반환하지 않는다. */
@@ -67,7 +66,7 @@ function validateEndpoint(where: string, ep: EndpointSpec): void {
 
 /**
  * `spec.endpoints` 를 `defineRestApi()` 가 기대하는 `{ apiName: { httpMethod: { path: config } } }` 모양으로 접는다.
- * `describe().api` 에 그대로 얹거나(`deepExtend`), 실제 `describe().api` 와 대조하는 잠금 테스트에 쓴다.
+ * 증권사 클래스의 `describe().api` 는 생성기(`scripts/gen-ts-abstract.mjs`)가 같은 규칙으로 만든 상수(`abstract/<id>.ts`)이고, 테스트가 둘을 대조한다.
  */
 export function deriveApiTree(spec: BrokerSpec): Dict {
     const tree: Dict = {};

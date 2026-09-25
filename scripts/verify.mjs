@@ -51,6 +51,7 @@ function findPython() {
 const skipPython = process.argv.includes('--no-python');
 
 pnpm('typecheck');
+node('scripts/gen-ts-abstract.mjs', '--check');
 pnpm('hygiene:check');
 pnpm('test');
 pnpm('docs:check');

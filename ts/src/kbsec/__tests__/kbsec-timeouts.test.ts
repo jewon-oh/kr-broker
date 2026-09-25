@@ -1,7 +1,7 @@
 /**
  * @fileoverview KB증권 요청 시간 상한 — **TR 코드로 조회와 주문의 계약이 갈린다.**
  *
- * KB 는 조회도 `POST /api/v1/{trcode}` 라 HTTP 메서드로 주문을 가를 수 없다. `describe().api` 의 `order` 표시(주문 TR 목록에서 온다)가 그 구분이다.
+ * KB 는 조회도 `POST /api/v1/{trcode}` 라 HTTP 메서드로 주문을 가를 수 없다. `describe().api` 의 `order` 표시(엔드포인트 표에서 오고, 주문 TR 목록과 같다)가 그 구분이다.
  *
  * - 조회가 응답 없이 멈추면 상한에서 요청을 끊고 `RequestTimeout` 이다. 다음 사이클이 다시 부르면 된다.
  * - 주문이 응답 없이 멈추면 요청을 끊되 `OrderOutcomeUnknown` 이다. 접수됐을 수 있고 다시 보내면 중복 주문이므로 실패로 넘기지 않는다.
