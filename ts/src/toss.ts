@@ -279,7 +279,7 @@ function kstDate(ms: number): string {
 }
 
 /** 지금이 개장 직후 09:00~09:10(한국 시각)인가. */
-function isOrderInfoPeakWindow(now: Date = new Date()): boolean {
+function isOrderInfoPeakWindow(now: Date): boolean {
     const kstMinutes = (now.getUTCHours() * 60 + now.getUTCMinutes() + 9 * 60) % (24 * 60);
     return kstMinutes >= PEAK_WINDOW_START_MIN && kstMinutes < PEAK_WINDOW_END_MIN;
 }
@@ -791,7 +791,7 @@ export class toss extends Exchange {
         } catch (error) {
             if (error instanceof TossRateLimited) {
                 const wait = Math.min(error.retryAfterMs ?? DEFAULT_BACKOFF_MS, MAX_BACKOFF_MS);
-                this.blockedUntil.set(this.safeString(config, 'bucket') ?? '', Date.now() + wait);
+                this.blockedUntil.set(this.safeString(config, 'bucket') ?? '', this.milliseconds() + wait);
             }
             throw error;
         }
@@ -799,12 +799,12 @@ export class toss extends Exchange {
 
     override calculateRateLimiterCost(_api: ApiName, _method: string, _path: string, _params: Dict, config: Dict = {}): number {
         const cost = this.safeNumber(config, 'cost', 1) as number;
-        return config.peak === true && isOrderInfoPeakWindow() ? cost * PEAK_COST_FACTOR : cost;
+        return config.peak === true && isOrderInfoPeakWindow(new Date(this.milliseconds())) ? cost * PEAK_COST_FACTOR : cost;
     }
 
     /** 그룹 한도에 더해 계정 전체 상한(`rateLimit`)도 지키고, 429 뒤에 쉬라고 한 시간이 남았으면 기다린다. */
     override async throttle(cost: Num = undefined, bucket: Str = undefined): Promise<void> {
-        const blockedFor = (this.blockedUntil.get(bucket ?? '') ?? 0) - Date.now();
+        const blockedFor = (this.blockedUntil.get(bucket ?? '') ?? 0) - this.milliseconds();
         if (blockedFor > 0) await this.sleep(blockedFor);
         await super.throttle(cost, bucket);
         if (bucket !== undefined) await super.throttle(1, undefined);
@@ -1091,15 +1091,15 @@ export class toss extends Exchange {
         if (country !== 'KR' && country !== 'US') throw new BadRequest(`${this.id} fetchMarketCalendar() market must be 'KR' or 'US'`);
         const cached = this.calendars[country];
         const ttl = this.safeInteger(this.options, 'calendarTtl', CALENDAR_TTL_MS) as number;
-        if (cached !== undefined && this.safeBool(params, 'refresh', false) !== true && Date.now() - cached.fetchedAt < ttl) return cached.value;
+        if (cached !== undefined && this.safeBool(params, 'refresh', false) !== true && this.milliseconds() - cached.fetchedAt < ttl) return cached.value;
         if (country === 'KR') {
             const value = this.unwrap<TossKrMarketCalendar>(await this.privateMarketGetMarketCalendarKR({}));
-            this.calendars.KR = { value, fetchedAt: Date.now() };
+            this.calendars.KR = { value, fetchedAt: this.milliseconds() };
             applyMarketCalendar('KR', tossKrCalendarDays(value));
             return value;
         }
         const value = this.unwrap<TossUsMarketCalendar>(await this.privateMarketGetMarketCalendarUS({}));
-        this.calendars.US = { value, fetchedAt: Date.now() };
+        this.calendars.US = { value, fetchedAt: this.milliseconds() };
         applyMarketCalendar('US', tossUsCalendarDays(value));
         return value;
     }
@@ -1107,7 +1107,7 @@ export class toss extends Exchange {
     /**
      * 국내 캘린더로 본 지금의 세션. `'closed'` 는 캘린더상 열린 세션이 없다는 뜻이고, `null` 은 캘린더를 받지 못했다는 뜻이다(호출하는 쪽이 정적 시간표로 판정한다).
      */
-    async currentKrSession(now: Date = new Date()): Promise<TossKrSession | 'closed' | null> {
+    async currentKrSession(now: Date = new Date(this.milliseconds())): Promise<TossKrSession | 'closed' | null> {
         try {
             const calendar = await this.fetchMarketCalendar('KR') as TossKrMarketCalendar;
             return findKrSession(calendar, now) ?? 'closed';
@@ -1118,7 +1118,7 @@ export class toss extends Exchange {
     }
 
     /** 미국 캘린더로 본 지금의 세션. `'closed'` 와 `null` 의 뜻은 `currentKrSession` 과 같다. */
-    async currentUsSession(now: Date = new Date()): Promise<TossUsSession | 'closed' | null> {
+    async currentUsSession(now: Date = new Date(this.milliseconds())): Promise<TossUsSession | 'closed' | null> {
         try {
             const calendar = await this.fetchMarketCalendar('US') as TossUsMarketCalendar;
             return findUsSession(calendar, now) ?? 'closed';
@@ -1134,7 +1134,7 @@ export class toss extends Exchange {
      */
     async supportsFractionalBuy(symbol: string): Promise<boolean> {
         if (this.countryOf(this.market(symbol)) !== 'US') return false;
-        const now = new Date();
+        const now = new Date(this.milliseconds());
         if ((await this.currentUsSession(now)) !== 'regularMarket') return false;
         const close = findUsRegularCloseMs(this.calendars.US?.value, now);
         return close === null || now.getTime() < close - FRACTIONAL_ORDER_CUTOFF_MS;
@@ -1414,14 +1414,14 @@ export class toss extends Exchange {
      */
     async refreshCommissions(): Promise<void> {
         const ttl = this.safeInteger(this.options, 'commissionsTtl', COMMISSIONS_TTL_MS) as number;
-        if (this.commissionRates.size > 0 && Date.now() - this.commissionsFetchedAt < ttl) return;
+        if (this.commissionRates.size > 0 && this.milliseconds() - this.commissionsFetchedAt < ttl) return;
         const rows = await this.fetchCommissions();
-        const today = kstDate(Date.now());
+        const today = kstDate(this.milliseconds());
         for (const country of ['KR', 'US'] as const) {
             const rate = pickCommissionRate(rows, country, today);
             if (rate !== null) this.commissionRates.set(country, rate);
         }
-        this.commissionsFetchedAt = Date.now();
+        this.commissionsFetchedAt = this.milliseconds();
         logger.info({ rates: Object.fromEntries(this.commissionRates) }, '[toss] 수수료율을 갱신했다');
     }
 
@@ -1444,7 +1444,7 @@ export class toss extends Exchange {
      * 국내 상장 ETF·ETN 은 매도에도 증권거래세가 붙지 않는다. `loadMarkets` 로 종목 유형을 불러온 경우에만 알 수 있어, 그렇지 않으면 세금을 더한 값이다.
      * 체결 뒤에는 주문 응답의 `execution.commission`·`execution.tax` 가 확정값이므로 이 값은 사전 추정과 폴백에 쓴다.
      */
-    effectiveFeeRate(symbol: string, side: 'buy' | 'sell', at: Date = new Date()): number {
+    effectiveFeeRate(symbol: string, side: 'buy' | 'sell', at: Date = new Date(this.milliseconds())): number {
         const market = this.market(symbol);
         const country = this.countryOf(market);
         const securityType = this.safeString(market.options, 'securityType');
@@ -1457,7 +1457,7 @@ export class toss extends Exchange {
     /** 참고 환율(1달러당 원화). 토스의 환율 조회(`GET /exchange-rate`)를 먼저 쓰고, 실패하면 `options.usdKrwRate` 로 폴백한다. 5분 캐시. 알 수 없으면 0. */
     private async usdKrwRate(): Promise<number> {
         const ttl = this.safeInteger(this.options, 'fxRateTtl', FX_RATE_TTL_MS) as number;
-        if (this.fxRate !== undefined && Date.now() - this.fxRate.fetchedAt < ttl) return this.fxRate.rate;
+        if (this.fxRate !== undefined && this.milliseconds() - this.fxRate.fetchedAt < ttl) return this.fxRate.rate;
         let rate = 0;
         try {
             const response = this.unwrap<Dict>(await this.privateMarketGetExchangeRate({ baseCurrency: 'USD', quoteCurrency: 'KRW' }));
@@ -1471,7 +1471,7 @@ export class toss extends Exchange {
             try { rate = await fallback(); } catch { rate = 0; }
         }
         if (Number.isFinite(rate) && rate > 0) {
-            this.fxRate = { rate, fetchedAt: Date.now() };
+            this.fxRate = { rate, fetchedAt: this.milliseconds() };
             return rate;
         }
         return 0;
@@ -1755,7 +1755,7 @@ export class toss extends Exchange {
         country: TossMarketCountry,
         form: { isMarket: boolean; useAmountBased: boolean; quantity: number },
     ): Promise<string | null> {
-        const now = new Date();
+        const now = new Date(this.milliseconds());
         if (country === 'KR') {
             const session = await this.currentKrSession(now);
             if (session === null) return isTossOrderable(symbol) ? null : 'KRX 거래시간 외 (09:00-15:30 KST 평일, 캘린더 조회 실패)';

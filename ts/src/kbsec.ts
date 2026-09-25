@@ -129,7 +129,6 @@ import {
     kbsecMarketOf,
     kbsecNormalizeCode,
     kbsecNum,
-    kbsecTodayKst,
 } from './kbsec/kbsec-types';
 
 // ============ 시간·재시도 상수 ============
@@ -1866,6 +1865,11 @@ export class kbsec extends Exchange {
         return this.authInstance;
     }
 
+    /** 인스턴스 시계(`milliseconds()`)로 본 오늘의 한국 날짜 `YYYYMMDD`. */
+    private todayKst(): string {
+        return kbsecDateKst(new Date(this.milliseconds()));
+    }
+
     /** 비공개 호출 앞에서 토큰을 준비해 요청 헤더에 싣는다. 소문자 `bearer` 다(공식 예제 기준이며 대문자는 거부된 사례가 있다). */
     override async authenticate(
         _path: string, _api: string | string[], _method: string, _params: Dict, headers: Dictionary<string> | undefined,
@@ -2540,7 +2544,7 @@ export class kbsec extends Exchange {
     async fetchHolidays(params: Dict = {}): Promise<KbsecHolidays> {
         const [until, query] = this.handleUntilParam('fetchHolidays', undefined, params);
         const body = await this.callTr(KBSEC_TR.HOLIDAYS_US, {
-            hndl_clsf: '4', iso_cd: 'US', dr_dt: '', end_dt: until !== undefined ? kbsecDateKst(new Date(until)) : kbsecTodayKst(), nxt_bsnss_dy: '', nxt_stlmt_dt: '',
+            hndl_clsf: '4', iso_cd: 'US', dr_dt: '', end_dt: until !== undefined ? kbsecDateKst(new Date(until)) : this.todayKst(), nxt_bsnss_dy: '', nxt_stlmt_dt: '',
             hldy_ccd: '', frgn_stk_ordr_psbl_f: '', ...query,
         });
         return {
@@ -2769,7 +2773,7 @@ export class kbsec extends Exchange {
      * 시간대별 체결 내역. 국내(`IVU10080`, 당일만)와 해외(`GSA10020`)를 종목 국가로 가른다.
      *
      * 국내는 체결가·체결수량·체결시각만 채운다. 방향(매도매수구분, `sell_buy_ccd`)과 체결ID는 코드값 의미를 확정할 근거가
-     * 없어(명세에 설명 없음) 채우지 않는다 — `info`에 원본이 남아 있다. 시각은 조회 시점의 한국 날짜(`kbsecTodayKst`)와
+     * 없어(명세에 설명 없음) 채우지 않는다 — `info`에 원본이 남아 있다. 시각은 조회 시점의 한국 날짜(`todayKst`)와
      * 체결시각(`ccls_tm`, HHMMSS)을 합쳐 만든다(TR 이름대로 당일 데이터라서 가능한 조합이다).
      *
      * 해외는 체결구분(`ccls_clsf`, `1`:매수자체결 `2`:매도자체결)이 명세에 명시돼 있어 `side`를 채운다. 시각은 한국시각
@@ -2783,7 +2787,7 @@ export class kbsec extends Exchange {
             excg_clsf: '1', is_cd: market.id, ovtm_mkt_clsf: '0', inq_cnt: kbsecNum(limit ?? 30),
             ...params,
         });
-        const today = kbsecTodayKst();
+        const today = this.todayKst();
         const trades = pickArray(body).map((row) => {
             const timestamp = kbsecCandleTimestamp(today, pickStr(row, 'ccls_tm'));
             return this.safeTrade({
@@ -3057,7 +3061,7 @@ export class kbsec extends Exchange {
     private async fetchOverseasHoldings(): Promise<OverseasHoldings> {
         if (this.overseasHoldingsUnavailable) return { rows: [], usdCash: undefined, read: false };
         // 일시 오류 직후에는 호출 빈도를 제한한다. 이 구간의 빈 결과는 "보유 없음"이 아니라 "안 물어봤다"이며, `read: false` 가 그 사실을 전한다.
-        if (Date.now() < this.overseasHoldingsRetryAt) return { rows: [], usdCash: undefined, read: false };
+        if (this.milliseconds() < this.overseasHoldingsRetryAt) return { rows: [], usdCash: undefined, read: false };
         try {
             const body = await this.callTr(KBSEC_TR.HOLDINGS_US, {
                 std_crncy_f: KBSEC_STD_CURRENCY_FOREIGN,
@@ -3122,7 +3126,7 @@ export class kbsec extends Exchange {
             if (permanent) {
                 this.overseasHoldingsUnavailable = true;
             } else {
-                this.overseasHoldingsRetryAt = Date.now() + (this.options.transientRetryCooldown as number);
+                this.overseasHoldingsRetryAt = this.milliseconds() + (this.options.transientRetryCooldown as number);
             }
             logger.warn({ err, trCode: KBSEC_TR.HOLDINGS_US, latched: permanent },
                 permanent
@@ -3157,14 +3161,14 @@ export class kbsec extends Exchange {
     /** 평가용 현재가. 잔고 조회를 잇달아 불러도 종목마다 TR 을 다시 부르지 않도록 TTL 동안 캐시한다. */
     private async holdingPrice(code: string): Promise<number> {
         const cached = this.holdingPriceCache.get(code);
-        if (cached !== undefined && Date.now() - cached.at < (this.options.holdingPriceTtl as number)) return cached.price;
+        if (cached !== undefined && this.milliseconds() - cached.at < (this.options.holdingPriceTtl as number)) return cached.price;
         let price = 0;
         try {
             price = (await this.fetchTicker(code)).last ?? 0;
         } catch (err) {
             logger.debug({ err, code }, '[kbsec] 평가용 현재가 조회 실패');
         }
-        if (price > 0) this.holdingPriceCache.set(code, { price, at: Date.now() });
+        if (price > 0) this.holdingPriceCache.set(code, { price, at: this.milliseconds() });
         return price;
     }
 
@@ -3253,7 +3257,7 @@ export class kbsec extends Exchange {
         try {
             const out = new Map<string, number>();
             for (let steps = 0; steps < (this.options.settlementLookbackDays as number); steps++) {
-                const ordrDt = kbsecBusinessDateKst(steps);
+                const ordrDt = kbsecBusinessDateKst(steps, new Date(this.milliseconds()));
                 let rows: Dict[];
                 try {
                     const result = await this.collectTrPages(KBSEC_TR.TRADES_KR, {
@@ -3266,7 +3270,7 @@ export class kbsec extends Exchange {
                     if (result.truncated) logger.warn({ ordrDt, rows: result.rows.length }, '[kbsec] 결제대기 매도 조회가 페이지 상한에서 잘렸다');
                     rows = result.rows;
                 } catch (err) {
-                    // `kbsecBusinessDateKst` 는 주말만 되감고 공휴일은 모르므로 연휴에는 조회일자가 KB 영업일보다 앞서 거부된다. 그 날짜 하나만
+                    // `kbsecBusinessDateKst` 의 휴장일 표에 없는 휴장일에는 조회일자가 KB 영업일보다 앞서 거부된다. 그 날짜 하나만
                     // 건너뛰고 나머지 영업일은 계속 본다. 통째로 포기하면 공휴일마다 보정이 조용히 꺼진다.
                     if (err instanceof ExchangeError && err.detail === KBSEC_ERROR_DETAIL.FUTURE_QUERY_DATE) {
                         logger.debug({ ordrDt }, '[kbsec] 결제대기 매도 조회 — 휴장일 건너뜀');
@@ -3318,7 +3322,7 @@ export class kbsec extends Exchange {
      * 부르지 않는다. 잔고 조회가 종목마다 불릴 수 있어 래치가 없으면 실패가 종목 수만큼 곱해지고, 미신청 계좌는 다시 물어도 답이 같다.
      */
     async fetchOneMarketMargin(): Promise<KbsecOneMarketMargin | undefined> {
-        if (this.oneMarketUnavailable || Date.now() < this.oneMarketRetryAt) return undefined;
+        if (this.oneMarketUnavailable || this.milliseconds() < this.oneMarketRetryAt) return undefined;
         try {
             const body = await this.callTr(KBSEC_TR.ONEMARKET_MARGIN, {});
             return {
@@ -3331,7 +3335,7 @@ export class kbsec extends Exchange {
         } catch (err) {
             const permanent = this.isPermanentFailure(err);
             if (permanent) this.oneMarketUnavailable = true;
-            else this.oneMarketRetryAt = Date.now() + (this.options.transientRetryCooldown as number);
+            else this.oneMarketRetryAt = this.milliseconds() + (this.options.transientRetryCooldown as number);
             logger.warn({ err, latched: permanent },
                 '[kbsec] 원마켓 증거금 조회 실패 — 영구 실패면 이 인스턴스에서 재시도하지 않는다(반복 실패는 계정 제한 사유)');
             return undefined;
@@ -3561,7 +3565,7 @@ export class kbsec extends Exchange {
     async fetchFractionalTrades(since: Int = undefined, params: Dict = {}): Promise<KbsecFractionalTradesFetch> {
         const until = this.safeInteger(params, 'until');
         const from = since !== undefined ? kbsecDateKst(new Date(since)) : '';
-        const to = until !== undefined ? kbsecDateKst(new Date(until)) : (since !== undefined ? kbsecTodayKst() : '');
+        const to = until !== undefined ? kbsecDateKst(new Date(until)) : (since !== undefined ? this.todayKst() : '');
         const result = await this.collectTrPages(KBSEC_TR.FRAC_TRADES_KR, {
             ordr_clsf: '0', trd_clsf: '0', trd_strt_dt: from, trd_end_dt: to, is_cd: '', ...this.omit(params, 'until'),
         }, (row) => ({
@@ -3598,7 +3602,7 @@ export class kbsec extends Exchange {
      */
     async fetchFractionalOrders(since: Int = undefined, params: Dict = {}): Promise<KbsecFractionalOrdersFetch> {
         const until = this.safeInteger(params, 'until');
-        const to = until !== undefined ? kbsecDateKst(new Date(until)) : kbsecTodayKst();
+        const to = until !== undefined ? kbsecDateKst(new Date(until)) : this.todayKst();
         const from = since !== undefined ? kbsecDateKst(new Date(since)) : to;
         const result = await this.collectTrPages(KBSEC_TR.FRAC_ORDERS_KR, {
             inq_strt_dt: from, inq_end_dt: to, trd_clsf: '99', is_cd: '', ordr_st: '0', dl_clsf: '0', ...this.omit(params, 'until'),
@@ -3780,8 +3784,8 @@ export class kbsec extends Exchange {
      */
     async fetchReservedOrderResults(since: Int = undefined, params: Dict = {}): Promise<KbsecReservedOrderResultsFetch> {
         const until = this.safeInteger(params, 'until');
-        const from = since !== undefined ? kbsecDateKst(new Date(since)) : kbsecTodayKst();
-        const to = until !== undefined ? kbsecDateKst(new Date(until)) : (since !== undefined ? kbsecTodayKst() : '');
+        const from = since !== undefined ? kbsecDateKst(new Date(since)) : this.todayKst();
+        const to = until !== undefined ? kbsecDateKst(new Date(until)) : (since !== undefined ? this.todayKst() : '');
         const result = await this.collectTrPages(KBSEC_TR.RESERVED_RESULTS_KR, {
             ordr_dt: from, trd_clsf: '0', hndl_clsf: '0', tv_rv_ccd: '0', end_dt: to, is_cd: '', ...this.omit(params, 'until'),
         }, (row) => ({
@@ -3812,7 +3816,7 @@ export class kbsec extends Exchange {
     async fetchReservedOrders(since: Int = undefined, params: Dict = {}): Promise<KbsecReservedOrdersFetch> {
         const until = this.safeInteger(params, 'until');
         const from = since !== undefined ? kbsecDateKst(new Date(since)) : '';
-        const to = until !== undefined ? kbsecDateKst(new Date(until)) : (since !== undefined ? kbsecTodayKst() : '');
+        const to = until !== undefined ? kbsecDateKst(new Date(until)) : (since !== undefined ? this.todayKst() : '');
         const result = await this.collectTrPages(KBSEC_TR.RESERVED_ORDERS_KR, {
             hndl_clsf: '1', chc_clsf: '1', inq_clsf: '3', strt_dt: from, end_dt: to, is_cd: '', ...this.omit(params, 'until'),
         }, (row) => ({
@@ -4007,7 +4011,7 @@ export class kbsec extends Exchange {
     /** 두 계좌원장 TR(`SWQA2301`·`SWQB2301`)의 공통 조회. `trFields`는 TR마다 다른 입력이다. */
     private async fetchLedgerRows(trCode: string, trFields: Dict, since: Int, params: Dict): Promise<KbsecLedgerFetch> {
         const until = this.safeInteger(params, 'until');
-        const endDt = until !== undefined ? kbsecDateKst(new Date(until)) : kbsecTodayKst();
+        const endDt = until !== undefined ? kbsecDateKst(new Date(until)) : this.todayKst();
         const strtDt = since !== undefined ? kbsecDateKst(new Date(since)) : endDt;
         const result = await this.collectTrPages(trCode, {
             inq_clsf: '1',
@@ -4258,7 +4262,7 @@ export class kbsec extends Exchange {
     async fetchRealizedPnl(since: Int = undefined, params: Dict = {}): Promise<KbsecRealizedPnlFetch> {
         const until = this.safeInteger(params, 'until');
         const from = since !== undefined ? kbsecDateKst(new Date(since)) : '';
-        const to = until !== undefined ? kbsecDateKst(new Date(until)) : (since !== undefined ? kbsecTodayKst() : '');
+        const to = until !== undefined ? kbsecDateKst(new Date(until)) : (since !== undefined ? this.todayKst() : '');
         const result = await this.collectTrPages(KBSEC_TR.PNL_PERIOD, {
             is_no: '', ordr_dt_from: from, ordr_dt_to: to, trd_svrl_cst: '', trd_pl: '', trd_nt_pl: '', inq_clsf: '',
             ...this.omit(params, 'until'),
@@ -4289,7 +4293,7 @@ export class kbsec extends Exchange {
         const until = this.safeInteger(params, 'until');
         return {
             inq_strt_dt: kbsecDateKst(new Date(since)),
-            inq_end_dt: until !== undefined ? kbsecDateKst(new Date(until)) : kbsecTodayKst(),
+            inq_end_dt: until !== undefined ? kbsecDateKst(new Date(until)) : this.todayKst(),
             md_clsf: mdClsf,
             ...this.omit(params, 'until'),
         };
@@ -4808,12 +4812,13 @@ export class kbsec extends Exchange {
      * 2854 가 아닌 오류는 그대로 던진다. 날짜와 무관한 실패를 날짜 탓으로 삼키지 않는다. 해외 조회(`US`)는 미국 현지 날짜로 되감는다.
      */
     private async callOnBusinessDate<T>(call: (ordrDt: string) => Promise<T>, country: 'KR' | 'US' = 'KR'): Promise<T> {
-        const today = country === 'US' ? kbsecDateUsEastern(new Date()) : kbsecTodayKst();
+        const today = country === 'US' ? kbsecDateUsEastern(new Date(this.milliseconds())) : this.todayKst();
         if (this.businessDateBackoff[country].day !== today) this.businessDateBackoff[country] = { day: today, steps: 0 };
         const startSteps = this.businessDateBackoff[country].steps;
         let lastErr: unknown;
         for (let steps = startSteps; steps <= (this.options.businessDateMaxBackoff as number); steps++) {
-            const ordrDt = country === 'US' ? kbsecBusinessDateUsEastern(steps) : kbsecBusinessDateKst(steps);
+            const now = new Date(this.milliseconds());
+            const ordrDt = country === 'US' ? kbsecBusinessDateUsEastern(steps, now) : kbsecBusinessDateKst(steps, now);
             try {
                 const result = await call(ordrDt);
                 // 새로 되감았을 때만 WARN 을 남긴다. 캐시가 적중한 경우는 조용히 지나간다.
