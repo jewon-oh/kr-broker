@@ -6,6 +6,7 @@
 
 ### 바뀜(호환되지 않음)
 
+- 요청 주소가 `https`가 아니면 보내기 전에 `BadRequest`를 던집니다. 루프백 주소는 예외입니다. 프록시 시험 등으로 평문 주소가 필요하면 `options.allowInsecureUrl`을 켭니다.
 - `fetchOHLCV(symbol, timeframe, since, limit)`에 `since`를 주면 세 증권사 모두 `since`부터 앞에서 `limit`개를 돌려줍니다(ccxt 규칙). 예전에는 `since`를 줘도 가장 최근 `limit`개였습니다. `since`가 없으면 예전처럼 최근 `limit`개입니다. 한국투자증권은 받은 봉을 `since`와 `params.until`로 거릅니다. 예전에는 `until` 뒤 봉이 섞였습니다.
 - KB증권 `fetchOHLCV`의 `params.until`은 요청 본문에 싣지 않고 받은 봉을 거르는 데만 씁니다.
 - 토스증권 `fetchClosedOrders`와 `fetchCanceledOrders`는 `params.until`보다 늦게 낸 주문을 뺍니다. 예전에는 같은 날이면 섞였습니다.
@@ -38,6 +39,7 @@
 
 ### 추가
 
+- KB증권 `options.hostAddr`(`{ ipAddr, macAddr }`)로 TR 본문에 싣는 호스트 주소를 정할 수 있습니다. 주지 않으면 예전처럼 이 호스트에서 모읍니다.
 - `watch*`가 `params.signal`(`AbortSignal`)을 받습니다. 신호가 오면 기다리던 호출만 `AbortError`로 끝나고, 쌓인 갱신은 다음 호출이 받습니다.
 - 한국투자증권 `createPriceStream`과 Python `create_price_stream`이 구독 거부 콜백 `onSubscribeError`(`on_subscribe_error`)를 받습니다.
 - `ExchangeClosedByUser`(ccxt 와 같은 이름, `ExchangeError` 아래)를 더했습니다. 한국투자증권과 토스증권의 `close()`는 기다리던 `watch*`를 이 오류로 끝냅니다. `ExchangeError`를 잡던 코드는 그대로 동작합니다.

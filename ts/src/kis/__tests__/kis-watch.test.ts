@@ -117,7 +117,7 @@ describe('watchOrders', () => {
 
     it('국내와 해외 체결통보를 HTS ID 로 구독하고(모의는 …9), 체결 통보마다 누적 체결 수량과 상태를 갱신한다', async () => {
         const { ex, stream, emit } = withFakeStream({ htsId: 'MYHTS' });
-        const notice = { oder_no: '0000117057', seln_byov_cls: '02', stck_shrn_iscd: '005930', oder_qty: '10', oder_prc: '71000', stck_cntg_hour: '093001', rfus_yn: 'N' };
+        const notice = { oder_no: '0000000101', seln_byov_cls: '02', stck_shrn_iscd: '005930', oder_qty: '10', oder_prc: '71000', stck_cntg_hour: '093001', rfus_yn: 'N' };
 
         const receipt = ex.watchOrders();
         await flush();
@@ -129,7 +129,7 @@ describe('watchOrders', () => {
 
         expect(stream.subscribe).toHaveBeenCalledWith('H0STCNI9', 'MYHTS');
         expect(stream.subscribe).toHaveBeenCalledWith('H0GSCNI9', 'MYHTS');
-        expect(accepted).toMatchObject({ id: '0000117057', symbol: '005930/KRW', side: 'buy', amount: 10, filled: 0, status: 'open', price: 71000 });
+        expect(accepted).toMatchObject({ id: '0000000101', symbol: '005930/KRW', side: 'buy', amount: 10, filled: 0, status: 'open', price: 71000 });
         expect(fills.map((o) => [o.filled, o.status])).toEqual([[3, 'open'], [10, 'closed']]);
     });
 
@@ -199,12 +199,12 @@ describe('params.signal', () => {
 
         emit('H0STCNT0', DOMESTIC_TRADE);
         emit('H0STCNI9', {
-            oder_no: '0000117057', seln_byov_cls: '02', stck_shrn_iscd: '005930', oder_qty: '10', oder_prc: '71000', stck_cntg_hour: '093001', rfus_yn: 'N',
+            oder_no: '0000000101', seln_byov_cls: '02', stck_shrn_iscd: '005930', oder_qty: '10', oder_prc: '71000', stck_cntg_hour: '093001', rfus_yn: 'N',
             cntg_yn: '1', cntg_qty: '0',
         });
 
         expect((await ex.watchTrades('005930/KRW')).map((t) => t.amount)).toEqual([15]);
-        expect((await ex.watchOrders()).map((o) => o.id)).toEqual(['0000117057']);
+        expect((await ex.watchOrders()).map((o) => o.id)).toEqual(['0000000101']);
     });
 });
 

@@ -96,7 +96,7 @@ describe('필드 이름과 건수 나누기', () => {
 
 describe('체결통보 복호', () => {
     it('decryptKisPayload 는 key, iv 로 AES-CBC 복호한다', async () => {
-        expect(await decryptKisPayload(encrypt('HTSID^12345678^0000117057'), KEY, IV)).toBe('HTSID^12345678^0000117057');
+        expect(await decryptKisPayload(encrypt('HTSID^12345678^0000000101'), KEY, IV)).toBe('HTSID^12345678^0000000101');
     });
 });
 

@@ -108,6 +108,25 @@ export function redactBodyForLog(body: string | undefined): string | undefined {
     return unreadable;
 }
 
+/** 평문으로 보내도 되는 루프백 호스트. */
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/**
+ * 요청 주소가 `https:` 가 아니면 보내기 전에 `BadRequest` 를 던진다. 평문으로 보내면 앱키와 시크릿, 토큰이 경로 위에 드러난다.
+ * 루프백 주소와 `allowInsecure`(`options.allowInsecureUrl`)만 예외다. 주소를 읽지 못하면 전송 계층이 실패하게 둔다.
+ */
+export function assertSecureUrl(id: string, url: string, allowInsecure: boolean): void {
+    if (allowInsecure) return;
+    let parsed: URL;
+    try {
+        parsed = new URL(url);
+    } catch {
+        return;
+    }
+    if (parsed.protocol === 'https:' || (parsed.protocol === 'http:' && LOOPBACK_HOSTS.has(parsed.hostname))) return;
+    throw new BadRequest(`${id} 요청 주소가 https 가 아니다: ${parsed.protocol}//${parsed.host}. 평문 전송은 options.allowInsecureUrl 로만 허용한다`);
+}
+
 /** HTTP 상태만 보고 만든 오류와 그 상태 코드. 증권사 오류 코드로 분류하지 못한 5xx 인지 가리는 데 쓴다. */
 const httpStatusErrors = new WeakMap<object, number>();
 
@@ -571,6 +590,7 @@ export class Exchange {
         body: string | undefined = undefined,
         timeoutMs: number = this.timeout,
     ): Promise<any> {
+        assertSecureUrl(this.id, url, this.options.allowInsecureUrl === true);
         let requestHeaders: Dictionary<string> = extend(this.headers, headers);
         if (this.userAgent !== undefined) requestHeaders = extend({ 'User-Agent': this.userAgent }, requestHeaders);
         const fetchImplementation = globalThis.fetch;

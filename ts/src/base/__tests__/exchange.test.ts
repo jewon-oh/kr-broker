@@ -1158,3 +1158,14 @@ describe('close', () => {
         await expect(new kbsec({}).close()).resolves.toBeUndefined();
     });
 });
+
+describe('assertSecureUrl', () => {
+    it('★https 가 아닌 주소는 보내기 전에 BadRequest 다. 루프백과 allowInsecure 는 예외다', async () => {
+        const { assertSecureUrl } = await import('../Exchange');
+        const { BadRequest } = await import('../errors');
+        expect(() => assertSecureUrl('x', 'http://openapi.example.com/a', false)).toThrow(BadRequest);
+        expect(() => assertSecureUrl('x', 'https://openapi.example.com/a', false)).not.toThrow();
+        for (const url of ['http://127.0.0.1:8080/a', 'http://localhost/a', 'http://[::1]:9/a']) expect(() => assertSecureUrl('x', url, false), url).not.toThrow();
+        expect(() => assertSecureUrl('x', 'http://openapi.example.com/a', true)).not.toThrow();
+    });
+});

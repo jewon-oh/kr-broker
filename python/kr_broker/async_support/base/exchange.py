@@ -21,7 +21,7 @@ from kr_broker.base import functions as fn
 from kr_broker.base.errors import (
     BaseError, ExchangeError, NetworkError, NotSupported, NullResponse, OperationFailed, OrderOutcomeUnknown, RequestTimeout,
 )
-from kr_broker.base.exchange import Exchange as BaseExchange, redact_body_for_log, redact_headers_for_log
+from kr_broker.base.exchange import Exchange as BaseExchange, assert_secure_url, redact_body_for_log, redact_headers_for_log
 from kr_broker.base.types import ApiName, Int, Num, Str, Strings
 
 logger = logging.getLogger('kr_broker')
@@ -186,6 +186,7 @@ class Exchange(BaseExchange):
     async def http_request(self, method: str, url: str, headers: Optional[Dict[str, str]] = None,  # type: ignore[override]
                            body: Str = None, timeout_ms: Optional[float] = None) -> HttpResponse:
         """HTTP 요청 하나를 그대로 보내고 본문까지 읽은 응답을 돌려준다. 시간 초과는 `RequestTimeout`, 그 밖의 전송 실패는 `NetworkError` 다."""
+        assert_secure_url(self.id, url, self.options.get('allowInsecureUrl') is True)
         timeout_ms = self.timeout if timeout_ms is None else timeout_ms
         self.open()
         try:

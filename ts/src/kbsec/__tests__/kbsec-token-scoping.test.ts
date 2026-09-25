@@ -11,7 +11,7 @@ const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 global.fetch = mockFetch as unknown as typeof fetch;
 
 import { kbsec } from '../../kbsec';
-import { ExchangeNotAvailable } from '../../base/errors';
+import { BadRequest, ExchangeNotAvailable } from '../../base/errors';
 import { __resetKbsecTokenBreaker, kbsecTokenBreakerState } from '../kbsec-token-breaker';
 
 const envelope = (header: Record<string, unknown>, body: unknown, status = 200) => {
@@ -74,5 +74,26 @@ describe('KB 토큰 캐시', () => {
         for (let i = 0; i < 3; i++) await exchange.fetchWithdrawableAmount();
 
         expect(tokenCalls()).toBe(1);
+    });
+});
+
+describe('KB 요청 주소와 호스트 주소', () => {
+    it('★options.hostAddr 로 준 IP 와 MAC 을 TR 본문 dataHeader 에 싣는다(빠진 값만 자동으로 모은다)', async () => {
+        mockFetch.mockImplementation(async (url: string) => String(url).includes('/oauth2/token') ? token('T1') : ok({ ndy_o_amt_psbl_amt: '1' }));
+        const exchange = new kbsec({ apiKey: 'kb-app-key-123456', secret: 'kb-secret', rateLimit: 0, options: { hostAddr: { ipAddr: '192.0.2.7', macAddr: 'AA-BB-CC-DD-EE-FF' } } });
+
+        await exchange.fetchWithdrawableAmount();
+
+        const trCall = mockFetch.mock.calls.find((c) => !String(c[0]).includes('/oauth2/token'));
+        expect(JSON.parse(trCall?.[1].body as string).dataHeader).toMatchObject({ ipAddr: '192.0.2.7', macAddr: 'AA-BB-CC-DD-EE-FF' });
+    });
+
+    it('★https 가 아닌 주소로는 토큰도 TR 도 보내지 않고 BadRequest 다(options.allowInsecureUrl 로만 허용)', async () => {
+        const exchange = new kbsec({ apiKey: 'kb-app-key-123456', secret: 'kb-secret', rateLimit: 0, urls: { api: { public: 'http://example.invalid:9443', private: 'http://example.invalid:9443' } } });
+
+        const error = await exchange.fetchWithdrawableAmount().catch((e: unknown) => e);
+        expect(error).toBeInstanceOf(BadRequest);
+        expect((error as Error).message).toContain('https 가 아니다');
+        expect(mockFetch).not.toHaveBeenCalled();
     });
 });

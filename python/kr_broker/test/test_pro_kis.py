@@ -183,7 +183,7 @@ def test_split_uses_the_quotient_when_values_divide_evenly_by_count() -> None:
 
 
 def test_decrypt_kis_payload_is_aes_cbc_with_key_and_iv() -> None:
-    assert decrypt_kis_payload(encrypt('HTSID^12345678^0000117057'), KEY, IV) == 'HTSID^12345678^0000117057'
+    assert decrypt_kis_payload(encrypt('HTSID^12345678^0000000101'), KEY, IV) == 'HTSID^12345678^0000000101'
 
 
 # ============ KisRealtimeStream ============
@@ -700,7 +700,7 @@ def test_watch_orders_requires_hts_id_before_subscribing() -> None:
 def test_watch_orders_subscribes_sandbox_notices_and_accumulates_fills() -> None:
     async def main() -> None:
         rig = WatchRig({'htsId': 'MYHTS'})
-        notice = {'oder_no': '0000117057', 'seln_byov_cls': '02', 'stck_shrn_iscd': '005930', 'oder_qty': '10', 'oder_prc': '71000',
+        notice = {'oder_no': '0000000101', 'seln_byov_cls': '02', 'stck_shrn_iscd': '005930', 'oder_qty': '10', 'oder_prc': '71000',
                   'stck_cntg_hour': '093001', 'rfus_yn': 'N'}
         receipt = asyncio.ensure_future(rig.ex.watch_orders())
         await settle()
@@ -712,7 +712,7 @@ def test_watch_orders_subscribes_sandbox_notices_and_accumulates_fills() -> None
         # 가짜 스트림은 부를 때마다 기록한다. 실제 스트림은 같은 구독을 한 번만 보낸다.
         assert set(rig.stream.subscribed) == {('H0STCNI9', 'MYHTS'), ('H0GSCNI9', 'MYHTS')}
         assert {k: accepted[k] for k in ('id', 'symbol', 'side', 'amount', 'filled', 'status', 'price')} == {
-            'id': '0000117057', 'symbol': '005930/KRW', 'side': 'buy', 'amount': 10, 'filled': 0, 'status': 'open', 'price': 71000,
+            'id': '0000000101', 'symbol': '005930/KRW', 'side': 'buy', 'amount': 10, 'filled': 0, 'status': 'open', 'price': 71000,
         }
         assert [(o['filled'], o['status']) for o in fills] == [(3, 'open'), (10, 'closed')]
 
