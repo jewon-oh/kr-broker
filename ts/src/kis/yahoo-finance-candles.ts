@@ -10,7 +10,7 @@
  * 종목코드 변환: KIS '005930' → Yahoo '005930.KS'
  */
 
-import { BadSymbol, BaseError, ExchangeNotAvailable, NetworkError, NotSupported, RateLimitExceeded } from '../base/errors';
+import { BadRequest, BadSymbol, BaseError, ExchangeNotAvailable, NetworkError, NotSupported, RateLimitExceeded } from '../base/errors';
 import { logger } from '../logger';
 import { resampleCandles } from './candle-resample';
 import { timeframeToMs } from '../broker-time';
@@ -265,6 +265,8 @@ export async function fetchYahooCandles(
                     const message = `야후 캔들 조회 실패(${yahooSymbol} ${timeframe}): HTTP ${response.status}`;
                     if (response.status === 404) throw new BadSymbol(message);
                     if (response.status === 429) throw new RateLimitExceeded(message);
+                    // 그 밖의 4xx(조회 폭 초과 422 등)는 요청 문제라 다시 보내도 같다.
+                    if (response.status < 500) throw new BadRequest(message);
                     throw new ExchangeNotAvailable(message);
                 }
 

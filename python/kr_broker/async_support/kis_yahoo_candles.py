@@ -14,7 +14,7 @@ from typing import Any, List, Optional
 
 from kr_broker.async_support.base.runtime import new_semaphore, sleep_seconds
 from kr_broker.base import functions as fn
-from kr_broker.base.errors import BadSymbol, BaseError, ExchangeNotAvailable, NetworkError, NotSupported, RateLimitExceeded, RequestTimeout
+from kr_broker.base.errors import BadRequest, BadSymbol, BaseError, ExchangeNotAvailable, NetworkError, NotSupported, RateLimitExceeded, RequestTimeout
 from kr_broker.broker_krx_code import is_krx_domestic_code
 from kr_broker.broker_time import timeframe_to_ms
 from kr_broker.kis_candle_pagination import slice_candle_window
@@ -182,6 +182,9 @@ async def fetch_yahoo_candles(stock_code: str, timeframe: str = '1d', limit: int
                     message = f'야후 캔들 조회 실패({yahoo_symbol} {timeframe}): HTTP {status}'
                     if status == 404:
                         raise BadSymbol(message)
+                    if status != 429 and status < 500:
+                        # 그 밖의 4xx(조회 폭 초과 422 등)는 요청 문제라 다시 보내도 같다.
+                        raise BadRequest(message)
                     if status == 429:
                         raise RateLimitExceeded(message)
                     raise ExchangeNotAvailable(message)
