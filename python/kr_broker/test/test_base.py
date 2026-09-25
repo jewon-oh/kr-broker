@@ -9,6 +9,7 @@ import pytest
 import kr_broker
 from kr_broker.base import functions as fn
 from kr_broker.base.errors import BadRequest, BaseError, MarketClosed, OrderOutcomeUnknown, RequestTimeout
+from kr_broker.base.exchange import Exchange
 from kr_broker.base.throttler import Throttler
 from kr_broker.base.token_store import refresh_token_with_lock
 
@@ -302,3 +303,41 @@ def test_legacy_key_token_store_reads_old_writes_both_and_locks_old() -> None:
     store.set('new', 'v', 1)
     assert data == {'old': 'v', 'new': 'v'}
     assert store.try_lock('new:lock', 'me', 1) and locks == ['old:lock']
+
+
+def test_kst_stamp_empties_dates_that_are_not_on_the_calendar() -> None:
+    broker = Exchange({})
+    for ymd in ('00000000', '20261300', '20260230', '20260000'):
+        assert broker.kst_stamp(ymd, '153000') == {'timestamp': None, 'datetime': None}, ymd
+
+
+def test_sync_session_ignores_netrc_and_proxy_env_and_close_keeps_user_session() -> None:
+    assert Exchange({}).session.trust_env is False
+
+    class UserSession:
+        closed = False
+
+        def close(self) -> None:
+            UserSession.closed = True
+
+    shared = UserSession()
+    broker = Exchange({'session': shared})
+    broker.close()
+    assert UserSession.closed is False and broker.session is shared
+    owned = Exchange({})
+    owned.close()
+    assert owned.session is None
+
+
+def test_sync_reads_text_without_charset_as_utf8() -> None:
+    class Response:
+        status_code = 502
+        reason = 'Bad Gateway'
+        headers = {'Content-Type': 'text/html'}
+        encoding = 'ISO-8859-1'          # requests 가 charset 없는 text/* 에 주는 값
+        content = '<html>게이트웨이 오류</html>'.encode('utf-8')
+
+    broker = Exchange({})
+    with pytest.raises(Exception):
+        broker.handle_rest_response(Response(), 'https://example.com/x')
+    assert broker.last_http_response == '<html>게이트웨이 오류</html>'

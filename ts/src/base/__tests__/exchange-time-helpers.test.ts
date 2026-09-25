@@ -55,6 +55,12 @@ describe('kstStamp, msStamp', () => {
         expect(ex().kstStamp(undefined, '153000')).toEqual({ timestamp: undefined, datetime: undefined });
     });
 
+    it('★달력에 없는 날짜는 다른 날로 넘기지 않고 비운다(Python 판과 같다)', () => {
+        for (const ymd of ['00000000', '20261300', '20260230', '20260000']) {
+            expect(ex().kstStamp(ymd, '153000'), ymd).toEqual({ timestamp: undefined, datetime: undefined });
+        }
+    });
+
     it('msStamp 는 이미 있는 ms 로 datetime 을 채운다', () => {
         expect(ex().msStamp(Date.parse('2026-09-22T06:30:00Z'))).toEqual({ timestamp: Date.parse('2026-09-22T06:30:00Z'), datetime: '2026-09-22T06:30:00.000Z' });
         expect(ex().msStamp(undefined)).toEqual({ timestamp: undefined, datetime: undefined });

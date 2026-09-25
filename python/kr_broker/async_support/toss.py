@@ -959,7 +959,7 @@ class toss(Exchange, ImplicitAPI):
             for code in ([currency] if currency is not None else ['KRW', 'USD']):
                 buying_power[code] = self.unwrap(await self.private_account_get_buying_power({'currency': code}))
         integrated = None
-        if currency == 'USD' and self.is_option_enabled('krwIntegratedMargin'):
+        if currency == 'USD' and await self.is_option_enabled('krwIntegratedMargin'):
             integrated = await self._krw_as_usd()
         return self.parse_balance({'holdings': holdings, 'buyingPower': buying_power, 'integrated': integrated})
 
@@ -1055,7 +1055,7 @@ class toss(Exchange, ImplicitAPI):
         fallback = self.options.get('usdKrwRate')
         if rate <= 0 and fallback is not None:
             try:
-                rate = fallback()
+                rate = await maybe_await(fallback())
             except Exception:
                 rate = 0
         if _is_finite_number(rate) and rate > 0:
@@ -1304,7 +1304,7 @@ class toss(Exchange, ImplicitAPI):
                 return 'KRX 휴장·정규장 외'
             if session != 'regularMarket':
                 # 확장세션은 옵션 `nxtRouting` 이 켜져 있을 때만 연다.
-                if not self.is_option_enabled('nxtRouting'):
+                if not await self.is_option_enabled('nxtRouting'):
                     return f'KRX {session} 세션 — 확장세션 주문은 nxtRouting 옵션이 켜져 있어야 한다'
                 return kr_session_order_restriction(session, form)
             return None
@@ -1329,7 +1329,7 @@ class toss(Exchange, ImplicitAPI):
 
     async def _kr_extended_session_conversion(self, symbol: str, side: str) -> Optional[Dict[str, Any]]:
         """국내 확장세션(프리·애프터) 전환 판정. 전환 대상이 아니면 `None`(정규장·휴장·옵션 꺼짐)."""
-        if not self.is_option_enabled('nxtRouting'):
+        if not await self.is_option_enabled('nxtRouting'):
             return None
         session = await self.current_kr_session()
         if session not in ('preMarket', 'afterMarket'):
@@ -1338,7 +1338,7 @@ class toss(Exchange, ImplicitAPI):
 
     async def _us_extended_session_conversion(self, symbol: str, side: str, quantity: float) -> Optional[Dict[str, Any]]:
         """미국 확장세션(주간거래·프리·애프터) 전환 판정. 소수점 수량은 정규장 전용이라 전환하지 않고 세션 검사가 막게 둔다."""
-        if not self.is_option_enabled('usExtendedLimit'):
+        if not await self.is_option_enabled('usExtendedLimit'):
             return None
         session = await self.current_us_session()
         if session not in ('dayMarket', 'preMarket', 'afterMarket'):

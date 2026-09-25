@@ -9,6 +9,7 @@ TypeScript 판의 `BrokerTokenStore`(`ts/src/options.ts`)와 `refreshTokenWithLo
 """
 
 import hashlib
+import inspect
 import logging
 import math
 import os
@@ -16,6 +17,7 @@ import time
 from typing import Any, Callable, Dict, Optional, Protocol, TypeVar, runtime_checkable
 
 from kr_broker.base import functions as fn
+from kr_broker.base.errors import NotSupported
 
 logger = logging.getLogger('kr_broker')
 
@@ -103,11 +105,18 @@ class LegacyKeyTokenStore:
 
 
 def resolve_token_store(option: Any) -> Optional[BrokerTokenStore]:
-    """옵션 값에서 토큰 저장소를 꺼낸다. 호출할 수 있는 값(함수)이면 지금 호출한다."""
+    """옵션 값에서 토큰 저장소를 꺼낸다. 호출할 수 있는 값(함수)이면 지금 호출한다. 함수는 저장소를 바로 돌려줘야 하고,
+    코루틴을 돌려주면 `NotSupported` 다(저장소의 메서드는 코루틴이어도 된다)."""
     if option is None:
         return None
     if callable(option) and not isinstance(option, BrokerTokenStore):
-        return option()
+        store = option()
+        if inspect.isawaitable(store):
+            close = getattr(store, 'close', None)
+            if callable(close):
+                close()
+            raise NotSupported('options.tokenStore 함수가 코루틴을 돌려줬다. 저장소를 바로 돌려주는 함수만 받는다(저장소의 메서드는 코루틴이어도 된다)')
+        return store
     return option
 
 

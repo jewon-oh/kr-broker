@@ -19,6 +19,7 @@
 """
 
 import calendar
+import datetime
 import inspect
 import json
 import logging
@@ -95,6 +96,15 @@ LIMIT_LOOKS_LIKE_MS = 1_000_000_000
 KST_OFFSET_MS = 9 * 60 * 60 * 1000
 
 
+def _is_calendar_date(year: int, month: int, day: int) -> bool:
+    """달력에 있는 날짜인가(`00000000`, 달 `13`, `0230` 같은 값을 거른다)."""
+    try:
+        datetime.date(year, month, day)
+    except ValueError:
+        return False
+    return True
+
+
 def _capitalize(s: str) -> str:
     return s[:1].upper() + s[1:]
 
@@ -118,6 +128,8 @@ class Exchange:
     session: Any = None
     # 동기 판이면 `True` 다. ccxt 처럼 비동기 판(`kr_broker.async_support`)은 `False` 이고 HTTP 세션을 처음 요청할 때 연다.
     synchronous = True
+    # 동기 판이 환경 변수 프록시와 `~/.netrc` 를 따를지. 비동기 판의 `aiohttp_trust_env` 와 같이 기본은 따르지 않는다.
+    requests_trust_env = False
 
     # ---- 선언 ----
     has: Dict[str, Any] = {}
@@ -252,6 +264,8 @@ class Exchange:
     def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
         config = {} if config is None else config
         self.options = self.get_default_options()
+        # 사용자가 넣은 세션은 사용자가 닫는다.
+        self.own_session = not (isinstance(config, dict) and config.get('session') is not None)
         # 부모 기본값 → 증권사 선언 → 사용자 설정 순으로 얹는다. 사전은 깊게 합치고 나머지는 덮어쓴다.
         for settings in (self.describe(), config):
             for key, value in settings.items():
@@ -264,10 +278,17 @@ class Exchange:
         self._bucket_throttlers: Dict[str, Optional[Throttler]] = {}
         self._define_camelcase_aliases()
         if self.session is None and self.synchronous:
-            self.session = requests.Session()
+            self.session = self._new_requests_session()
         self.after_construct()
         if fn.safe_bool(config, 'sandbox') is True:
             self.set_sandbox_mode(True)
+
+    def _new_requests_session(self) -> Any:
+        """동기 판의 HTTP 세션. `requests_trust_env` 가 꺼져 있으면 `~/.netrc` 와 환경 변수 프록시를 따르지 않는다.
+        `.netrc` 를 따르면 Basic 인증이 직접 넣은 `Authorization` 헤더를 덮는다."""
+        session = requests.Session()
+        session.trust_env = self.requests_trust_env
+        return session
 
     def _define_camelcase_aliases(self) -> None:
         """snake_case 이름마다 camelCase 별칭을 붙인다. ccxt Python 판과 같은 규칙이다(`fetch_ohlcv` → `fetchOHLCV`).
@@ -468,7 +489,7 @@ class Exchange:
         """HTTP 요청 하나를 그대로 보내고 응답(`status_code`·`reason`·`headers`·`encoding`·`content`)을 돌려준다.
         오류 봉투는 보지 않는다. 시간 초과는 `RequestTimeout`, 그 밖의 전송 실패는 `NetworkError` 로 바꿔 던진다."""
         timeout_ms = self.timeout if timeout_ms is None else timeout_ms
-        session = self.session if self.session is not None else requests.Session()
+        session = self.session if self.session is not None else self._new_requests_session()
         try:
             # 리다이렉트를 따르지 않는다. 따르면 앱키와 시크릿 헤더, 토큰 발급 본문을 다른 호스트로 다시 보낸다. 3xx 는 오류로 던진다.
             return session.request(method, url, headers=headers, data=None if body is None else body.encode('utf-8'),
@@ -486,7 +507,9 @@ class Exchange:
                              request_body: Str = None) -> Any:
         """응답 본문을 JSON 으로 읽고 `handle_errors` → `handle_http_status_code` 순으로 오류를 가린다."""
         response_headers = self.get_response_headers(response.headers)
-        encoding = response.encoding or 'utf-8'
+        # `requests` 는 charset 없는 `text/*` 를 ISO-8859-1 로 읽는다. 한글 원문이 깨지지 않게 charset 이 있을 때만 그 값을 쓴다.
+        content_type = str(fn.safe_string_2(response_headers, 'Content-Type', 'content-type') or '').lower()
+        encoding = response.encoding if response.encoding and 'charset=' in content_type else 'utf-8'
         response_body = response.content.decode(encoding, errors='replace')
         parsed_body = self.parse_json(response_body)
         self.last_response_headers = response_headers
@@ -667,6 +690,10 @@ class Exchange:
     # ============ 종목 ============
 
     def load_markets(self, reload: bool = False, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """종목 목록을 받는다. 이미 받았으면 `reload` 가 아닌 한 다시 부르지 않는다(비동기 판은 진행 중인 조회도 함께 쓴다)."""
+        return self._load_markets_helper(reload, params)
+
+    def _load_markets_helper(self, reload: bool, params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         if not reload and self.markets is not None:
             if self.markets_by_id is None:
                 return self.set_markets(self.markets)
@@ -1285,7 +1312,7 @@ class Exchange:
     def kst_stamp(self, ymd: Str, hms: Str = None) -> Dict[str, Any]:
         """한국 날짜(`YYYYMMDD`)와 시각(`HHMMSS`)으로 `timestamp`·`datetime` 을 만든다. 날짜를 못 읽으면 둘 다 비운다."""
         date = re.fullmatch(r'(\d{4})(\d{2})(\d{2})', ymd or '')
-        if date is None:
+        if date is None or not _is_calendar_date(int(date.group(1)), int(date.group(2)), int(date.group(3))):
             return {'timestamp': None, 'datetime': None}
         time_text = hms.rjust(6, '0') if hms else '000000'
         clock = re.fullmatch(r'(\d{2})(\d{2})(\d{2})', time_text)
@@ -1458,7 +1485,8 @@ class Exchange:
         raise NotSupported(f'{self.id} fetch_trading_fee() is not supported yet')
 
     def close(self) -> None:
-        """HTTP 세션을 닫는다."""
-        if self.session is not None:
+        """이 인스턴스가 연 HTTP 세션을 닫는다. 사용자가 넘긴 세션은 사용자가 닫는다."""
+        if self.session is not None and self.own_session:
             self.session.close()
+            self.session = None
 

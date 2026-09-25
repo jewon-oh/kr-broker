@@ -1132,9 +1132,17 @@ class kis(Exchange, ImplicitAPI):
         """이 인스턴스의 종목 마스터 데이터(`options['masterData']`). 넘기지 않았으면 빈 데이터다."""
         return master_data_of(self.options)
 
-    def _quote_market_division(self) -> str:
+    async def _resolve_kr_market(self, symbol: str) -> Optional[str]:
+        """국내 종목의 코스피·코스닥 구분. 비동기 판의 `stockDirectory.find_kr_market` 은 코루틴을 돌려줘도 된다. 조회에 실패하면 `None` 이다."""
+        try:
+            return await maybe_await(resolve_kr_market(symbol, self.options.get('stockDirectory'), self._master()))
+        except Exception as err:
+            logger.warning('[KrMarket] 종목 디렉터리 조회 실패 — 기본값(.KS/KOSPI) 사용 (symbol=%s, err=%s)', symbol, err)
+            return None
+
+    async def _quote_market_division(self) -> str:
         """국내 시세 조회의 상품구분. `nxtRouting` 옵션이 켜져 있고 NXT 확장세션이면 통합(`UN`)으로 애프터마켓 시세를 받는다."""
-        return 'UN' if is_nxt_extended_tradable() and self.is_option_enabled('nxtRouting') else 'J'
+        return 'UN' if is_nxt_extended_tradable() and await self.is_option_enabled('nxtRouting') else 'J'
 
     # ============ 시세 ============
 
@@ -1154,7 +1162,7 @@ class kis(Exchange, ImplicitAPI):
             }, params))
         else:
             response = await self.private_get_uapi_domestic_stock_v1_quotations_inquire_price(self.extend({
-                'FID_COND_MRKT_DIV_CODE': self._quote_market_division(),
+                'FID_COND_MRKT_DIV_CODE': await self._quote_market_division(),
                 'FID_INPUT_ISCD': instrument.code,
                 'tr_id': 'FHKST01010100',
             }, params))
@@ -1251,7 +1259,7 @@ class kis(Exchange, ImplicitAPI):
         if instrument.overseas:
             raise NotSupported(f'{self.id} fetchOrderBook() 은 국내 종목만 지원한다: {symbol}')
         response = await self.private_get_uapi_domestic_stock_v1_quotations_inquire_asking_price_exp_ccn(self.extend({
-            'FID_COND_MRKT_DIV_CODE': self._quote_market_division(),
+            'FID_COND_MRKT_DIV_CODE': await self._quote_market_division(),
             'FID_INPUT_ISCD': instrument.code,
             'tr_id': 'FHKST01010200',
         }, params))
@@ -1282,7 +1290,7 @@ class kis(Exchange, ImplicitAPI):
         instrument = self._instrument_of(symbol)
         until = self.safe_integer(params, 'until')
         # 코스피·코스닥 구분으로 야후 티커의 접미사(.KS·.KQ)를 맞게 붙인다.
-        kr_market = resolve_kr_market(symbol, self.options.get('stockDirectory'), self._master())
+        kr_market = await self._resolve_kr_market(symbol)
         daily_like = timeframe in ('1d', '1w', '1W', '1M')
         # 폴백할 거래소. 자격증명이 없으면 KIS 로 폴백할 수 없다.
         fallback_exchange = (instrument.quote_exchange if instrument.overseas and daily_like and self.check_required_credentials(False)
@@ -1708,7 +1716,7 @@ class kis(Exchange, ImplicitAPI):
             raise BadRequest(f"{self.id} createOrder() 의 params.session 은 'regular' 이나 'nxt' 여야 한다: {session}")
         params = self.omit(params, 'session')
         # 확장세션(NXT 프리 08:00~08:50, 애프터 15:30~20:00)은 정규장 게이트 대신 NXT 게이트를 거쳐 SOR 로 낸다. `nxtRouting` 이 꺼져 있으면 정규장 규칙이다.
-        extended = session == 'nxt' or (session is None and self.is_option_enabled('nxtRouting') and is_nxt_extended_tradable())
+        extended = session == 'nxt' or (session is None and await self.is_option_enabled('nxtRouting') and is_nxt_extended_tradable())
         if extended:
             await self._assert_nxt_session_open()
             await self._assert_nxt_tradable(instrument)

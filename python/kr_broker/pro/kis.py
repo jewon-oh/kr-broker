@@ -84,7 +84,7 @@ class kis(kr_broker.async_support.kis):
         hashes = ['orders'] if symbol is None else [f'ticker:{symbol}', f'trades:{symbol}', f'orderbook:{symbol}']
         self._watch_hub.reject(ExchangeError(f'{self.id} 실시간 구독이 거부됐다 {tr_id} {tr_key}: {message}'), hashes)
 
-    def _watch_subscribe(self, symbol: str, kind: str) -> str:
+    async def _watch_subscribe(self, symbol: str, kind: str) -> str:
         """종목의 체결(`trade`)이나 호가(`book`) TR 을 구독하고 통합 심볼을 돌려준다. 국내는 NXT 통합 시세를 쓸 때 통합 TR 이다."""
         instrument = self._instrument_of(symbol)
         if instrument.overseas:
@@ -93,7 +93,7 @@ class kis(kr_broker.async_support.kis):
             tr_id = 'HDFSCNT0' if kind == 'trade' else 'HDFSASP0'
             key = f'D{instrument.quote_exchange}{instrument.code}'
         else:
-            integrated = self._quote_market_division() == 'UN'
+            integrated = (await self._quote_market_division()) == 'UN'
             tr_id = ('H0UNCNT0' if integrated else 'H0STCNT0') if kind == 'trade' else ('H0UNASP0' if integrated else 'H0STASP0')
             key = instrument.code
         self._watch_keys[key] = instrument.symbol
@@ -102,16 +102,16 @@ class kis(kr_broker.async_support.kis):
 
     async def watch_ticker(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """다음 시세. 국내는 체결 TR 이 시가, 고가, 저가, 누적거래량까지 준다. 해외는 지연체결가(`HDFSCNT0`)다."""
-        return await self._watch_hub.next(f"ticker:{self._watch_subscribe(symbol, 'trade')}")
+        return await self._watch_hub.next(f"ticker:{await self._watch_subscribe(symbol, 'trade')}")
 
     async def watch_trades(self, symbol: str, since: Int = None, limit: Int = None, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """새 체결. 지난 호출 뒤로 받은 체결을 한꺼번에 돌려준다."""
-        trades = await self._watch_hub.next_batch(f"trades:{self._watch_subscribe(symbol, 'trade')}")
+        trades = await self._watch_hub.next_batch(f"trades:{await self._watch_subscribe(symbol, 'trade')}")
         return self.filter_by_since_limit(trades, since, limit, 'timestamp', True)
 
     async def watch_order_book(self, symbol: str, limit: Int = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """다음 호가. 국내는 10단계, 해외 지연호가는 1단계다."""
-        book = await self._watch_hub.next(f"orderbook:{self._watch_subscribe(symbol, 'book')}")
+        book = await self._watch_hub.next(f"orderbook:{await self._watch_subscribe(symbol, 'book')}")
         return book if limit is None else {**book, 'bids': book['bids'][:limit], 'asks': book['asks'][:limit]}
 
     async def watch_orders(self, symbol: Str = None, since: Int = None, limit: Int = None,
