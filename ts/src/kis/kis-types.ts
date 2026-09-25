@@ -81,7 +81,7 @@ export const KIS_DEFAULT_ACCOUNT_SUFFIX = '01';
 // ============ 인증 타입 ============
 
 /** KIS 자격증명 */
-export interface KISCredentials {
+export interface KisCredentials {
     /** App Key (KIS Developers 발급) */
     appKey: string;
     /** App Secret (KIS Developers 발급) */
@@ -93,13 +93,13 @@ export interface KISCredentials {
 }
 
 /** 캐시된 토큰 정보 */
-export interface KISCachedToken {
+export interface KisCachedToken {
     accessToken: string;
     expiresAt: number;
 }
 
 /** 일봉 데이터 (국내주식) */
-export interface KISDailyCandle {
+export interface KisDailyCandle {
     /** 영업일 (YYYYMMDD) */
     stck_bsop_date: string;
     /** 시가 */
@@ -181,7 +181,7 @@ export const KIS_PRESENT_BALANCE_PARAMS = {
 } as const;
 
 /** 해외주식 일봉 (HHDFS76240000 output2) */
-export interface KISOverseasDailyCandle {
+export interface KisOverseasDailyCandle {
     /** 영업일 (YYYYMMDD) */
     xymd: string;
     /** 시가 */
@@ -266,6 +266,17 @@ export const KIS_WS_FIELD = {
 } as const;
 
 /** approval_key 발급 응답 (POST /oauth2/Approval). */
-export interface KISApprovalResponse {
+export interface KisApprovalResponse {
     approval_key: string;
 }
+
+/** @deprecated `KisCredentials` 를 쓴다. 다음 판에서 지운다. */
+export type KISCredentials = KisCredentials;
+/** @deprecated `KisCachedToken` 을 쓴다. 다음 판에서 지운다. */
+export type KISCachedToken = KisCachedToken;
+/** @deprecated `KisDailyCandle` 을 쓴다. 다음 판에서 지운다. */
+export type KISDailyCandle = KisDailyCandle;
+/** @deprecated `KisOverseasDailyCandle` 을 쓴다. 다음 판에서 지운다. */
+export type KISOverseasDailyCandle = KisOverseasDailyCandle;
+/** @deprecated `KisApprovalResponse` 를 쓴다. 다음 판에서 지운다. */
+export type KISApprovalResponse = KisApprovalResponse;

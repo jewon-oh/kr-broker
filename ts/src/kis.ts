@@ -90,7 +90,7 @@ import { logger } from './logger';
 import { buildExtendedSessionLimit } from './extended-session-limit';
 import { refreshMarketCalendar as refreshSharedMarketCalendar } from './market-calendar';
 import { krxSellTaxRate } from './krx-sell-tax';
-import { KISAuth } from './kis/kis-auth';
+import { KisAuth } from './kis/kis-auth';
 import { KIS_EXCEPTIONS_EXACT } from './kis/kis-error-codes';
 import { acquireKisSlot } from './kis/kis-rate-limiter';
 import { checkKRXTradingHours, getKrxMarketPhase, getNxtSession, isNxtExtendedTradable } from './kis/kis-trading-hours';
@@ -119,7 +119,7 @@ import {
     type OverseasOrderMarket,
 } from './kis/kis-overseas-master';
 import { getKRXStockByCode, getStockMasterCount, searchKRXStocks } from './kis/kis-stock-master';
-import { KISCandleService } from './kis/kis-candle-service';
+import { KisCandleService } from './kis/kis-candle-service';
 import { fetchYahooCandles } from './kis/yahoo-finance-candles';
 import { resolveKrMarket } from './kis/kr-market';
 import { masterDataOf, type KisMasterData } from './kis/kis-master-data';
@@ -3543,7 +3543,7 @@ const KIS_INDEX_RANGE_MARGIN = 1.5;
 /** `createOrder` 가 받지 않는 ccxt 조건 인자. 본문에 합치면 조건 없는 일반 주문이 바로 나갈 수 있어 요청 전에 막는다. */
 const CONDITIONAL_ORDER_PARAMS = ['triggerPrice', 'stopPrice', 'stopLossPrice', 'takeProfitPrice', 'stopLoss', 'takeProfit'] as const;
 
-/** 일 단위 봉의 시각. `KISCandleService`의 국내 일봉과 같게 장 시작(09:00 KST)으로 둔다. */
+/** 일 단위 봉의 시각. `KisCandleService`의 국내 일봉과 같게 장 시작(09:00 KST)으로 둔다. */
 const KIS_DAILY_CANDLE_HMS = '090000';
 
 /** 회원사 실시간 매매동향의 회원사코드 전체 값(문서: `99999(전체)`). */
@@ -3666,8 +3666,8 @@ const signedChange = (change: Str, percentage: Str, sign: Str): string => {
 
 export class kis extends Exchange {
     /** 접근 토큰·실시간 접속키 캐시. 앱키가 바뀌면 다시 만든다. */
-    private authState: { appKey: string; auth: KISAuth } | undefined;
-    private candleService: KISCandleService | undefined;
+    private authState: { appKey: string; auth: KisAuth } | undefined;
+    private candleService: KisCandleService | undefined;
     /** 종목별 NXT 거래 가능 여부. `blockedReason` 이 없으면 거래할 수 있다. */
     private readonly nxtEligibility = new Map<string, { blockedReason: string | undefined; at: number }>();
     /** 응답 객체별 응답 헤더 `tr_cont`. `last_response_headers` 는 동시 요청에 덮이므로 응답 객체에 묶는다. */
@@ -4148,12 +4148,12 @@ export class kis extends Exchange {
 
     // ============ 인증 ============
 
-    private authManager(): KISAuth {
+    private authManager(): KisAuth {
         const appKey = this.apiKey as string;
         if (this.authState === undefined || this.authState.appKey !== appKey) {
             this.authState = {
                 appKey,
-                auth: new KISAuth(appKey, {
+                auth: new KisAuth(appKey, {
                     requestToken: () => this.requestAccessToken(),
                     requestApprovalKey: () => this.requestApprovalKey(),
                 }, () => this.getTokenStore()),
@@ -4859,8 +4859,8 @@ export class kis extends Exchange {
     }
 
     /** KIS 가 직접 주는 캔들(일봉·당일 분봉·해외 일봉)과 심층 이력 페이지네이션. `fetchOHLCV` 는 미국 일봉 폴백에만 이 경로를 쓴다. */
-    candles(): KISCandleService {
-        this.candleService ??= new KISCandleService(this);
+    candles(): KisCandleService {
+        this.candleService ??= new KisCandleService(this);
         return this.candleService;
     }
 

@@ -1,7 +1,5 @@
 """한국투자증권 상수와 호가 단위. TypeScript 판 `ts/src/kis/kis-types.ts` 를 옮겼다."""
 
-from typing import Optional
-
 from kr_broker.base import functions as fn
 from kr_broker.broker_krx_code import KIS_KRX_CODE_DIGITS, KNOWN_ALNUM_KRX_CODES, is_krx_domestic_code
 from kr_broker.krx_sell_tax import krx_sell_tax_rate
@@ -9,9 +7,9 @@ from kr_broker.krx_sell_tax import krx_sell_tax_rate
 __all__ = [
     'KIS_API_DOMAINS', 'KIS_WS_DOMAINS', 'KIS_WS_PATH', 'KIS_WS_TR', 'KIS_WS_FIELD',
     'KIS_RATE_LIMIT_ERROR_CODE', 'KIS_LEDGER_RATE_LIMIT_ERROR_CODE', 'KIS_RATE_LIMIT_ERROR_CODES',
-    'KIS_BROKERAGE_FEE', 'KIS_DEFAULT_FEE_RATE', 'KIS_OVERSEAS_DEFAULT_FEE_RATE', 'KIS_CUSTOMER_TYPE', 'KIS_DEFAULT_ACCOUNT_SUFFIX',
+    'KIS_BROKERAGE_FEE', 'KIS_OVERSEAS_DEFAULT_FEE_RATE', 'KIS_CUSTOMER_TYPE', 'KIS_DEFAULT_ACCOUNT_SUFFIX',
     'KIS_ORDER_TYPE', 'KIS_OVERSEAS_ORD_DVSN', 'KIS_PRESENT_BALANCE_PARAMS', 'KIS_KRX_CODE_DIGITS', 'KNOWN_ALNUM_KRX_CODES',
-    'get_kis_effective_fee_rate', 'get_tick_size', 'is_krx_domestic_code', 'is_overseas_symbol', 'krx_sell_tax_rate',
+    'get_tick_size', 'is_krx_domestic_code', 'is_overseas_symbol', 'krx_sell_tax_rate',
 ]
 
 KIS_API_DOMAINS = {
@@ -56,8 +54,6 @@ KIS_RATE_LIMIT_ERROR_CODES = (KIS_RATE_LIMIT_ERROR_CODE, KIS_LEDGER_RATE_LIMIT_E
 
 # 국내 위탁수수료율(0.015%, 매수·매도 모두). 등급과 할인은 따로다.
 KIS_BROKERAGE_FEE = 0.00015
-# 예전 이름. 위탁수수료만 담는다.
-KIS_DEFAULT_FEE_RATE = KIS_BROKERAGE_FEE
 # 미국 주식 기본 수수료율(0.25%).
 KIS_OVERSEAS_DEFAULT_FEE_RATE = 0.0025
 
@@ -91,11 +87,6 @@ KIS_PRESENT_BALANCE_PARAMS = {
     'TR_MKET_ALL': '00',
     'INQR_DVSN_ALL': '00',
 }
-
-
-def get_kis_effective_fee_rate(side: str, at_ms: Optional[int] = None) -> float:
-    """매수는 위탁수수료, 매도는 위탁수수료에 증권거래세를 더한 비율."""
-    return KIS_BROKERAGE_FEE + krx_sell_tax_rate(at_ms) if side == 'sell' else KIS_BROKERAGE_FEE
 
 
 def get_tick_size(price: float) -> int:

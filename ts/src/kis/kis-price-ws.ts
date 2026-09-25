@@ -4,7 +4,7 @@
  * 단일 WS 연결로 체결가(H0STCNT0/HDFSCNT0)·호가(H0STASP0) 를 구독해 콜백으로 emit.
  * KIS 는 표준 WebSocket 라이브러리가 없어 자체 WS 프로토콜로 구현한다.
  *
- * - 인증: approval_key (KISAuth.getApprovalKey).
+ * - 인증: approval_key (KisAuth.getApprovalKey).
  * - 재연결: 지수 백오프 + `getApprovalKey()` 재호출(캐시가 유효하면 같은 키) + 구독 재등록.
  * - PINGPONG: 수신 프레임 그대로 echo.
  * - 프레임 파싱은 순수 함수(kis-realtime-parser)로 분리 — 테스트로 고정.

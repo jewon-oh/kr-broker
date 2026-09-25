@@ -18,7 +18,7 @@ import { networkInterfaces } from 'node:os';
  *
  * `resultCode`/`resultMessage` 는 실패해도 `200`/`성공` 이다. 전송 계층 코드라 업무 성패 판정에 쓰면 안 된다.
  */
-export interface KBSecResponseHeader {
+export interface KbsecResponseHeader {
     processFlag?: string;
     processCode?: string;
     processMessage?: string;
@@ -52,13 +52,13 @@ const TOKEN_FAILURE_CODES: ReadonlySet<string> = new Set([
 ]);
 
 /** 토큰 재발급으로 복구할 수 있는 응답인가. HTTP 401(표준)이거나 KB 의 `I445` 다. */
-export function isKBSecTokenFailure(httpStatus: number, header: KBSecResponseHeader | undefined): boolean {
+export function isKbsecTokenFailure(httpStatus: number, header: KbsecResponseHeader | undefined): boolean {
     if (httpStatus === 401) return true;
     return TOKEN_FAILURE_CODES.has(String(header?.processCode ?? '').trim());
 }
 
 /** 업무 실패인가. 플래그가 없으면 판정할 수 없으므로 실패로 보지 않고, 빈 결과 코드는 플래그가 `B` 여도 실패가 아니다. */
-export function isKBSecBusinessError(header: KBSecResponseHeader | undefined): boolean {
+export function isKbsecBusinessError(header: KbsecResponseHeader | undefined): boolean {
     if (!header) return false;
     const flag = String(header.processFlag ?? '').trim().toUpperCase();
     if (!flag) return false;
@@ -97,3 +97,10 @@ export function kbsecHostAddr(): { ipAddr: string; macAddr: string } {
     cachedHostAddr = { ipAddr, macAddr };
     return cachedHostAddr;
 }
+
+/** @deprecated `KbsecResponseHeader` 를 쓴다. 다음 판에서 지운다. */
+export type KBSecResponseHeader = KbsecResponseHeader;
+/** @deprecated `isKbsecTokenFailure` 를 쓴다. 다음 판에서 지운다. */
+export const isKBSecTokenFailure = isKbsecTokenFailure;
+/** @deprecated `isKbsecBusinessError` 를 쓴다. 다음 판에서 지운다. */
+export const isKBSecBusinessError = isKbsecBusinessError;

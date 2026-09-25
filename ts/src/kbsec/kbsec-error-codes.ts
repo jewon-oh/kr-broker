@@ -35,13 +35,13 @@ export const KBSEC_ERROR_DETAIL = {
     FUTURE_QUERY_DATE: 'FUTURE_QUERY_DATE',
 } as const;
 
-export interface KBSecErrorMapping {
+export interface KbsecErrorMapping {
     error: ErrorClass;
     detail?: string;
 }
 
 /** 실측한 processCode 의 매핑. 키는 코드 문자열이다. */
-export const KBSEC_PROCESS_CODES: Readonly<Record<string, KBSecErrorMapping>> = {
+export const KBSEC_PROCESS_CODES: Readonly<Record<string, KbsecErrorMapping>> = {
     // 토큰 검증 실패 — 재발급과 1회 재시도로 복구된다. 재시도 뒤에도 남으면 인증 실패다(SSQM0004 실측).
     I445: { error: AuthenticationError, detail: KBSEC_ERROR_DETAIL.TOKEN_INVALID },
     // `API 사용 권한이 없습니다.` — 해외 잔고·주문 TR 에서 실측.
@@ -79,3 +79,6 @@ export function kbsecExactExceptions(): Record<string, ErrorClass> {
 export function kbsecErrorDetail(processCode: string): string | undefined {
     return KBSEC_PROCESS_CODES[processCode.trim()]?.detail;
 }
+
+/** @deprecated `KbsecErrorMapping` 을 쓴다. 다음 판에서 지운다. */
+export type KBSecErrorMapping = KbsecErrorMapping;

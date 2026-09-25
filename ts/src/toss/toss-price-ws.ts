@@ -56,11 +56,6 @@ async function resolveWsCtor(): Promise<WsCtor | null> {
     return wsCtorCache;
 }
 
-/** 이 런타임에서 토스 WS 구독이 가능한가(`ws` 패키지를 불러올 수 있는가). */
-export async function isTossWsSupported(): Promise<boolean> {
-    return (await resolveWsCtor()) !== null;
-}
-
 /**
  * 테스트 전용 — 동적 `import('ws')` 를 거치지 않고 생성자를 직접 주입한다. `null` 로 리셋한다.
  *

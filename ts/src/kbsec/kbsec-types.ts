@@ -19,6 +19,7 @@
 
 import { ExchangeError } from '../base/errors';
 import { isKrxDomesticCode } from '../broker-krx-code';
+import type { StockMarketGroup } from '../broker-market-group';
 import { isKrxBusinessDayKst } from '../krx-trading-hours';
 
 // ============ 접속 상수 ============
@@ -49,7 +50,7 @@ export const KBSEC_TOKEN_DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
 
 // ============ 자격증명 ============
 
-export interface KBSecCredentials {
+export interface KbsecCredentials {
     /** 포털에서 발급한 appKey. TR 호출 시 헤더로도 보낸다. */
     appKey: string;
     /** 포털에서 발급한 appSecret. 토큰 발급에만 쓴다. */
@@ -64,14 +65,14 @@ export interface KBSecCredentials {
 // ============ 봉투(envelope) ============
 
 /** 요청 dataHeader — 서버사이드 호출은 빈 문자열로 보내도 처리된다(공식 예제 동일). */
-export interface KBSecDataHeader {
+export interface KbsecDataHeader {
     ipAddr: string;
     macAddr: string;
 }
 
 /** 모든 TR 요청 공통 봉투. */
-export interface KBSecRequestEnvelope<T = Record<string, unknown>> {
-    dataHeader: KBSecDataHeader;
+export interface KbsecRequestEnvelope<T = Record<string, unknown>> {
+    dataHeader: KbsecDataHeader;
     dataBody: T;
 }
 
@@ -80,13 +81,13 @@ export interface KBSecRequestEnvelope<T = Record<string, unknown>> {
  * o_lngth(출길이) · o_clsf(출구분) · o_msg(출메시지)
  * 성패는 이 필드가 아니라 `dataHeader.processFlag` 로 가른다(`kbsec-envelope.ts`).
  */
-export interface KBSecResponseEnvelope<T = Record<string, unknown>> {
+export interface KbsecResponseEnvelope<T = Record<string, unknown>> {
     /** 업무 성패가 여기 담긴다 — processFlag 'A'=성공/'B'=실패 (실측 2026-08-09). */
     dataHeader?: Record<string, unknown>;
-    dataBody?: T & KBSecCommonOutput;
+    dataBody?: T & KbsecCommonOutput;
 }
 
-export interface KBSecCommonOutput {
+export interface KbsecCommonOutput {
     /** 출길이 */
     o_lngth?: string;
     /** 출구분. 값 체계가 명세에 없어 성패 판정에 쓰지 않는다. */
@@ -96,14 +97,14 @@ export interface KBSecCommonOutput {
 }
 
 /** 토큰 발급 응답 dataBody. */
-export interface KBSecTokenResponse {
+export interface KbsecTokenResponse {
     access_token?: string;
     accessToken?: string;
     token_type?: string;
     expires_in?: number;
 }
 
-export interface KBSecCachedToken {
+export interface KbsecCachedToken {
     accessToken: string;
     expiresAt: number;
 }
@@ -362,7 +363,7 @@ export const KBSEC_ORDER_TR_CODES: ReadonlySet<string> = new Set<string>([
 ]);
 
 /** 이 TR 이 주문을 바꾸는가 — 대소문자 무관(경로는 소문자로 붙는다). */
-export function isKBSecOrderTr(trCode: string): boolean {
+export function isKbsecOrderTr(trCode: string): boolean {
     return KBSEC_ORDER_TR_CODES.has(trCode.trim().toUpperCase());
 }
 
@@ -598,11 +599,11 @@ export const KBSEC_CHART_KIND = {
 
 // ============ 심볼 헬퍼 ============
 
-/** 시장 구분 — 국내 종목코드 모양이면 KR, 아니면 US. */
-export type KBSecMarketCountry = 'KR' | 'US';
+/** @deprecated `StockMarketGroup` 을 쓴다. 다음 판에서 지운다. */
+export type KBSecMarketCountry = StockMarketGroup;
 
-/** 도메인 심볼('005930/KRW' · 'AAPL/USD') → 시장 구분. */
-export function kbsecMarketOf(symbol: string): KBSecMarketCountry {
+/** 도메인 심볼('005930/KRW' · 'AAPL/USD') → 시장 구분. 국내 종목코드 모양이면 KR, 아니면 US. */
+export function kbsecMarketOf(symbol: string): StockMarketGroup {
     return isKrxDomesticCode(kbsecBaseSymbol(symbol)) ? 'KR' : 'US';
 }
 
@@ -637,3 +638,20 @@ export function kbsecNum(value: number, decimals = 0): string {
     if (!Number.isFinite(value)) return '0';
     return value.toFixed(decimals);
 }
+
+/** @deprecated `KbsecCredentials` 를 쓴다. 다음 판에서 지운다. */
+export type KBSecCredentials = KbsecCredentials;
+/** @deprecated `KbsecDataHeader` 를 쓴다. 다음 판에서 지운다. */
+export type KBSecDataHeader = KbsecDataHeader;
+/** @deprecated `KbsecRequestEnvelope` 를 쓴다. 다음 판에서 지운다. */
+export type KBSecRequestEnvelope<T = Record<string, unknown>> = KbsecRequestEnvelope<T>;
+/** @deprecated `KbsecResponseEnvelope` 를 쓴다. 다음 판에서 지운다. */
+export type KBSecResponseEnvelope<T = Record<string, unknown>> = KbsecResponseEnvelope<T>;
+/** @deprecated `KbsecCommonOutput` 을 쓴다. 다음 판에서 지운다. */
+export type KBSecCommonOutput = KbsecCommonOutput;
+/** @deprecated `KbsecTokenResponse` 를 쓴다. 다음 판에서 지운다. */
+export type KBSecTokenResponse = KbsecTokenResponse;
+/** @deprecated `KbsecCachedToken` 을 쓴다. 다음 판에서 지운다. */
+export type KBSecCachedToken = KbsecCachedToken;
+/** @deprecated `isKbsecOrderTr` 를 쓴다. 다음 판에서 지운다. */
+export const isKBSecOrderTr = isKbsecOrderTr;

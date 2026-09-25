@@ -35,11 +35,6 @@ export const KRX_SELL_TAX_SCHEDULE_HORIZON_MS = Date.UTC(2026, 11, 31, 15);
 
 let staleScheduleWarned = false;
 
-/** 테스트 전용 — 경고 래치를 푼다. 프로덕션에서 부르지 말 것. */
-export function __resetKrxSellTaxWarnLatchForTest(): void {
-    staleScheduleWarned = false;
-}
-
 /**
  * 체결 시각의 매도 증권거래세율. 국내 매도에만 붙는다(해외는 0).
  *

@@ -9,6 +9,9 @@
  * ```
  *
  * 설정은 전부 인스턴스가 받는다(`options`). 라이브러리 수준의 설정은 로거(`setLogger`) 하나뿐이고, 기본은 아무것도 출력하지 않는다.
+ *
+ * 휴장일 캘린더는 읽는 함수만 내보낸다. 프로세스 전체의 캘린더를 바꾸는 함수(`applyMarketCalendar`, `resetMarketCalendar` 등)는
+ * `kr-broker/market-calendar` 에 있다.
  */
 
 import { Exchange } from './base';
@@ -18,7 +21,9 @@ import { toss } from './toss';
 
 export * from './base';
 export { kis, kbsec, toss };
-export * from './market-calendar';
+export { isMarketClosedDay, marketCalendarStatus, marketDayStatus } from './market-calendar';
+export type { CalendarDay, CalendarDayStatus, CalendarMarket, MarketCalendarStatus } from './market-calendar';
+export type { StockMarketGroup } from './broker-market-group';
 export { setLogger, noopLogger } from './logger';
 export type { BrokerLogger, BrokerLogFn, BrokerLogContext } from './logger';
 export type { BrokerStockDirectory, BrokerTokenStore, FlagOption, TokenStoreOption, UsdKrwRateOption } from './options';

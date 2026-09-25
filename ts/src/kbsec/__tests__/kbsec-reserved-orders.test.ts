@@ -9,7 +9,7 @@ global.fetch = mockFetch as unknown as typeof fetch;
 
 import { kbsec } from '../../kbsec';
 import { InvalidOrder, NotSupported } from '../../base/errors';
-import { isKBSecOrderTr, KBSEC_TR } from '../kbsec-types';
+import { isKbsecOrderTr, KBSEC_TR } from '../kbsec-types';
 import { __resetKbsecTokenBreaker } from '../kbsec-token-breaker';
 import { CREDS, routeTr, trBody } from './support/kbsec-fetch';
 
@@ -26,11 +26,11 @@ afterEach(() => {
 
 describe('예약주문 TR 은 주문 TR 로 분류된다', () => {
     it('접수와 취소 TR 은 재시도하지 않는 주문 TR 이고, 조회 TR 은 아니다', () => {
-        expect(isKBSecOrderTr(KBSEC_TR.RESERVED_ORDER_KR)).toBe(true);
-        expect(isKBSecOrderTr(KBSEC_TR.RESERVED_ORDER_US)).toBe(true);
-        expect(isKBSecOrderTr(KBSEC_TR.RESERVED_CANCEL_US)).toBe(true);
-        expect(isKBSecOrderTr(KBSEC_TR.RESERVED_RESULTS_KR)).toBe(false);
-        expect(isKBSecOrderTr(KBSEC_TR.RESERVED_ORDERS_KR)).toBe(false);
+        expect(isKbsecOrderTr(KBSEC_TR.RESERVED_ORDER_KR)).toBe(true);
+        expect(isKbsecOrderTr(KBSEC_TR.RESERVED_ORDER_US)).toBe(true);
+        expect(isKbsecOrderTr(KBSEC_TR.RESERVED_CANCEL_US)).toBe(true);
+        expect(isKbsecOrderTr(KBSEC_TR.RESERVED_RESULTS_KR)).toBe(false);
+        expect(isKbsecOrderTr(KBSEC_TR.RESERVED_ORDERS_KR)).toBe(false);
     });
 });
 

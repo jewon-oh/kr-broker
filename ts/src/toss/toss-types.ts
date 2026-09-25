@@ -6,6 +6,7 @@
  */
 
 import { isKrxDomesticCode } from '../broker-krx-code';
+import type { StockMarketGroup } from '../broker-market-group';
 import { krxSellTaxRate } from '../krx-sell-tax';
 
 // ============ 상수 ============
@@ -26,11 +27,11 @@ export { krxSellTaxRate };
 
 // ============ 시장 판정 ============
 
-/** 종목의 시장 구분. */
-export type TossMarketCountry = 'KR' | 'US';
+/** @deprecated `StockMarketGroup` 을 쓴다. 다음 판에서 지운다. */
+export type TossMarketCountry = StockMarketGroup;
 
 /** 종목 심볼(`005930`, `005930/KRW`, `AAPL`)의 시장. 종목코드의 모양만 본다(`isKrxDomesticCode`). */
-export function tossMarketCountry(symbol: string): TossMarketCountry {
+export function tossMarketCountry(symbol: string): StockMarketGroup {
     return isKrxDomesticCode(symbol.split('/')[0]) ? 'KR' : 'US';
 }
 
@@ -44,7 +45,7 @@ export function tossMarketCountry(symbol: string): TossMarketCountry {
  * `taxExempt` 는 증권거래세가 붙지 않는 국내 상장 ETF·ETN 매도에 쓴다.
  */
 export function getTossEffectiveFeeRate(
-    market: TossMarketCountry,
+    market: StockMarketGroup,
     side: 'buy' | 'sell',
     at: Date = new Date(),
     brokerage: number = market === 'US' ? TOSS_US_BROKERAGE_FEE : TOSS_BROKERAGE_FEE,
@@ -99,7 +100,7 @@ export interface TossHoldingMarketValue {
 export interface TossHoldingItem {
     symbol: string;
     name?: string;
-    marketCountry: TossMarketCountry;
+    marketCountry: StockMarketGroup;
     currency: TossCurrency;
     quantity: string;
     lastPrice?: string;
@@ -382,7 +383,7 @@ export interface TossStockWarning {
 
 /** `GET /commissions` 항목. */
 export interface TossCommission {
-    marketCountry: TossMarketCountry;
+    marketCountry: StockMarketGroup;
     commissionRate: string;
     startDate?: string | null;
     endDate?: string | null;

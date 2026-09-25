@@ -18,7 +18,7 @@ import {
     KIS_TOKEN_EXPIRY_MS,
     KIS_TOKEN_SAFETY_MARGIN_MS,
     KIS_TOKEN_MIN_LIFETIME_MS,
-    type KISCachedToken,
+    type KisCachedToken,
 } from './kis-types';
 
 /** 토큰 저장소 키의 접두사. 키 본체는 앱키의 해시다(`tokenStoreKey`). */
@@ -56,8 +56,8 @@ function resolveTokenLifetimeMs(expiresInSec: unknown): number {
     return withMargin;
 }
 
-export class KISAuth {
-    private cachedToken: KISCachedToken | null = null;
+export class KisAuth {
+    private cachedToken: KisCachedToken | null = null;
     private refreshPromise: Promise<string> | null = null;
     private cachedApprovalKey: { key: string; expiresAt: number } | null = null;
     private approvalPromise: Promise<string> | null = null;
@@ -133,7 +133,7 @@ export class KISAuth {
         try {
             const raw = await store.get(this.storeKey);
             if (!raw) return null;
-            const parsed = JSON.parse(raw) as KISCachedToken;
+            const parsed = JSON.parse(raw) as KisCachedToken;
             if (parsed.expiresAt <= Date.now()) return null;
             this.cachedToken = parsed;
             logger.debug({ expiresAt: new Date(parsed.expiresAt).toISOString() }, '[KISAuth] 저장소에서 토큰 복원');
@@ -231,3 +231,8 @@ export class KISAuth {
         logger.info('[KISAuth] 토큰 캐시 초기화');
     }
 }
+
+/** @deprecated `KisAuth` 를 쓴다. 다음 판에서 지운다. */
+export const KISAuth = KisAuth;
+/** @deprecated `KisAuth` 를 쓴다. 다음 판에서 지운다. */
+export type KISAuth = KisAuth;
