@@ -18,6 +18,7 @@
 - 토스증권 `fetchBalance`는 현금의 `total`과 `used`를 비웁니다. 예전에는 `total`에 매수 가능 금액을, `used`에 0을 실었습니다. 전체 잔고의 보유 종목도 `free`와 `used`를 비웁니다. `params.symbol`로 한 종목만 받으면 매도 가능 수량(`GET /sellable-quantity`)을 한 번 더 조회해 `free`로 씁니다. `fetchSellableQuantity`는 응답에 값이 없으면 0 대신 `BadResponse`를 던집니다.
 - KB증권 `fetchBalance`는 `KRW`의 `total`과 `used`를 비웁니다. 국내 보유 종목의 `free`는 주문가능수량(`ordr_psbl_q`)이고, 해외 보유 종목의 `free`는 비웁니다. 예전에는 둘 다 보유 수량이었습니다. `USD`는 주문가능금액이 예수금보다 크면 `total`과 `used`를 비웁니다. `krwIntegratedMargin`으로 환산한 `USD`에는 `free`만 싣습니다.
 - 토스증권 `cancelOrder`는 취소를 접수한 뒤 원주문의 상세(`GET /orders/{orderId}`)를 조회해 상태를 확인합니다. 예전에는 접수만 되면 `status: 'canceled'`를 돌려줬지만, 명세에서 취소는 `PENDING_CANCEL`을 거쳐 끝납니다. 원주문이 `CANCELED`면 `canceled`, `REJECTED`면 `rejected`입니다. 취소가 닿기 전에 전량 체결됐으면(`FILLED`) `closed`입니다. 예산 안에 확정되지 않거나 조회가 실패하거나 `confirmExecution`이 꺼져 있으면 `status`를 비웁니다. 취소가 거절되면 원주문이 이전 상태로 돌아가 아직 반영되지 않은 것과 구별할 수 없으므로, 이때도 `rejected`가 아니라 빈 값입니다. `status === 'canceled'`로 취소 성공을 세던 코드는 빈 `status`를 "모름"으로 다루고 `fetchOrder`로 확인합니다. 조회는 `createOrder`의 체결 확인과 같은 옵션(`confirmExecution`, `confirmBudget`)을 따릅니다. 조회마다 주문 내역 호출 한도(`order_history`)를 씁니다. `params.confirmExecution: false`로 호출마다 끌 수도 있습니다. 새 주문번호는 `info.orderId`에, 조회한 원주문은 `info.order`에 있습니다. `cancelAllOrders`의 항목도 같은 상태를 쓰고 확정 조회를 주문마다 합니다. 미확정 주문이 10건이면 조회가 최대 60회 늘어 기본 예산에서 15초 넘게 걸릴 수 있습니다. 조건주문 취소는 예전처럼 `canceled`입니다. Python 판도 같습니다.
+- `package.json`의 `exports`에서 다시 내보내기만 하던 경로 `kr-broker/kis/kis-trading-hours`와 `kr-broker/kis/us-market-hours`를 뺐습니다. 같은 함수를 `kr-broker/krx-trading-hours`와 `kr-broker/us-market-hours`에서 가져옵니다.
 
 ### 추가
 

@@ -154,10 +154,6 @@
       "types": "./dist/kis/kis-stock-master.d.ts",
       "default": "./dist/kis/kis-stock-master.js"
     },
-    "./kis/kis-trading-hours": {
-      "types": "./dist/kis/kis-trading-hours.d.ts",
-      "default": "./dist/kis/kis-trading-hours.js"
-    },
     "./kis/kis-types": {
       "types": "./dist/kis/kis-types.d.ts",
       "default": "./dist/kis/kis-types.js"
@@ -169,10 +165,6 @@
     "./kis/master-search-rank": {
       "types": "./dist/kis/master-search-rank.d.ts",
       "default": "./dist/kis/master-search-rank.js"
-    },
-    "./kis/us-market-hours": {
-      "types": "./dist/kis/us-market-hours.d.ts",
-      "default": "./dist/kis/us-market-hours.js"
     },
     "./kis/yahoo-finance-candles": {
       "types": "./dist/kis/yahoo-finance-candles.d.ts",
