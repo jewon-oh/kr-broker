@@ -38,8 +38,10 @@
  * ## 옵션
  *
  * 전역 설정은 없고 인스턴스가 `options` 로 받는다. `tokenStore`(토큰 저장소), `nxtRouting`(국내 확장세션 주문), `usExtendedLimit`(미국 확장세션 시장가를 지정가로),
- * `krwIntegratedMargin`(달러 예수금이 모자랄 때 원화 예수금 환산 합산, 환율은 `usdKrwRate`), `confirmBudget`(체결 확정 조회 예산)이다.
- * 켜고 끄는 옵션은 불리언이거나 불리언을 돌려주는 함수이고 기본은 꺼짐이다.
+ * `krwIntegratedMargin`(켜면 `fetchBalance({ currency: 'USD' })` 의 USD 에 원화 매수 여력의 달러 환산액을 늘 더한다. 환율은 토스 조회, 실패하면 `usdKrwRate`),
+ * `confirmBudget`(체결 확정 조회 예산), `confirmExecution`(접수 뒤 체결 확정 조회)이다.
+ * `nxtRouting`·`usExtendedLimit`·`krwIntegratedMargin` 은 불리언이거나 불리언을 돌려주는 함수이고 기본은 꺼짐이다. `confirmExecution` 은 기본이 켜짐이고
+ * `false` 일 때만 꺼지므로 함수를 넘기면 늘 켜진다.
  *
  * ## 오류
  *
@@ -498,7 +500,7 @@ export class toss extends Exchange {
                     },
                 },
             },
-            // 값은 그룹별 공식 한도(초당 호출 수)에서 여유를 두고 정했다. 조회 그룹(자산)은 문서보다 훨씬 빡빡하다는 실측 보고가 있어 문서값(5)이 아니라 1건으로 줄였다.
+            // 값은 그룹별 공식 한도(초당 호출 수)에서 여유를 두고 정했다. 조회 그룹(자산)은 문서값(5)보다 낮은 1건으로 둔다.
             rateLimitBuckets: {
                 auth: { rateLimit: 334 },
                 account: { rateLimit: 1100 },
@@ -607,8 +609,8 @@ export class toss extends Exchange {
             },
             precisionMode: TICK_SIZE,
             options: {
-                // 켜고 끄는 옵션은 불리언이거나 불리언을 돌려주는 함수(값이 바뀔 수 있을 때)다. 기본은 꺼짐이다.
-                /** 미국 달러 예수금이 모자랄 때 원화 예수금을 환산해 합산한다(`fetchBalance({ currency: 'USD' })` 에만 적용). */
+                // 아래 세 옵션은 불리언이거나 불리언을 돌려주는 함수(값이 바뀔 수 있을 때)다. 기본은 꺼짐이다.
+                /** `fetchBalance({ currency: 'USD' })` 의 USD 에 원화 매수 여력의 달러 환산액을 늘 더한다. 환율은 토스 조회, 실패하면 `usdKrwRate` 다. */
                 krwIntegratedMargin: undefined,
                 /** 국내 확장세션(프리·애프터) 주문을 연다. */
                 nxtRouting: undefined,
@@ -620,7 +622,7 @@ export class toss extends Exchange {
                 usdKrwRate: undefined,
                 /** 접수 뒤 체결 확정 조회의 예산 `{ attempts, intervalMs }`. 객체이거나 객체를 돌려주는 함수다. */
                 confirmBudget: undefined,
-                /** 접수 뒤 체결이 확정될 때까지 주문 상세를 짧게 조회한다. */
+                /** 접수 뒤 체결이 확정될 때까지 주문 상세를 짧게 조회한다. 기본은 켜짐이고 `false` 일 때만 끈다(함수를 넘기면 켜진 것으로 본다). */
                 confirmExecution: true,
                 authTimeout: AUTH_TIMEOUT_MS,
                 calendarTtl: CALENDAR_TTL_MS,
@@ -1189,15 +1191,15 @@ export class toss extends Exchange {
     }
 
     /**
-     * 봉을 받아 온다. 토스는 `1m` 과 `1d` 만 제공한다. 다른 주기는 던진다. 가까운 주기로 몰래 바꾸면 1분봉이 1시간봉 이름으로 저장되는 사고가 나므로,
-     * 잘못된 이름의 데이터를 만드느니 실패하는 편이 낫다. 필요한 주기는 호출하는 쪽이 1분봉을 모아 만든다.
+     * 봉을 받아 온다. 토스는 `1m` 과 `1d` 만 제공한다. 다른 주기는 가까운 주기로 바꾸지 않고 던진다.
+     * 필요한 주기는 호출하는 쪽이 1분봉을 모아 만든다.
      *
      * 봉의 `timestamp` 는 봉의 시작 시각이다(토스의 1분봉은 종료 시각으로 오므로 1분을 뺀다). `params.until`(ms)은 이 시각 이전의 봉만 받는다.
      */
     override async fetchOHLCV(symbol: string, timeframe = '1m', since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<OHLCV[]> {
         const interval = this.safeString(this.timeframes, timeframe);
         if (interval === undefined) {
-            throw new NotSupported(`${this.id} 미지원 타임프레임 '${timeframe}'. 토스 API 는 1m·1d 만 제공한다. 가까운 주기로 몰래 바꾸면 1분봉이 다른 주기 이름으로 저장되므로 던진다.`);
+            throw new NotSupported(`${this.id} 미지원 타임프레임 '${timeframe}'. 지원: 1m, 1d`);
         }
         const market = this.market(symbol);
         const target = Math.max(1, limit ?? DEFAULT_CANDLE_LIMIT);
@@ -1498,10 +1500,10 @@ export class toss extends Exchange {
     }
 
     /**
-     * 주문을 낸다. 조건주문(`params.triggerPrice`)은 서버가 가격을 감시하다 조건이 맞으면 내는 주문이며, 봇이 내려가도 손절이 남는다.
+     * 주문을 낸다. 조건주문(`params.triggerPrice`)은 서버가 가격을 감시하다 조건이 맞으면 내는 주문이다.
      * 인자와 `params` 의 뜻은 파일 머리의 표를 본다.
      *
-     * 접수된 주문은 상세를 짧게 조회해 체결을 확정한다. 확장세션(프리·애프터, 미국 주간거래)에서 시장가로 낸 청산은 지정가로 바꿔 낸다
+     * 접수된 주문은 상세를 짧게 조회해 체결을 확정한다. 확장세션(프리·애프터, 미국 주간거래)에서 시장가 주문은 매수와 매도 모두 지정가로 바꿔 낸다
      * (확장세션은 지정가만 받는다. 기능 옵션 `nxtRouting`·`usExtendedLimit` 가 켜져 있을 때만). 이때 지정가가 아직 체결되지 않았으면
      * 체결됐다고 하지 않고 미체결 주문(`status: 'open'`, `order.info.extendedSession` 에 세션 이름)을 돌려준다.
      */
@@ -1533,7 +1535,7 @@ export class toss extends Exchange {
         const clientOrderId = this.safeString(params, 'clientOrderId');
         const timeInForce = this.parseTimeInForce(params);
 
-        // 확장세션 시장가는 지정가로 바꿔 낸다. 바꾸지 않으면 세션 게이트를 열어도 주문 형태에서 막혀 청산할 수 없다.
+        // 확장세션 시장가는 지정가로 바꿔 낸다. 바꾸지 않으면 세션 게이트를 열어도 주문 형태 검사에서 막힌다.
         let effectiveType: OrderType = type;
         let effectivePrice = price;
         let extendedSession: string | undefined;
@@ -1589,8 +1591,7 @@ export class toss extends Exchange {
 
         const draft = { market, type: effectiveType, side, price: effectivePrice, quantity, useAmountBased, cost, orderId, clientOrderId, timeInForce, response, extendedSession };
 
-        // 확장세션 지정가는 체결을 가정하지 않는다. 즉시 체결이 보장되지 않는데 체결로 기록하면 보유는 남고 기록은 청산으로 남는다.
-        // 접수 직후 미체결 장부에 남아 있으면 미체결 주문으로 돌려주고, 체결 반영은 호출하는 쪽의 동기화에 맡긴다.
+        // 확장세션 지정가는 즉시 체결이 보장되지 않으므로 체결을 가정하지 않는다. 접수 직후 미체결 장부에 남아 있으면 미체결 주문으로 돌려준다.
         if (extendedSession !== undefined) {
             const stillOpen = await this.fetchOpenOrders(symbol).then((list) => list.some((o) => o.id === orderId)).catch(() => true);
             if (stillOpen) {
@@ -1720,7 +1721,8 @@ export class toss extends Exchange {
      * 주문 접수 가능 시간과 형태를 검사한다.
      *
      * 미국은 네 세션을 캘린더로 판정하고, 정규장 밖에서는 정규장 전용인 주문 형태(금액 주문·소수점 수량·시장가)를 막는다. 정규장 안에서도 종료 1시간 전 이후에는
-     * 금액 주문과 소수점 수량 주문이 접수되지 않는다. 캘린더를 받지 못하면 정적 시간표(`isTossOrderable`)로 판정한다. 그 폴백은 열어 주는 쪽이 아니라 좁히는 쪽으로 어긋난다.
+     * 금액 주문과 소수점 수량 주문이 접수되지 않는다. 캘린더를 받지 못하면 정적 시간표(`isTossOrderable`)로 판정한다. 그 폴백에서 국내 휴장일은
+     * 공용 캘린더가 알 때만 막고(모르면 연다), 미국 확장세션은 막는다(좁히는 쪽).
      *
      * @returns 막는 사유(한국어). 접수할 수 있으면 `null`.
      */
@@ -1735,7 +1737,7 @@ export class toss extends Exchange {
             if (session === null) return isTossOrderable(symbol) ? null : 'KRX 거래시간 외 (09:00-15:30 KST 평일, 캘린더 조회 실패)';
             if (session === 'closed') return 'KRX 휴장·정규장 외';
             if (session !== 'regularMarket') {
-                // 확장세션(프리 08:00~08:50, 애프터 15:30~20:00)은 기능 옵션으로 연다. 옵션을 보지 않고 막으면 켜 놓아도 확장세션 청산이 안 된다.
+                // 확장세션(프리 08:00~08:50, 애프터 15:30~20:00)은 기능 옵션 `nxtRouting` 이 켜져 있을 때만 연다.
                 if (!(await this.isOptionEnabled('nxtRouting'))) {
                     return `KRX ${session} 세션 — 확장세션 주문은 nxtRouting 옵션이 켜져 있어야 한다`;
                 }
@@ -1866,13 +1868,6 @@ export class toss extends Exchange {
     // ============ 조건주문 ============
 
     /**
-     * 조건주문을 등록한다(`createOrder` 가 `params.triggerPrice` 를 보고 부른다).
-     *
-     * - `SINGLE`: `triggerPrice` 하나. `type: 'limit'` 이면 `price` 가 트리거 뒤에 낼 지정가이고, `'market'` 이면 시장가다(서버측 손절은 체결이 보장되는 시장가가 알맞다).
-     * - `OCO`: 두 조건을 함께 감시하고 하나가 체결되면 반대편이 취소된다. 익절·손절 브래킷이라 양쪽 모두 매도이고 지정가만 된다.
-     * - `OTO`: 첫 조건이 체결된 뒤 둘째 조건을 감시한다(진입과 청산의 연결). 지정가만 된다.
-     */
-    /**
      * 조건주문 인자를 검사하고 등록할 모양으로 정리한다. 요청은 보내지 않는다. 브로커가 거절할 조합은 여기서 `OrderNotSent` 로 막는다.
      */
     private planConditionalOrder(
@@ -1950,6 +1945,13 @@ export class toss extends Exchange {
         this.planConditionalOrder(type, side, price, params);
     }
 
+    /**
+     * 조건주문을 등록한다(`createOrder` 가 `params.triggerPrice` 를 보고 부른다).
+     *
+     * - `SINGLE`: `triggerPrice` 하나. `type: 'limit'` 이면 `price` 가 트리거 뒤에 낼 지정가이고, `'market'` 이면 시장가다(서버측 손절은 체결이 보장되는 시장가가 알맞다).
+     * - `OCO`: 두 조건을 함께 감시하고 하나가 체결되면 반대편이 취소된다. 익절·손절 브래킷이라 양쪽 모두 매도이고 지정가만 된다.
+     * - `OTO`: 첫 조건이 체결된 뒤 둘째 조건을 감시한다(진입과 청산의 연결). 지정가만 된다.
+     */
     private async createConditionalOrder(
         market: MarketInterface,
         type: OrderType,

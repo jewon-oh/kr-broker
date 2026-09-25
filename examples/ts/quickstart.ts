@@ -16,7 +16,7 @@ async function main(): Promise<void> {
     await broker.loadMarkets();
 
     const ticker = await broker.fetchTicker('005930/KRW');
-    console.log(ticker.symbol, ticker.last, ticker.bid, ticker.ask);
+    console.log(ticker.symbol, ticker.last, ticker.close);
 
     const balance = await broker.fetchBalance({ scope: 'kr' });
     console.log(balance.free, balance.total);

@@ -43,10 +43,8 @@ export const KIS_TOKEN_SAFETY_MARGIN_MS = KIS_TOKEN_SAFETY_MARGIN_MINUTES * 60 *
 /**
  * 접근 토큰 유효 기간 (ms) — **폴백값**.
  *
- * 정본은 발급 응답의 `expires_in` 이다. 이 상수는 사양을 코드에 베껴 둔 것이라
- * 서버가 수명을 줄이거나 토큰이 조기 무효화되면 **우리만 아직 유효하다고 믿는다.** 그 상태에서는
- * 인메모리·Redis 캐시가 둘 다 무효가 된 토큰을 보관하고 있고 무효화를 호출하는 곳이 없어
- * **재시작으로도 복구되지 않는다.** 그래서 서버 값이 있으면 그쪽을 쓴다.
+ * 정본은 발급 응답의 `expires_in` 이다. 이 상수는 사양을 베낀 값이라 서버가 수명을 줄이면 프로세스 캐시와
+ * 토큰 저장소(`options.tokenStore`)가 무효 토큰을 계속 쓴다. 그래서 서버 값이 있으면 그쪽을 쓴다.
  */
 export const KIS_TOKEN_EXPIRY_MS =
     (KIS_TOKEN_VALIDITY_HOURS * 60 - KIS_TOKEN_SAFETY_MARGIN_MINUTES) * 60 * 1000;
@@ -54,39 +52,20 @@ export const KIS_TOKEN_EXPIRY_MS =
 /** 서버 `expires_in` 을 적용할 때의 하한 — 마진을 빼서 음수가 되면 갱신 요청이 몰린다. */
 export const KIS_TOKEN_MIN_LIFETIME_MS = 60_000;
 
-/**
- * 국내주식 위탁수수료율 (0.015%) — 매수/매도 양방향.
- * 한국투자증권 표준 수수료 기준 (2026년 기준 — 사용자 등급/할인 별도).
- */
+/** 국내주식 위탁수수료율 (0.015%) — 매수/매도 양방향. 실제 요율은 계좌 유형과 할인에 따라 다르다. */
 export const KIS_BROKERAGE_FEE = 0.00015;
 
-/**
- * KRX 매도 거래세 — 매도 시에만 적용.
- *
- * 종전엔 `0.0018` 상수였다. 그건 **2024년 세율**이라 2025년(0.15%)과 2026년(0.20%)에
- * 어긋났다. 세금은 브로커가 정하는 게 아니라 법이 정하고 해마다 바뀌므로,
- * 값은 `../krx-sell-tax` 한 곳에 두고 체결 시각으로 고른다. 코넥스는 별도 세율이고
- * 이 패키지는 코넥스를 다루지 않는다.
- */
+/** KRX 매도 거래세 — 매도 시에만 적용. 세율은 `../krx-sell-tax` 한 곳에 두고 체결 시각으로 고른다. 코넥스는 다루지 않는다. */
 export { krxSellTaxRate };
 
 /**
- * 매수 effective rate = brokerage only.
- * 매도 effective rate = brokerage + transaction tax.
+ * `KIS_BROKERAGE_FEE` 의 옛 이름이다. 위탁수수료만 들어 있고 매도 거래세는 빠져 있다.
  *
- * 이전 `KIS_DEFAULT_FEE_RATE` (0.00015) 는 위탁수수료만 반영 → 매도 PnL
- * 예측이 거래세 누락으로 약 0.18% 저평가 (왕복 0.36%). 백테스트와 라이브
- * 결과가 크게 어긋난 주된 원인이었다.
- *
- * Deprecated alias 로 유지한다 — 외부에서 import 하는 곳은 호출하는 쪽에서 점차 이전한다.
- * 신규 코드는 `getKisEffectiveFeeRate(side)` 또는 두 상수를 명시해서 사용한다.
+ * @deprecated `getKisEffectiveFeeRate(side)` 또는 `KIS_BROKERAGE_FEE` 를 쓴다.
  */
 export const KIS_DEFAULT_FEE_RATE = KIS_BROKERAGE_FEE;
 
-/**
- * KIS 의 effective 수수료율 — 매수/매도별.
- * Position sizing / PnL 계산에서 이 함수 결과 사용 권장.
- */
+/** KIS 의 effective 수수료율 — 매수는 위탁수수료, 매도는 위탁수수료에 `at` 시점의 거래세를 더한다. */
 export function getKisEffectiveFeeRate(side: 'buy' | 'sell', at: Date = new Date()): number {
     return side === 'sell'
         ? KIS_BROKERAGE_FEE + krxSellTaxRate(at)
@@ -101,7 +80,7 @@ export const KIS_DEFAULT_ACCOUNT_SUFFIX = '01';
 
 // ============ 인증 타입 ============
 
-/** KIS 자격증명 (DB 저장용) */
+/** KIS 자격증명 */
 export interface KISCredentials {
     /** App Key (KIS Developers 발급) */
     appKey: string;
@@ -173,10 +152,7 @@ export { KIS_KRX_CODE_DIGITS };
  * 해외주식인지 식별 — KRX 코드 형식 (6자리 숫자) = 국내, 그 외 = 해외.
  * KRX 종목코드는 6자리이고 대다수가 숫자다 (예: 005930). 해외 ticker 는 영문 (AAPL, BRK/B 등 — KIS 는 슬래시 사용).
  *
- * 판정 전 마켓 페어 접미사(`/KRW`·`/USD` 등)를 떼고 base 로 검사한다 — `005930/KRW` 처럼 풀형식이
- * 들어오면 슬래시 때문에 6자리 앵커(`^\d{6}$`) 매치가 깨져 국내 코드가 해외로 오라우팅되던 결함을
- * 방어(getTicker/createOrder/fetchOHLCV 일괄). 이미 base 만 넘기는 호출부(getOrderbook 등)엔
- * 이중 스트립이라 무해(no-op). 해외 ticker(AAPL/BRK 등)는 base 도 비-6자리라 판정 불변.
+ * 판정 전 마켓 페어 접미사(`/KRW`·`/USD` 등)를 떼고 base 로 검사한다. `005930/KRW` 와 `005930` 은 같은 결과다.
  */
 export function isOverseasSymbol(symbol: string): boolean {
     const base = symbol.split('/')[0];
@@ -279,7 +255,7 @@ export const KIS_WS_FIELD = {
     OVERSEAS_TRADE_LAST: 11,
     OVERSEAS_TRADE_CHANGE_PCT: 14,
     /**
-     * 국내 호가 H0STASP0: [0]=종목코드, [3]=영업시간,
+     * 국내 호가 H0STASP0: [0]=종목코드, [1]=영업시간,
      * 매도호가 ASKP1..10 = [3+i], 매수호가 BIDP1..10 = [13+i],
      * 매도잔량 ASKP_RSQN1..10 = [23+i], 매수잔량 BIDP_RSQN1..10 = [33+i].
      */

@@ -9,13 +9,14 @@
  *     apiKey, secret, uid,
  *     options: {
  *         tokenStore,                                // 여러 프로세스가 토큰을 나눠 쓴다
- *         nxtRouting: true,                          // 정규장 밖 주문을 NXT 로 낸다
+ *         nxtRouting: true,                          // 정규장 밖 주문을 SOR 로 낸다
  *         masterData: { kospi, kosdaq, nasdaq, nyse, amex },
  *     },
  * });
  * ```
  *
  * 값이 함수인 옵션(`tokenStore`, `nxtRouting`, `confirmBudget` 등)은 쓸 때마다 호출한다. 운영 중에 바뀌는 값을 넘길 수 있다.
+ * 토스의 `confirmExecution` 은 함수를 받지 않는다. 기본이 켜짐이고 `false` 일 때만 꺼지므로 함수를 넘기면 늘 켜진다.
  */
 
 /**
@@ -34,7 +35,7 @@ export interface BrokerTokenStore {
     delete(key: string): Promise<void>;
     /**
      * 저장된 값(JSON)의 `accessToken` 이 `accessToken` 과 같을 때만 지운다. 남의 새 토큰을 지우지 않기 위해서다. 지웠으면 `true`.
-     * 값이 없거나 JSON 이 아니면 지우지 않는다(모르는 값을 지우는 쪽이 사고의 원인이었다).
+     * 값이 없거나 JSON 이 아니면 지우지 않는다.
      */
     deleteIfAccessTokenEquals(key: string, accessToken: string): Promise<boolean>;
     /** `ttlMs` 동안 유효한 락을 잡는다. 이미 잡혀 있으면 `false`. */

@@ -1,19 +1,17 @@
 /**
- * @fileoverview 국내 정산 행(`SSQM2121`) ↔ 기록된 거래(`Trade`) 매칭·안분 — **순수 함수**.
+ * @fileoverview 국내 정산 행(`SSQM2121`) ↔ 거래 매칭·안분 — **순수 함수**.
  *
- * 여기서 `Trade` 는 호출하는 쪽이 기록해 둔 거래 행을 가리킨다.
+ * 입력 계약은 {@link KbsecSettlementTrade} 의 필드뿐이다.
  *
  * ## 왜 체결단가를 조인 키로 안 쓰나
  *
  * 정산 행에 **주문번호가 없다**(출력 30필드 전수 확인). 그래서 남는 축은
  * (일자 × 종목 × 매매구분 × 체결단가 × 수량)인데, 단가를 키에 넣으면 두 군데서 깨진다.
  *
- * ① **분할체결.** KB 는 한 주문의 두 번째 체결부터 식별자를 지운 행으로 준다
- * (`kbsec-fill-row.ts` 실측). `Trade.price` 는 그것들의 **가중평균**인데
+ * ① **분할체결.** 한 주문의 체결가는 여러 체결의 **가중평균**인데
  * 정산은 `clsf=1`(단가별)로 단가마다 행을 쪼갠다 — 어느 행과도 같지 않다.
- * ② **축이 다르다.** `Trade.price` 는 USD 다(`price × usdToKrwRate` 가 원화 단가).
- * `Trade.amount` 는 **매도 행에서 진입 명목**이다 — 호출하는 쪽이 청산 거래에 기존 포지션의
- * 명목을 그대로 기록한다. KB 가 알 수 있는 값이 아니다.
+ * ② **축이 다르다.** 입력 단가 `priceUsd` 는 USD 라, 원화 단가(`priceUsd × usdToKrwRate`)로 되짚으면
+ * 환율 곱의 꼬리가 남아 정산 단가와 같은 값이 되지 않는다.
  *
  * 단가로 조인하면 이 두 경우에 **조용히 0건**이 된다. "정산이 없다" 와 구분이 안 된다.
  *
@@ -24,9 +22,6 @@
  *
  * 비용은 명목에 비례하므로, 그룹 안 단가가 같으면 명목 안분은 근사가 아니라 **정확**하다.
  * 단가가 서로 다른 그룹에서도 위탁수수료·세금이 모두 정률이라 오차는 원 단위 절사분뿐이다.
- *
- * 실측한 국내 체결에서는 **거의 모든 그룹이 단일 거래**라 안분 자체가 필요 없었고,
- * 다중 그룹은 드물었다.
  *
  * ## 결과를 네 갈래로 구분한다 — "못 덮었다" 를 한 가지로 합치지 않는다
  *
@@ -54,13 +49,12 @@ export interface KbsecSettlementTrade {
     /** 도메인 종목코드(6자리). */
     symbol: string;
     side: 'BUY' | 'SELL';
-    /** `Trade.price` — **USD** 축이다. */
+    /** 체결 단가 — **USD** 다. */
     priceUsd: number;
-    /** `Trade.usdToKrwRate` — 기록 시점 환율. 없으면 원화 축으로 못 간다. */
+    /** 원/달러 환율. `priceUsd × usdToKrwRate` 가 원화 단가다. 없으면 원화 명목을 구하지 못한다. */
     usdToKrwRate: number | null;
     /**
-     * 체결 수량(주). `Trade.quantity`, 없으면 호출부가 포지션에서 되짚은 값.
-     * 모르면 null — 그룹에 거래가 둘 이상이면 안분을 포기하는 근거가 된다.
+     * 체결 수량(주). 모르면 null — 그룹에 거래가 둘 이상이면 안분을 포기하는 근거가 된다.
      */
     quantity: number | null;
 }
@@ -71,7 +65,7 @@ export type KbsecSettlementMatch =
         tradeId: string;
         /** 이 거래 몫의 실청구 비용(원화). */
         costKrw: number;
-        /** 실효 비용률 — `costKrw / 명목(원화)`. 호출하는 쪽이 거래의 수수료율(`Trade.feeRate`)로 그대로 기록한다. */
+        /** 실효 비용률 — `costKrw / 명목(원화)`. */
         rate: number;
         /** 안분에 쓴 이 거래의 원화 명목. */
         notionalKrw: number;
@@ -85,9 +79,8 @@ export type KbsecSettlementMatch =
 /**
  * 기록된 명목 합과 KB `dl_amt` 합의 허용 상대오차.
  *
- * 원화 단가를 `price × usdToKrwRate` 로 되짚으므로 부동소수 꼬리가 남는다(실측 최대 0.37원).
- * 종목당 명목이 수십만~수백만 원이라 0.1% 면 그 잡음을 덮고도 **한 주 어긋남**(가장 작은
- * 실질 불일치)은 잡는다.
+ * 0.1% 다. 원화 단가를 `priceUsd × usdToKrwRate` 로 되짚어 생기는 부동소수 꼬리는 덮고,
+ * **한 주 어긋남**(가장 작은 실질 불일치)은 잡는다.
  */
 export const SETTLEMENT_NOTIONAL_REL_TOLERANCE = 0.001;
 
@@ -106,8 +99,7 @@ function toTradeSide(side: KbsecSettlementRow['side']): 'BUY' | 'SELL' | null {
 /**
  * 이 거래의 **원화 명목** — 안분 가중치.
  *
- * 수량과 환율을 둘 다 알아야 구할 수 있다. `Trade.amount` 를 대신 쓰지 않는다 —
- * 매도 행에서 그 값은 진입 명목이라 청산 명목과 다르다(파일 헤더 ②).
+ * 단가·수량·환율을 모두 알아야 구할 수 있다. 하나라도 없으면 null 이다.
  */
 function notionalKrwOf(trade: KbsecSettlementTrade): number | null {
     const fx = trade.usdToKrwRate;
@@ -120,8 +112,8 @@ function notionalKrwOf(trade: KbsecSettlementTrade): number | null {
 /**
  * 하루치 정산 행을 그날의 거래에 배분한다.
  *
- * @param trades 그날(KST) 기록된 국내 KB증권 거래
- * @param rows 같은 날 `SSQM2121` 행 (`trd_clsf=9` 로 양방향 다 받은 것)
+ * @param trades 그날(KST) 국내 KB증권 거래
+ * @param rows 같은 날 `fetchDomesticSettlements` 결과의 `rows`(매도·매수를 따로 받아 합친 것)
  * @returns 거래 하나당 결과 하나. 입력 순서를 유지한다.
  */
 export function matchKbsecSettlements(

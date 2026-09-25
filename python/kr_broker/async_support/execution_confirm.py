@@ -1,7 +1,6 @@
 """주문 접수 뒤 실체결 확정(증권사 공용 폴링). TypeScript 판 `ts/src/execution-confirm.ts` 와 같다.
 
-접수 응답에는 체결 정보가 없다. 한 번만 조회하고 포기하면 요청가와 요청 수량이 체결값으로 기록되므로, 체결이 확정될 때까지 예산 안에서 짧게 조회한다.
-증권사 클래스는 자기 응답을 `{'snapshot', 'terminal'}` 로 옮기는 조회 함수 하나만 넘긴다.
+접수 응답에는 체결 정보가 없으므로 체결이 확정될 때까지 예산 안에서 짧게 조회한다. 증권사 클래스는 자기 응답을 `{'snapshot', 'terminal'}` 로 옮기는 조회 함수 하나만 넘긴다.
 
 체결 스냅샷은 `{'filled', 'average', 'amount', 'fee', 'feeCurrency'}` 사전이다. 브로커가 확정한 값만 담고, 모르는 값은 `None` 이다.
 """
@@ -15,7 +14,7 @@ from kr_broker.async_support.base.runtime import sleep_seconds
 
 logger = logging.getLogger('kr_broker')
 
-# 폴링 예산 기본값: 6회 × 350ms ≈ 최대 1.75초. 토스 주문 정보 그룹의 한도(개장 직후 3건/초)를 넘지 않는 간격이다.
+# 폴링 예산 기본값: 6회 × 350ms ≈ 최대 1.75초. 간격은 토스 체결 확정 조회가 쓰는 `order_history` 그룹의 한도 안에 들게 정했다.
 DEFAULT_ATTEMPTS = 6
 DEFAULT_INTERVAL_MS = 350
 
@@ -61,7 +60,8 @@ async def confirm_execution(label: str, order_id: str, exchange: str, probe: Cal
     """체결이 확정될 때까지 짧게 조회한다.
 
     `probe(attempt)` 가 `terminal` 을 돌려주면(완전체결·취소·거부) 그때까지 가장 많이 채워진 스냅샷으로 끝내고, 예산을 다 쓰면 그때까지의 스냅샷을 돌려준다.
-    `probe` 는 던져도 된다(조회 실패로 보고 다음 시도로 넘어간다). 주문은 이미 접수됐으므로 이 함수는 던지지 않는다. 확정하지 못하면 `None`.
+    `probe` 는 던져도 된다(조회 실패로 보고 다음 시도로 넘어간다). 주문은 이미 접수됐으므로 이 함수는 던지지 않는다. 확정하지 못하면 `None` 이고,
+    호출부는 `filled` 를 비운다.
     """
     resolved = resolve_confirm_budget(defaults, budget)
     attempts, interval_ms = resolved['attempts'], resolved['intervalMs']
@@ -82,10 +82,10 @@ async def confirm_execution(label: str, order_id: str, exchange: str, probe: Cal
                 logger.warning('%s 주문이 체결 없이 끝났다. 체결 기록 없음(주문 %s, %s, %d회째)', label, order_id, exchange, attempt)
             return best
     if best is None:
-        logger.warning('%s 체결 미확인: 요청 수량과 호가로 기록된다. 진입가와 슬리피지에 오차가 날 수 있다(주문 %s, %s, %d회 %dms)',
+        logger.warning('%s 체결 미확인: filled 를 비운 주문을 돌려준다(주문 %s, %s, %d회 %dms)',
                        label, order_id, exchange, attempts, (attempts - 1) * interval_ms)
     else:
-        logger.warning('%s 부분체결 상태로 예산을 다 썼다. 관측된 체결분으로 기록한다(주문 %s, %s, 체결 %s)', label, order_id, exchange, best['filled'])
+        logger.warning('%s 부분체결 상태로 예산을 다 썼다. 관측된 체결분을 돌려준다(주문 %s, %s, 체결 %s)', label, order_id, exchange, best['filled'])
     return best
 
 
@@ -95,7 +95,7 @@ def _num(value: Any) -> float:
 
 def trade_list_probe(fetch_trades: Callable[[], List[Dict[str, Any]]], order_id: str, requested_qty: float,
                      fee_currency: Optional[str] = None) -> Callable[..., Dict[str, Any]]:
-    """체결 내역 목록만 주는 증권사(한국투자증권·KB증권)용 조회 함수를 만든다.
+    """체결 내역 목록만 주는 증권사(KB증권)용 조회 함수를 만든다.
 
     주문 하나를 조회하는 API 가 없어 계좌 체결 내역을 주문 id 로 걸러 합산한다. 분할체결이면 같은 주문의 행이 여러 개라 수량 가중으로 합치고,
     요청 수량을 다 채웠을 때만 끝난 것으로 본다(체결 내역에는 주문이 끝났다는 신호가 없다).

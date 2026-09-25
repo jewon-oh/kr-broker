@@ -26,8 +26,8 @@
  * ## 옵션
  *
  * 전역 설정은 없고 인스턴스가 `options` 로 받는다. `tokenStore`(여러 프로세스가 나눠 쓰는 토큰 저장소), `nxtRouting`(정규장 밖 주문·시세, 불리언 또는
- * 불리언을 돌려주는 함수), `masterData`(종목 마스터), `stockDirectory`(코스피·코스닥 구분), `confirmBudget`(체결 확정 조회 예산),
- * `htsId`(관심종목과 조건검색 조회에 쓰는 HTS 사용자 ID)다.
+ * 불리언을 돌려주는 함수), `masterData`(종목 마스터), `stockDirectory`(코스피·코스닥 구분),
+ * `htsId`(관심종목·조건검색 조회와 `watchOrders` 에 쓰는 HTS 사용자 ID)다. `confirmBudget` 은 선언만 있고 읽지 않는다.
  *
  * ## 유량
  *
@@ -312,7 +312,7 @@ export interface KisInvestorTradingRecord extends KrTimestamped {
 
 /**
  * 체결 하나의 매매손익과 청구된 수수료·거래세(`inquire-period-trade-profit`, TR `TTTC8715R`). 국내만 지원한다
- * (해외는 공식 API의 필드 구성이 달라 별도 조사가 필요하다).
+ * (해외 실현손익은 `fetchOverseasRealizedPnl`).
  */
 export interface KisTradeProfitRecord extends KrTimestamped {
     /** 매매일자 `YYYYMMDD`(`trad_dt`) */
@@ -4030,7 +4030,7 @@ export class kis extends Exchange {
                 masterData: undefined,
                 /** 국내 종목의 KOSPI·KOSDAQ 구분을 알려 주는 곳(`BrokerStockDirectory`). 없으면 마스터 데이터로 판별한다. */
                 stockDirectory: undefined,
-                /** 접수 뒤 체결 확정 조회의 예산 `{ attempts, intervalMs }`. 객체이거나 객체를 돌려주는 함수다. */
+                /** 체결 확정 조회의 예산. 한국투자증권은 이 옵션을 읽지 않는다. */
                 confirmBudget: undefined,
             },
         });
@@ -4217,7 +4217,7 @@ export class kis extends Exchange {
     //
     // `createRealtimeStream` 위에 ccxt pro 의 `watch*` 를 둔다. 호출마다 다음 갱신을 돌려주고, 처음 부를 때 구독한다. 체결은 기다리는 쪽이
     // 없을 때 쌓아 두었다가 다음 호출에 한꺼번에 돌려준다. 같은 앱키와 접속키로 다른 프로그램이 이미 연결돼 있으면 KIS 가 이 연결을 곧바로
-    // 끊는다(2026-09-24 실측).
+    // 끊는다.
 
     private watchStream: KisRealtimeStream | undefined;
     private readonly watchHub = new WatchHub();
@@ -4740,7 +4740,7 @@ export class kis extends Exchange {
         return native as OHLCV[];
     }
 
-    /** KIS 가 직접 주는 캔들(일봉·당일 분봉·해외 일봉)과 심층 이력 페이지네이션. `fetchOHLCV` 가 쓰지 않는 원본 경로다. */
+    /** KIS 가 직접 주는 캔들(일봉·당일 분봉·해외 일봉)과 심층 이력 페이지네이션. `fetchOHLCV` 는 미국 일봉 폴백에만 이 경로를 쓴다. */
     candles(): KISCandleService {
         this.candleService ??= new KISCandleService(this);
         return this.candleService;
@@ -5145,8 +5145,7 @@ export class kis extends Exchange {
     /**
      * 기준 시각(`params.until`, 없으면 지금) 이전의 체결(`inquire-time-itemconclusion`, TR `FHPST01060000`). 국내만 지원한다. 행은 `output2`다.
      *
-     * 공식 문서는 체결가 필드를 `stck_pbpr`로 적었다. 다른 체결 조회는 `stck_prpr`를 쓰므로 오타일 수 있지만, 실제 응답으로 확인하지 못해
-     * 문서대로 읽는다. `price`가 비어 있으면 `info`의 원문을 본다.
+     * 체결가는 응답의 `stck_prpr`를 읽고, 없으면 공식 문서가 적은 `stck_pbpr`를 읽는다.
      */
     async fetchTradeTicksBefore(symbol: string, params: Dict = {}): Promise<KisTradeTick[]> {
         const [until, query] = this.handleUntilParam('fetchTradeTicksBefore', undefined, params);
@@ -5157,7 +5156,6 @@ export class kis extends Exchange {
             FID_INPUT_HOUR_1: kstHms(until ?? this.milliseconds()),
             tr_id: 'FHPST01060000',
         }, query));
-        // 예제 필드 목록은 가격을 `stck_pbpr`로 적지만 실계좌 응답(2026-09-24)에는 `stck_prpr`가 온다.
         return rowsOf(this.safeValue(response, 'output2')).map((row) => this.tradeTick(row, 'stck_prpr' in row ? 'stck_prpr' : 'stck_pbpr', 'cnqn'));
     }
 
@@ -5397,7 +5395,7 @@ export class kis extends Exchange {
 
     /**
      * 기준 시각(`params.until`, 없으면 지금)의 한국 날짜와 시각 이전 1분봉(`inquire-time-dailychartprice`, TR `FHKST03010230`).
-     * 국내만 지원한다. 두 입력은 필수이고 기본값을 두지 않는다. 과거 데이터 포함 여부와 허봉 포함 여부는 문서의 기본값(`N`, 빈 값)을 보낸다.
+     * 국내만 지원한다. 필수 입력인 날짜와 시각은 기준 시각으로 채운다. 과거 데이터 포함 여부와 허봉 포함 여부는 문서의 기본값(`N`, 빈 값)을 보낸다.
      */
     async fetchMinuteOHLCVAt(symbol: string, since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<OHLCV[]> {
         const [until, query] = this.handleUntilParam('fetchMinuteOHLCVAt', limit, params);
@@ -9795,8 +9793,7 @@ export class kis extends Exchange {
 
     /**
      * 체결별 매매손익과 청구된 수수료·거래세(`inquire-period-trade-profit`)를 기간으로 조회한다. 국내만 지원한다.
-     * KIS 는 이 조회에 연속조회(`tr_cont`)를 쓰는데, 기존 계좌·체결 조회들과 같은 이유로 아직 페이지를 이어 받지 않는다
-     * (실계좌 확인 전에는 구현하지 않는다) — 첫 페이지만 돌려준다.
+     * 연속조회(`tr_cont`)로 다음 페이지를 이어 받지 않고 첫 페이지만 돌려준다.
      */
     async fetchDomesticSettlements(since: Int, limit: Int = undefined, params: Dict = {}): Promise<KisTradeProfitRecord[]> {
         const [until, query] = this.handleUntilParam('fetchDomesticSettlements', limit, params);
@@ -10480,7 +10477,7 @@ export class kis extends Exchange {
     // ============ 수수료 ============
 
     /**
-     * 수수료율. 국내 위탁수수료 0.015%(뱅키스 기준, 계좌 유형·이벤트에 따라 다르다), 미국 0.25%다. 요율을 알려 주는 API 는 없어 표를 쓴다.
+     * 수수료율. 국내 위탁수수료 0.015%(계좌 유형과 할인에 따라 다르다), 미국 0.25%다. 요율을 알려 주는 API 는 없어 표를 쓴다.
      * 국내 매도에는 증권거래세가 더해진다. 세율은 시행일 표(`krx-sell-tax.ts`)를 따르며 `info.sellTaxRate` 에 있다.
      */
     override async fetchTradingFee(symbol: string, _params: Dict = {}): Promise<TradingFeeInterface> {

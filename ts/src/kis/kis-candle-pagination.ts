@@ -1,13 +1,8 @@
 /**
  * @fileoverview KIS 일봉 페이지네이션 창 계산 — **순수 모듈**.
  *
- * KIS `inquire-daily-itemchartprice` 는 한 응답에 **약 100행**만 준다. 그래서 800봉을
- * 요청해도 최근 100봉만 오는데, 호출부가 길이가 0 이 아니면 성공으로 읽고 심층 구간을
- * Yahoo 로 폴백했다. Yahoo 는 KR 티커에서 429 를 내 재시도를 모두 소모한다. 결과적으로
- * **종목당 31초를 낭비하면서 심층 이력은 쌓이지 않았다.**
- *
- * 창을 과거로 옮겨 가며 반복 호출하면 KIS 만으로 채울 수 있다. 그 창 계산을 여기 둔다 —
- * 날짜 산술은 조용히 틀리기 쉬운데 부수효과에 섞여 있으면 테스트하기 어렵다.
+ * KIS `inquire-daily-itemchartprice` 는 한 응답에 **약 100행**만 준다. 더 긴 이력은 창을 과거로 옮겨 가며
+ * 반복 호출해 채운다. 그 창 계산을 부수효과 없이 여기 둔다.
  */
 
 /** KIS 한 응답의 최대 행수(실측). 창 크기는 이걸 넘지 않게 잡는다. */
@@ -23,7 +18,7 @@ export const KIS_DAILY_PAGE_ROWS = 100;
  */
 export const KIS_DAILY_PAGE_DAYS = 140;
 
-/** 안전 상한 — 창이 과거로 무한히 이어지지 않게. 800봉이면 9창에 도달한다. */
+/** 안전 상한 — 창이 과거로 무한히 이어지지 않게. 800봉이면 8창이다. */
 export const KIS_DAILY_MAX_PAGES = 12;
 
 export interface DateWindow {
@@ -47,7 +42,7 @@ const MS_PER_DAY = 86_400_000;
  * `endExclusiveMs` 이전으로 한 창을 만든다.
  *
  * 창은 **겹치지 않게** 이어 붙인다 — `end` 는 이전 창의 `start` 보다 하루 전이다.
- * 겹치면 같은 캔들을 두 번 받고(업서트라 무해하지만 호출이 낭비), 벌어지면 **빈틈이 생긴다**.
+ * 겹치면 같은 캔들을 두 번 받고, 벌어지면 **빈틈이 생긴다**.
  */
 export function windowBefore(endMs: number, days: number = KIS_DAILY_PAGE_DAYS): DateWindow {
     const end = new Date(endMs);

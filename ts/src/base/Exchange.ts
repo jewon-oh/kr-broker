@@ -90,12 +90,14 @@ export function redactBodyForLog(body: string | undefined): string | undefined {
         if (value === null || typeof value !== 'object') return value;
         return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, SECRET_LOG_FIELDS.has(k.toLowerCase()) ? REDACTED : redact(v)]));
     };
+    // 읽을 수 없는 본문은 비밀이 섞여 있을 수 있어 길이만 남긴다.
+    const unreadable = `<본문 ${body.length}자, 해석하지 못해 생략>`;
     const trimmed = body.trim();
     if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
         try {
             return JSON.stringify(redact(JSON.parse(trimmed)));
         } catch {
-            return body;
+            return unreadable;
         }
     }
     if (/^[^=&\s]+=[^&]*(&[^=&\s]+=[^&]*)*$/.test(trimmed)) {
@@ -103,7 +105,7 @@ export function redactBodyForLog(body: string | undefined): string | undefined {
         for (const key of [...form.keys()]) if (SECRET_LOG_FIELDS.has(key.toLowerCase())) form.set(key, REDACTED);
         return form.toString();
     }
-    return body;
+    return unreadable;
 }
 
 /** HTTP 상태만 보고 만든 오류와 그 상태 코드. 증권사 오류 코드로 분류하지 못한 5xx 인지 가리는 데 쓴다. */

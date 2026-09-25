@@ -2,7 +2,7 @@
  * @fileoverview 패키지 진입점. ccxt 처럼 증권사 클래스(`kis`·`toss`·`kbsec`)와 그 부모(`Exchange`), 오류 계층, 자료 구조를 내보낸다.
  *
  * ```ts
- * import { kis } from '<패키지 이름>';
+ * import { kis } from 'kr-broker';
  * const broker = new kis({ apiKey, secret, uid: '12345678-01' });
  * await broker.loadMarkets();
  * const ticker = await broker.fetchTicker('005930/KRW');

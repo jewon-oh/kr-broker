@@ -24,8 +24,9 @@
  *
  * ## 옵션
  *
- * 전역 설정은 없고 인스턴스가 `options` 로 받는다. `tokenStore`(토큰 저장소), `nxtRouting`(정규장 밖 국내 주문을 SOR 로), `krwIntegratedMargin`(원마켓 계좌의
- * 미국 주식 매수여력을 원화 환산분으로 보강, 환율은 `usdKrwRate`), `masterData`(해외 종목의 상장 거래소 판별), `confirmBudget`(체결 확정 조회 예산)이다.
+ * 전역 설정은 없고 인스턴스가 `options` 로 받는다. `tokenStore`(토큰 저장소), `nxtRouting`(정규장 안의 국내 주문을 SOR 로. 정규장 밖 주문은
+ * 받지 않는다), `krwIntegratedMargin`(원마켓 계좌의 미국 주식 매수여력을 원화 환산분으로 보강, 환율은 `usdKrwRate`), `masterData`(해외 종목의
+ * 상장 거래소 판별), `confirmBudget`(체결 확정 조회 예산)이다.
  * 켜고 끄는 옵션은 불리언이거나 불리언을 돌려주는 함수다.
  *
  * ## 안전 계약
@@ -277,7 +278,6 @@ export interface KbsecFractionalHolding {
     info: Dict;
 }
 
-/** `fetchFractionalHoldings` 결과. `truncated`가 `true`면 `rows`에 없는 종목은 보유 0이 아니라 **읽지 못한 것**이다. */
 /** 해외 소수점 보유 한 종목(`SPQM5472`). 외화 축으로 받으므로 금액은 `currency` 통화다. */
 export interface KbsecOverseasFractionalHolding extends KbsecFractionalHolding {
     /** 통화코드(`crncy_cd`) */
@@ -628,6 +628,7 @@ export interface KbsecOverseasOrdersFetch {
     truncated: boolean;
 }
 
+/** `fetchFractionalHoldings` 결과. `truncated`가 `true`면 `rows`에 없는 종목은 보유 0이 아니라 **읽지 못한 것**이다. */
 export interface KbsecFractionalHoldingsFetch {
     rows: KbsecFractionalHolding[];
     truncated: boolean;
@@ -1676,7 +1677,7 @@ interface HoldingRow {
 
 const NO_ORDER_ID = '';
 
-/** 조건(스톱) 주문을 뜻하는 `createOrder` 인자. KB 클래스는 조건 주문을 보내지 않으므로 하나라도 있으면 거절한다. */
+/** 조건(스톱) 주문을 뜻하는 `createOrder` 인자. `createOrder` 는 조건 인자를 받지 않으므로 하나라도 있으면 거절한다. 스탑지정가는 `createTriggerOrder` 로 낸다. */
 const UNSUPPORTED_CONDITIONAL_PARAMS = ['triggerPrice', 'stopPrice', 'stopLossPrice', 'takeProfitPrice'] as const;
 
 export class kbsec extends Exchange {
@@ -1690,7 +1691,7 @@ export class kbsec extends Exchange {
     private readonly holdingPriceCache = new Map<string, { price: number; at: number }>();
     /** NXT 미상장이 실측으로 확인된 종목(인스턴스 수명). 거부 응답으로 역산하며 영속화하지 않는다. 재시작이 캐시 만료다. */
     private readonly nxtIneligible = new Set<string>();
-    /** 조회일자 되감기 캐시(시장별, 그 시장 날짜별). 연휴에 사이클마다 같은 실패를 반복하지 않게 한다. 국내와 해외는 날짜 축이 달라 따로 둔다. */
+    /** 조회일자 되감기 캐시(시장별, 그 시장 날짜별). 연휴에 호출마다 같은 실패를 반복하지 않게 한다. 국내와 해외는 날짜 축이 달라 따로 둔다. */
     private businessDateBackoff: Record<'KR' | 'US', { day: string; steps: number }> = { KR: { day: '', steps: 0 }, US: { day: '', steps: 0 } };
     private holdingFieldsLogged = false;
 
@@ -1739,7 +1740,7 @@ export class kbsec extends Exchange {
                 fetchTicker: true,
                 fetchTickers: false,
                 fetchOrderBook: true,
-                // 국내만 지원한다. 해외 차트는 봉 시각의 기준(한국 시각인지 현지 시각인지)이 명세에 없어 `NotSupported` 다.
+                // 국내만 지원한다. 해외 차트는 15분 지연 시세라 `NotSupported` 이고 `fetchOverseasCandles` 로 준다.
                 fetchOHLCV: true,
                 fetchBalance: true,
                 createOrder: true,
@@ -1815,7 +1816,7 @@ export class kbsec extends Exchange {
                  */
                 domesticConfirmBudget: { attempts: 5, intervalMs: 1000 },
                 // 켜고 끄는 옵션은 불리언이거나 불리언을 돌려주는 함수(값이 바뀔 수 있을 때)다. 기본은 꺼짐이다.
-                /** 정규장 밖 국내 주문을 SOR(KRX·NXT 중 유리한 쪽)로 낸다. */
+                /** 정규장 안의 국내 주문을 SOR(KRX·NXT 중 유리한 쪽)로 보낸다. 정규장 밖 주문은 세션 게이트가 `MarketClosed` 로 막는다. */
                 nxtRouting: undefined,
                 /**
                  * 원마켓(통합증거금) 계좌의 미국 주식 매수여력을 원화 환산분으로 보강한다. 원마켓 계좌는 USD 로 미리 환전하지 않고 원화로 미국 주식을 산다.
@@ -2217,8 +2218,9 @@ export class kbsec extends Exchange {
     }
 
     /**
-     * 종목 순위. 지금은 `FLUCTUATION`(등락률상위)과 `VOLUME`(거래량상위) 둘만 지원한다. KB 공식 순위 API는
-     * 외국인/기관매매상위·프로그램매매상위·거래대금상위·업종랭킹 등 9종이 더 있다. 국내만 지원한다.
+     * 종목 순위. 국내만 지원한다. `FLUCTUATION`(등락률상위)·`VOLUME`(거래량상위)·`PROGRAM_TRADING`(프로그램매매상위)·
+     * `TRADING_VALUE`(거래대금상위)·`OPEN_CHANGE_RATE`(시가대비등락률상위)·`EXTENDED_HOURS_CHANGE_RATE`(기간외등락률순위)·
+     * `SURGE_PLUNGE`(급등/급락 상위) 일곱 가지를 받고, 나머지는 `NotSupported` 다.
      */
     async fetchRankings(type: KbsecRankingType, params: Dict = {}): Promise<KbsecRankingItem[]> {
         switch (type) {
@@ -2651,7 +2653,7 @@ export class kbsec extends Exchange {
 
     /**
      * 봉. **국내만 지원한다.** 명세(`IVS11560`)의 필드 이름으로 읽으며, 실계좌로 검증한 적은 없다.
-     * 해외 차트(`GSC10060`)는 실계좌에서 15분 지연 시세였다. 지연 봉을 공통 메서드에 섞지 않으려고 해외는 `fetchOverseasCandles`로만 준다.
+     * 해외 차트(`GSC10060`)는 15분 지연 시세다. 지연 봉을 공통 메서드에 섞지 않으려고 해외는 `fetchOverseasCandles`로만 준다.
      * 시장구분(`mkt_clsf`)은 코스피(`0`)로 보낸다. 코스닥 종목에서 빈 응답이 오면 `params.mkt_clsf` 에 `'1'` 을 넘긴다.
      */
     override async fetchOHLCV(
@@ -2828,7 +2830,7 @@ export class kbsec extends Exchange {
         const krw = pickNum(deposit, ...krwFields);
 
         // 원마켓(통합증거금) 계좌는 달러 예수금이 0 이어도 원화로 미국 주식을 산다. `krwIntegratedMargin` 옵션이 켜져 있으면 원화환산 외화 예수금을 **USD 로 환산해**
-        // 라벨과 값의 축을 맞춘다. 원화 값을 USD 라벨에 그대로 담으면 사이징이 ~1,450배로 읽는다.
+        // 라벨과 값의 축을 맞춘다. USD 라벨에 원화 값을 담지 않는다.
         let oneMarketUsd: Dict | undefined;
         if (await this.isOptionEnabled('krwIntegratedMargin')) {
             const margin = await this.fetchOneMarketMargin();
@@ -3118,7 +3120,7 @@ export class kbsec extends Exchange {
         return 0;
     }
 
-    /** 평가용 현재가. 잔고 조회가 사이클마다 여러 번 불려 TR 왕복이 곱해지는 것을 TTL 캐시로 막는다. */
+    /** 평가용 현재가. 잔고 조회를 잇달아 불러도 종목마다 TR 을 다시 부르지 않도록 TTL 동안 캐시한다. */
     private async holdingPrice(code: string): Promise<number> {
         const cached = this.holdingPriceCache.get(code);
         if (cached !== undefined && Date.now() - cached.at < (this.options.holdingPriceTtl as number)) return cached.price;
@@ -4198,7 +4200,7 @@ export class kbsec extends Exchange {
      * 개인별 쿠폰(`SZQM6019`). 수수료 혜택 같은 쿠폰의 금액과 유효기간을 읽는다.
      *
      * 상태구분(`st_clsf`)은 설명이 없는 선택 입력이라 비워 보낸다. 공식 예시값 `1`이 어느 상태를 고르는지 모르므로, 예시값을 따르면
-     * 다른 상태의 쿠폰이 조용히 빠질 수 있다. 대표고객번호(`rprst_cs_no`)는 "계좌 또는 고객번호 필수"인데 계좌번호가 인증 헤더로 가므로 비워 보낸다.
+     * 다른 상태의 쿠폰이 조용히 빠질 수 있다. 대표고객번호(`rprst_cs_no`)는 "계좌 또는 고객번호 필수"지만 계좌가 앱키에 묶이므로 비워 보낸다.
      * 연속조회 키가 없는 TR 이라 한 번만 부른다. 쿠폰코드와 쿠폰명이 모두 빈 행은 쿠폰이 아니라서 거른다.
      */
     async fetchCoupons(params: Dict = {}): Promise<KbsecCoupon[]> {
@@ -4304,7 +4306,7 @@ export class kbsec extends Exchange {
 
     /**
      * 종목별기간실현손익(`SSQM2443`, 국내). 종목 단위 기간 합계라 개별 매매로 나눌 수 없다. 기간과 연속조회는 `fetchRealizedPnlDaily`와 같다.
-     * 매체구분은 기본값 없이 호출하는 쪽이 고른다. 이 TR 은 실계좌에서 API 권한이 없어(I446) 매체구분이 행을 거르는지 확인하지 못했다.
+     * 매체구분은 기본값 없이 호출하는 쪽이 고른다. 권한이 없는 계정에서는 I446 을 준다.
      */
     async fetchRealizedPnlBySymbol(media: KbsecMediaClass, since: Int = undefined, params: Dict = {}): Promise<KbsecSymbolRealizedPnlFetch> {
         const mdClsf = KBSEC_MEDIA_CLASS_CODE[media] as string | undefined;
@@ -4363,8 +4365,8 @@ export class kbsec extends Exchange {
      * - 접수 뒤에는 체결 조회로 체결가·수량을 확정한다. 확정하지 못하면 `order.info.fillConfirmed` 가 `false` 이고 `filled` 는 비어 있다.
      * - `params.fractional` 이 참이면 국내 소수점 주문이다(수량을 소수 6자리로 보내고 체결 확정을 하지 않는다).
      * - `params.sor` 는 국내 라우팅(`K` KRX · `N` NXT · `S` SOR)이다. 생략하면 `options.nxtRouting` 을 따른다.
-     * - **조건(스톱) 주문은 받지 않는다.** `params` 에 `triggerPrice`·`stopPrice`·`stopLossPrice`·`takeProfitPrice` 가 있으면 요청 없이 `NotSupported` 다.
-     *   버리고 일반 주문으로 내면 조건 주문을 의도한 호출이 곧바로 체결된다.
+     * - **조건 인자는 받지 않는다.** `params` 에 `triggerPrice`·`stopPrice`·`stopLossPrice`·`takeProfitPrice` 가 있으면 요청 없이 `NotSupported` 다.
+     *   버리고 일반 주문으로 내면 조건 주문을 의도한 호출이 곧바로 체결된다. 스탑지정가는 `createTriggerOrder` 로 낸다.
      *
      * 시간 초과나 연결 끊김은 `OrderOutcomeUnknown` 이다. 다시 보내지 말고 `fetchMyTrades` 로 접수 여부를 확인한다.
      */
@@ -4375,7 +4377,7 @@ export class kbsec extends Exchange {
         // 조건 주문 인자는 어떤 요청보다 먼저 거른다(세션 게이트의 휴장일 조회도 요청이다).
         for (const key of UNSUPPORTED_CONDITIONAL_PARAMS) {
             if (this.safeValue(params, key) !== undefined) {
-                throw new NotSupported(`${this.id} createOrder() does not support ${key} (conditional orders): 조건 주문은 지원하지 않는다`);
+                throw new NotSupported(`${this.id} createOrder() does not support ${key} (conditional orders): 조건 인자는 받지 않는다. 스탑지정가는 createTriggerOrder() 로 낸다`);
             }
         }
         this.checkOrderArguments(market, type, side, amount, price, params);
@@ -4385,7 +4387,7 @@ export class kbsec extends Exchange {
         const sorOverride = safeString(params, 'sor');
         const extra = omit(params, ['fractional', 'sor', 'timeInForce', 'postOnly', 'reduceOnly', 'clientOrderId', 'cost']);
 
-        // 세션 게이트. 장 마감 뒤에 사이클이 돌 때마다 주문이 실제로 KB 로 나가고, 거부된 뒤에야 실패로 기록되는 것을 막는다.
+        // 세션 게이트. 거래시간 밖 주문은 KB 로 보내지 않고 `MarketClosed` 로 막는다.
         // KRX 판정은 시장이 아는 사실이라 이 클래스가 자기 시간표를 갖지 않고 공용 술어에 맡긴다.
         if (isKr) await this.refreshMarketCalendar();
         const closed = marketSessionBlockReason('kbsec', symbol, undefined, masterDataOf(this.options));
@@ -4435,7 +4437,7 @@ export class kbsec extends Exchange {
                 // NXT 미상장 종목(우선주 등)은 SOR 로 나가면 통째로 거부된다. 브로커가 사유와 조치를 그대로 알려 준다(`KRX로 주문해주세요`).
                 // 업무 거부라 주문은 접수되지 않았고, 재전송이 중복 주문이 되지 않는다.
                 if (!wantSor || !(err instanceof ExchangeError) || err.detail !== KBSEC_ERROR_DETAIL.NXT_INELIGIBLE) throw err;
-                // 한 번 확인한 종목은 인스턴스 수명 동안 기억해 매 사이클 거부를 한 번씩 더 받지 않게 한다.
+                // 한 번 확인한 종목은 인스턴스 수명 동안 기억해 다음 주문부터 KRX 로 바로 보낸다.
                 this.nxtIneligible.add(base);
                 logger.warn({ symbol, side, submittedQty }, '[kbsec] NXT 미상장 — KRX 로 재주문 (이후 이 종목은 KRX 직행)');
                 response = await send(KBSEC_SOR.KRX);
@@ -4445,7 +4447,7 @@ export class kbsec extends Exchange {
                 trd_dl_ccd: side === 'buy' ? KBSEC_ORDER_SIDE_US.BUY : KBSEC_ORDER_SIDE_US.SELL,
                 is_cd: base,
                 frgn_ordr_typ_cd: isLimit ? KBSEC_ORDER_TYPE_US.LIMIT : KBSEC_ORDER_TYPE_US.MARKET,
-                // 국내와 같은 이유로 내림이다. `kbsecNum` 은 반올림이라 배정 자본을 초과 매수한다.
+                // 국내와 같은 이유로 내림이다. `kbsecNum` 은 반올림이라 요청 수량보다 많이 살 수 있다.
                 frgn_ordr_q: kbsecNum(submittedQty),
                 frgn_ordr_prc_p4: isLimit ? kbsecNum(effectivePrice ?? 0, 4) : '0',
                 ...extra,
@@ -4509,7 +4511,7 @@ export class kbsec extends Exchange {
     /**
      * 접수된 주문의 실체결을 확정해 `Order` 로 만든다.
      *
-     * 접수 응답에는 체결 정보가 없다. 체결가를 호출하는 쪽이 현재가로 짐작하면 진입가가 틀리므로 계좌 체결내역에서 주문번호로 찾아 확정한다.
+     * 접수 응답에는 체결 정보가 없으므로 계좌 체결내역에서 주문번호로 찾아 확정한다.
      * 확정하지 못하면 `filled`·`average` 를 **비워 둔다**(주문 자체는 접수 성공이다). 값을 지어내지 않고 `info.fillConfirmed: false` 로 알린다.
      */
     private async confirmedOrder(
@@ -4789,7 +4791,7 @@ export class kbsec extends Exchange {
             const ordrDt = country === 'US' ? kbsecBusinessDateUsEastern(steps) : kbsecBusinessDateKst(steps);
             try {
                 const result = await call(ordrDt);
-                // 캐시가 적중한 경우는 조용히 지나간다. 새로 되감았을 때만 남기지 않으면 연휴 내내 사이클마다 같은 WARN 이 쌓인다.
+                // 새로 되감았을 때만 WARN 을 남긴다. 캐시가 적중한 경우는 조용히 지나간다.
                 if (steps !== startSteps) {
                     logger.warn({ ordrDt, steps, country }, '[kbsec] 조회일자를 영업일보다 더 되감아 성공 — 미등록 휴장일로 보임');
                     this.businessDateBackoff[country] = { day: today, steps };

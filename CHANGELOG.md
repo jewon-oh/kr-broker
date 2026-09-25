@@ -53,6 +53,7 @@
 
 ### 고침
 
+- 보안: verbose 로그에서 JSON 이나 폼으로 읽지 못한 본문은 원문 대신 길이만 남깁니다. 예전에는 원문을 그대로 남겨, 깨진 JSON 에 섞인 비밀 필드가 가려지지 않았습니다.
 - 토스증권 조건주문의 `triggerPrice`(둘째 조건 포함)가 없거나 숫자가 아니면 `ArgumentsRequired`, 0 이하면 `InvalidOrder`를 요청 전에 던집니다. 예전에는 트리거 가격이 빠진 조건을 보냈고, 고액주문 확인 플래그도 붙지 않았습니다.
 - 보안: verbose 로그에서 비밀 헤더(`authorization`, `appkey`, `appsecret`)와 본문 필드(`appsecret`, `secretkey`, `client_secret`, `access_token`, `approval_key`, `refresh_token`)를 가립니다. 한국투자증권 체결통보 TR 은 암호화되지 않은 프레임을 버립니다. 실시간 주소는 `urls.ws`와 `urls.wsTest`를 따릅니다. 토스 `TossTokenRejected.failedToken`은 열거되지 않습니다.
 - KB증권 토큰 차단기가 프로세스 전체에 하나라 한 계정의 실패가 다른 계정의 주문까지 막던 것을 고쳤습니다. 앱키마다 따로 셉니다.

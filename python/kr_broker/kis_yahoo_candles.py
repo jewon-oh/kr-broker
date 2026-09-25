@@ -80,8 +80,8 @@ def _at(values: Any, index: int) -> Any:
 def align_tail_to_series_grid(candles: List[List[float]], timeframe: str) -> None:
     """진행 중인 마지막 봉의 시각을 시리즈의 격자(직전 봉에서 타임프레임의 배수)로 내린다. 제자리에서 바꾼다.
 
-    야후는 완성된 봉에 구간 시작 시각을 주지만 진행 중인 마지막 봉에는 지연된 현재 시각을 준다. 그대로 두면 폴링할 때마다 시각이 달라져
-    같은 봉이 새 행으로 쌓인다. 정시로 내리면 미국장 시간봉(13:30 UTC 앵커)의 키가 모두 바뀌므로 직전 봉 기준으로 맞춘다.
+    야후는 완성된 봉에 구간 시작 시각을 주지만 진행 중인 마지막 봉에는 지연된 현재 시각을 준다. 그대로 두면 부를 때마다 마지막 봉의
+    시각이 달라진다. 정시로 내리면 미국장 시간봉(13:30 UTC 앵커)의 시각이 모두 바뀌므로 직전 봉 기준으로 맞춘다.
     일봉·주봉·월봉(`d`, `w`, `W`, `M`)은 건드리지 않는다.
     """
     if timeframe.endswith(('d', 'w', 'W', 'M')):
@@ -160,8 +160,7 @@ def fetch_yahoo_candles(stock_code: str, timeframe: str = '1d', limit: int = 500
     interval = YAHOO_INTERVAL_MAP.get(timeframe)
     if not interval:
         logger.error('[YahooFinance] 미지원 timeframe — silent 폴백 차단 (timeframe=%s, stockCode=%s)', timeframe, stock_code)
-        raise NotSupported(f"[YahooFinance] 미지원 타임프레임 '{timeframe}'. 지원: {', '.join(YAHOO_INTERVAL_MAP)}. "
-                           '이전 동작(1d silent 폴백)은 지표 오계산 사고로 폐기.')
+        raise NotSupported(f"[YahooFinance] 미지원 타임프레임 '{timeframe}'. 지원: {', '.join(YAHOO_INTERVAL_MAP)}.")
     # period1·period2 는 Node 의 fetch 에서 400 이 나서 두 판 모두 range 로만 조회한다.
     max_range_ms = YAHOO_MAX_RANGE_MS.get(timeframe)
     if since:

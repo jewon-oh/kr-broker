@@ -1,5 +1,5 @@
 /**
- * @fileoverview 오류 계층. ccxt 의 구조를 따르되 주식 브로커에 의미 있는 가지만 남기고, 증권사에서 필요한 둘을 더했다.
+ * @fileoverview 오류 계층. ccxt 의 구조를 따르되 주식 브로커에 의미 있는 가지만 남기고, 증권사에서 필요한 `OrderOutcomeUnknown` 하나를 더했다.
  *
  * ```
  * BaseError
@@ -89,7 +89,7 @@ export class RequestTimeout extends NetworkError { override name = 'RequestTimeo
 export class BadResponse extends OperationFailed { override name = 'BadResponse'; }
 export class NullResponse extends BadResponse { override name = 'NullResponse'; }
 
-// ---- 증권사용 확장 ----
+// ---- 재시도하지 않는 클래스. `MarketClosed` 는 ccxt 에도 있고, `OrderOutcomeUnknown` 은 이 패키지가 더했다 ----
 
 /**
  * 장 시간 밖이거나 휴장일이라 주문·조회를 받을 수 없다. ccxt 와 같이 `OperationRejected`(거절) 아래에 둔다.

@@ -24,8 +24,10 @@ ccxt 와 같은 모양으로 다룬다. 실시간(`watch_*`)은 이 클래스를
 
 옵션
     `tokenStore`(토큰 저장소), `nxtRouting`(국내 확장세션 주문), `usExtendedLimit`(미국 확장세션 시장가를 지정가로),
-    `krwIntegratedMargin`(달러 예수금에 원화 예수금 환산 합산, 환율 폴백은 `usdKrwRate`), `confirmBudget`(체결 확정 조회 예산).
-    켜고 끄는 옵션은 불리언이거나 불리언을 돌려주는 함수이고 기본은 꺼짐이다.
+    `krwIntegratedMargin`(켜면 `fetch_balance({'currency': 'USD'})` 의 USD 에 원화 매수 여력의 달러 환산액을 늘 더한다. 환율은 토스 조회,
+    실패하면 `usdKrwRate`), `confirmBudget`(체결 확정 조회 예산), `confirmExecution`(접수 뒤 체결 확정 조회).
+    `nxtRouting`·`usExtendedLimit`·`krwIntegratedMargin` 은 불리언이거나 불리언을 돌려주는 함수이고 기본은 꺼짐이다. `confirmExecution` 은 기본이
+    켜짐이고 `False` 일 때만 꺼지므로 함수를 넘기면 늘 켜진다.
 
 오류
     토스의 오류 코드는 ccxt 오류 계층으로 옮기고 원래 코드는 `error.detail` 에 둔다. 장 시간 밖은 `MarketClosed`, 주문 요청이 시간 초과로 끝나
@@ -475,8 +477,8 @@ class toss(Exchange, ImplicitAPI):
             },
             'precisionMode': TICK_SIZE,
             'options': {
-                # 켜고 끄는 옵션은 불리언이거나 불리언을 돌려주는 함수(값이 바뀔 수 있을 때)다. 기본은 꺼짐이다.
-                # 미국 달러 예수금이 모자랄 때 원화 예수금을 환산해 합산한다(`fetch_balance({'currency': 'USD'})` 에만 적용).
+                # 아래 세 옵션은 불리언이거나 불리언을 돌려주는 함수(값이 바뀔 수 있을 때)다. 기본은 꺼짐이다.
+                # `fetch_balance({'currency': 'USD'})` 의 USD 에 원화 매수 여력의 달러 환산액을 늘 더한다. 환율은 토스 조회, 실패하면 `usdKrwRate` 다.
                 'krwIntegratedMargin': None,
                 # 국내 확장세션(프리·애프터) 주문을 연다.
                 'nxtRouting': None,
@@ -488,7 +490,7 @@ class toss(Exchange, ImplicitAPI):
                 'usdKrwRate': None,
                 # 접수 뒤 체결 확정 조회의 예산 `{'attempts', 'intervalMs'}`. 사전이거나 사전을 돌려주는 함수다.
                 'confirmBudget': None,
-                # 접수 뒤 체결이 확정될 때까지 주문 상세를 짧게 조회한다.
+                # 접수 뒤 체결이 확정될 때까지 주문 상세를 짧게 조회한다. 기본은 켜짐이고 `False` 일 때만 끈다(함수를 넘기면 켜진 것으로 본다).
                 'confirmExecution': True,
                 'authTimeout': AUTH_TIMEOUT_MS,
                 'calendarTtl': CALENDAR_TTL_MS,
@@ -875,13 +877,12 @@ class toss(Exchange, ImplicitAPI):
 
     async def fetch_ohlcv(self, symbol: str, timeframe: str = '1m', since: Int = None, limit: Int = None,
                     params: Optional[Dict[str, Any]] = None) -> List[List[Any]]:
-        """봉. 토스는 `1m` 과 `1d` 만 준다. 다른 주기를 가까운 주기로 몰래 바꾸면 1분봉이 다른 주기 이름으로 저장되므로 던진다.
+        """봉. 토스는 `1m` 과 `1d` 만 준다. 다른 주기는 가까운 주기로 바꾸지 않고 던진다.
         봉의 시각은 시작 시각이다(토스의 1분봉은 종료 시각으로 오므로 1분을 뺀다). `params['until']`(ms)은 이 시각 이전의 봉만 받는다."""
         params = {} if params is None else params
         interval = self.safe_string(self.timeframes, timeframe)
         if interval is None:
-            raise NotSupported(f"{self.id} 미지원 타임프레임 '{timeframe}'. 토스 API 는 1m·1d 만 제공한다. "
-                               '가까운 주기로 몰래 바꾸면 1분봉이 다른 주기 이름으로 저장되므로 던진다.')
+            raise NotSupported(f"{self.id} 미지원 타임프레임 '{timeframe}'. 지원: 1m, 1d")
         market = self.market(symbol)
         target = max(1, DEFAULT_CANDLE_LIMIT if limit is None else limit)
         until = self.safe_integer(params, 'until')
@@ -1098,7 +1099,7 @@ class toss(Exchange, ImplicitAPI):
                      params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """주문을 낸다. `params['triggerPrice']` 가 있으면 조건주문이다. 인자의 뜻은 모듈 설명을 본다.
 
-        확장세션(프리·애프터, 미국 주간거래)에서 시장가로 낸 청산은 지정가로 바꿔 낸다(옵션 `nxtRouting`·`usExtendedLimit` 이 켜져 있을 때만).
+        확장세션(프리·애프터, 미국 주간거래)에서 시장가 주문은 매수와 매도 모두 지정가로 바꿔 낸다(옵션 `nxtRouting`·`usExtendedLimit` 이 켜져 있을 때만).
         이때 지정가가 아직 체결되지 않았으면 미체결 주문(`status: 'open'`, `info['extendedSession']` 에 세션 이름)을 돌려준다.
         """
         params = {} if params is None else params
@@ -1121,7 +1122,7 @@ class toss(Exchange, ImplicitAPI):
         client_order_id = self.safe_string(params, 'clientOrderId')
         time_in_force = self._parse_time_in_force(params)
 
-        # 확장세션 시장가는 지정가로 바꿔 낸다. 바꾸지 않으면 세션 게이트를 열어도 주문 형태에서 막혀 청산할 수 없다.
+        # 확장세션 시장가는 지정가로 바꿔 낸다. 바꾸지 않으면 세션 게이트를 열어도 주문 형태 검사에서 막힌다.
         effective_type = type
         effective_price = price
         extended_session = None
@@ -1292,7 +1293,8 @@ class toss(Exchange, ImplicitAPI):
 
     async def _check_orderable_session(self, symbol: str, country: str, form: Dict[str, Any]) -> Optional[str]:
         """주문 접수 가능 시간과 형태를 검사한다. 막는 사유(한국어)이고, 접수할 수 있으면 `None`.
-        캘린더를 받지 못하면 정적 시간표(`is_toss_orderable`)로 판정한다. 그 폴백은 열어 주는 쪽이 아니라 좁히는 쪽으로 어긋난다."""
+        캘린더를 받지 못하면 정적 시간표(`is_toss_orderable`)로 판정한다. 그 폴백에서 국내 휴장일은 공용 캘린더가 알 때만 막고(모르면 연다),
+        미국 확장세션은 막는다(좁히는 쪽)."""
         now = _now_ms()
         if country == 'KR':
             session = await self.current_kr_session(now)
@@ -1301,7 +1303,7 @@ class toss(Exchange, ImplicitAPI):
             if session == 'closed':
                 return 'KRX 휴장·정규장 외'
             if session != 'regularMarket':
-                # 확장세션은 옵션으로 연다. 옵션을 보지 않고 막으면 켜 놓아도 확장세션 청산이 안 된다.
+                # 확장세션은 옵션 `nxtRouting` 이 켜져 있을 때만 연다.
                 if not self.is_option_enabled('nxtRouting'):
                     return f'KRX {session} 세션 — 확장세션 주문은 nxtRouting 옵션이 켜져 있어야 한다'
                 return kr_session_order_restriction(session, form)

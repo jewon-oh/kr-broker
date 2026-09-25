@@ -1,8 +1,8 @@
 /**
  * @fileoverview 체결 행 해석이 어긋났을 때 남기는 경고.
  *
- * 체결 행 파서(`kbsec-fill-row.ts`)는 필드 이름과 값 규칙을 실측으로 확정해 왔다. 규칙이 또 틀리면 조용히 잘못된 수량이 나오므로,
- * 어긋난 징후를 찾는 자리마다 경고를 남긴다. 매 사이클 같은 줄이 쌓이지 않도록 프로세스당 횟수를 제한한다.
+ * 체결 행 파서(`kbsec-fill-row.ts`)의 필드 이름과 값 규칙이 틀리면 조용히 잘못된 수량이 나오므로,
+ * 어긋난 징후를 찾는 자리마다 경고를 남긴다. 같은 줄이 반복해 쌓이지 않도록 프로세스당 횟수를 제한한다.
  * 값이 아니라 **키**만 남긴다. 수량·종목은 민감 정보이고, 첫 실응답이 정확한 이름을 알려 준다.
  */
 
@@ -35,7 +35,6 @@ let fillTotalsWarnCount = 0;
  * 주문 단위 수량 검산(`Σ체결 + 잔여미체결 = 주문수량`)이 깨졌을 때의 경고.
  *
  * 깨졌다면 분할체결 연속 행을 놓쳤거나 수량 모델이 또 바뀐 것이다. 어느 쪽이든 분할체결이 실제보다 적게 확정된다.
- * 남은 수량이 장부에 열린 채로 남고 다음 사이클이 없는 수량을 팔려다 거부된다.
  */
 export function warnIfFillTotalsInconsistent(parsed: KbsecFillRow[], rows: Record<string, unknown>[], where: string): void {
     if (fillTotalsWarnCount >= FILL_TOTALS_WARN_LIMIT || parsed.length === 0) return;

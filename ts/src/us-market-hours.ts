@@ -125,12 +125,8 @@ export function getUsMarketPhase(now: Date = new Date()): UsMarketPhase {
 }
 
 /**
- * `now` 기준 다음 미국 정규장 개장(09:30 ET)까지의 밀리초.
- *
- * 호출하는 쪽의 스케줄러가 야간/주말/휴장에 무의미한 사이클을 돌리지 않고
- * 다음 개장까지 한 번에 건너뛰기 위한 헬퍼 — KRX 용 `getTimeUntilKrxOpen()`
- * 의 NYSE/NASDAQ 대응. 정규장/동시호가 윈도우(pre-auction·open·closing-auction) 중이면
- * 0 반환 — 호출자는 `max(intervalMs, 0)` 로 처리해 사이클을 계속.
+ * `now` 기준 다음 미국 정규장 개장(09:30 ET)까지의 밀리초. KRX 용 `getTimeUntilKrxOpen()` 의
+ * NYSE/NASDAQ 대응. 정규장/동시호가 윈도우(pre-auction·open·closing-auction) 중이면 0 반환.
  *
  * ET↔UTC 오프셋은 DST 로 -4(EDT)/-5(EST) 가 바뀌므로 `Intl` 기반 1-pass 역산 사용
  * (09:30 은 spring-forward gap 02:00-03:00 과 무관해 단일 패스로 정확).
@@ -139,7 +135,7 @@ export function getUsMarketPhase(now: Date = new Date()): UsMarketPhase {
  * @returns ms (음수 없음). 정규장 중이면 0
  */
 export function getTimeUntilUsMarketOpen(now: Date = new Date()): number {
-    // 정규장(및 opening/closing 동시호가) 중이면 계속 사이클.
+    // 정규장(및 opening/closing 동시호가) 중이면 0.
     if (getUsMarketPhase(now) !== 'closed') return 0;
 
     const nowMs = now.getTime();

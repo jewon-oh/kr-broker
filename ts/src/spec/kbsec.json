@@ -98,7 +98,7 @@
                     "description": "보유율"
                 }
             ],
-            "evidence": "ts/src/kbsec.ts:989-1005(fetchInvestorRanking)"
+            "evidence": "ts/src/kbsec.ts(fetchInvestorRanking)"
         },
         "privatePostIva10370": { "api": ["private"], "method": "POST", "path": "iva10370", "cost": 1 },
         "privatePostIvs11190": { "api": ["private"], "method": "POST", "path": "ivs11190", "cost": 1 },

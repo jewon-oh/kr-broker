@@ -3,8 +3,7 @@
  * @description REST-only. 국내·해외 주식 현물 (오픈베타 2026-07-20 개시).
  *
  * 인증: OAuth2 Client Credentials (appKey/appSecret → access_token).
- * Base URL: https://developer.kbsec.com:32484 ← **비표준 포트**. egress 443 만 열린
- * 환경(일부 k8s NetworkPolicy·사내망)에서는 그대로 막히니 배선 전 개방 확인이 필요하다.
+ * Base URL: https://developer.kbsec.com:32484 ← **비표준 포트**다. 나가는 연결이 이 포트로 열려 있어야 한다.
  *
  * 전문(電文) 계열 규격이라 토스/KIS 와 방식이 다르다:
  * - 엔드포인트가 기능이 아니라 **TR 코드**다: `POST /api/v1/{trcode}` (조회도 전부 POST).
@@ -14,9 +13,8 @@
  *
  * 스펙 출처: KB증권 API 포털 문서와 공식 예제 저장소(2026-08-08 대조).
  *
- * **라이브 미검증**: KB 는 모의투자/샌드박스 서버를 제공하지 않아(운영 단일 환경),
- * 이 어댑터는 명세 기준으로만 작성됐다. 실계좌 키 등록 후 응답 대조가 필요하며,
- * 특히 주문 계열은 최소 수량·체결 불가 지정가로 스모크한 뒤 사용할 것.
+ * KB 는 모의투자 서버가 없어(운영 단일 환경) 검증은 실계좌로만 한다. TR 별 검증 수준은
+ * `docs/coverage/kbsec.json` 의 `verified` 를 본다.
  */
 
 import { isKrxDomesticCode } from '../broker-krx-code';
@@ -55,9 +53,8 @@ export interface KBSecCredentials {
     /** 포털에서 발급한 appSecret. 토큰 발급에만 쓴다. */
     appSecret: string;
     /**
-     * 계좌 식별자 — **KB 는 TR 본문에 계좌번호를 받지 않는다**(93개 TR 전수 확인).
-     * 계좌가 appKey 에 바인딩되는 구조로 보이며, 이 필드는 로깅·다계좌 구분용 메모다.
-     * 멀티 계좌 운용은 appKey 를 계좌 수만큼 발급해야 할 가능성이 크다(신청 시 확인 필요).
+     * 사람이 계좌를 구분하려는 메모(`uid`)다. **KB 는 계좌번호를 받지 않아**(계좌가 appKey 에 묶인다)
+     * 어떤 요청에도 보내지 않는다.
      */
     accountNo?: string;
 }
@@ -79,7 +76,7 @@ export interface KBSecRequestEnvelope<T = Record<string, unknown>> {
 /**
  * 응답 봉투. `dataBody` 앞머리에 공통 출력 필드가 붙는다:
  * o_lngth(출길이) · o_clsf(출구분) · o_msg(출메시지)
- * 업무 오류가 HTTP 200 으로 오므로 이 필드들이 성패 판정의 유일한 근거다.
+ * 성패는 이 필드가 아니라 `dataHeader.processFlag` 로 가른다(`kbsec-envelope.ts`).
  */
 export interface KBSecResponseEnvelope<T = Record<string, unknown>> {
     /** 업무 성패가 여기 담긴다 — processFlag 'A'=성공/'B'=실패 (실측 2026-08-09). */
@@ -90,7 +87,7 @@ export interface KBSecResponseEnvelope<T = Record<string, unknown>> {
 export interface KBSecCommonOutput {
     /** 출길이 */
     o_lngth?: string;
-    /** 출구분 — 정상/오류 구분값. 값 체계가 명세에 없어 o_msg 와 함께 판정한다. */
+    /** 출구분. 값 체계가 명세에 없어 성패 판정에 쓰지 않는다. */
     o_clsf?: string;
     /** 출메시지 — 오류 시 사유가 담긴다. */
     o_msg?: string;
@@ -181,7 +178,7 @@ export const KBSEC_TR = {
     QUOTE_US: 'GSS10030',
     /** 해외 호가 */
     ORDERBOOK_US: 'GSS10040',
-    /** 해외 차트 — 봉 시각의 기준(한국·현지)이 명세에 없다 */
+    /** 해외 차트 — 15분 지연 시세다. 봉 시각은 미국 동부 현지 시각이다 */
     CHART_US: 'GSC10060',
     /** 해외 시간대별체결 */
     TRADES_TIMELINE_US: 'GSA10020',
@@ -192,15 +189,12 @@ export const KBSEC_TR = {
     /** 보유주식 조회 */
     HOLDINGS: 'SSQM1801',
     /**
-     * 계좌자산평가 — 국내·해외 보유를 **한 번에** 준다 (2026-09-05 라이브 프로브로 확정).
+     * 계좌자산평가 — 국내·해외 보유를 **한 번에** 준다. 국내 보유 조회의 1순위다.
      *
-     * `SSQM1801` 이 못 주던 것을 전부 준다: `byng_avr_prc`(매입평균가) · `now_prc`(현재가) ·
-     * `val_amt`(평가금액) · `is_nm`(종목명), 그리고 결정적으로 **`ec_q`(실보유수량)** 와
-     * `nstmt_s_q`/`nstmt_b_q`(미결제 매도·매수)를 **분리해서** 준다.
+     * `SSQM1801` 에 없는 `byng_avr_prc`(매입평균가) · `now_prc`(현재가) · `val_amt`(평가금액) · `is_nm`(종목명)과
+     * **`ec_q`(실보유수량)**, `nstmt_s_q`/`nstmt_b_q`(미결제 매도·매수)를 **분리해서** 준다. 매도 후 결제대기 종목은 `ec_q=0` 이다.
      *
-     * 그래서 `max(gnrl_q, ordr_psbl_q)` 추정과 체결내역 3영업일 스캔이 필요 없다.
-     * 실측한 행 전부에서 `val_amt = ec_q × now_prc` 가 성립했고, 매도 후 결제대기 종목은
-     * `ec_q=0` · `val_amt=0` · `byng_avr_prc=0` 으로 **추정 없이** 걸러진다.
+     * 이 TR 이 실패하면 보유주식(`SSQM1801`) 경로로 내려가 `max(gnrl_q, ordr_psbl_q)` 추정과 체결내역 스캔으로 보정한다.
      */
     ASSET_EVAL: 'SSQM2952',
     /** 주식자산평가조회(실시간) */
@@ -242,11 +236,8 @@ export const KBSEC_TR = {
     /** 취소주문 */
     CANCEL_KR: 'SSAM1806',
     /**
-     * [미배선·권한없음] 주문체결현황 — 이 계정 appKey 에 **API 사용 권한이 없다**
-     * (실측 2026-08-11: HTTP 500 · `"API 사용 권한이 없습니다." processCode=I446`).
-     * 미체결 조회는 권한이 있는 `TRADES_KR`(SSQM2341, `ccls_clsf=2`)로 대신한다.
-     * KB 포털에서 이 TR 권한을 받기 전까지 다시 배선하지 말 것 — 호출은 전량 실패하고,
-     * 실패 반복은 KB 가 경고하는 계정 제한 사유가 된다.
+     * [미배선] 주문체결현황 — 권한이 없는 계정에서는 HTTP 500 과 `processCode=I446`("API 사용 권한이 없습니다.")을 준다.
+     * 미체결 조회는 `TRADES_KR`(SSQM2341, `ccls_clsf=2`)로 한다.
      */
     ORDERS_KR: 'SSQM0832',
     /** 계좌별주문체결조회 */
@@ -309,13 +300,7 @@ export const KBSEC_TR = {
     RESERVED_CANCEL_US: 'SPAO2106',
     /** 해외 주문번호별주문내역 */
     ORDER_HISTORY_US: 'SPQM1818',
-    /**
-     * 해외 주문체결조회 — 해외 **체결 확정**의 조달처.
-     *
-     * 종전엔 `[미배선]` 이었고, 그 탓에 `fetchMyTrades` 가 심볼과 무관하게 국내 TR 만 불렀다.
-     * 해외 주문의 체결 확정이 **국내 체결내역에서 US 티커를 찾는** 꼴이라 구조적으로 항상
-     * 실패했고, 매번 발주값이 진입가로 기록됐다. 상수는 있는데 연결이 없던 부분이다.
-     */
+    /** 해외 주문체결조회 — 해외 **체결 확정**의 조달처. 해외 체결은 국내 체결 TR 에 없다. */
     ORDERS_US: 'SPQM2103',
     /** 원마켓플러스 주문가능금액 (종목·가격 지정) — 원화환산 주문가능액을 준다 */
     ONEMARKET_BUYABLE: 'SKQM2106',
@@ -328,12 +313,7 @@ export const KBSEC_TR = {
     /** 원마켓 계좌증거금 — 원화·원화환산 외화 예수금 */
     ONEMARKET_MARGIN: 'SPQM3390',
     /**
-     * 해외 잔고평가조회 — **해외 보유 종목의 정본**.
-     *
-     * 포털 문서의 "고객계좌 해외 5종" 표에는 없다. 그 표엔 매매손익·정산·
-     * 증거금뿐이라 "KB 는 해외 보유잔고 TR 을 안 준다"고 읽혔는데, 실제로는 **트레이딩 분류**에
-     * 있었다(KB 공식 스펙 `samples.generated.json`, 2026-06-24 판). 그 오독 때문에 어댑터가
-     * 국내 TR 만 불렀고, 해외 실보유가 잔고에 나타나지 않았다.
+     * 해외 잔고평가조회 — **해외 보유 종목의 정본**. 포털 문서의 "고객계좌 해외" 표가 아니라 **트레이딩 분류**에 있다.
      *
      * 응답에 **그리드가 둘**이다 — 통화별 예수금(`crncy_clsf_nm`·`tfnd`…)과 종목별
      * 보유(`is_cd`·`frgn_hld_q_p6`…). 첫 배열을 집으면 예수금 쪽을 집는다.
@@ -348,8 +328,7 @@ export const KBSEC_TR = {
      *
      * 국내 `SETTLEMENT_KR` 과 **매매구분 도메인이 다르다** — 여기는 `char(2)` 의
      * `99`/`01`/`02` 고 국내는 `char(1)` 의 `9`/`1`/`2` 다. 국내 값을 그대로 보내면 KB 가
-     * `processCode 1861`("조회할 자료가 없습니다")로 답하고, 클라이언트가 그 코드를 정상
-     * 빈 결과로 흡수해 **거부가 "거래 없음" 과 똑같아 보인다.** 이것이 처음 관측된 증상이다.
+     * `processCode 1861`("조회할 자료가 없습니다")로 답해 **거부가 "거래 없음" 과 똑같아 보인다.**
      */
     SETTLEMENT_US: 'SPQM2205',
 } as const;
@@ -388,9 +367,8 @@ export function isKBSecOrderTr(trCode: string): boolean {
 // ============ 코드 매핑 ============
 
 /**
- * 국내 주문구분코드 (`ordr_ccd`).
- * FOK/IOC 계열(`F0`·`F3`·`F5` 등)도 명세에 있으나 이 어댑터는 지정가·시장가만 노출한다 —
- * 호출하는 쪽이 요구하는 TIF 가 그 둘뿐이고, 나머지는 라이브 검증이 없다.
+ * 국내 주문구분코드 (`ordr_ccd`). 지정가·시장가와 스톱지정가(`createTriggerOrder`)만 쓴다.
+ * FOK/IOC 계열(`F0`·`F3`·`F5` 등)도 명세에 있으나 쓰지 않는다.
  */
 export const KBSEC_ORDER_TYPE_KR = {
     LIMIT: '00',
@@ -431,8 +409,8 @@ export const KBSEC_INQ_STOCK = '1';
  * 조회구분 '전체'.
  *
  * 위 값 표는 **SSQM2341(체결/미체결)** 기준이다. 보유주식(SSQM1801)에서 같은 의미인지는
- * 미확인 — 그래서 잔고 조회는 `1` 을 먼저 쓰고 0건일 때만 이 값으로 재시도하며,
- * 무엇이 통했는지 로그로 남긴다(`fetchHoldingRows`). 확정되면 한쪽으로 고정할 것.
+ * 명세에 없어, 잔고 조회는 `1` 을 먼저 쓰고 0건일 때만 이 값으로 재시도하며
+ * 무엇이 통했는지 로그로 남긴다(`fetchHoldingRows`).
  */
 export const KBSEC_INQ_ALL = '9';
 
@@ -447,9 +425,7 @@ export const KBSEC_CCLS_PENDING = '2';
 
 /**
  * 매매구분 (`trd_clsf`, SSQM2341/SPQM2103 체결 행) — `1` 매도 · 그 외 매수.
- *
- * 종전엔 이 규칙이 어댑터 세 곳에 `=== '1'` 리터럴로 복제돼 있었다.
- * 복제된 규칙은 브로커가 값을 바꿀 때 한 곳만 고쳐지고 나머지가 조용히 어긋난다.
+ * 이 규칙은 이 상수 한 곳에만 둔다.
  */
 export const KBSEC_TRD_SELL = '1';
 
@@ -487,18 +463,8 @@ const US_EASTERN_DATE_FORMATTER = new Intl.DateTimeFormat('en-CA', {
  * 임의 시각의 **미국 현지 날짜** — `YYYYMMDD`. 해외 주문의 `ordr_dt` 축이다.
  *
  * 해외에 {@link kbsecDateKst} 를 쓰면 안 된다. 미국 정규장은 KST 로 22:30~05:00(겨울
- * 23:30~06:00)이라 **자정을 넘긴 체결이 하루 뒤로 밀린다.** 한 달가량의 해외 체결과
- * 정산 TR 행을 실측 대조했을 때 두 축의 결과가 서로 어긋났다:
- *
- * ET 일자 기준 → 체결 묶음과 정산 행이 전부 겹친다
- * KST 일자 기준 → 양쪽에 짝이 없는 조합이 다수 남는다. 거의 전부 어긋난다
- *
- * 그런데 어긋난 결과는 "그 날 정산이 없다" 로 보여서 로그가 조용하다. 그래서
- * `matchKbsecOverseasSettlements` 가 안 붙은 정산 묶음을 따로 세어 경고한다.
- *
- * UTC 날짜로도 실측 표본이 전부 맞지만 ET 를 쓴다. 정규장·시간외(~20:00 ET)는 두 축이
- * 같지만, 겨울(EST)의 19:00~20:00 ET 는 이미 UTC 로 다음 날이라 그 구간에서만 어긋난다.
- * "우연히 겹친 축" 이 아니라 **뜻이 맞는 축**을 쓴다.
+ * 23:30~06:00)이라 **자정을 넘긴 체결이 하루 뒤로 밀린다.** UTC 날짜도 겨울(EST)의
+ * 19:00~20:00 ET 에서 다음 날이 되어 어긋난다.
  */
 export function kbsecDateUsEastern(at: Date): string {
     return US_EASTERN_DATE_FORMATTER.format(at).replace(/-/g, '');
@@ -514,12 +480,7 @@ function kstNow(): Date {
  * 조회 기준일(`ordr_dt`) — **KB 의 `현재일자` 는 영업일**이라 주말·휴장일엔 직전 영업일에 머문다.
  *
  * 캘린더 날짜를 그대로 보내면 그날 조회가 **전량 거부**된다:
- * `주문일자가 현재일자보다 큽니다 [processCode=2854]`.
- * 라이브 실측(토요일): 토요일 00시를 넘긴 직후부터 미체결 조회가 매 사이클 실패했고
- * (30시간 동안 1,200여 건), 평일 같은 시각엔 한 건도 없었다. 즉 시각이 아니라 **요일** 문제다.
- *
- * 로그 소음에 그치지 않는다 — 같은 TR 을 쓰는 **체결 조회**도 함께 실패해서, 금요일 장 마감
- * 근처 체결을 주말에 재확인하면 "체결 미확인 → 요청 호가로 기록" 경로로 빠진다.
+ * `주문일자가 현재일자보다 큽니다 [processCode=2854]`. 같은 TR 을 쓰는 **체결 조회**도 함께 실패한다.
  *
  * 공휴일은 여기서 모델링하지 않는다(주말만 되감는다) — 호출부가 `2854` 를 만나면 한 칸씩 더
  * 되감아 재시도하고, 그때 WARN 을 남겨 **모르는 휴장일을 사후에 알 수 있게** 한다.
@@ -585,9 +546,8 @@ export const KBSEC_ORDER_SIDE_US = {
 } as const;
 
 /**
- * 해외 주문유형코드 (`frgn_ordr_typ_cd`).
- * VWAP/TWAP/MOO/MOC 도 명세에 있으나(개인용 API 로는 드문 표면) 라이브 검증 전까지
- * 시장가·지정가만 노출한다.
+ * 해외 주문유형코드 (`frgn_ordr_typ_cd`). 시장가·지정가와 스톱지정가(`C`, `createTriggerOrder`)만 쓴다.
+ * VWAP/TWAP/MOO/MOC 도 명세에 있으나 쓰지 않는다.
  */
 export const KBSEC_ORDER_TYPE_US = {
     MARKET: '1',
@@ -656,10 +616,8 @@ export function kbsecBaseSymbol(symbol: string): string {
 /**
  * KB 응답의 종목코드 → 도메인 코드(6자리).
  *
- * KB 는 국내 단축코드를 **`A` 접두**로 준다(`A005930`, KRX 표준 표기). 실측 2026-08-11:
- * 미체결 조회 응답의 `is_cd` 가 `A005930` 이었다. 그대로 넘기면 6자리 숫자가 아니라
- * `kbsecMarketOf` 가 **해외 종목으로 오판**한다 — `cancelAllOrders` 가 국내 주문을
- * 해외 취소 TR(SKAM2102)로 보내 전량 실패하고, 심볼 필터도 영영 매칭되지 않는다.
+ * KB 는 국내 단축코드를 **`A` 접두**로 준다(`A005930`, KRX 표준 표기). 그대로 넘기면 6자리 숫자가 아니라
+ * `kbsecMarketOf` 가 **해외 종목으로 오판**하므로 여기서 벗긴다.
  *
  * 표준종목번호(ISIN, `KR7005930003`)로 오는 필드도 같은 곳에서 흡수한다.
  */

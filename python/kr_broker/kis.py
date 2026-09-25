@@ -868,7 +868,7 @@ class kis(Exchange, ImplicitAPI):
                 'masterData': None,
                 # 국내 종목의 코스피·코스닥 구분을 알려 주는 곳(`find_kr_market(code)` 가 있는 객체). 없으면 마스터 데이터로 판별한다.
                 'stockDirectory': None,
-                # 접수 뒤 체결 확정 조회의 예산 `{'attempts', 'intervalMs'}`. 사전이거나 사전을 돌려주는 함수다.
+                # 체결 확정 조회의 예산. 한국투자증권은 이 옵션을 읽지 않는다.
                 'confirmBudget': None,
             },
         })
@@ -1305,7 +1305,7 @@ class kis(Exchange, ImplicitAPI):
         return native
 
     def candles(self) -> KISCandleService:
-        """KIS 가 직접 주는 봉(일봉·당일 분봉·해외 일봉)과 깊은 이력 페이지 조회. `fetch_ohlcv` 가 쓰지 않는 원본 경로다."""
+        """KIS 가 직접 주는 봉(일봉·당일 분봉·해외 일봉)과 깊은 이력 페이지 조회. `fetch_ohlcv` 는 미국 일봉 폴백에만 이 경로를 쓴다."""
         if self._candle_service is None:
             self._candle_service = KISCandleService(self)
         return self._candle_service
@@ -1313,7 +1313,7 @@ class kis(Exchange, ImplicitAPI):
     # ============ 수수료 ============
 
     def fetch_trading_fee(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """수수료율. 국내 위탁수수료 0.015%(뱅키스 기준, 계좌 유형과 이벤트에 따라 다르다), 미국 0.25%다. 요율을 알려 주는 API 가 없어 표를 쓴다.
+        """수수료율. 국내 위탁수수료 0.015%(계좌 유형과 할인에 따라 다르다), 미국 0.25%다. 요율을 알려 주는 API 가 없어 표를 쓴다.
         국내 매도에는 증권거래세가 더해진다. 세율은 시행일 표(`krx_sell_tax`)를 따르며 `info['sellTaxRate']` 에 있다."""
         instrument = self._instrument_of(symbol)
         rate = KIS_OVERSEAS_DEFAULT_FEE_RATE if instrument.overseas else KIS_BROKERAGE_FEE

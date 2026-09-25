@@ -30,7 +30,7 @@ export interface KisOrderbookRecord {
 export type KisRealtimeRecord = KisTradeRecord | KisOrderbookRecord;
 
 /**
- * 실시간 raw 종목코드 → priceStream/오더북 스트림 키.
+ * 실시간 raw 종목코드 → 체결가·호가 콜백의 심볼.
  * 국내(6자리) → `<code>/KRW`, 해외(ticker) → `<TICKER>/USD`.
  */
 export function toStreamSymbol(rawSymbol: string): string {
@@ -39,27 +39,8 @@ export function toStreamSymbol(rawSymbol: string): string {
 }
 
 /**
- * 해외 주식 스트림 quote — **`USD` 이지 `USDT` 가 아니다**.
- *
- * ## 왜 바꿨나 — bare 심볼 충돌
- *
- * 가격 스트림을 소비하는 쪽은 캐시와 리스너 콜백에서 **거래소 접두 없는 bare
- * 심볼**을 키로 쓸 수 있다.
- * 그래서 해외 주식을 `AAPL/USDT` 로 발행하면 **같은 프로세스에서 도는 다른 거래소의 피드와 키가
- * 겹칠 수 있다** — 주식을 토큰화해 `AMD/USDT` 로 거래하는 거래소가 실제로 그 모양이다.
- * 겹치면 다른 자산 가격으로 손절·익절을 평가하게 되고, 오류도 로그도 남지 않는다.
- *
- * `USD` 는 스테이블코인 페어에 쓰이지 않는 quote 라 그 자체로 네임스페이스 역할을 한다.
- * 접두를 새로 도입하는 것보다 **소비처 변경이 없고** 되돌리기도 쉽다.
- *
- * ## 부수 효과 — 저장 형태와 일치한다
- *
- * 해외 주식 포지션은 소비하는 쪽에서 이미 `AAPL/USD` 로 저장하고 있었고, 발행 키가 그와 달라
- * 불일치를 메우는 복원 후보를 따로 넣어야 했다. 이제 발행 키와 저장
- * 형태가 같으므로 그 간극 자체가 사라진다.
- *
- * 기존 데이터 이관 불필요 — 해외 주식은 애초에 피드에 한 건도 없었다(실측: 피드의
- * 주식 항목은 `kis:NNNNNN/KRW:spot` 국내뿐).
+ * 해외 주식 스트림 quote — **`USD` 이지 `USDT` 가 아니다**. 통합 심볼(`AAPL/USD`)과 같게 두어,
+ * 주식을 토큰화한 스테이블코인 페어(`AMD/USDT`)와 겹치지 않는다.
  */
 export const OVERSEAS_STREAM_QUOTE = 'USD';
 
@@ -109,7 +90,7 @@ export function parseKisRealtimeFrame(raw: string): KisRealtimeRecord[] {
         return out;
     }
 
-    // OVERSEAS_ASKING(HDFSASP0) 등은 후속.
+    // 해외 호가(HDFSASP0) 등 다른 TR 은 파싱하지 않는다.
     return out;
 }
 

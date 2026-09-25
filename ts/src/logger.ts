@@ -5,7 +5,7 @@
  * 원하는 구현(pino, console 등)을 넘긴다.
  *
  * ```ts
- * import { setLogger } from '<패키지 이름>';
+ * import { setLogger } from 'kr-broker';
  * setLogger({ debug: console.debug, info: console.info, warn: console.warn, error: console.error });
  * ```
  *

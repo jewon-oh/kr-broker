@@ -167,4 +167,6 @@ def test_redact_helpers_match_ts() -> None:
     from kr_broker.base.exchange import redact_body_for_log, redact_headers_for_log
     assert redact_headers_for_log({'AppKey': 'a', 'Content-Type': 'application/json'}) == {'AppKey': '***', 'Content-Type': 'application/json'}
     assert redact_body_for_log('grant_type=client_credentials&client_id=id&client_secret=s') == 'grant_type=client_credentials&client_id=id&client_secret=***'
-    assert redact_body_for_log('<html>maintenance</html>') == '<html>maintenance</html>'
+    assert redact_body_for_log('<html>maintenance</html>') == '<본문 24자, 해석하지 못해 생략>'
+    assert 'SECRET-VALUE' not in redact_body_for_log('{"client_secret":"SECRET-VALUE"')
+    assert redact_body_for_log('') == '' and redact_body_for_log(None) is None

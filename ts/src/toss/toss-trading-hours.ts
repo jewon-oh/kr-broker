@@ -3,7 +3,8 @@
  *
  * 국내는 `GET /market-calendar/KR`(KRX 와 NXT 통합)의 세션 구간으로, 미국은 `GET /market-calendar/US` 의 네 세션(주간거래·프리마켓·정규장·애프터마켓,
  * 전부 한국 시각)으로 지금 열려 있는 세션을 찾는다. 캘린더는 공휴일과 부분 휴장을 그대로 담고 있다.
- * 캘린더를 받지 못했을 때만 정적 시간표(`isTossOrderable`)로 판정한다. 그 폴백은 공휴일과 미국 확장세션을 모르므로 열어 주는 쪽이 아니라 좁히는 쪽으로 어긋난다.
+ * 캘린더를 받지 못했을 때만 정적 시간표(`isTossOrderable`)로 판정한다. 그 폴백에서 국내 휴장일은 공용 캘린더가 알 때만 막고(모르면 연다),
+ * 미국 확장세션은 막는다(좁히는 쪽).
  */
 
 import { isTradingHours, getTimeUntilMarketOpen } from '../trading-hours';
@@ -179,7 +180,7 @@ export function timeUntilTossOpen(now: Date = new Date()): number {
 /**
  * 종목의 시장 기준으로 지금 주문할 수 있는 시간대인가. 캘린더를 받지 못했을 때의 폴백이다.
  *
- * - 국내: KRX 정규장(평일 09:00~15:30). 공휴일을 몰라서 휴장일에도 열린 것으로 본다.
+ * - 국내: KRX 정규장(평일 09:00~15:30). 휴장일은 공용 캘린더가 알 때만 막고, 모르는 평일은 열린 것으로 본다.
  * - 미국: 미국 정규장과 종가 단일가만. 토스가 운영하는 주간거래·프리마켓·애프터마켓은 이 판정에 보이지 않아 좁게 막힌다.
  */
 export function isTossOrderable(symbol: string, now: Date = new Date()): boolean {

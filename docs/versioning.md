@@ -86,4 +86,13 @@ Node.js 22 미만에서는 동작을 확인하지 않았습니다.
 
 런타임 의존성은 실시간 시세용 `ws` 하나입니다. HTTP 요청은 전역 `fetch`를 사용합니다.
 
-언어별 지원 범위는 언어별 절에 적습니다.
+## Python 지원 범위
+
+| 항목 | 값 |
+|---|---|
+| `pyproject.toml`의 `requires-python` | Python 3.10 이상 |
+| CI 검사 | Linux의 Python 3.10과 3.13 |
+
+Python 판은 동기 판(`kr_broker`), 비동기 판(`kr_broker.async_support`), 실시간 판(`kr_broker.pro`)을 TypeScript 판과 같은 버전 번호로 냅니다. 동기 판 증권사 파일은 비동기 판에서 만들므로 두 판의 공개 API는 같습니다.
+
+Python 3.10 미만에서는 동작을 확인하지 않았습니다. 지원하는 Python 최소 버전을 올리는 변경은 파괴적 변경입니다.

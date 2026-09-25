@@ -11,7 +11,7 @@ from kr_broker.kis_master_search_rank import rank_master_matches
 
 logger = logging.getLogger('kr_broker')
 
-# 신형 영숫자 단축코드 보충. 2026-05-27 상장한 단일종목 인버스2X ETF 가 마스터 스냅샷에 없어 코드로 합친다(마스터에 있으면 마스터가 우선이다).
+# 넘긴 마스터 데이터에 같은 코드가 없을 때만 더하는 보충 종목. 같은 코드가 있으면 마스터 데이터의 행을 쓴다.
 CURATED_KRX_SUPPLEMENT = (
     {'code': '0193L0', 'name': 'PLUS 삼성전자선물단일종목인버스2X', 'market': 'KOSPI', 'securityType': 'ETF'},
     {'code': '0197X0', 'name': 'SOL SK하이닉스선물단일종목인버스2X', 'market': 'KOSPI', 'securityType': 'ETF'},

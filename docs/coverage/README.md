@@ -32,7 +32,7 @@
 - `evidence`가 빈 줄이나 다른 API의 정의 줄이 아니라 그 API를 가리킵니다.
 - 생성기가 만든 결과가 커밋된 `docs/brokers/`와 같습니다.
 
-`pnpm docs:check`는 마지막 두 항목을 검사합니다. 공개 저장소의 CI가 `docs:check`를 실행합니다.
+`pnpm docs:check`는 마지막 두 항목을 검사합니다. CI가 `docs:check`를 실행합니다.
 
 ## 증권사 파일
 
