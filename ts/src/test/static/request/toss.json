@@ -3811,6 +3811,70 @@
             }
         },
         {
+            "description": "fetchOrder 는 거절된 취소 요청의 레코드(CANCEL_REJECTED)를 rejected 로 옮긴다. 원주문은 이전 상태로 따로 조회된다",
+            "method": "fetchOrder",
+            "args": ["ORD-0031"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders/ORD-0031",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "orderId": "ORD-0031",
+                                "symbol": "005930",
+                                "side": "BUY",
+                                "orderType": "LIMIT",
+                                "timeInForce": "DAY",
+                                "status": "CANCEL_REJECTED",
+                                "price": "70000",
+                                "quantity": "3",
+                                "currency": "KRW",
+                                "orderedAt": "2026-03-25T01:00:00Z",
+                                "execution": { "filledQuantity": "0" }
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "info": {
+                    "orderId": "ORD-0031",
+                    "symbol": "005930",
+                    "side": "BUY",
+                    "orderType": "LIMIT",
+                    "timeInForce": "DAY",
+                    "status": "CANCEL_REJECTED",
+                    "price": "70000",
+                    "quantity": "3",
+                    "currency": "KRW",
+                    "orderedAt": "2026-03-25T01:00:00Z",
+                    "execution": { "filledQuantity": "0" }
+                },
+                "id": "ORD-0031",
+                "timestamp": 1774400400000,
+                "datetime": "2026-03-25T01:00:00.000Z",
+                "symbol": "005930/KRW",
+                "type": "limit",
+                "timeInForce": "DAY",
+                "side": "buy",
+                "price": 70000,
+                "amount": 3,
+                "filled": 0,
+                "cost": 0,
+                "status": "rejected",
+                "trades": [],
+                "fees": [],
+                "remaining": 3,
+                "postOnly": false
+            }
+        },
+        {
             "description": "fetchOrder 에 trigger 를 주면 조건주문 상세를 옮긴다",
             "method": "fetchOrder",
             "args": ["COND-0007", "005930", { "trigger": true }],

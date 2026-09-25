@@ -544,7 +544,7 @@
       "suggested": null,
       "proposal": null,
       "verified": "real",
-      "note": "주문 접수 뒤 체결 확인 폴링도 이 API를 씁니다. 미국 `editOrder`도 정정 전에 이 API로 남은 수량을 읽습니다.",
+      "note": "주문 접수 뒤 체결 확인 폴링도 이 API를 씁니다. 미국 `editOrder`도 정정 전에 이 API로 남은 수량을 읽습니다. 상태 `CANCEL_REJECTED`와 `REPLACE_REJECTED`는 `rejected`로 옮깁니다. 명세는 두 상태를 거절된 취소나 정정 요청을 기록한 별도 레코드로 정의하고, 원주문은 이전 상태로 돌아간다고 적습니다.",
       "spec": "https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1orders~1{orderId}/get"
     },
     {

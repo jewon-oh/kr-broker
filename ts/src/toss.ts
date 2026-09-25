@@ -2080,6 +2080,7 @@ export class toss extends Exchange {
             CANCELED: 'canceled',
             REPLACED: 'canceled',
             REJECTED: 'rejected',
+            // 명세: 거절된 취소·정정 요청을 기록한 별도 레코드의 상태다. 원주문은 이전 상태로 돌아가 제 상태로 따로 조회된다.
             CANCEL_REJECTED: 'rejected',
             REPLACE_REJECTED: 'rejected',
         };
