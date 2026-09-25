@@ -40,9 +40,11 @@ class BrokerTokenStore(Protocol):
 
     def delete_if_access_token_equals(self, key: str, access_token: str) -> bool:
         """저장된 값(JSON)의 `accessToken` 이 같을 때만 지운다. 남의 새 토큰을 지우지 않기 위해서다. 지웠으면 `True`."""
+        ...
 
     def try_lock(self, key: str, owner: str, ttl_ms: int) -> bool:
         """`ttl_ms` 동안 유효한 락을 잡는다. 이미 잡혀 있으면 `False`."""
+        ...
 
     def unlock(self, key: str, owner: str) -> None:
         """`owner` 가 잡은 락일 때만 푼다."""

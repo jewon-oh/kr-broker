@@ -88,6 +88,10 @@ jobs:
         working-directory: python
       - name: 예제 문법 검사
         run: python -m py_compile examples/py/*.py
+      # 타입 검사는 한 버전에서만 돈다. 표준 라이브러리는 설정의 pythonVersion(3.10) 기준으로 보므로 3.10 에서 따로 돌리지 않는다.
+      - name: 타입 검사(pyright 오류 수가 기준선과 같은지)
+        if: matrix.python == '3.13'
+        run: node scripts/check-python-types.mjs --python python
 
   # 운영 의존성만 검사한다. 개발 의존성의 취약점은 배포물에 실리지 않는다.
   audit:
