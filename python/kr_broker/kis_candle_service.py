@@ -3,7 +3,8 @@
 `kis.fetch_ohlcv` 는 이력이 긴 야후를 먼저 쓴다. 이 모듈은 KIS 원본 봉이 필요한 경로(깊은 이력 채우기, 당일 분봉, 야후가 빈 해외 일봉)를
 `kis` 인스턴스의 암묵 API 로 조회한다. 인스턴스의 `candles()` 가 이 서비스를 돌려준다.
 
-날짜 인자(`YYYYMMDD`)는 TypeScript 판처럼 이 프로세스의 지역 시간대로 만든다.
+국내 날짜 인자(`YYYYMMDD`)는 TypeScript 판처럼 이 프로세스의 지역 시간대로 만든다. 해외 기간별 시세의 기준일(`BYMD`)은 미국 거래일이라
+미국 동부 날짜로 적는다.
 """
 
 import datetime
@@ -14,6 +15,7 @@ from typing import Any, Callable, Dict, List, Optional
 from kr_broker.base import functions as fn
 from kr_broker.kis_candle_pagination import merge_candles, plan_windows
 from kr_broker.kis_candle_resample import resample_candles
+from kr_broker.us_market_hours import et_ymd
 
 logger = logging.getLogger('kr_broker')
 
@@ -43,6 +45,14 @@ def _format_local_date(ms: float) -> str:
     if not isinstance(ms, (int, float)) or not math.isfinite(ms):
         return 'NaNNaNNaN'
     d = datetime.datetime.fromtimestamp(ms / 1000)
+    return f'{d.year}{d.month:02d}{d.day:02d}'
+
+
+def _format_utc_date(ms: float) -> str:
+    """UTC 밀리초의 UTC 달력 날짜 `YYYYMMDD`. 시각이 아니면 JavaScript 처럼 `NaNNaNNaN` 이다."""
+    if not isinstance(ms, (int, float)) or not math.isfinite(ms):
+        return 'NaNNaNNaN'
+    d = datetime.datetime(1970, 1, 1) + datetime.timedelta(milliseconds=ms)
     return f'{d.year}{d.month:02d}{d.day:02d}'
 
 
@@ -173,7 +183,8 @@ class KISCandleService:
 
     def fetch_overseas_daily_ohlcv(self, ticker: str, market: str, timeframe: str, limit: int) -> List[List[float]]:
         """해외 기간별(일·주·월) 봉(`HHDFS76240000`). 한 번에 100건이라, 더 필요하면 기준일(`BYMD`)을 앞 페이지 마지막 날의 하루 전으로
-        옮겨 다시 부른다. `1d`·`1w`·`1M` 만 받는다(KIS 해외 분봉은 이 경로에 없다). 실패하면 로그를 남기고 빈 목록이다."""
+        옮겨 다시 부른다. `1d`·`1w`·`1M` 만 받는다(KIS 해외 분봉은 이 경로에 없다). 실패하면 로그를 남기고 빈 목록이다.
+        `BYMD` 는 미국 거래일이라 실행 환경의 시간대가 아니라 미국 동부 날짜로 적는다."""
         gubn = OVERSEAS_GUBN_MAP.get(timeframe)
         if not gubn:
             logger.warning('[KISCandleService] 해외 timeframe 미지원 — 1d/1w/1M 만 사용 가능 (ticker=%s, market=%s, timeframe=%s)',
@@ -181,7 +192,7 @@ class KISCandleService:
             return []
         try:
             collected: List[List[float]] = []
-            bymd = _format_local_date(fn.milliseconds())
+            bymd = et_ymd(fn.milliseconds())
             page = 0
             while page < OVERSEAS_MAX_PAGES and len(collected) < limit:
                 response = self.exchange.private_get_uapi_overseas_price_v1_quotations_dailyprice({
@@ -204,12 +215,12 @@ class KISCandleService:
                     collected.append([ts, _number(c, 'open'), _number(c, 'high'), _number(c, 'low'), _number(c, 'clos'), _number(c, 'tvol')])
                 if len(data) < OVERSEAS_PAGE_SIZE:
                     break
-                # 다음 페이지는 마지막 날의 하루 전(UTC)을 지역 시간대 날짜로 적어 부른다.
+                # 다음 페이지는 마지막 날의 하루 전을 달력 날짜 그대로(UTC) 적어 부른다.
                 last_xymd = data[-1].get('xymd')
                 if not last_xymd:
                     break
                 last_date = _parse_ms(f'{last_xymd[0:4]}-{last_xymd[4:6]}-{last_xymd[6:8]}T00:00:00Z')
-                bymd = _format_local_date(last_date - DAY_MS)
+                bymd = _format_utc_date(last_date - DAY_MS)
                 page += 1
             ordered = sorted(collected, key=lambda c: c[0])
             logger.info('[KISCandleService] fetchOverseasDailyOHLCV 완료 (ticker=%s, market=%s, timeframe=%s, count=%d)', ticker, market,

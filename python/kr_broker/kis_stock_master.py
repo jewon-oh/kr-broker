@@ -34,14 +34,14 @@ def _krx_stock_master(data: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 def search_krx_stocks(data: Dict[str, Any], query: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
-    """코드와 한글명(영문명이 있으면 영문명도)으로 찾는다. 검색어가 없으면 마스터 앞쪽을 돌려준다."""
+    """코드와 한글명(영문명이 있으면 영문명도)으로 찾는다. 대소문자는 가리지 않는다(신형 영숫자 코드 `0193L0`). 검색어가 없으면 마스터 앞쪽을 돌려준다."""
     master = _krx_stock_master(data)
     if not query or len(query.strip()) == 0:
         return master[:limit]
     q = query.strip().lower()
     results = [
         stock for stock in master
-        if q in stock['code'] or q in stock['name'].lower() or (stock.get('nameEn') is not None and q in stock['nameEn'].lower())
+        if q in stock['code'].lower() or q in stock['name'].lower() or (stock.get('nameEn') is not None and q in stock['nameEn'].lower())
     ]
     logger.debug('[KIS StockMaster] 종목 검색 query=%s resultCount=%d', query, len(results))
     return rank_master_matches(results, q, lambda s: s['code'])[:limit]

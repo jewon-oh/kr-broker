@@ -1,7 +1,7 @@
 """야후 파이낸스 차트 API(v8)로 받는 OHLCV 봉. TypeScript 판 `ts/src/kis/yahoo-finance-candles.ts` 와 같다.
 
 KIS 분봉은 당일뿐이고 일봉도 한 번에 100행이라, 한국투자증권 `fetch_ohlcv` 는 이력이 긴 야후를 먼저 쓴다. 키가 필요 없다.
-국내 종목코드는 `005930.KS`(코스피)·`247540.KQ`(코스닥)로, 미국 티커는 그대로 쓴다.
+국내 종목코드는 `005930.KS`(코스피)·`247540.KQ`(코스닥)로, 미국 티커는 점을 하이픈으로 바꿔(`BRK.B` → `BRK-B`) 쓴다.
 
 요청은 증권사 인스턴스의 HTTP 세션(`session`)으로 보낸다. 증권사 API 가 아니라서 서명, 호출 간격, 오류 봉투 처리를 거치지 않는다.
 """
@@ -17,6 +17,7 @@ from typing import Any, List, Optional
 import requests
 
 from kr_broker.base import functions as fn
+from kr_broker.base.errors import NotSupported
 from kr_broker.broker_krx_code import is_krx_domestic_code
 from kr_broker.broker_time import timeframe_to_ms
 from kr_broker.kis_candle_resample import resample_candles
@@ -47,10 +48,6 @@ YAHOO_RETRY_BASE_MS = 500
 # 프로세스 전체의 동시 요청 상한. 한꺼번에 많이 부르면 야후가 빈 응답을 대량으로 준다.
 YAHOO_MAX_CONCURRENT = 6
 _yahoo_slots = threading.BoundedSemaphore(YAHOO_MAX_CONCURRENT)
-
-
-class UnsupportedTimeframeError(ValueError):
-    """야후가 주지 않는 타임프레임. 예전에는 1d 로 몰래 바꿨는데 지표가 틀리게 계산되는 사고가 나서 던진다."""
 
 
 def _truthy(value: Any) -> bool:
@@ -86,9 +83,10 @@ def align_tail_to_series_grid(candles: List[List[float]], timeframe: str) -> Non
     """진행 중인 마지막 봉의 시각을 시리즈의 격자(직전 봉에서 타임프레임의 배수)로 내린다. 제자리에서 바꾼다.
 
     야후는 완성된 봉에 구간 시작 시각을 주지만 진행 중인 마지막 봉에는 지연된 현재 시각을 준다. 그대로 두면 폴링할 때마다 시각이 달라져
-    같은 봉이 새 행으로 쌓인다. 정시로 내리면 미국장 시간봉(13:30 UTC 앵커)의 키가 모두 바뀌므로 직전 봉 기준으로 맞춘다. 일봉·주봉은 건드리지 않는다.
+    같은 봉이 새 행으로 쌓인다. 정시로 내리면 미국장 시간봉(13:30 UTC 앵커)의 키가 모두 바뀌므로 직전 봉 기준으로 맞춘다.
+    일봉·주봉·월봉(`d`, `w`, `W`, `M`)은 건드리지 않는다.
     """
-    if timeframe.endswith('d') or timeframe.endswith('w'):
+    if timeframe.endswith(('d', 'w', 'W', 'M')):
         return
     if len(candles) < 2:
         return
@@ -135,7 +133,8 @@ def to_yahoo_range(window_ms: float) -> str:
 
 
 def to_yahoo_ticker(stock_code: str, kr_market: Optional[str] = None) -> str:
-    """종목코드를 야후 티커로 바꾼다. 국내는 `.KS`(코스닥은 `.KQ`)를 붙이고 미국 티커는 그대로 둔다. `stock:` 접두사와 `/KRW` 같은 접미사는 뗀다."""
+    """종목코드를 야후 티커로 바꾼다. 국내는 `.KS`(코스닥은 `.KQ`)를 붙이고 미국 티커는 점을 하이픈으로 바꾼다(`BRK.B` → `BRK-B`).
+    `stock:` 접두사와 `/KRW` 같은 접미사는 뗀다."""
     code = stock_code[6:] if stock_code.startswith('stock:') else stock_code
     code = code.split('/')[0] if '/' in code else code
     if code.endswith('.KS') or code.endswith('.KQ'):
@@ -143,7 +142,7 @@ def to_yahoo_ticker(stock_code: str, kr_market: Optional[str] = None) -> str:
     if is_krx_domestic_code(code):
         suffix = YAHOO_KR_SUFFIX['KOSDAQ'] if kr_market == 'KOSDAQ' else YAHOO_KR_SUFFIX['KOSPI']
         return f'{code}{suffix}'
-    return code
+    return code.replace('.', '-')
 
 
 def _backoff(attempt: int) -> None:
@@ -154,15 +153,15 @@ def fetch_yahoo_candles(stock_code: str, timeframe: str = '1d', limit: int = 500
                         kr_market: Optional[str] = None, session: Any = None) -> List[List[float]]:
     """야후에서 봉 `[[시각(ms), 시가, 고가, 저가, 종가, 거래량], ...]` 을 받는다. 최신 `limit` 개를 돌려준다.
 
-    받지 못하면(없는 심볼, 재시도를 다 쓴 빈 응답이나 실패) 빈 목록이다. 지원하지 않는 타임프레임은 `UnsupportedTimeframeError` 를 던진다.
+    받지 못하면(없는 심볼, 재시도를 다 쓴 빈 응답이나 실패) 빈 목록이다. 지원하지 않는 타임프레임은 `NotSupported` 를 던진다.
     `since` 가 있으면 `until`(없으면 지금)까지의 기간을 덮는 `range` 로, 없으면 타임프레임별 기본 `range` 로 조회한다.
     """
     yahoo_symbol = to_yahoo_ticker(stock_code, kr_market)
     interval = YAHOO_INTERVAL_MAP.get(timeframe)
     if not interval:
         logger.error('[YahooFinance] 미지원 timeframe — silent 폴백 차단 (timeframe=%s, stockCode=%s)', timeframe, stock_code)
-        raise UnsupportedTimeframeError(f"[YahooFinance] 미지원 타임프레임 '{timeframe}'. 지원: {', '.join(YAHOO_INTERVAL_MAP)}. "
-                                        '이전 동작(1d silent 폴백)은 지표 오계산 사고로 폐기.')
+        raise NotSupported(f"[YahooFinance] 미지원 타임프레임 '{timeframe}'. 지원: {', '.join(YAHOO_INTERVAL_MAP)}. "
+                           '이전 동작(1d silent 폴백)은 지표 오계산 사고로 폐기.')
     # period1·period2 는 Node 의 fetch 에서 400 이 나서 두 판 모두 range 로만 조회한다.
     max_range_ms = YAHOO_MAX_RANGE_MS.get(timeframe)
     if since:
@@ -224,11 +223,13 @@ def fetch_yahoo_candles(stock_code: str, timeframe: str = '1d', limit: int = 500
                         continue
                     ts = timestamps[i]
                     candles.append([0 if ts is None else ts * 1000, open_, high, low, close, 0 if volume is None else volume])
-                align_tail_to_series_grid(candles, timeframe)
+                # 4h 는 받은 1h 봉의 격자로 맞춘 뒤 합친다.
+                needs_resample = timeframe == '4h'
+                align_tail_to_series_grid(candles, '1h' if needs_resample else timeframe)
                 dedupe_by_timestamp_keep_last(candles)
                 logger.debug('[YahooFinance] 캔들 조회 완료 (symbol=%s, timeframe=%s, raw=%d, valid=%d)', yahoo_symbol, timeframe,
                              len(timestamps), len(candles))
-                final = resample_candles(candles, 4 * 60) if timeframe == '4h' else candles
+                final = resample_candles(candles, 4 * 60) if needs_resample else candles
                 return final if limit is None else final[-limit:]
             except Exception as err:
                 if can_retry:

@@ -41,6 +41,7 @@
     받는다(국내는 항상, 미국 일·주·월봉은 야후가 비면 KIS 로 다시 받는다). `fetch_order_book` 은 국내만, `fetch_tickers` 는 국내 30종목까지다.
 """
 
+import datetime
 import json
 import logging
 import math
@@ -77,7 +78,7 @@ from kr_broker.kis_yahoo_candles import fetch_yahoo_candles
 from kr_broker.krx_sell_tax import krx_sell_tax_rate
 from kr_broker.krx_trading_hours import check_krx_trading_hours, get_krx_market_phase, is_nxt_extended_tradable
 from kr_broker.market_calendar import refresh_market_calendar as refresh_shared_market_calendar
-from kr_broker.us_market_hours import et_wall_clock, format_et_wall_clock, get_us_market_phase
+from kr_broker.us_market_hours import et_wall_clock_to_utc_ms, et_ymd, format_et_wall_clock, get_us_market_phase
 
 logger = logging.getLogger('kr_broker')
 
@@ -182,18 +183,22 @@ def kst_ymd(ms: int) -> str:
     return fn.iso8601(ms + KST_OFFSET_MS)[:10].replace('-', '')
 
 
-def et_ymd(ms: int) -> str:
-    """UTC 밀리초의 미국 동부(ET) 날짜 `YYYYMMDD`. 해외 체결 조회의 일자는 현지 날짜다."""
-    et = et_wall_clock(ms)
-    return f'{et.year:04d}{et.month:02d}{et.day:02d}'
-
-
 def kst_timestamp(ymd: Str, hms: Str) -> Int:
     """`YYYYMMDD` 와 `HHMMSS`(한국 시각)를 UTC 밀리초로 바꾼다. 날짜를 못 읽으면 None, 시각을 못 읽으면 그날 0시다."""
     if ymd is None or _YMD.fullmatch(ymd) is None:
         return None
     clock = hms if hms is not None and _HMS.fullmatch(hms) is not None else '000000'
     return fn.js_date_parse_iso(f'{ymd[0:4]}-{ymd[4:6]}-{ymd[6:8]}T{clock[0:2]}:{clock[2:4]}:{clock[4:6]}+09:00')
+
+
+def et_timestamp(ymd: Str, hms: Str) -> Int:
+    """`YYYYMMDD` 와 `HHMMSS`(미국 동부 시각, 서머타임 반영)를 UTC 밀리초로 바꾼다. 읽는 규칙은 `kst_timestamp` 와 같다."""
+    kst = kst_timestamp(ymd, hms)
+    if kst is None:
+        return None
+    # 한국 시각으로 읽은 값에 9시간을 더하면 같은 벽시계 시각을 UTC 로 읽은 값이 된다.
+    wall = datetime.datetime(1970, 1, 1) + datetime.timedelta(milliseconds=kst + KST_OFFSET_MS)
+    return et_wall_clock_to_utc_ms(wall.year, wall.month, wall.day, wall.hour, wall.minute) + wall.second * 1000
 
 
 def first_row(value: Any) -> Dict[str, Any]:
@@ -1396,10 +1401,17 @@ class kis(Exchange, ImplicitAPI):
         request = self.extend(spec['params'](self.milliseconds()), {'tr_id': spec['trId']})
         response = call(self.extend(request, prepared))
         f = spec.get('fields') or {}
-        currency = _tpl(KIS_OVERSEAS_RANKING_EXCHANGES.get(fn.js_string(prepared.get('EXCD')))) if spec.get('overseas') else 'KRW'
+        overseas = bool(spec.get('overseas'))
+        currency = _tpl(KIS_OVERSEAS_RANKING_EXCHANGES.get(fn.js_string(prepared.get('EXCD')))) if overseas else 'KRW'
+
+        def symbol_of(row: Dict[str, Any]) -> str:
+            # 해외 슬래시 티커(`BRK/B`)는 다른 메서드처럼 점 심볼(`BRK.B/USD`)로 옮긴다.
+            code = self.safe_string(row, spec['symbolKey'], '')
+            return f"{code.replace('/', '.', 1) if overseas else code}/{currency}"
+
         return [{
             'rank': self.safe_number(row, f.get('rank', 'data_rank')),
-            'symbol': f"{self.safe_string(row, spec['symbolKey'], '')}/{currency}",
+            'symbol': symbol_of(row),
             'name': _or_none(self.safe_string(row, f.get('name', 'hts_kor_isnm'))),
             'last': self.safe_number(row, f.get('price', 'stck_prpr')),
             'change': self.safe_number(row, f.get('change', 'prdy_vrss')),
@@ -1951,19 +1963,27 @@ class kis(Exchange, ImplicitAPI):
 
     def cancel_all_orders(self, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """미체결 주문을 모두 취소한다. 종목을 주면 그 종목만이다. 하나라도 취소하지 못하면 나머지를 다 시도한 뒤 첫 실패를 던진다.
-        살아 있을 수 있는 주문을 성공으로 돌려주지 않기 위해서다. TypeScript 판은 동시에 보내고 이 판은 같은 순서로 차례로 보낸다."""
+        살아 있을 수 있는 주문을 성공으로 돌려주지 않기 위해서다. TypeScript 판은 동시에 보내고 이 판은 같은 순서로 차례로 보낸다.
+        국내 취소에는 공식 예제처럼 미체결 행의 주문채번지점번호(`ord_gno_brno`)를 원주문 조직번호로 싣는다."""
         open_orders = self.fetch_open_orders(symbol, None, None, params)
         results: List[Dict[str, Any]] = []
         first_error: Optional[BaseException] = None
         for order in open_orders:
             try:
-                results.append(self.cancel_order(order['id'], order.get('symbol'), {}))
+                results.append(self.cancel_order(order['id'], order.get('symbol'), self._cancel_params_of(order)))
             except Exception as error:
                 if first_error is None:
                     first_error = error
         if first_error is not None:
             raise first_error
         return results
+
+    def _cancel_params_of(self, order: Dict[str, Any]) -> Dict[str, Any]:
+        """`cancel_all_orders` 가 미체결 주문 하나를 취소할 때의 `params`. 해외 취소 요청에는 조직번호가 없어 아무것도 싣지 않는다."""
+        org_no = self.safe_string(order.get('info'), 'ord_gno_brno')
+        symbol = order.get('symbol')
+        overseas = symbol is not None and self._instrument_of(symbol).overseas
+        return {} if org_no is None or overseas else {'orderOrgNo': org_no}
 
     # ============ 주문·체결 조회 ============
 
@@ -2113,9 +2133,10 @@ class kis(Exchange, ImplicitAPI):
             price = self.safe_string(order, 'ft_ord_unpr3')
             average = self.safe_string(order, 'ft_ccld_unpr3')
             cost = self.safe_string(order, 'ft_ccld_amt3')
+            # 국내 주문일시(`dmst_ord_dt`, `thco_ord_tmd`)는 한국 시각, 현지 주문일시(`ord_dt`, `ord_tmd`)는 미국 동부 시각이다.
             timestamp = kst_timestamp(self.safe_string(order, 'dmst_ord_dt'), self.safe_string(order, 'thco_ord_tmd'))
             if timestamp is None:
-                timestamp = kst_timestamp(self.safe_string(order, 'ord_dt'), self.safe_string(order, 'ord_tmd'))
+                timestamp = et_timestamp(self.safe_string(order, 'ord_dt'), self.safe_string(order, 'ord_tmd'))
             status = self._order_status_of(filled, remaining, None)
         else:
             amount = self.safe_string(order, 'ord_qty')
@@ -2169,7 +2190,7 @@ class kis(Exchange, ImplicitAPI):
             order_date = self.safe_string_2(trade, 'ord_dt', 'dmst_ord_dt', '')
             timestamp = kst_timestamp(self.safe_string(trade, 'dmst_ord_dt'), self.safe_string(trade, 'thco_ord_tmd'))
             if timestamp is None:
-                timestamp = kst_timestamp(order_date, self.safe_string(trade, 'ord_tmd'))
+                timestamp = et_timestamp(order_date, self.safe_string(trade, 'ord_tmd'))
         else:
             order_date = self.safe_string(trade, 'ord_dt', '')
             timestamp = kst_timestamp(order_date, self.safe_string(trade, 'ord_tmd'))

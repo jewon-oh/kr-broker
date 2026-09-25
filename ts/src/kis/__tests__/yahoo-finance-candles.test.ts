@@ -4,6 +4,7 @@
  * 버스트 스로틀(빈 응답) 재시도 회복.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { NotSupported } from '../../base/errors';
 import { fetchYahooCandles } from '../yahoo-finance-candles';
 
 describe('fetchYahooCandles — 미지원 timeframe', () => {
@@ -15,13 +16,11 @@ describe('fetchYahooCandles — 미지원 timeframe', () => {
         await expect(fetchYahooCandles('005930', '8h')).rejects.toThrow(/미지원 타임프레임/);
     });
 
-    it('error.name 은 UnsupportedTimeframeError (catch 분기용)', async () => {
-        try {
-            await fetchYahooCandles('005930', '2d');
-            expect.fail('throw 되어야 함');
-        } catch (e) {
-            expect((e as Error).name).toBe('UnsupportedTimeframeError');
-        }
+    it('★ccxt 오류 클래스 NotSupported 를 던지고 메시지에 타임프레임을 담는다(토스증권과 같다)', async () => {
+        const error = await fetchYahooCandles('005930', '2d').catch((e: unknown) => e);
+        expect(error).toBeInstanceOf(NotSupported);
+        expect((error as Error).name).toBe('NotSupported');
+        expect((error as Error).message).toContain("'2d'");
     });
 });
 

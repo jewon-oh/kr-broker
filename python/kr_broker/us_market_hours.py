@@ -79,6 +79,12 @@ def et_wall_clock(now_ms: Optional[int] = None) -> EtWallClock:
     return _to_et_wall_clock(fn.milliseconds() if now_ms is None else now_ms)
 
 
+def et_ymd(now_ms: int) -> str:
+    """UTC 밀리초의 미국 동부(ET) 날짜 `YYYYMMDD`. 미국 거래일을 요청에 적을 때 쓴다."""
+    et = _to_et_wall_clock(now_ms)
+    return f'{et.year:04d}{et.month:02d}{et.day:02d}'
+
+
 def _is_us_holiday(et: EtWallClock) -> bool:
     """그 동부 날짜가 휴장일인가. 증권사 캘린더가 알려 준 날짜만 안다."""
     if et.weekday in (0, 6):
