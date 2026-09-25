@@ -82,7 +82,7 @@ TypeScript 판과 Python 판이 있습니다. Python 판은 ccxt처럼 동기(`k
 | 정정 `editOrder` | ✅ | ✅ | ⚠️ | `kis` 정정 구분(RVSE_CNCL_DVSN_CD=01)으로 취소와 같은 엔드포인트를 씁니다. `amount`를 주면 일부정정, 안 주면 전량정정입니다.<br>`toss` 국내는 수량과 가격을 함께(`amount` 필수), 미국은 가격만(`amount`를 주면 `NotSupported`) 정정합니다. 조건주문 정정(`params.trigger: true`)은 조건 전체를 다시 보내는 재설정이라 새 conditionalOrderId가 발급됩니다.<br>`kbsec` 미국은 가격만 정정합니다. `price`가 없으면 요청 전에 `ArgumentsRequired`를 던집니다. |
 | 취소 `cancelOrder` | ✅ | ✅ | ✅ | `toss` 조건 주문은 `params.trigger`로 취소합니다.<br>`kbsec` 전량 취소만 씁니다. |
 | 전체 취소 `cancelAllOrders` | 🔁 | 🔁 | 🔁 | `kis` 미국은 실전만 지원합니다.<br>`kbsec` 국내만 지원합니다. |
-| 정규장 밖 주문 | ⚠️ | ✅ | ❌ | `kis` 국내만 지원합니다. `options.nxtRouting`이 필요합니다.<br>`toss` 정수 지정가만 받습니다. 국내는 `options.nxtRouting`이 필요합니다.<br>`kbsec` 주문 TR이 시간외 시장을 받지만 세션 검사가 정규장 밖 주문을 막습니다. |
+| 정규장 밖 주문 | ⚠️ | ✅ | ❌ | `kis` 국내만 지원합니다. `options.nxtRouting`이 필요합니다.<br>`toss` 국내는 `options.nxtRouting`이 필요하고 시장가는 현재가 지정가로 바꿉니다. 미국은 정수 수량의 지정가만 받고, `options.usExtendedLimit`을 켜면 시장가를 지정가로 바꿉니다.<br>`kbsec` 주문 TR이 시간외 시장을 받지만 세션 검사가 정규장 밖 주문을 막습니다. |
 | 주문 조회 `fetchOrder` | ✅ | ✅ | ⚠️ | `kbsec` 미국은 최근 사흘의 주문만 찾습니다. |
 | 주문 목록 `fetchOrders` | ✅ | ➖ | ⚠️ | `toss` 주문 목록 API는 상태(OPEN, CLOSED)를 지정해야 합니다.<br>`kbsec` 국내만 지원합니다. `since`는 적용하지 않습니다. |
 | 미체결 `fetchOpenOrders` | ⚠️ | ✅ | ⚠️ | `kis` 미국은 실전만 지원합니다.<br>`toss` 미체결 조건 주문은 100건씩 최대 10쪽(1,000건)까지 받습니다.<br>`kbsec` 국내만 지원합니다. `since`는 적용하지 않습니다. |
@@ -93,7 +93,7 @@ TypeScript 판과 Python 판이 있습니다. Python 판은 ccxt처럼 동기(`k
 | 종목 정보 `fetchStocks` | ✅ | ✅ | ✅ | `kis` 해외 종목은 지원하지 않습니다. `BadSymbol`을 던집니다.<br>`toss` 200종목을 초과해도 나누어 호출하지 않습니다.<br>`kbsec` 국내만 지원합니다. 해외 종목코드로도 조회되는지는 명세에 없어 확인 불가입니다. |
 | 거래정지와 경고 `fetchStockWarnings` | ⚠️ | ✅ | ✅ | `kis` VI(변동성완화장치) 발동 현황만 줍니다. 정리매매와 단기과열 여부, 시장경고 구분은 `fetchStockStatus`가 현재 상태로만 줍니다. 신주인수권은 대응하는 값이 없습니다.<br>`kbsec` 국내만 지원합니다. 종목 하나의 현재 상태(매매제한·위험등급)를 줍니다. 발동 이력이 아닙니다. |
 | 투자자별 매매동향 `fetchInvestorTrading` | ⚠️ | ⚠️ | ⚠️ | `kis` 종목 단위만 지원합니다(토스는 시장 단위)<br>`toss` 국내 시장 단위만 지원합니다.<br>`kbsec` 국내만 지원합니다. 13개 투자자 유형(개인·외국인·기관 외 증권·보험·투신 등)을 하루 단위로 줍니다. |
-| 종목 랭킹 `fetchRankings` | ⚠️ | ✅ | ⚠️ | `kis` 등락률 순위와 거래량 순위만 지원합니다. 공식 API는 그 밖에도 30종 가까이 더 있습니다(시가총액·신용잔고·공매도 등, 각각 별도 엔드포인트)<br>`kbsec` 등락률상위와 거래량상위만 지원합니다. 공식 API는 그 밖에도 7종 더 있습니다(외국인·기관매매상위·프로그램매매상위·거래대금상위·업종랭킹 등) |
+| 종목 랭킹 `fetchRankings` | ⚠️ | ✅ | ⚠️ | `kis` 국내와 해외, ELW 순위 46종을 받습니다. 종류마다 공식 엔드포인트가 따로 있습니다.<br>`kbsec` 국내 순위 7종(등락률, 거래량, 프로그램매매, 거래대금, 시가대비 등락률, 시간외 등락률, 급등락)을 받습니다. |
 <!-- coverage:end -->
 
 증권사별 공식 API 목록과 더 자세한 판단 근거는 [docs/brokers/](docs/brokers/README.md)에 있습니다.
@@ -102,7 +102,7 @@ TypeScript 판과 Python 판이 있습니다. Python 판은 ccxt처럼 동기(`k
 
 `fetchMarketCalendar`는 세 증권사 모두 있지만 반환 형식이 다릅니다. 토스증권은 세션 시각 원본을, 한국투자증권과 KB증권은 날짜별 캘린더 목록을 반환합니다.
 
-한국투자증권과 토스증권에서 정규장 밖 국내 주문을 내려면 `options.nxtRouting`을 켜야 합니다. 이때 두 증권사는 지정가 주문만 받습니다. 토스증권은 미국도 정규장 밖에는 정수 수량의 지정가 주문만 받습니다. `options.usExtendedLimit`을 켜면 미국 정규장 밖의 시장가 주문을 지정가 주문으로 변환해 냅니다.
+한국투자증권과 토스증권에서 정규장 밖 국내 주문을 내려면 `options.nxtRouting`을 켜야 합니다. 이때 두 증권사는 시장가 주문을 현재가 기준의 지정가 주문으로 바꿔 냅니다. 같은 방향의 미체결 주문이 있거나 기준가를 구하지 못하면 주문을 보내지 않고 오류를 던집니다. 토스증권은 미국도 정규장 밖에는 정수 수량의 지정가 주문만 받습니다. `options.usExtendedLimit`을 켜면 미국 정규장 밖의 시장가 주문을 지정가 주문으로 변환해 냅니다.
 
 ```ts
 new kis({}).has.fetchOHLCV; // true, false, 'emulated' 중 하나
@@ -144,7 +144,7 @@ async function main(): Promise<void> {
     await broker.loadMarkets();
 
     const ticker = await broker.fetchTicker('005930/KRW');
-    console.log(ticker.symbol, ticker.last, ticker.bid, ticker.ask);
+    console.log(ticker.symbol, ticker.last, ticker.close);
 
     const balance = await broker.fetchBalance({ scope: 'kr' });
     console.log(balance.free, balance.total);
@@ -238,11 +238,11 @@ buy().catch(console.error);
 
 | 오류 | 뜻 | 재시도 |
 |---|---|---|
-| `NetworkError`, `RequestTimeout` | 조회 요청이 끊기거나 시간 초과 | `maxRetriesOnFailure` 횟수만큼 다시 보냅니다(기본 0, 한국투자증권은 3) |
+| `NetworkError`, `RequestTimeout` | 조회 요청이 끊기거나 시간 초과 | `maxRetriesOnFailure` 횟수만큼 다시 보냅니다(기본 0, 한국투자증권은 3). 한국투자증권은 시간 초과를 재시도하지 않습니다 |
 | `RateLimitExceeded` | 호출 한도 초과 | 잠시 뒤 |
 | `AuthenticationError`, `PermissionDenied` | 키가 틀렸거나 권한이 없음 | 하지 않습니다 |
 | `InsufficientFunds`, `InvalidOrder` | 잔고나 주문 값 문제 | 하지 않습니다 |
-| `MarketClosed` | 장 시간 밖이거나 휴장일 | 개장 뒤 |
+| `MarketClosed` | 장 시간 밖이거나 휴장일 | 개장 뒤. KB증권 미국 주문은 `masterData`가 없으면 개장 뒤에도 막힙니다 |
 | `OrderOutcomeUnknown` | 주문 접수 여부를 모름 | **재시도하지 않습니다.** 미체결 주문과 체결 내역으로 확인합니다 |
 
 ### 휴장일과 장 시간
@@ -273,7 +273,7 @@ main().catch(console.error);
 
 ### 기간 조회
 
-증권사 고유 조회도 ccxt 규칙을 따릅니다. 기간 시작은 `since`(ms), 개수는 `limit`, 기간 끝은 `params.until`(ms)로 줍니다. 기준일 하나만 받는 조회는 `params.until`의 한국 날짜를 기준일로 씁니다. 결과 행에는 `timestamp`(ms)와 `datetime`(ISO 8601)이 있습니다.
+증권사 고유 조회도 ccxt 규칙을 따릅니다. 기간 시작은 `since`(ms), 개수는 `limit`, 기간 끝은 `params.until`(ms)로 줍니다. 기준일 하나만 받는 조회는 `params.until`의 한국 날짜를 기준일로 씁니다. 국내 결과 행에는 `timestamp`(ms)와 `datetime`(ISO 8601)이 있습니다. 해외 행은 날짜의 시간대를 확인하지 못해 두 값을 비워 둡니다.
 
 ```ts
 const opinions = await broker.fetchInvestmentOpinions('005930/KRW', Date.parse('2026-06-01T00:00:00+09:00'), 20, { until: Date.now() });
@@ -304,14 +304,14 @@ await broker.close();
 | `enableRateLimit` | `true` | 요청 사이에 대기해 호출 한도를 지킵니다 |
 | `rateLimit` | 증권사별 | 요청 간격(ms). 엔드포인트마다 `cost`를 곱합니다 |
 | `timeout` | 조회 상한 | 조회 요청 시간 상한(ms) |
-| `options.maxRetriesOnFailure` | `0` | 조회 재시도 횟수입니다. 한국투자증권은 기본 `3`입니다. 주문 요청은 재시도하지 않습니다 |
+| `options.maxRetriesOnFailure` | `0` | 조회 재시도 횟수입니다. 한국투자증권은 기본 `3`이고, 시간 초과는 재시도하지 않습니다. 주문 요청은 재시도하지 않습니다 |
 | `orderTimeout` | 주문 상한 | 주문 요청 시간 상한(ms). 넘으면 `OrderOutcomeUnknown` |
 | `options.tokenStore` | 없음 | 접근 토큰과 발급 잠금을 여러 프로세스가 나눠 쓰는 저장소(`BrokerTokenStore`)입니다. 없으면 프로세스 메모리 캐시만 사용합니다. 함수를 전달하면 사용할 때마다 호출합니다 |
-| `options.nxtRouting` | `false` | 정규장 밖(넥스트레이드 프리마켓과 애프터마켓) 국내 주문을 허용합니다(한국투자증권과 토스증권). KB증권에서는 정규장 안에서 주문을 SOR로 보내는 데만 사용하고 정규장 밖은 허용하지 않습니다. 불리언이거나 불리언을 반환하는 함수입니다 |
+| `options.nxtRouting` | `false` | 정규장 밖(넥스트레이드 프리마켓과 애프터마켓) 국내 주문을 허용합니다(한국투자증권과 토스증권). 시장가 주문은 현재가 지정가로 바꿔 냅니다. KB증권에서는 정규장 안에서 주문을 SOR로 보내는 데만 사용하고 정규장 밖은 허용하지 않습니다. 불리언이거나 불리언을 반환하는 함수입니다 |
 | `options.krwIntegratedMargin` | `false` | 통합증거금 계좌의 미국 주식 매수여력을 원화 예수금 환산분으로 보강합니다(토스증권과 KB증권) |
 | `options.usExtendedLimit` | `false` | 미국 정규장 밖에서 시장가 주문을 지정가 주문으로 변환해 냅니다(토스증권) |
 | `options.usdKrwRate` | 없음 | 1달러당 원화를 반환하는 `() => Promise<number>`입니다. 원화 환산에 사용합니다(토스증권과 KB증권) |
-| `options.masterData` | 빈 데이터 | 한국투자증권 종목 마스터 파일을 옮긴 `KisMasterData`입니다. 종목 검색과 해외 거래소 판별에 사용합니다(한국투자증권과 KB증권) |
+| `options.masterData` | 빈 데이터 | 한국투자증권 종목 마스터 파일을 옮긴 `KisMasterData`입니다. 종목 검색과 해외 거래소 판별에 사용합니다(한국투자증권과 KB증권). KB증권 미국 주문은 이 데이터로 상장 거래소를 판별하므로, 없으면 `MarketClosed`입니다 |
 | `options.stockDirectory` | 없음 | 국내 종목이 코스피인지 코스닥인지 알려 주는 `BrokerStockDirectory`입니다. 없으면 마스터 데이터로 판별합니다(한국투자증권) |
 | `options.confirmBudget` | `{ attempts: 6, intervalMs: 350 }` | 주문 접수 뒤 체결을 확정하려고 조회하는 횟수와 간격입니다(토스증권과 KB증권). KB증권 국내 주문은 `{ attempts: 5, intervalMs: 1000 }`이 기본입니다. 한국투자증권은 이 옵션을 읽지 않습니다. 객체이거나 객체를 반환하는 함수입니다 |
 | `options.confirmExecution` | `true` | `false`면 접수 뒤 체결 조회를 하지 않습니다(토스증권) |
@@ -371,7 +371,7 @@ asyncio.run(main())
 - 토스증권 미체결 조건 주문은 100건씩 최대 10쪽(1,000건)까지 받습니다. 넘으면 로그를 남기고 나머지는 자릅니다. `fetchOpenOrders`와 `includeTrigger`를 켠 `cancelAllOrders`가 이 범위를 대상으로 합니다.
 - 한국투자증권 캔들은 증권사 API가 아니라 야후 파이낸스에서 받습니다. 미국 일봉, 주봉, 월봉이 비어 있으면 한국투자증권 API로 다시 받습니다.
 - KB증권 캔들은 코스피를 기본으로 조회합니다. 코스닥 종목은 `params.mkt_clsf = '1'`을 전달합니다.
-- KB증권은 조건 주문을 지원하지 않습니다. `createOrder`에 `triggerPrice`, `stopPrice`, `stopLossPrice`, `takeProfitPrice`를 전달하면 요청을 보내기 전에 `NotSupported`를 던집니다.
+- KB증권 `createOrder`는 조건 인자(`triggerPrice`, `stopPrice`, `stopLossPrice`, `takeProfitPrice`)를 받지 않고 요청 전에 `NotSupported`를 던집니다. 스탑지정가는 `createTriggerOrder`로 냅니다.
 - KB증권 미체결 행에는 주문 시각이 없어서 `fetchOpenOrders`는 `since`를 적용하지 않습니다. `since`를 전달해도 미체결 전체를 반환합니다.
 - 국내 호가단위는 가격대별이라 ccxt의 단일 `precision.price`로 표현할 수 없습니다.
 - 실계좌 검증은 작성자가 가진 계좌로 확인한 범위까지만 했습니다.

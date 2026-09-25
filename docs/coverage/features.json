@@ -671,7 +671,7 @@
         },
         "toss": {
           "status": "지원",
-          "constraint": "정수 지정가만 받습니다. 국내는 `options.nxtRouting`이 필요합니다",
+          "constraint": "국내는 `options.nxtRouting`이 필요하고 시장가는 현재가 지정가로 바꿉니다. 미국은 정수 수량의 지정가만 받고, `options.usExtendedLimit`을 켜면 시장가를 지정가로 바꿉니다",
           "apis": [
             "POST /orders"
           ]
@@ -1026,7 +1026,7 @@
       "cells": {
         "kis": {
           "status": "부분",
-          "constraint": "등락률 순위와 거래량 순위만 지원합니다. 공식 API는 그 밖에도 30종 가까이 더 있습니다(시가총액·신용잔고·공매도 등, 각각 별도 엔드포인트)",
+          "constraint": "국내와 해외, ELW 순위 46종을 받습니다. 종류마다 공식 엔드포인트가 따로 있습니다",
           "apis": [
             "examples_llm/domestic_stock/fluctuation",
             "examples_llm/domestic_stock/volume_rank"
@@ -1040,7 +1040,7 @@
         },
         "kbsec": {
           "status": "부분",
-          "constraint": "등락률상위와 거래량상위만 지원합니다. 공식 API는 그 밖에도 7종 더 있습니다(외국인·기관매매상위·프로그램매매상위·거래대금상위·업종랭킹 등)",
+          "constraint": "국내 순위 7종(등락률, 거래량, 프로그램매매, 거래대금, 시가대비 등락률, 시간외 등락률, 급등락)을 받습니다",
           "apis": [
             "IVU10240",
             "IVU10280"

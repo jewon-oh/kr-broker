@@ -16,6 +16,7 @@
 <!-- 실행한 명령과 결과를 적습니다. -->
 
 - [ ] 타입 검사, 테스트, 빌드가 통과합니다(TypeScript는 `pnpm typecheck`, `pnpm test`, `pnpm build`).
+- [ ] Python 판을 바꿨다면 `python/`에서 `python -m pytest`가 통과하고, `node scripts/gen-python-sync.mjs --check`와 `node scripts/gen-python-abstract.mjs --check`가 통과합니다. 동기 판은 비동기 판을 고친 뒤 `node scripts/gen-python-sync.mjs`로 만듭니다.
 - [ ] 바뀐 동작에 테스트를 추가했거나 고쳤습니다.
 - [ ] 실계좌나 모의투자로 확인한 것이 있으면 결과를 적었습니다. 확인하지 못했다면 그렇게 적었습니다.
 

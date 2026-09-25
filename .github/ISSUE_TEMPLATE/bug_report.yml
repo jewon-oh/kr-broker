@@ -20,6 +20,19 @@ body:
     validations:
       required: true
   - type: dropdown
+    id: implementation
+    attributes:
+      label: 구현
+      description: 문제가 난 판을 고릅니다. Python 동기 판은 비동기 판에서 만들므로 두 판에서 모두 나는지 확인하면 도움이 됩니다.
+      options:
+        - TypeScript
+        - Python 동기(kr_broker)
+        - Python 비동기(kr_broker.async_support)
+        - Python 실시간(kr_broker.pro)
+        - 구현과 관계없음(문서 등)
+    validations:
+      required: true
+  - type: dropdown
     id: mode
     attributes:
       label: 모의투자 또는 실전
@@ -43,7 +56,7 @@ body:
     attributes:
       label: 실행 환경
       description: 언어와 버전, 운영체제를 적습니다.
-      placeholder: TypeScript, Node.js 22.11, Linux
+      placeholder: Node.js 22.11, Linux 또는 Python 3.12, macOS
     validations:
       required: true
   - type: textarea

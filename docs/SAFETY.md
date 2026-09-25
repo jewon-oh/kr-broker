@@ -99,7 +99,7 @@ KB증권의 미국 주문은 `fetchOpenOrders`가 조회하지 않으므로 `fet
 
 - `OrderOutcomeUnknown`을 잡으면 주문한 종목의 주문을 멈추고 접수 여부 확인을 마친 뒤에 다시 시작합니다.
 - 오류를 잡지 않고 루프가 같은 주문을 다시 내는 구조를 피합니다.
-- 조회는 `maxRetriesOnFailure` 횟수만큼 다시 보냅니다. 주문은 다시 보내지 않고, 접수 여부를 모르는 실패를 `OrderOutcomeUnknown`으로 바꿉니다.
+- 조회는 `maxRetriesOnFailure` 횟수만큼 다시 보냅니다. 한국투자증권은 시간 초과를 재시도하지 않습니다. 주문은 다시 보내지 않고, 접수 여부를 모르는 실패를 `OrderOutcomeUnknown`으로 바꿉니다.
 
 ## 앱키가 남을 수 있는 곳
 
@@ -114,7 +114,7 @@ KB증권의 미국 주문은 `fetchOpenOrders`가 조회하지 않으므로 `fet
 | `last_request_url` | 한국투자증권 조회 주소의 쿼리에 계좌번호(`CANO`)와 상품 코드 |
 | `last_http_response`, `last_json_response` | 한국투자증권 토큰 발급 직후에는 접근 토큰이 든 응답 |
 | 오류 메시지 | 한국투자증권 토큰 발급 실패 메시지에 응답 본문 전체. HTTP 오류 메시지에 요청 주소와 응답 본문 |
-| `verbose`가 켜진 로그 | 요청과 응답의 헤더와 본문. 알려진 비밀 헤더(`authorization`, `appkey`, `appsecret`)와 본문 필드(`appsecret`, `secretkey`, `client_secret`, `access_token`, `approval_key`, `refresh_token`)는 `***`로 가리지만, 계좌번호 같은 나머지 값은 그대로 남습니다 |
+| `verbose`가 켜진 로그 | 요청과 응답의 헤더와 본문. 알려진 비밀 헤더(`authorization`, `appkey`, `appsecret`)와 본문 필드(`appsecret`, `secretkey`, `client_secret`, `access_token`, `approval_key`, `refresh_token`)는 `***`로 가리지만, 계좌번호 같은 나머지 값은 그대로 남습니다. JSON 이나 폼으로 읽지 못한 본문은 원문 대신 길이만 남깁니다 |
 | `options.tokenStore`가 가리키는 저장소 | 접근 토큰(JSON) |
 
 `JSON.stringify(broker)`와 `console.log(broker)`는 `apiKey`와 `secret`을 그대로 출력합니다. 인스턴스를 로그에 넣지 마십시오.
