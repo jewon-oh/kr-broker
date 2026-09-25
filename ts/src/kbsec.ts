@@ -3185,21 +3185,11 @@ export class kbsec extends Exchange {
         const maxPages = this.options.holdingsMaxPages as number;
         let lastRaw: Dict = {};
         for (const [i, params] of attempts.entries()) {
-            const rows: Dict[] = [];
-            let nextKey = '';
-            let repeated = false;
-            for (let page = 0; page < maxPages; page++) {
-                const raw = await this.callTr(KBSEC_TR.HOLDINGS, { ...params, nxt_key: nextKey });
-                lastRaw = raw;
-                // KB 는 마지막 페이지에서 공백 문자열을 준다. trim 해야 "끝"으로 읽힌다.
-                const next = String(raw.nxt_key ?? '').trim();
-                // 같은 다음키가 되풀이되면 끝까지 읽었는지 알 수 없다. 완주로 보지 않고 잘림으로 표시한다(`collectTrPages` 와 같다).
-                if (next !== '' && next === nextKey) { repeated = true; break; }
-                rows.push(...pickArray(raw));
-                if (next === '') { nextKey = ''; break; }
-                nextKey = next;
-            }
-            const truncated = repeated || nextKey !== '';
+            // 0건일 때 남길 근거로 마지막 응답을 기억한다.
+            const { rows, truncated } = await this.collectTrPages(KBSEC_TR.HOLDINGS, params, (row) => row, maxPages, (body) => {
+                lastRaw = body;
+                return pickArray(body);
+            });
             if (truncated) {
                 // 상한에 걸려 중단했다. 조용히 자르면 그 종목들이 청산으로 읽힌다.
                 logger.error({ pages: maxPages, rows: rows.length }, '[kbsec] 보유주식 연속조회 상한 도달 — 목록이 잘렸다(청산 오판 위험)');
@@ -5224,36 +5214,20 @@ export class kbsec extends Exchange {
     }
 
     /**
-     * 한 매매구분의 하루치 정산 행. 연속조회를 따라가되 **같은 키가 또 오면 그 페이지를 버리고** 잘렸다고 표시한다. 담고 나서 멈추면 같은 행이
-     * 두 번 들어가고 잘린 것을 완주로 보고한다.
+     * 한 매매구분의 하루치 정산 행. 연속조회는 `collectTrPages` 를 따른다. 같은 키가 또 오면 그 페이지를 버리고 잘렸다고 표시한다.
+     * 담고 나서 멈추면 같은 행이 두 번 들어가고 잘린 것을 완주로 보고한다.
      */
     private async fetchSettlementSide(tradeDateKst: string, trdClsf: string): Promise<KbsecSettlementFetch> {
-        const rows: KbsecSettlementRow[] = [];
-        let nextKey = '';
-        let truncated = false;
-        const maxPages = this.options.settlementMaxPages as number;
+        let rows: KbsecSettlementRow[];
+        let truncated: boolean;
         try {
-            for (let page = 0; page < maxPages; page++) {
-                const body = await this.callTr(KBSEC_TR.SETTLEMENT_KR, {
-                    trd_dt: tradeDateKst,
-                    clsf: KBSEC_SETTLE_CLSF.BY_PRICE,
-                    trd_clsf: trdClsf,
-                    // KB 공식 예제가 결제일자에 매매일자와 같은 값을 넣는다. 실측상 필터가 아니다. 빈 값으로 보내도 같은 행 수가 온다.
-                    stmt_dt: tradeDateKst,
-                    nxt_key: nextKey,
-                });
-                const pageRows = pickSettlementGrid(body).map(parseKbsecDomesticSettlementRow);
-                const prevKey = nextKey;
-                nextKey = pickStr(body, 'nxt_key');
-                if (nextKey !== '' && nextKey === prevKey) {
-                    logger.warn({ tradeDateKst, trdClsf, rows: rows.length }, '[kbsec] 정산 연속조회 키가 그대로다 — 이 페이지를 버리고 잘렸다고 본다');
-                    truncated = true;
-                    break;
-                }
-                rows.push(...pageRows);
-                if (nextKey === '') break;
-                if (page === maxPages - 1) truncated = true;
-            }
+            ({ rows, truncated } = await this.collectTrPages(KBSEC_TR.SETTLEMENT_KR, {
+                trd_dt: tradeDateKst,
+                clsf: KBSEC_SETTLE_CLSF.BY_PRICE,
+                trd_clsf: trdClsf,
+                // KB 공식 예제가 결제일자에 매매일자와 같은 값을 넣는다. 실측상 필터가 아니다. 빈 값으로 보내도 같은 행 수가 온다.
+                stmt_dt: tradeDateKst,
+            }, parseKbsecDomesticSettlementRow, this.options.settlementMaxPages as number, pickSettlementGrid));
         } catch (err) {
             logger.warn({ err, tradeDateKst, trdClsf }, '[kbsec] 국내 정산 조회 실패 — 추정치를 유지한다(0건 아님)');
             return { ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -5278,43 +5252,27 @@ export class kbsec extends Exchange {
      * @param endDateUs 종료 주문일자 `YYYYMMDD`
      */
     async fetchOverseasSettlements(startDateUs: string, endDateUs: string): Promise<KbsecOverseasSettlementFetch> {
-        const raw: KbsecOverseasSettlementRow[] = [];
-        let nextKey = '';
-        let truncated = false;
-        const maxPages = this.options.settlementMaxPages as number;
+        let raw: KbsecOverseasSettlementRow[];
+        let truncated: boolean;
         try {
-            for (let page = 0; page < maxPages; page++) {
-                const body = await this.callTr(KBSEC_TR.SETTLEMENT_US, {
-                    strt_ordr_dt: startDateUs,
-                    end_ordr_dt: endDateUs,
-                    // 거래소·종목·ISO 는 비워 전체를 받는다(스펙상 선택 필드).
-                    frgn_krx_ccd: '',
-                    trd_clsf: KBSEC_OVERSEAS_SETTLE_TRD_CLSF.ALL,
-                    stnd_is_cd: '',
-                    iso_cd: '',
-                    // 합계 입력칸. 조회에는 빈 값으로 보낸다.
-                    s_stmt_amt_sum_p4: '',
-                    b_stmt_amt_sum_p4: '',
-                    tl_s_ccls_q_p6: '',
-                    tl_b_ccls_q_p6: '',
-                    fcrncy_fee_p4: '',
-                    krw_unty_mgn_rqst_f: KBSEC_OVERSEAS_SETTLE_FX_AXIS.FOREIGN,
-                    dl_clsf: KBSEC_OVERSEAS_SETTLE_DL_CLSF.ALL,
-                    nxt_key: nextKey,
-                });
-                const pageRows = pickOverseasSettlementGrid(body).map(parseKbsecOverseasSettlementRow);
-                const prevKey = nextKey;
-                nextKey = pickStr(body, 'nxt_key');
-                // 같은 키가 또 오면 앞 페이지와 같은 내용이다. 담으면 비용이 몇 배로 부풀고 완주한 것처럼 보인다.
-                if (nextKey !== '' && nextKey === prevKey) {
-                    logger.warn({ startDateUs, endDateUs, rows: raw.length }, '[kbsec] 해외 정산 연속조회 키가 그대로다 — 이 페이지를 버리고 잘렸다고 본다');
-                    truncated = true;
-                    break;
-                }
-                raw.push(...pageRows);
-                if (nextKey === '') break;
-                if (page === maxPages - 1) truncated = true;
-            }
+            // 같은 키가 또 오면 앞 페이지와 같은 내용이다. `collectTrPages` 는 그 페이지를 버린다. 담으면 비용이 몇 배로 부풀고 완주한 것처럼 보인다.
+            ({ rows: raw, truncated } = await this.collectTrPages(KBSEC_TR.SETTLEMENT_US, {
+                strt_ordr_dt: startDateUs,
+                end_ordr_dt: endDateUs,
+                // 거래소·종목·ISO 는 비워 전체를 받는다(스펙상 선택 필드).
+                frgn_krx_ccd: '',
+                trd_clsf: KBSEC_OVERSEAS_SETTLE_TRD_CLSF.ALL,
+                stnd_is_cd: '',
+                iso_cd: '',
+                // 합계 입력칸. 조회에는 빈 값으로 보낸다.
+                s_stmt_amt_sum_p4: '',
+                b_stmt_amt_sum_p4: '',
+                tl_s_ccls_q_p6: '',
+                tl_b_ccls_q_p6: '',
+                fcrncy_fee_p4: '',
+                krw_unty_mgn_rqst_f: KBSEC_OVERSEAS_SETTLE_FX_AXIS.FOREIGN,
+                dl_clsf: KBSEC_OVERSEAS_SETTLE_DL_CLSF.ALL,
+            }, parseKbsecOverseasSettlementRow, this.options.settlementMaxPages as number, pickOverseasSettlementGrid));
         } catch (err) {
             logger.warn({ err, startDateUs, endDateUs }, '[kbsec] 해외 정산 조회 실패 — 추정치를 유지한다(0건 아님)');
             return { ok: false, error: err instanceof Error ? err.message : String(err) };
