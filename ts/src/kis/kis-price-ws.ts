@@ -116,6 +116,8 @@ export interface KisWsSub {
 export interface KisPriceWsOptions {
     getApprovalKey: () => Promise<string>;
     isVirtual: boolean;
+    /** 접속 주소. 없으면 `isVirtual` 에 따라 KIS 기본 주소다. */
+    url?: string;
     onTrade?: (streamSymbol: string, last: number, changePct: number) => void;
     onOrderbook?: (streamSymbol: string, bids: [number, number][], asks: [number, number][]) => void;
 }
@@ -183,7 +185,7 @@ export class KisPriceWs {
             this.scheduleReconnect();
             return;
         }
-        const url = (this.opts.isVirtual ? KIS_WS_DOMAINS.VIRTUAL : KIS_WS_DOMAINS.REAL) + KIS_WS_PATH;
+        const url = this.opts.url ?? (this.opts.isVirtual ? KIS_WS_DOMAINS.VIRTUAL : KIS_WS_DOMAINS.REAL) + KIS_WS_PATH;
         try {
             const ws = new Ctor(url);
             this.ws = ws;

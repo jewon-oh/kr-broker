@@ -399,7 +399,8 @@ def precision_from_string(text: Optional[str]) -> int:
         return 0
     if 'e' in text or 'E' in text:
         return int(re.sub(r'^[-+]?\d\.?\d*[eE]', '', text)) * -1
-    parts = re.sub(r'0+$', '', text).split('.')
+    # 끝의 0 을 지운다. `re.sub(r'0+$', ...)` 는 0 이 길게 이어진 입력에서 되추적이 제곱으로 늘어난다.
+    parts = text.rstrip('0').split('.')
     return len(parts[1]) if len(parts) > 1 else 0
 
 

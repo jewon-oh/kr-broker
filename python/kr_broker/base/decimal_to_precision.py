@@ -3,7 +3,6 @@
 import decimal
 import numbers
 import itertools
-import re
 
 __all__ = [
     'TRUNCATE',
@@ -143,11 +142,8 @@ def decimal_to_precision(n, rounding_mode=ROUND, precision=None, counting_mode=D
         if len(parts) > 1:
             new_precision = len(parts[1])
         else:
-            match = re.search(r'0+$', parts[0])
-            if match is None:
-                new_precision = 0
-            else:
-                new_precision = - len(match.group(0))
+            # 끝에 이어진 0 의 개수. 정규식(`0+$`)은 0 이 길게 이어진 입력에서 되추적이 제곱으로 늘어난다.
+            new_precision = -(len(parts[0]) - len(parts[0].rstrip('0')))
         return decimal_to_precision(format(dec, 'f'), ROUND, new_precision, DECIMAL_PLACES, padding_mode)
 
     if rounding_mode == ROUND:

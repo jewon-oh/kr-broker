@@ -99,17 +99,21 @@ KB증권의 미국 주문은 `fetchOpenOrders`가 조회하지 않으므로 `fet
 | `last_request_url` | 한국투자증권 조회 주소의 쿼리에 계좌번호(`CANO`)와 상품 코드 |
 | `last_http_response`, `last_json_response` | 한국투자증권 토큰 발급 직후에는 접근 토큰이 든 응답 |
 | 오류 메시지 | 한국투자증권 토큰 발급 실패 메시지에 응답 본문 전체. HTTP 오류 메시지에 요청 주소와 응답 본문 |
-| `verbose`가 켜진 로그 | 요청과 응답의 헤더와 본문 전체 |
+| `verbose`가 켜진 로그 | 요청과 응답의 헤더와 본문. 알려진 비밀 헤더(`authorization`, `appkey`, `appsecret`)와 본문 필드(`appsecret`, `secretkey`, `client_secret`, `access_token`, `approval_key`, `refresh_token`)는 `***`로 가리지만, 계좌번호 같은 나머지 값은 그대로 남습니다 |
 | `options.tokenStore`가 가리키는 저장소 | 접근 토큰(JSON) |
 
 `JSON.stringify(broker)`와 `console.log(broker)`는 `apiKey`와 `secret`을 그대로 출력합니다. 인스턴스를 로그에 넣지 마십시오.
 
 `last_*` 값은 요청마다 덮어씁니다. 토큰 발급 요청의 값은 다음 요청을 보내면 사라집니다. 다음 요청 전에 오류 보고 도구가 인스턴스를 수집하면 값이 함께 외부로 전송됩니다.
 
+## 실시간 체결통보를 주문 판단의 근거로 쓰지 않습니다
+
+한국투자증권의 실시간 연결(`ws://ops.koreainvestment.com`)은 암호화되지 않은 평문 연결입니다. 같은 망에 있는 제3자는 접속키와 HTS ID 를 읽을 수 있습니다. 라이브러리는 체결통보 TR(`H0STCNI0`, `H0STCNI9`, `H0GSCNI0`, `H0GSCNI9`) 가운데 암호화되지 않은 프레임을 버립니다. 그래도 `watchOrders()`가 알려 준 체결을 근거로 다음 주문을 내기 전에는 `fetchOrder`나 `fetchMyTrades`로 한 번 더 확인하십시오. 증권사가 암호화된 주소를 제공하면 `urls.ws`와 `urls.wsTest`로 바꿀 수 있습니다.
+
 ## 로그에 비밀이 남지 않게 하는 방법
 
-1. 실전 환경에서 `verbose`를 켜지 않습니다. `verbose`는 기본이 `false`이고, 로그는 `setLogger`로 로거를 전달했을 때만 출력됩니다.
-2. `setLogger`에 전달하는 로거에서 `headers`, `body`, `err` 필드를 제외하거나 마스킹합니다. 라이브러리는 세 필드를 가리지 않고 로거에 전달합니다.
+1. 실전 환경에서 `verbose`를 켜지 않습니다. `verbose`는 기본이 `false`입니다. TypeScript 판은 `setLogger`로 로거를 전달했을 때만 로그를 출력합니다. Python 판은 표준 `logging`의 `kr_broker` 로거로 남기므로, 앱이 `logging.basicConfig(level=logging.DEBUG)`만 해도 출력됩니다.
+2. `setLogger`에 전달하는 로거(Python 판은 `kr_broker` 로거의 핸들러)에서 `headers`, `body`, `err` 필드를 제외하거나 마스킹합니다. 라이브러리는 알려진 비밀 필드만 가리고 나머지는 그대로 전달합니다.
 3. 기본 로거는 아무것도 출력하지 않습니다. `setLogger`를 호출하지 않으면 라이브러리는 로그를 남기지 않습니다.
 4. 오류를 로그에 남길 때는 `error.name`, `error.detail`, 정리한 메시지만 씁니다. `error.message`에는 요청 주소와 응답 본문이 들어 있을 수 있고, `error.cause`는 하위 오류를 그대로 담습니다.
 5. `last_request_*`와 `last_http_response`를 로그, 오류 보고 도구, 크래시 덤프에 넣지 않습니다.

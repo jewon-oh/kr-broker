@@ -16,7 +16,8 @@
 export const KIS_MIN_INTERVAL_MS = Math.ceil(1000 / 15);
 
 /**
- * 앱키별 다음 가용 슬롯 시각(epoch ms). 예약은 동기적으로 이뤄져 병렬 진입에도 레이스가 없다.
+ * 앱키별 다음 가용 슬롯 시각(단조 시계 ms). 예약은 동기적으로 이뤄져 병렬 진입에도 레이스가 없다.
+ * 시스템 시각(`Date.now`)을 쓰면 NTP 보정이나 VM 재개로 시각이 뒤로 갈 때 그만큼 모든 요청이 멈춘다.
  * 키 개수 = 앱키 수(소수)라 무한 증가 없음.
  */
 const nextSlotAt = new Map<string, number>();
@@ -32,7 +33,7 @@ const nextSlotAt = new Map<string, number>();
  * @param intervalMs 이 호출이 차지하는 시간. 모의투자는 초당 2건이라 실전보다 길다.
  */
 export async function acquireKisSlot(appKey: string, intervalMs: number = KIS_MIN_INTERVAL_MS): Promise<void> {
-    const now = Date.now();
+    const now = performance.now();
     const prev = nextSlotAt.get(appKey) ?? 0;
     const scheduledAt = Math.max(now, prev);
     // 다음 호출자용 슬롯을 *동기적으로* 예약 — await 이전에 확정해 병렬 진입 레이스 차단.

@@ -72,4 +72,17 @@ describe('kis-rate-limiter — acquireKisSlot', () => {
         expect(KIS_MIN_INTERVAL_MS).toBe(Math.ceil(1000 / 15)); // 67ms
         expect(KIS_MIN_INTERVAL_MS).toBeGreaterThan(50);
     });
+
+    it('★시스템 시각이 뒤로 가도 요청이 그만큼 멈추지 않는다 — 단조 시계로 슬롯을 잡는다', async () => {
+        vi.useFakeTimers();
+        resetKisRateLimiter('key-clock');
+        await acquireKisSlot('key-clock');
+        vi.setSystemTime(Date.now() - 10_000);   // NTP 보정이나 VM 재개로 시스템 시각이 10초 뒤로 갔다
+        let fired = false;
+        const pending = acquireKisSlot('key-clock').then(() => { fired = true; });
+        await vi.advanceTimersByTimeAsync(KIS_MIN_INTERVAL_MS + 5);
+        expect(fired).toBe(true);
+        await pending;
+        vi.useRealTimers();
+    });
 });

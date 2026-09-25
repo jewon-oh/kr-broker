@@ -70,6 +70,42 @@ import type {
     FetchSignal, MarketInterface, Num, OHLCV, Order, OrderBook, OrderSide, OrderType, Status, Str, Strings, Ticker, Tickers, Trade, TradingFeeInterface,
 } from './types';
 
+/** verbose 로그에서 값을 가리는 헤더와 본문 필드(소문자로 비교). */
+const SECRET_LOG_FIELDS = new Set(['authorization', 'appkey', 'appsecret', 'secretkey', 'client_secret', 'access_token', 'approval_key', 'refresh_token']);
+const REDACTED = '***';
+
+/** 로그에 남길 헤더. 비밀 헤더의 값을 가린다. */
+export function redactHeadersForLog(headers: Dictionary<string> | undefined): Dictionary<string> | undefined {
+    if (headers === undefined) return undefined;
+    const out: Dictionary<string> = {};
+    for (const [key, value] of Object.entries(headers)) out[key] = SECRET_LOG_FIELDS.has(key.toLowerCase()) ? REDACTED : value;
+    return out;
+}
+
+/** 로그에 남길 본문. JSON 이나 폼 본문의 비밀 필드 값을 가린다. 읽을 수 없는 본문은 그대로 둔다. */
+export function redactBodyForLog(body: string | undefined): string | undefined {
+    if (body === undefined || body === '') return body;
+    const redact = (value: unknown): unknown => {
+        if (Array.isArray(value)) return value.map(redact);
+        if (value === null || typeof value !== 'object') return value;
+        return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, SECRET_LOG_FIELDS.has(k.toLowerCase()) ? REDACTED : redact(v)]));
+    };
+    const trimmed = body.trim();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        try {
+            return JSON.stringify(redact(JSON.parse(trimmed)));
+        } catch {
+            return body;
+        }
+    }
+    if (/^[^=&\s]+=[^&]*(&[^=&\s]+=[^&]*)*$/.test(trimmed)) {
+        const form = new URLSearchParams(trimmed);
+        for (const key of [...form.keys()]) if (SECRET_LOG_FIELDS.has(key.toLowerCase())) form.set(key, REDACTED);
+        return form.toString();
+    }
+    return body;
+}
+
 /** HTTP 상태만 보고 만든 오류와 그 상태 코드. 증권사 오류 코드로 분류하지 못한 5xx 인지 가리는 데 쓴다. */
 const httpStatusErrors = new WeakMap<object, number>();
 
@@ -404,7 +440,7 @@ export class Exchange {
     }
 
     /**
-     * 요청 하나를 처리한다: (비공개면) 자격증명 확인 → `authenticate` → `throttle` → 재시도 루프 { `sign` → `fetch` }.
+     * 요청 하나를 처리한다: (비공개면) 자격증명 확인 → 재시도 루프 { `throttle` → (비공개면) `authenticate` → `sign` → `fetch` }.
      *
      * 주문 요청(`config.order`)은 재시도하지 않고, 접수 여부를 모르는 실패를 `OrderOutcomeUnknown` 으로 바꿔 던진다.
      * 조회는 `OperationFailed` 계열이면서 `retryable !== false` 인 오류만 `maxRetriesOnFailure`(옵션 또는 `params`, 기본 0)번까지 다시 보낸다.
@@ -419,13 +455,8 @@ export class Exchange {
         config: EndpointConfig = {},
     ): Promise<any> {
         const isOrder = safeBool(config, 'order', false);
-        if (this.isPrivateApi(api)) {
-            this.checkRequiredCredentials();
-            await this.authenticate(path, api, method, params, headers, body);
-        }
-        if (this.enableRateLimit) {
-            await this.throttle(this.calculateRateLimiterCost(api, method, path, params, config), safeString(config, 'bucket'));
-        }
+        const isPrivate = this.isPrivateApi(api);
+        if (isPrivate) this.checkRequiredCredentials();
         let retries = 0;
         [retries, params] = this.handleOptionAndParams(params, path, 'maxRetriesOnFailure', retries);
         let retryDelay = 0;
@@ -433,6 +464,12 @@ export class Exchange {
         if (isOrder) retries = 0;
         const timeout = isOrder && this.orderTimeout !== undefined ? this.orderTimeout : this.timeout;
         for (let attempt = 0; ; attempt++) {
+            // 재시도도 요청 간격 조절을 거친다. 인증은 간격 조절 뒤에 한다. 기다리는 사이 토큰이 무효화되면 새 토큰을 받는다.
+            // 둘은 재시도 대상 밖이다. 토큰 발급 실패를 다시 시도하면 발급 빈도 제한(KIS 분당 1회)에 더 걸린다.
+            if (this.enableRateLimit) {
+                await this.throttle(this.calculateRateLimiterCost(api, method, path, params, config), safeString(config, 'bucket'));
+            }
+            if (isPrivate) await this.authenticate(path, api, method, params, headers, body);
             try {
                 this.lastRestRequestTimestamp = now();
                 const request = this.sign(path, api, method, params, headers, body);
@@ -452,7 +489,11 @@ export class Exchange {
                 const retryable = error instanceof OperationFailed && error.retryable !== false;
                 if (!retryable || attempt >= retries) throw error;
                 this.log(`요청 실패, 다시 시도한다(${attempt + 1}/${retries}): ${errorMessage(error)}`);
-                if (retryDelay > 0) await sleep(retryDelay);
+                // 서버가 알려 준 대기 시간(429 `Retry-After`)이 있으면 그만큼 기다린다.
+                const retryAfter = (error as { retryAfterMs?: unknown }).retryAfterMs;
+                const retryAfterMs = typeof retryAfter === 'number' ? retryAfter : 0;
+                const waitMs = Math.max(retryDelay, retryAfterMs);
+                if (waitMs > 0) await sleep(waitMs);
             }
         }
     }
@@ -532,7 +573,7 @@ export class Exchange {
         if (this.userAgent !== undefined) requestHeaders = extend({ 'User-Agent': this.userAgent }, requestHeaders);
         const fetchImplementation = globalThis.fetch;
         if (typeof fetchImplementation !== 'function') throw new NotSupported(`${this.id} 이 실행 환경에는 fetch 가 없다`);
-        if (this.verbose) this.log(`${this.id} ${method} ${url}`, { headers: requestHeaders, body });
+        if (this.verbose) this.log(`${this.id} ${method} ${url}`, { headers: redactHeadersForLog(requestHeaders), body: redactBodyForLog(body) });
 
         const controller = new AbortController();
         let timer: ReturnType<typeof setTimeout> | undefined;
@@ -545,7 +586,8 @@ export class Exchange {
         let response: HttpResponseLike;
         try {
             const exchange = (async (): Promise<HttpResponseLike> => {
-                const res = await fetchImplementation(url, { method, headers: requestHeaders, body, signal: controller.signal as FetchSignal });
+                // 리다이렉트를 따르지 않는다. 따르면 앱키와 시크릿 헤더, 토큰 발급 본문을 다른 호스트로 다시 보낸다. 3xx 는 오류로 던진다.
+                const res = await fetchImplementation(url, { method, headers: requestHeaders, body, redirect: 'manual', signal: controller.signal as FetchSignal });
                 // 본문까지 읽어야 시간 상한이 끝난다. 이미 읽은 본문으로 다시 응답을 만들어 넘긴다.
                 const text = await res.text();
                 return { status: res.status, statusText: res.statusText, headers: res.headers, text: async () => text };
@@ -578,7 +620,7 @@ export class Exchange {
         this.last_response_headers = responseHeaders;
         this.last_http_response = responseBody;
         this.last_json_response = parsedBody;
-        if (this.verbose) this.log(`${this.id} ${method} ${url} -> ${response.status}`, { headers: responseHeaders, body: responseBody });
+        if (this.verbose) this.log(`${this.id} ${method} ${url} -> ${response.status}`, { headers: redactHeadersForLog(responseHeaders), body: redactBodyForLog(responseBody) });
         const handled = this.handleErrors(
             response.status, response.statusText, url, method, responseHeaders, responseBody, parsedBody, requestHeaders, requestBody,
         );
@@ -604,9 +646,9 @@ export class Exchange {
         return undefined;
     }
 
-    /** 상태 표(`httpExceptions`)의 오류를 던진다. 표에 없는 5xx 는 `ExchangeNotAvailable` 이다. */
+    /** 상태 표(`httpExceptions`)의 오류를 던진다. 표에 없는 3xx(따르지 않은 리다이렉트)와 5xx 는 `ExchangeNotAvailable` 이다. */
     handleHttpStatusCode(code: number, reason: string, url: string, method: string, body: string): void {
-        const ErrorClassForStatus = this.httpExceptions[String(code)] ?? (code >= 500 ? ExchangeNotAvailable : undefined);
+        const ErrorClassForStatus = this.httpExceptions[String(code)] ?? (code >= 500 || (code >= 300 && code < 400) ? ExchangeNotAvailable : undefined);
         if (ErrorClassForStatus !== undefined) {
             throw this.httpStatusError(code, ErrorClassForStatus, `${this.id} ${method} ${url} ${code} ${reason} ${body}`);
         }

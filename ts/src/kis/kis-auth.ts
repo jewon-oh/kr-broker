@@ -13,6 +13,7 @@
 import { refreshTokenWithLock } from '../token-refresh-lock';
 import { logger } from '../logger';
 import type { BrokerTokenStore } from '../options';
+import { legacyTokenStoreKey, tokenStoreKey, withLegacyTokenKeys } from '../token-store-key';
 import {
     KIS_TOKEN_EXPIRY_MS,
     KIS_TOKEN_SAFETY_MARGIN_MS,
@@ -20,13 +21,9 @@ import {
     type KISCachedToken,
 } from './kis-types';
 
-/**
- * 토큰 저장소 키의 접두사. 앱키의 앞 12자만 키에 쓴다. 저장소 로그나 관리 도구에 앱키 전체가 드러나지 않게 하려는 것이고,
- * 같은 사용자 안에서 앞 12자가 겹칠 가능성은 없다.
- */
+/** 토큰 저장소 키의 접두사. 키 본체는 앱키의 해시다(`tokenStoreKey`). */
 const KIS_TOKEN_KEY_PREFIX = 'kis:token:';
 const KIS_APPROVAL_KEY_PREFIX = 'kis:approval:';
-const KEY_DIGITS = 12;
 
 /** 저장소 락 TTL(ms). 토큰 발급 빈도 제한(1분)보다 길게 잡아 락이 풀린 뒤 다시 시도해도 안전하게 한다. */
 const TOKEN_FETCH_LOCK_TTL_MS = 90 * 1000;
@@ -68,20 +65,29 @@ export class KISAuth {
     /**
      * @param appKey 저장소 키를 만드는 데 쓴다.
      * @param source 발급 요청을 보내는 쪽.
-     * @param storeOf 지금 쓸 토큰 저장소를 돌려주는 함수. 저장소가 없으면 `null` 이고, 그러면 프로세스 메모리 캐시만 쓴다.
+     * @param rawStoreOf 지금 쓸 토큰 저장소를 돌려주는 함수. 저장소가 없으면 `null` 이고, 그러면 프로세스 메모리 캐시만 쓴다.
      */
     constructor(
         private readonly appKey: string,
         private readonly source: KisTokenSource,
-        private readonly storeOf: () => BrokerTokenStore | null = () => null,
+        private readonly rawStoreOf: () => BrokerTokenStore | null = () => null,
     ) {}
 
     private get storeKey(): string {
-        return `${KIS_TOKEN_KEY_PREFIX}${this.appKey.slice(0, KEY_DIGITS)}`;
+        return tokenStoreKey(KIS_TOKEN_KEY_PREFIX, this.appKey);
     }
 
     private get approvalStoreKey(): string {
-        return `${KIS_APPROVAL_KEY_PREFIX}${this.appKey.slice(0, KEY_DIGITS)}`;
+        return tokenStoreKey(KIS_APPROVAL_KEY_PREFIX, this.appKey);
+    }
+
+    /** 저장소. 옛 키 형식(앱키 앞 12자)을 쓰는 판과 함께 도는 동안 두 키를 함께 읽고 쓴다. */
+    private storeOf(): BrokerTokenStore | null {
+        const store = this.rawStoreOf();
+        return store === null ? null : withLegacyTokenKeys(store, {
+            [this.storeKey]: legacyTokenStoreKey(KIS_TOKEN_KEY_PREFIX, this.appKey),
+            [this.approvalStoreKey]: legacyTokenStoreKey(KIS_APPROVAL_KEY_PREFIX, this.appKey),
+        });
     }
 
     /**

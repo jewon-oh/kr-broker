@@ -25,6 +25,9 @@ from kr_broker.kis_types import KIS_WS_DOMAINS, KIS_WS_PATH
 
 __all__ = ['KisRealtimeRecord', 'KisRealtimeStream', 'split_kis_realtime_records', 'decrypt_kis_payload']
 
+# 늘 암호화되어 오는 체결통보 TR(국내, 해외, 실전, 모의).
+_ENCRYPTED_NOTICE_TRS = frozenset(['H0STCNI0', 'H0STCNI9', 'H0GSCNI0', 'H0GSCNI9'])
+
 logger = logging.getLogger('kr_broker')
 
 RECONNECT_BASE_MS = 2_000
@@ -92,10 +95,12 @@ class KisRealtimeStream(ReconnectingWebSocket):
 
     def __init__(self, get_approval_key: Callable[[], Awaitable[str]], is_virtual: bool, connect: WsConnect,
                  on_record: Callable[[KisRealtimeRecord], None], on_subscribe_error: Optional[Callable[[str, str, str], None]] = None,
-                 sleep: Callable[[float], Awaitable[Any]] = sleep_seconds) -> None:
+                 sleep: Callable[[float], Awaitable[Any]] = sleep_seconds, url: Optional[str] = None) -> None:
         super().__init__(connect, sleep)
         self._get_approval_key = get_approval_key
         self.is_virtual = is_virtual
+        # 접속 주소. 없으면 `is_virtual` 에 따라 KIS 기본 주소다.
+        self.url = url
         self._on_record = on_record
         # 구독 응답이 실패(`rt_cd` 가 `0` 이 아님)면 부른다
         self._on_subscribe_error = on_subscribe_error
@@ -124,7 +129,7 @@ class KisRealtimeStream(ReconnectingWebSocket):
 
     async def connect_target(self) -> Tuple[str, Dict[str, str]]:
         self._approval_key = await self._get_approval_key()
-        return (KIS_WS_DOMAINS['VIRTUAL'] if self.is_virtual else KIS_WS_DOMAINS['REAL']) + KIS_WS_PATH, {}
+        return self.url or (KIS_WS_DOMAINS['VIRTUAL'] if self.is_virtual else KIS_WS_DOMAINS['REAL']) + KIS_WS_PATH, {}
 
     def on_open(self) -> None:
         for tr_id, tr_key in list(self._subs.values()):
@@ -169,6 +174,10 @@ class KisRealtimeStream(ReconnectingWebSocket):
             return
         flag, tr_id, count_text = parts[0], parts[1], parts[2]
         payload = '|'.join(parts[3:])
+        # KIS 실시간 연결은 평문이다. 체결통보는 늘 암호화되어 오므로, 평문 체결통보는 경로 위에서 끼워 넣은 프레임으로 보고 버린다.
+        if flag != '1' and tr_id in _ENCRYPTED_NOTICE_TRS:
+            logger.warning('[KisRealtimeStream] 암호화되지 않은 체결통보 프레임 — 버린다 (trId=%s)', tr_id)
+            return
         if flag == '1':
             cipher = self._cipher_keys.get(tr_id)
             if cipher is None:

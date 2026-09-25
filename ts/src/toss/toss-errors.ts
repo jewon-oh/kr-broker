@@ -10,11 +10,12 @@ import { AuthenticationError, InvalidOrder, RateLimitExceeded, type BaseErrorOpt
  */
 export class TossTokenRejected extends AuthenticationError {
     override name = 'TossTokenRejected';
-    readonly failedToken: string | undefined;
+    declare readonly failedToken: string | undefined;
 
     constructor(message: string, options: BaseErrorOptions = {}, failedToken?: string) {
         super(message, options);
-        this.failedToken = failedToken;
+        // 열거할 수 없게 둔다. 로거와 오류 수집기는 열거 가능한 속성을 모두 기록해서 토큰 원문이 밖으로 나간다.
+        Object.defineProperty(this, 'failedToken', { value: failedToken, enumerable: false, writable: false });
     }
 }
 

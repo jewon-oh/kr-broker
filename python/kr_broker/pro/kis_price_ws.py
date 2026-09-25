@@ -48,10 +48,12 @@ class KisPriceWs(ReconnectingWebSocket):
 
     def __init__(self, get_approval_key: Callable[[], Awaitable[str]], is_virtual: bool, connect: WsConnect,
                  on_trade: Optional[OnTrade] = None, on_orderbook: Optional[OnOrderbook] = None,
-                 sleep: Callable[[float], Awaitable[Any]] = sleep_seconds) -> None:
+                 sleep: Callable[[float], Awaitable[Any]] = sleep_seconds, url: Optional[str] = None) -> None:
         super().__init__(connect, sleep)
         self._get_approval_key = get_approval_key
         self.is_virtual = is_virtual
+        # 접속 주소. 없으면 `is_virtual` 에 따라 KIS 기본 주소다.
+        self.url = url
         self._on_trade = on_trade
         self._on_orderbook = on_orderbook
         self._approval_key = ''
@@ -75,7 +77,7 @@ class KisPriceWs(ReconnectingWebSocket):
 
     async def connect_target(self) -> Tuple[str, Dict[str, str]]:
         self._approval_key = await self._get_approval_key()
-        return (KIS_WS_DOMAINS['VIRTUAL'] if self.is_virtual else KIS_WS_DOMAINS['REAL']) + KIS_WS_PATH, {}
+        return self.url or (KIS_WS_DOMAINS['VIRTUAL'] if self.is_virtual else KIS_WS_DOMAINS['REAL']) + KIS_WS_PATH, {}
 
     def on_open(self) -> None:
         logger.info('[KisPriceWs] WS 연결 완료 — 구독 등록 (subs=%s)', len(self._subs))

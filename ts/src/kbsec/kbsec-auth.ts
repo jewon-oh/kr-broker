@@ -19,6 +19,7 @@
 import { refreshTokenWithLock } from '../token-refresh-lock';
 import { logger } from '../logger';
 import type { BrokerTokenStore } from '../options';
+import { legacyTokenStoreKey, tokenStoreKey, withLegacyTokenKeys } from '../token-store-key';
 import { RequestTimeout } from '../base/errors';
 import type { FetchSignal } from '../base/types';
 
@@ -83,6 +84,8 @@ async function postJson(op: string, url: string, body: unknown): Promise<{ res: 
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
+            // 리다이렉트를 따르면 앱키와 시크릿이 든 본문을 다른 호스트로 다시 보낸다. 3xx 는 `res.ok` 가 거짓이라 실패로 처리된다.
+            redirect: 'manual',
             signal: controller.signal as FetchSignal,
         });
         return { res, text: await res.text() };
@@ -150,14 +153,20 @@ export class KBSecAuth {
 
     /**
      * @param baseUrl API 서버 주소. 생략하면 운영 서버다.
-     * @param storeOf 지금 쓸 토큰 저장소를 돌려주는 함수. 저장소가 없으면 `null` 이고, 그러면 프로세스 메모리 캐시만 쓴다.
+     * @param rawStoreOf 지금 쓸 토큰 저장소를 돌려주는 함수. 저장소가 없으면 `null` 이고, 그러면 프로세스 메모리 캐시만 쓴다.
      */
     constructor(
         credentials: KBSecCredentials,
         readonly baseUrl: string = KBSEC_API_BASE,
-        private readonly storeOf: () => BrokerTokenStore | null = () => null,
+        private readonly rawStoreOf: () => BrokerTokenStore | null = () => null,
     ) {
         this.credentials = credentials;
+    }
+
+    /** 저장소. 옛 키 형식(앱키 앞 12자)을 쓰는 판과 함께 도는 동안 두 키를 함께 읽고 쓴다. */
+    private storeOf(): BrokerTokenStore | null {
+        const store = this.rawStoreOf();
+        return store === null ? null : withLegacyTokenKeys(store, { [this.storeKey]: legacyTokenStoreKey(KBSEC_TOKEN_KEY_PREFIX, this.credentials.appKey) });
     }
 
     get appKey(): string {
@@ -165,7 +174,7 @@ export class KBSecAuth {
     }
 
     private get storeKey(): string {
-        return `${KBSEC_TOKEN_KEY_PREFIX}${this.credentials.appKey.slice(0, 12)}`;
+        return tokenStoreKey(KBSEC_TOKEN_KEY_PREFIX, this.credentials.appKey);
     }
 
     /**
@@ -196,7 +205,8 @@ export class KBSecAuth {
      * KIS·Toss 어댑터는 이미 `async invalidate()` 로 await 한다 — kbsec 만 달랐다.
      */
     async invalidate(failedToken?: string): Promise<void> {
-        this.cachedToken = null;
+        // 실패한 토큰이 캐시에 그대로 있을 때만 비운다. 동시 요청 가운데 먼저 끝난 쪽이 새 토큰을 받아 뒀으면 그것을 지우지 않는다.
+        if (failedToken === undefined || this.cachedToken?.accessToken === failedToken) this.cachedToken = null;
         const store = this.storeOf();
         if (store) {
             try {
@@ -404,7 +414,10 @@ export class KBSecAuth {
         const ttlMs = typeof payload.expires_in === 'number' && payload.expires_in > 0
             ? payload.expires_in * 1000
             : KBSEC_TOKEN_DEFAULT_TTL_MS;
-        const expiresAt = Date.now() + Math.max(0, ttlMs - KBSEC_TOKEN_SAFETY_MARGIN_MS);
+        // 수명이 안전 여유의 두 배보다 짧으면(KB 는 만료 직전에 3초, 1초를 준다) 여유를 수명의 절반으로 줄인다. 여유를 다 빼면 만료 시각이
+        // 지금이 되어 TR 마다 새로 발급한다.
+        const shortLived = ttlMs <= KBSEC_TOKEN_SAFETY_MARGIN_MS * 2;
+        const expiresAt = Date.now() + (shortLived ? Math.floor(ttlMs / 2) : ttlMs - KBSEC_TOKEN_SAFETY_MARGIN_MS);
 
         this.cachedToken = { accessToken, expiresAt };
 
@@ -412,7 +425,7 @@ export class KBSecAuth {
         // 보장되지 않아 **더 오래된 토큰이 캐시에 남을 수 있다**. KIS·Toss 와 동일.
         const store = this.storeOf();
         const ttlSec = Math.floor((expiresAt - Date.now()) / 1000);
-        if (store && ttlSec > 0) {
+        if (store && ttlSec > 0 && !shortLived) {
             // 남은 수명이 0 이하면 쓰지 않는다 — KB 가 `expires_in` 을 3초·1초로 주는 응답이
             // 실제로 관측됐다. 그걸 최소 1초로 끌어올려 저장하면 다른 파드가
             // 곧바로 만료될 토큰을 가져다 쓴다. 캐시 미스가 재발급보다 싸다.

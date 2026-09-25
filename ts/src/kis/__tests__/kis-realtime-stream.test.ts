@@ -165,6 +165,30 @@ describe('KisRealtimeStream', () => {
         stream.stop();
     });
 
+    it('★암호화되지 않은 체결통보 프레임은 버린다 — 평문 연결 위에서 끼워 넣은 위조 체결을 받지 않는다', async () => {
+        const records: KisRealtimeRecord[] = [];
+        const { stream, ws } = await open(records);
+        stream.subscribe('H0STCNI0', 'HTSID');
+        const values = KIS_REALTIME_COLUMNS.H0STCNI0.map((_, i) => (i === 0 ? 'HTSID' : String(i)));
+        for (const trId of ['H0STCNI0', 'H0STCNI9', 'H0GSCNI0', 'H0GSCNI9']) ws.emit('message', { data: `0|${trId}|001|${values.join('^')}` });
+        await flush();
+
+        expect(records).toHaveLength(0);
+        stream.stop();
+    });
+
+    it('접속 주소는 인스턴스의 urls.ws 를 따른다', async () => {
+        const kis = newKis({ sandbox: false });
+        kis.urls.ws = { public: 'wss://example.invalid:21000' };
+        const stream = kis.createRealtimeStream(() => undefined);
+        vi.spyOn(kis, 'getApprovalKey').mockResolvedValue('ak');
+        stream.subscribe('H0IFCNT0', '101W12');
+        await vi.waitFor(() => expect(FakeWs.instances).toHaveLength(1));
+
+        expect(FakeWs.instances[0].url).toBe('wss://example.invalid:21000/tryitout');
+        stream.stop();
+    });
+
     it('kis.createRealtimeStream 은 모의투자 여부를 따라 KisRealtimeStream 을 만든다', () => {
         const stream = newKis({ sandbox: false }).createRealtimeStream(() => undefined);
 

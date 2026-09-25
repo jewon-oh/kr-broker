@@ -47,6 +47,43 @@ from kr_broker.execution_confirm import resolve_confirm_budget
 
 logger = logging.getLogger('kr_broker')
 
+# verbose 로그에서 값을 가리는 헤더와 본문 필드(소문자로 비교). TS 판 `SECRET_LOG_FIELDS` 와 같다.
+_SECRET_LOG_FIELDS = frozenset(['authorization', 'appkey', 'appsecret', 'secretkey', 'client_secret', 'access_token', 'approval_key',
+                                'refresh_token'])
+_REDACTED = '***'
+_FORM_BODY = re.compile(r'[^=&\s]+=[^&]*(&[^=&\s]+=[^&]*)*')
+
+
+def redact_headers_for_log(headers: Optional[Dict[str, str]]) -> Optional[Dict[str, str]]:
+    """로그에 남길 헤더. 비밀 헤더의 값을 가린다."""
+    if headers is None:
+        return None
+    return {key: _REDACTED if str(key).lower() in _SECRET_LOG_FIELDS else value for key, value in dict(headers).items()}
+
+
+def redact_body_for_log(body: Str) -> Str:
+    """로그에 남길 본문. JSON 이나 폼 본문의 비밀 필드 값을 가린다. 읽을 수 없는 본문은 그대로 둔다."""
+    if not body:
+        return body
+
+    def redact(value: Any) -> Any:
+        if isinstance(value, list):
+            return [redact(v) for v in value]
+        if isinstance(value, dict):
+            return {k: _REDACTED if str(k).lower() in _SECRET_LOG_FIELDS else redact(v) for k, v in value.items()}
+        return value
+
+    trimmed = body.strip()
+    if trimmed[:1] in ('{', '['):
+        try:
+            return json.dumps(redact(json.loads(trimmed)), ensure_ascii=False, separators=(',', ':'))
+        except ValueError:
+            return body
+    if _FORM_BODY.fullmatch(trimmed):
+        pairs = [part.split('=', 1) for part in trimmed.split('&')]
+        return '&'.join(f'{k}={_REDACTED}' if k.lower() in _SECRET_LOG_FIELDS else f'{k}={v}' for k, v in pairs)
+    return body
+
 DEFAULT_TIMEOUT_MS = 10_000
 DEFAULT_RATE_LIMIT_MS = 50
 DEFAULT_CURRENCY_TICK = '1e-8'
@@ -322,15 +359,13 @@ class Exchange:
 
     def fetch2(self, path: str, api: ApiName = 'public', method: str = 'GET', params: Optional[Dict[str, Any]] = None,
                headers: Optional[Dict[str, str]] = None, body: Str = None, config: Optional[Dict[str, Any]] = None) -> Any:
-        """요청 하나를 처리한다: (비공개면) 자격증명 확인 → `authenticate` → `throttle` → 재시도 루프 { `sign` → `fetch` }."""
+        """요청 하나를 처리한다: (비공개면) 자격증명 확인 → 재시도 루프 { `throttle` → (비공개면) `authenticate` → `sign` → `fetch` }."""
         params = {} if params is None else params
         config = {} if config is None else config
         is_order = fn.safe_bool(config, 'order', False) is True
-        if self.is_private_api(api):
+        is_private = self.is_private_api(api)
+        if is_private:
             self.check_required_credentials()
-            self.authenticate(path, api, method, params, headers, body)
-        if self.enableRateLimit:
-            self.throttle(self.calculate_rate_limiter_cost(api, method, path, params, config), fn.safe_string(config, 'bucket'))
         retries, params = self.handle_option_and_params(params, path, 'maxRetriesOnFailure', 0)
         retry_delay, params = self.handle_option_and_params(params, path, 'maxRetriesOnFailureDelay', 0)
         if is_order:
@@ -338,6 +373,11 @@ class Exchange:
         timeout = self.orderTimeout if is_order and self.orderTimeout is not None else self.timeout
         attempt = 0
         while True:
+            # 재시도도 간격 조절을 거치고, 인증은 그 뒤에 한다. 둘은 재시도 대상 밖이다(토큰 발급 실패를 다시 시도하지 않는다).
+            if self.enableRateLimit:
+                self.throttle(self.calculate_rate_limiter_cost(api, method, path, params, config), fn.safe_string(config, 'bucket'))
+            if is_private:
+                self.authenticate(path, api, method, params, headers, body)
             try:
                 self.lastRestRequestTimestamp = fn.milliseconds()
                 request = self.sign(path, api, method, params, headers, body)
@@ -360,8 +400,11 @@ class Exchange:
                     raise error from e
                 attempt += 1
                 self.log(f'요청 실패, 다시 시도한다({attempt}/{retries}): {error}')
-                if retry_delay > 0:
-                    self.sleep(retry_delay)
+                # 서버가 알려 준 대기 시간(429 `Retry-After`)이 있으면 그만큼 기다린다.
+                retry_after = getattr(error, 'retry_after_ms', None)
+                wait_ms = max(retry_delay, retry_after if isinstance(retry_after, (int, float)) else 0)
+                if wait_ms > 0:
+                    self.sleep(wait_ms)
 
     def is_outcome_unknown(self, error: BaseException) -> bool:
         """주문 요청이 이 오류로 끝났을 때 접수 여부를 알 수 없는가. 시간 초과, 응답 전에 연결이 끊긴 전송 오류(`NetworkError` 그 자체),
@@ -408,7 +451,7 @@ class Exchange:
         timeout_ms = self.timeout if timeout_ms is None else timeout_ms
         request_headers = self.prepare_request_headers(headers)
         if self.verbose:
-            self.log(f'{self.id} {method} {url}', {'headers': request_headers, 'body': body})
+            self.log(f'{self.id} {method} {url}', {'headers': redact_headers_for_log(request_headers), 'body': redact_body_for_log(body)})
         response = self.http_request(method, url, request_headers, body, timeout_ms)
         return self.handle_rest_response(response, url, method, request_headers, body)
 
@@ -426,8 +469,9 @@ class Exchange:
         timeout_ms = self.timeout if timeout_ms is None else timeout_ms
         session = self.session if self.session is not None else requests.Session()
         try:
+            # 리다이렉트를 따르지 않는다. 따르면 앱키와 시크릿 헤더, 토큰 발급 본문을 다른 호스트로 다시 보낸다. 3xx 는 오류로 던진다.
             return session.request(method, url, headers=headers, data=None if body is None else body.encode('utf-8'),
-                                   timeout=timeout_ms / 1000)
+                                   timeout=timeout_ms / 1000, allow_redirects=False)
         except requests.exceptions.Timeout as e:
             raise RequestTimeout(f'{self.id} {method} {url} 요청이 {int(timeout_ms)}ms 안에 끝나지 않았다') from e
         except (requests.exceptions.InvalidHeader, requests.exceptions.InvalidURL, requests.exceptions.MissingSchema,
@@ -448,7 +492,8 @@ class Exchange:
         self.last_http_response = response_body
         self.last_json_response = parsed_body
         if self.verbose:
-            self.log(f'{self.id} {method} {url} -> {response.status_code}', {'headers': response_headers, 'body': response_body})
+            self.log(f'{self.id} {method} {url} -> {response.status_code}',
+                     {'headers': redact_headers_for_log(response_headers), 'body': redact_body_for_log(response_body)})
         handled = self.handle_errors(response.status_code, response.reason or '', url, method, response_headers, response_body,
                                      parsed_body, request_headers, request_body)
         if handled is None:
@@ -461,8 +506,8 @@ class Exchange:
         return None
 
     def handle_http_status_code(self, code: int, reason: str, url: str, method: str, body: str) -> None:
-        """상태 표(`httpExceptions`)의 오류를 던진다. 표에 없는 5xx 는 `ExchangeNotAvailable` 이다."""
-        error_class = self.httpExceptions.get(str(code)) or (ExchangeNotAvailable if code >= 500 else None)
+        """상태 표(`httpExceptions`)의 오류를 던진다. 표에 없는 3xx(따르지 않은 리다이렉트)와 5xx 는 `ExchangeNotAvailable` 이다."""
+        error_class = self.httpExceptions.get(str(code)) or (ExchangeNotAvailable if code >= 500 or 300 <= code < 400 else None)
         if error_class is not None:
             raise self.http_status_error(code, error_class, f'{self.id} {method} {url} {code} {reason} {body}')
 

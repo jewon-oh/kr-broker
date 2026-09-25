@@ -113,7 +113,9 @@ class FakeSession:
         return body if isinstance(body, str) else json.dumps(body, ensure_ascii=False)
 
     def request(self, method: str, url: str, headers: Optional[Dict[str, str]] = None, data: Optional[bytes] = None,
-                timeout: Optional[float] = None) -> FakeResponse:
+                timeout: Optional[float] = None, allow_redirects: bool = True) -> FakeResponse:
+        # 라이브러리는 리다이렉트를 따르지 않는다(비밀 재전송 방지).
+        assert allow_redirects is False
         exchange = self.reply(method, url, headers, data)
         if exchange.get('network') == 'timeout':
             raise requests.exceptions.ReadTimeout('timed out')
@@ -160,7 +162,8 @@ class FakeAsyncSession(FakeSession):
     """`aiohttp.ClientSession` 대신 응답한다. 기록과 응답 규칙은 `FakeSession` 과 같고, 연결 오류만 aiohttp 의 것으로 던진다."""
 
     def request(self, method: str, url: str, headers: Optional[Dict[str, str]] = None, data: Optional[bytes] = None,  # type: ignore[override]
-                timeout: Any = None) -> _FakeRequestContext:
+                timeout: Any = None, allow_redirects: bool = True) -> _FakeRequestContext:
+        assert allow_redirects is False
         return _FakeRequestContext(self, (method, url, headers, data))
 
     async def close(self) -> None:  # type: ignore[override]

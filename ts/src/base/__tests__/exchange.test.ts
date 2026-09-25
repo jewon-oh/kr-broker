@@ -12,6 +12,8 @@ import {
 import { deepExtend } from '../functions/generic';
 import type { Dict, MarketInterface, Order } from '../types';
 import { FakeExchange, hanging, json, marketOf, stubFetch, text } from './support/fake-exchange';
+import { noopLogger, setLogger, type BrokerLogger } from '../../logger';
+import { redactBodyForLog, redactHeadersForLog } from '../Exchange';
 
 const CREDENTIALS = { apiKey: 'key', secret: 'secret', uid: '12345678-01' };
 
@@ -184,11 +186,11 @@ describe('fetch2 파이프라인', () => {
         expect(ex.calls).toEqual(['throttle', 'sign', 'fetch', 'handleErrors']);
     });
 
-    it('비공개 호출은 자격증명을 확인하고 authenticate 를 먼저 부른다', async () => {
+    it('비공개 호출은 자격증명을 확인하고, 간격 조절 뒤에 authenticate 를 부른다(기다리는 사이 무효화된 토큰으로 나가지 않는다)', async () => {
         const { calls } = stubFetch(json({}));
         const ex = new FakeExchange(CREDENTIALS);
         await ex.privateGetAccounts();
-        expect(ex.calls).toEqual(['authenticate', 'throttle', 'sign', 'handleErrors']);
+        expect(ex.calls).toEqual(['throttle', 'authenticate', 'sign', 'handleErrors']);
         expect((calls[0].init.headers as Dict).Authorization).toBe('Bearer issued-token');
     });
 
@@ -400,10 +402,18 @@ describe('오류 매핑', () => {
             expect(await new FakeExchange().publicGetMarketAll().catch((e: unknown) => e)).toBeInstanceOf(ExchangeNotAvailable);
         });
 
-        it('표에 없는 상태(200·202·302)는 던지지 않는다', async () => {
-            for (const status of [200, 202, 302]) {
+        it('표에 없는 2xx(200·202)는 던지지 않는다', async () => {
+            for (const status of [200, 202]) {
                 stubFetch(new Response('ok', { status }));
                 expect(await new FakeExchange().publicGetMarketAll()).toBe('ok');
+            }
+        });
+
+        it('★리다이렉트를 따르지 않는다 — fetch 에 redirect: manual 을 주고, 3xx 는 ExchangeNotAvailable 로 던진다', async () => {
+            for (const status of [301, 302, 307, 308]) {
+                const { calls } = stubFetch(new Response('moved', { status, headers: { Location: 'https://elsewhere.invalid/' } }));
+                expect(await new FakeExchange(CREDENTIALS).privateGetAccounts().catch((e: unknown) => e), String(status)).toBeInstanceOf(ExchangeNotAvailable);
+                expect(calls[0].init.redirect).toBe('manual');
             }
         });
 
@@ -1085,5 +1095,56 @@ describe('통합 메서드 기본 구현', () => {
         expect(() => ex.checkOrderArguments(undefined, 'limit', 'buy', -1, 100)).toThrow(ArgumentsRequired);
         expect(() => ex.checkOrderArguments(undefined, 'limit', 'buy', NaN, 100)).toThrow(ArgumentsRequired);
         expect(() => ex.checkOrderArguments(undefined, 'limit', 'buy', undefined, 100)).toThrow(ArgumentsRequired);
+    });
+});
+
+
+describe('verbose 로그의 비밀 가리기', () => {
+    it('★요청과 응답 로그에서 비밀 헤더와 본문 필드의 값을 가린다', async () => {
+        const debug = vi.fn();
+        setLogger({ debug, info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as BrokerLogger);
+        try {
+            stubFetch(json({ access_token: 'tok-secret-value', expires_in: 86400 }));
+            const ex = new FakeExchange({ ...CREDENTIALS, verbose: true });
+            await ex.fetch('https://example.invalid/oauth2/token', 'POST', { appkey: 'APPKEY-VALUE', appsecret: 'SECRET-VALUE', Authorization: 'Bearer x' },
+                JSON.stringify({ grant_type: 'client_credentials', appsecret: 'SECRET-VALUE' }));
+            const logged = JSON.stringify(debug.mock.calls);
+            expect(logged).not.toContain('SECRET-VALUE');
+            expect(logged).not.toContain('APPKEY-VALUE');
+            expect(logged).not.toContain('tok-secret-value');
+            expect(logged).toContain('client_credentials');
+        } finally {
+            setLogger(noopLogger);
+        }
+    });
+
+    it('JSON 과 폼 본문, 대소문자를 가리지 않는 헤더 이름을 처리하고 읽을 수 없는 본문은 그대로 둔다', () => {
+        expect(redactHeadersForLog({ AppKey: 'a', 'Content-Type': 'application/json' })).toEqual({ AppKey: '***', 'Content-Type': 'application/json' });
+        expect(JSON.parse(redactBodyForLog('{"appSecret":"s","nested":{"approval_key":"k"},"rows":[{"access_token":"t"}]}') as string))
+            .toEqual({ appSecret: '***', nested: { approval_key: '***' }, rows: [{ access_token: '***' }] });
+        expect(redactBodyForLog('grant_type=client_credentials&client_id=id&client_secret=s')).toBe('grant_type=client_credentials&client_id=id&client_secret=***');
+        expect(redactBodyForLog('<html>maintenance</html>')).toBe('<html>maintenance</html>');
+    });
+});
+
+
+describe('조회 재시도의 간격', () => {
+    it('★재시도마다 간격 조절과 인증을 다시 거치고, 오류의 retryAfterMs 만큼 기다린다', async () => {
+        vi.useFakeTimers();
+        class Limited extends FakeExchange {
+            override handleErrors(...args: Parameters<FakeExchange['handleErrors']>): boolean | undefined {
+                if (args[0] === 429) throw Object.assign(new RateLimitExceeded('slow down'), { retryAfterMs: 2000 });
+                return super.handleErrors(...args);
+            }
+        }
+        const { calls } = stubFetch([text('busy', 429), json(MARKET_ROWS)]);
+        const ex = new Limited({ ...CREDENTIALS, options: { maxRetriesOnFailure: 1 } });
+        const pending = ex.privateGetAccounts();
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(calls).toHaveLength(1);   // Retry-After 전에는 다시 보내지 않는다
+        await vi.advanceTimersByTimeAsync(1500);
+        expect(await pending).toEqual(MARKET_ROWS);
+        expect(ex.calls.filter((c) => c === 'throttle')).toHaveLength(2);
+        expect(ex.calls.filter((c) => c === 'authenticate')).toHaveLength(2);
     });
 });

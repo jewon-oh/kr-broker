@@ -1,6 +1,7 @@
 """주문 요청이 어떤 실패에서 `OrderOutcomeUnknown`(접수 미상)이 되는지 동기 판과 비동기 판에서 본다. TS 판 `exchange.test.ts` 의 '주문 요청' 절과 같은 규칙이다."""
 
 import asyncio
+import logging
 from typing import Any, Dict, List, Optional
 
 import pytest
@@ -131,3 +132,39 @@ def test_confirm_budget_never_raises_after_order_is_sent() -> None:
     for option in (boom, coroutine_budget, [3, 100], 'x'):
         assert SyncExchange({'options': {'confirmBudget': option}}).get_confirm_budget(defaults) == defaults
     assert SyncExchange({'options': {'confirmBudget': {'attempts': 2}}}).get_confirm_budget(defaults) == {'attempts': 2, 'intervalMs': 1000}
+
+
+@pytest.mark.parametrize('cls', [SyncFake, AsyncFake])
+@pytest.mark.parametrize('status', [301, 302, 307, 308])
+def test_redirect_is_not_followed_but_raised(cls: Any, status: int) -> None:
+    # 리다이렉트를 따르면 앱키와 시크릿을 다른 호스트로 다시 보낸다. 3xx 는 오류로 던진다.
+    error = _order(cls([_Response(status, 'moved')]))
+    assert isinstance(error, ExchangeNotAvailable) and not isinstance(error, OrderOutcomeUnknown)
+
+
+def test_sync_http_request_disables_redirects() -> None:
+    seen: Dict[str, Any] = {}
+
+    class Session:
+        def request(self, method: str, url: str, **kwargs: Any) -> Any:
+            seen.update(kwargs)
+            return _Response(200, '{}')
+
+    SyncExchange({'session': Session()}).http_request('GET', 'https://example.invalid/x')
+    assert seen['allow_redirects'] is False
+
+
+def test_verbose_log_redacts_secrets(caplog: pytest.LogCaptureFixture) -> None:
+    ex = SyncFake([_Response(200, '{"access_token": "tok-secret-value", "expires_in": 86400}')], {'verbose': True})
+    with caplog.at_level(logging.DEBUG, logger='kr_broker'):
+        ex.fetch('https://example.invalid/oauth2/token', 'POST', {'appkey': 'APPKEY-VALUE', 'appsecret': 'SECRET-VALUE'},
+                 '{"grant_type": "client_credentials", "appsecret": "SECRET-VALUE"}')
+    logged = caplog.text + ' '.join(str(r.args) for r in caplog.records)
+    assert 'SECRET-VALUE' not in logged and 'APPKEY-VALUE' not in logged and 'tok-secret-value' not in logged
+
+
+def test_redact_helpers_match_ts() -> None:
+    from kr_broker.base.exchange import redact_body_for_log, redact_headers_for_log
+    assert redact_headers_for_log({'AppKey': 'a', 'Content-Type': 'application/json'}) == {'AppKey': '***', 'Content-Type': 'application/json'}
+    assert redact_body_for_log('grant_type=client_credentials&client_id=id&client_secret=s') == 'grant_type=client_credentials&client_id=id&client_secret=***'
+    assert redact_body_for_log('<html>maintenance</html>') == '<html>maintenance</html>'

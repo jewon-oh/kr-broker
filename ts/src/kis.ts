@@ -103,6 +103,7 @@ import {
     KIS_OVERSEAS_ORD_DVSN,
     KIS_PRESENT_BALANCE_PARAMS,
     KIS_WS_DOMAINS,
+    KIS_WS_PATH,
     getTickSize,
     isKrxDomesticCode,
 } from './kis/kis-types';
@@ -4188,6 +4189,7 @@ export class kis extends Exchange {
         return new KisPriceWs({
             getApprovalKey: () => this.getApprovalKey(),
             isVirtual: this.isSandboxModeEnabled,
+            url: this.realtimeUrl(),
             ...handlers,
         });
     }
@@ -4200,7 +4202,15 @@ export class kis extends Exchange {
     createRealtimeStream(
         onRecord: (record: KisRealtimeRecord) => void, onSubscribeError: ((trId: string, trKey: string, message: string) => void) | undefined = undefined,
     ): KisRealtimeStream {
-        return new KisRealtimeStream({ getApprovalKey: () => this.getApprovalKey(), isVirtual: this.isSandboxModeEnabled, onRecord, onSubscribeError });
+        return new KisRealtimeStream({
+            getApprovalKey: () => this.getApprovalKey(), isVirtual: this.isSandboxModeEnabled, url: this.realtimeUrl(), onRecord, onSubscribeError,
+        });
+    }
+
+    /** 실시간 접속 주소. `urls.ws`(모의는 `urls.wsTest`)의 `public` 에 경로를 붙인다. 사용하는 쪽이 `urls` 로 바꿀 수 있다. */
+    private realtimeUrl(): string | undefined {
+        const base = this.safeString(this.isSandboxModeEnabled ? this.urls.wsTest : this.urls.ws, 'public');
+        return base === undefined ? undefined : base + KIS_WS_PATH;
     }
 
     // ============ 실시간(ccxt pro) ============

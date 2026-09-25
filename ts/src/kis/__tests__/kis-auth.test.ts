@@ -120,7 +120,7 @@ describe('토큰 캐시 — kis.authenticate', () => {
         const broker = newKis({ options: { tokenStore: store } });
 
         const pending = broker.authenticate();
-        await vi.advanceTimersByTimeAsync(2000);
+        await vi.advanceTimersByTimeAsync(13_000);   // 락을 쥔 쪽의 발급을 상한(12초)까지 기다린 뒤 직접 발급한다
         await pending;
 
         expect(broker.token).toBe('fallback');

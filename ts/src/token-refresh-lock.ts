@@ -29,7 +29,10 @@ import { logger } from './logger';
 import type { BrokerTokenStore } from './options';
 
 /** 락 미획득 시 다른 프로세스의 발급을 기다리는 기본 시간. KIS 구현에서 가져온 값. */
-const DEFAULT_WAIT_MS = 1_500;
+/** 락을 못 잡았을 때 다른 프로세스의 발급을 기다리는 최대 시간. 토스 발급 상한(10초)보다 길게 잡는다. */
+const DEFAULT_WAIT_MS = 12_000;
+/** 기다리는 동안 저장소를 다시 읽는 간격. */
+const DEFAULT_POLL_MS = 250;
 
 export interface TokenRefreshLockParams<T> {
     /** 로그 접두 (예: `[TossAuth]`). */
@@ -47,8 +50,10 @@ export interface TokenRefreshLockParams<T> {
     readCached: () => Promise<T | null>;
     /** 새 토큰을 발급하고 **캐시에 저장까지** 한다. */
     issueAndCache: () => Promise<T>;
-    /** 락 미획득 시 대기 시간(ms). */
+    /** 락 미획득 시 최대 대기 시간(ms). */
     waitMs?: number;
+    /** 대기 중 저장소를 다시 읽는 간격(ms). */
+    pollMs?: number;
 }
 
 /**
@@ -79,6 +84,9 @@ export async function refreshTokenWithLock<T>(params: TokenRefreshLockParams<T>)
     }
     if (acquired) {
         try {
+            // 락을 잡기 직전에 다른 프로세스가 발급을 마치고 락을 풀었을 수 있다. 저장소에 있으면 발급하지 않는다.
+            const cached = await readCached().catch(() => null);
+            if (cached !== null) return cached;
             return await issueAndCache();
         } finally {
             // 자기 락만 푼다 — 만료된 뒤 다른 프로세스가 잡은 락을 지우지 않게.
@@ -90,16 +98,21 @@ export async function refreshTokenWithLock<T>(params: TokenRefreshLockParams<T>)
         }
     }
 
-    // 락 미획득 → 다른 프로세스가 발급 중. 짧게 대기 후 캐시 재조회.
-    await new Promise(resolve => setTimeout(resolve, params.waitMs ?? DEFAULT_WAIT_MS));
-    try {
-        const cached = await readCached();
-        if (cached !== null) {
-            logger.info(`${label} 🤝 다른 프로세스 발급 토큰 사용 (분산 락 협업)`);
-            return cached;
+    // 락 미획득 → 다른 프로세스가 발급 중. 발급 상한까지 짧은 간격으로 저장소를 다시 읽는다. 한 번만 보고 직접 발급하면
+    // 상대의 발급이 길어질 때 두 곳이 발급한다(토스는 두 토큰 중 하나가 곧바로 무효다). 대기는 횟수로 센다.
+    const pollMs = params.pollMs ?? DEFAULT_POLL_MS;
+    const polls = Math.max(1, Math.ceil((params.waitMs ?? DEFAULT_WAIT_MS) / pollMs));
+    for (let i = 0; i < polls; i++) {
+        await new Promise(resolve => setTimeout(resolve, pollMs));
+        try {
+            const cached = await readCached();
+            if (cached !== null) {
+                logger.info(`${label} 🤝 다른 프로세스 발급 토큰 사용 (분산 락 협업)`);
+                return cached;
+            }
+        } catch (err) {
+            logger.debug({ err }, `${label} 협업 토큰 재조회 실패`);
         }
-    } catch (err) {
-        logger.debug({ err }, `${label} 협업 토큰 재조회 실패 — 직접 발급으로 폴백`);
     }
 
     logger.warn({}, `${label} 분산 락 협업 실패 — 직접 발급 폴백 (발급 빈도 제한 위험)`);
