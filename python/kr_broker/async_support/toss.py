@@ -1139,7 +1139,7 @@ class toss(Exchange, ImplicitAPI):
         if type not in ('limit', 'market'):
             raise InvalidOrder(f"{self.id} createOrder() type must be 'limit' or 'market'")
         # 조건주문은 `triggerPrice` 로만 낸다. 다른 ccxt 조건 인자를 버리면 조건 없는 일반 주문이 바로 나가므로 요청 전에 막는다.
-        for key in ('stopPrice', 'stopLossPrice', 'takeProfitPrice'):
+        for key in ('stopPrice', 'stopLossPrice', 'takeProfitPrice', 'stopLoss', 'takeProfit'):
             if self.safe_value(params, key) is not None:
                 raise NotSupported(f'{self.id} createOrder() 는 조건 인자 {key} 를 받지 않는다. 조건주문은 params.triggerPrice 나 createTriggerOrder() 로 낸다')
         market = self.market(symbol)

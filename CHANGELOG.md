@@ -6,7 +6,7 @@
 
 ### 바뀜(호환되지 않음)
 
-- 한국투자증권과 토스증권 `createOrder`가 받지 않는 ccxt 조건 인자를 주면 요청 없이 `NotSupported`를 던집니다. 한국투자증권은 `triggerPrice`, `stopPrice`, `stopLossPrice`, `takeProfitPrice`를, 토스는 `stopPrice`, `stopLossPrice`, `takeProfitPrice`를 막습니다. 예전에는 이 인자를 버리거나 본문에 합쳐, 조건 없는 일반 주문이 바로 나갈 수 있었습니다. 한국투자증권 스탑지정가는 `createTriggerOrder`로, 토스 조건주문은 `params.triggerPrice`나 `createTriggerOrder`로 냅니다. KB증권은 이미 같은 인자를 막습니다.
+- 한국투자증권과 토스증권 `createOrder`가 받지 않는 ccxt 조건 인자를 주면 요청 없이 `NotSupported`를 던집니다. 한국투자증권은 `triggerPrice`, `stopPrice`, `stopLossPrice`, `takeProfitPrice`, `stopLoss`, `takeProfit`를, 토스는 `triggerPrice`를 뺀 다섯 키를 막습니다. 예전에는 이 인자를 버리거나 본문에 합쳐, 조건 없는 일반 주문이 바로 나갈 수 있었습니다. 한국투자증권 스탑지정가는 `createTriggerOrder`로, 토스 조건주문은 `params.triggerPrice`나 `createTriggerOrder`로 냅니다. KB증권은 이미 같은 인자를 막았고, `stopLoss`와 `takeProfit`도 더했습니다.
 - 일봉, 주봉, 월봉의 `timestamp`를 세 증권사 모두 그 기간 첫날(그 시장의 현지 날짜)의 00:00 UTC로 맞춥니다. 주봉은 월요일, 월봉은 1일입니다. ccxt의 일봉 관례와 같습니다. 바뀌는 곳은 한국투자증권 미국 일봉(야후의 09:30 ET), 야후 주봉과 월봉(현지 자정), 토스 일봉(현지 자정), KB증권 국내 봉과 `fetchOverseasCandles`의 일, 주, 월, 연봉(현지 자정)입니다. 한국투자증권 국내 일봉(09:00 KST = 00:00 UTC)은 그대로입니다. Python 판도 같습니다.
 - KB증권 토큰 발급이 연결 실패나 시간 초과, 업무 코드 없는 5xx, 429로 끝나면 `AuthenticationError` 대신 `NetworkError` 계열(`NetworkError`, `RequestTimeout`, `ExchangeNotAvailable`, `RateLimitExceeded`)을 던집니다. 예전에는 일시 장애도 자격증명 오류처럼 보였습니다. 이때는 다른 본문 형태로 다시 보내지 않습니다. 봉투에 업무 코드가 있는 실패(E021 등)는 그대로 `AuthenticationError`입니다.
 - 한국투자증권 캔들의 야후 조회가 404 가 아닌 4xx(조회 폭 초과 422 등)로 끝나면 `BadRequest`를 던집니다. 예전에는 일시 장애처럼 보이는 `ExchangeNotAvailable`이었습니다. 5xx 와 재시도를 다 쓴 실패는 그대로 `ExchangeNotAvailable`입니다.

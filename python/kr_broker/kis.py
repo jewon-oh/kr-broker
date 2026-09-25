@@ -137,7 +137,7 @@ OVERSEAS_ORDER_TR = {
 }
 
 # `create_order` 가 받지 않는 ccxt 조건 인자. 본문에 합치면 조건 없는 일반 주문이 바로 나갈 수 있어 요청 전에 막는다.
-CONDITIONAL_ORDER_PARAMS = ('triggerPrice', 'stopPrice', 'stopLossPrice', 'takeProfitPrice')
+CONDITIONAL_ORDER_PARAMS = ('triggerPrice', 'stopPrice', 'stopLossPrice', 'takeProfitPrice', 'stopLoss', 'takeProfit')
 
 # 미국 거래소. 이 거래소의 주문에는 미국장 세션 게이트를 건다.
 US_ORDER_EXCHANGES = frozenset(['NASD', 'NYSE', 'AMEX'])
@@ -1756,7 +1756,7 @@ class kis(Exchange, ImplicitAPI):
 
         `params['session']` 은 `'regular'` 이나 `'nxt'` 다. 생략하면 `options['nxtRouting']` 과 NXT 확장세션 시각으로 정한다(국내).
         확장세션이면 종목이 NXT 에서 거래되는지 먼저 확인하고(실전만), 아니면 `MarketClosed` 를 던진다. 조건 인자(`triggerPrice`,
-        `stopPrice`, `stopLossPrice`, `takeProfitPrice`)는 요청 없이 `NotSupported` 다(스탑지정가는 `create_trigger_order`). 그 밖의 키는
+        `stopPrice`, `stopLossPrice`, `takeProfitPrice`, `stopLoss`, `takeProfit`)는 요청 없이 `NotSupported` 다(스탑지정가는 `create_trigger_order`). 그 밖의 키는
         요청 본문에 합친다.
 
         국내 시장가는 `ORD_DVSN=01`, 지정가는 `00` 이다. 미국은 지정가만 낼 수 있고 실전에서 `market` 을 주면 장마감지정가(LOC)로 낸다.

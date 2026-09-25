@@ -1557,7 +1557,7 @@ export class toss extends Exchange {
         if (side !== 'buy' && side !== 'sell') throw new InvalidOrder(`${this.id} createOrder() side must be 'buy' or 'sell'`);
         if (type !== 'limit' && type !== 'market') throw new InvalidOrder(`${this.id} createOrder() type must be 'limit' or 'market'`);
         // 조건주문은 `triggerPrice` 로만 낸다. 다른 ccxt 조건 인자를 버리면 조건 없는 일반 주문이 바로 나가므로 요청 전에 막는다.
-        for (const key of ['stopPrice', 'stopLossPrice', 'takeProfitPrice']) {
+        for (const key of ['stopPrice', 'stopLossPrice', 'takeProfitPrice', 'stopLoss', 'takeProfit']) {
             if (this.safeValue(params, key) !== undefined) {
                 throw new NotSupported(`${this.id} createOrder() 는 조건 인자 ${key} 를 받지 않는다. 조건주문은 params.triggerPrice 나 createTriggerOrder() 로 낸다`);
             }
