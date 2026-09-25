@@ -85,7 +85,7 @@ import {
     type ApiName,
     type Market,
 } from './base';
-import { implicitMethodName, kstTimestampOf } from './base/Exchange';
+import { implicitMethodName, kstTimestampOf, strictKstTimestampOf } from './base/Exchange';
 import { KIS_API_TREE, type KisImplicitApi, type KisPrivateGetPath } from './abstract/kis';
 import { logger } from './logger';
 import { buildExtendedSessionLimit } from './extended-session-limit';
@@ -5259,7 +5259,7 @@ export class kis extends Exchange {
                 tr_id: 'FHKUP03500200',
             }, params));
             candles = rowsOf(this.safeValue(response, 'output2'))
-                .map((row) => candle(row, kstTimestamp(this.safeString(row, 'stck_bsop_date'), this.safeString(row, 'stck_cntg_hour')), 'cntg_vol'));
+                .map((row) => candle(row, strictKstTimestampOf(this.safeString(row, 'stck_bsop_date'), this.safeString(row, 'stck_cntg_hour')), 'cntg_vol'));
         }
         const sorted = candles
             .filter((c) => c[0] !== undefined && (since === undefined || (c[0] as number) >= since))
@@ -5286,7 +5286,7 @@ export class kis extends Exchange {
         }, query));
         const candles = rowsOf(this.safeValue(response, 'output2'))
             .map((row): OHLCV => [
-                kstTimestamp(this.safeString(row, 'stck_bsop_date'), this.safeString(row, 'stck_cntg_hour')),
+                strictKstTimestampOf(this.safeString(row, 'stck_bsop_date'), this.safeString(row, 'stck_cntg_hour')),
                 this.safeNumber(row, 'stck_oprc'),
                 this.safeNumber(row, 'stck_hgpr'),
                 this.safeNumber(row, 'stck_lwpr'),
@@ -7760,7 +7760,7 @@ export class kis extends Exchange {
             expectedVolume: this.safeNumber(summary, 'antc_vol'),
             expectedAmount: this.safeNumber(summary, 'antc_tr_pbmn'),
             points: rowsOf(this.safeValue(response, 'output2')).map((row) => ({
-                timestamp: kstTimestamp(this.safeString(row, 'stck_bsop_date'), this.safeString(row, 'stck_cntg_hour')),
+                timestamp: strictKstTimestampOf(this.safeString(row, 'stck_bsop_date'), this.safeString(row, 'stck_cntg_hour')),
                 price: this.safeNumber(row, 'stck_prpr'),
                 change: this.safeNumber(row, 'prdy_vrss'),
                 percentage: this.safeNumber(row, 'prdy_ctrt'),
@@ -8592,7 +8592,7 @@ export class kis extends Exchange {
         }, params));
         return rowsOf(this.safeValue(response, 'output2'))
             .map((row): OHLCV => [
-                kstTimestamp(this.safeString(row, 'kymd'), this.safeString(row, 'khms')),
+                strictKstTimestampOf(this.safeString(row, 'kymd'), this.safeString(row, 'khms')),
                 this.safeNumber(row, 'open'),
                 this.safeNumber(row, 'high'),
                 this.safeNumber(row, 'low'),

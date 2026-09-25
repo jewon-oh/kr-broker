@@ -110,6 +110,19 @@ describe('해외 종목 시세', () => {
         ]);
     });
 
+    it('fetchOverseasMinuteOHLCV 는 범위를 넘는 시각(240000)의 행을 그날 0시로 두지 않고 버린다', async () => {
+        mockFetch.mockResolvedValueOnce(tokenOk()).mockResolvedValueOnce(dataOk({
+            output2: [
+                { kymd: '20260923', khms: '240000', last: '228' },
+                { kymd: '20260923', khms: '223000', last: '227' },
+            ],
+        }));
+
+        const candles = await newKis().fetchOverseasMinuteOHLCV('AAPL/USD', 5);
+
+        expect(candles.map((c) => [c[0], c[4]])).toEqual([[Date.parse('2026-09-23T13:30:00Z'), 227]]);
+    });
+
     it('국내 종목이나 잘못된 입력은 보내기 전에 던진다', async () => {
         const broker = newKis();
         await expect(broker.fetchOverseasOrderBook('005930/KRW')).rejects.toThrow(BadSymbol);

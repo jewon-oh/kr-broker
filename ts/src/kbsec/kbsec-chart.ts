@@ -3,7 +3,7 @@
  */
 
 import { NotSupported } from '../base/errors';
-import { kstTimestampOf } from '../base/Exchange';
+import { kstTimestampOf, strictKstTimestampOf } from '../base/Exchange';
 import { etWallClockToUtcMs } from '../us-market-hours';
 import { KBSEC_CHART_KIND } from './kbsec-types';
 
@@ -54,13 +54,11 @@ export function kbsecBarMs(timeframe: string): number {
 
 /**
  * 국내 봉의 `dt`(YYYYMMDD)와 `tm`(HHMMSS) → UTC 밀리초. 두 값은 한국 시각이다. `long` 형이라 앞의 0 이 빠져 올 수 있어 자리를 채운다.
- * 일자를 읽을 수 없거나 달력에 없는 날짜면 `undefined` 다. 일봉은 시각이 없거나 0 이라 자정(KST)이 된다.
+ * 일자나 시각을 읽을 수 없거나 달력에 없는 날짜면 `undefined` 다. 일봉은 시각이 없거나 0 이라 자정(KST)이 된다.
  */
 export function kbsecCandleTimestamp(dt: string, tm: string): number | undefined {
-    // 시각을 읽을 수 없는 봉은 0시로 두지 않고 버린다. 날짜 읽기와 달력 검증은 `kstTimestampOf` 가 한다.
-    const time = tm.trim() === '' ? '000000' : tm.trim().padStart(6, '0');
-    if (!/^\d{6}$/.test(time)) return undefined;
-    return kstTimestampOf(dt.trim(), time);
+    // 시각을 읽을 수 없는 봉(`240000` 등)은 0시로 두지 않고 버린다.
+    return strictKstTimestampOf(dt.trim(), tm.trim());
 }
 
 /**
