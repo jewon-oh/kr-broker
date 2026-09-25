@@ -931,6 +931,103 @@
             "error": { "class": "ArgumentsRequired" }
         },
         {
+            "description": "fetchBalance 는 매수 가능 금액 조회가 토큰을 다시 받은 뒤에도 401 이면 던진다 — 보유만 담고 원화 행을 뺀 채 성공으로 돌려주지 않는다",
+            "method": "fetchBalance",
+            "args": [],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/holdings",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "items": [
+                                    { "symbol": "005930", "name": "삼성전자", "marketCountry": "KR", "currency": "KRW", "quantity": "4", "averagePurchasePrice": "69250" }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/buying-power?currency=KRW",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": { "status": 401, "body": { "error": { "code": "token-revoked", "message": "만료" } } }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.tossinvest.com/oauth2/token",
+                        "headers": { "Content-Type": "application/x-www-form-urlencoded" },
+                        "body": "grant_type=client_credentials&client_id=toss-client-id-123456&client_secret=toss-secret"
+                    },
+                    "response": { "status": 200, "body": { "access_token": "tok-renewed", "token_type": "Bearer", "expires_in": 86400 } }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/buying-power?currency=KRW",
+                        "headers": { "Authorization": "Bearer tok-renewed", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": { "status": 401, "body": { "error": { "code": "token-revoked", "message": "만료" } } }
+                }
+            ],
+            "error": { "class": "TossTokenRejected", "detail": "token-revoked" }
+        },
+        {
+            "description": "fetchBalance 는 달러 매수 가능 금액 조회가 실패하면 던진다 — 보유와 원화만 담아 성공으로 돌려주지 않는다",
+            "method": "fetchBalance",
+            "args": [],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/holdings",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "items": [
+                                    { "symbol": "005930", "name": "삼성전자", "marketCountry": "KR", "currency": "KRW", "quantity": "4", "averagePurchasePrice": "69250" }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/buying-power?currency=KRW",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": { "status": 200, "body": { "result": { "currency": "KRW", "cashBuyingPower": "300000" } } }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/buying-power?currency=USD",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": { "status": 503, "body": { "error": { "code": "service-unavailable", "message": "잠시 뒤 다시" } } }
+                }
+            ],
+            "error": { "class": "ExchangeNotAvailable" }
+        },
+        {
             "description": "fetchTradingFee 는 오늘 유효한 행 가운데 가장 늦게 시작한 요율을 쓰고 백분율 응답은 소수 비율로 바꾼다",
             "now": 1774400400000,
             "method": "fetchTradingFee",

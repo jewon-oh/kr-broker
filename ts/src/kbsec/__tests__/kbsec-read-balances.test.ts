@@ -3,7 +3,8 @@
  *
  * 배경: KB 는 해외 조회만 실패해도 국내 보유가 담긴 **비어 있지 않은 목록을 성공으로** 돌려줄 수 있다. 소비처가 그 목록에 없는 해외 종목을
  * 보유 0 으로 읽으면 오경보가 난다. 그래서 `info.readStatus`(`COMPLETE`/`PARTIAL`)와 `info.unreadMarkets` 가 그 구분을 값으로 전한다.
- * 국내를 못 읽으면(예수금 실패 포함) 던진다. 실패와 "없음"을 같은 값으로 돌려주지 않는다.
+ * 예수금을 못 읽으면 던진다. 국내 보유를 다 읽지 못하면(계좌자산평가 실패 뒤 보유주식 폴백이 걸러지거나 비는 등) `unreadMarkets` 에 `KR` 이 들어간다.
+ * 실패와 "없음"을 같은 값으로 돌려주지 않는다.
  *
  * 이 파일은 실제 `kbsec` 를 `fetch` 목킹으로 부른다. 판정 규칙을 로컬 함수로 복사해 검증하면 인스턴스 상태(래치·냉각·그리드 이력)를 볼 수 없다.
  */
@@ -50,6 +51,15 @@ const tokenOk = () => {
 type UsMode = 'ok' | 'empty' | 'timeout' | 'business';
 let usMode: UsMode = 'ok';
 let depositFails = false;
+/** 국내 1순위 계좌자산평가(SSQM2952). ok=삼성전자 10주, empty=성공했지만 행 없음, timeout=연결 타임아웃 */
+type AssetEvalMode = 'ok' | 'empty' | 'timeout';
+let assetEvalMode: AssetEvalMode = 'ok';
+/** 국내 폴백 보유주식(SSQM1801). none=0건, ok=삼성전자 10주, filtered=종목코드 없는 1행(전부 걸러짐), endless=연속조회가 끝나지 않음 */
+type HoldingRowsMode = 'none' | 'ok' | 'filtered' | 'endless';
+let holdingRowsMode: HoldingRowsMode = 'none';
+let holdingPage = 0;
+
+const connectTimeout = () => Object.assign(new TypeError('fetch failed'), { cause: { code: 'UND_ERR_CONNECT_TIMEOUT' } });
 
 function route() {
     mockFetch.mockImplementation(async (url: string) => {
@@ -70,7 +80,19 @@ function route() {
             }
             return jsonOk({ ordr_psbl_csh: '5000000' });
         }
-        if (tr === KBSEC_TR.ASSET_EVAL.toLowerCase()) return jsonOk(DOMESTIC_ASSET_EVAL);
+        if (tr === KBSEC_TR.ASSET_EVAL.toLowerCase()) {
+            if (assetEvalMode === 'timeout') throw connectTimeout();
+            return jsonOk(assetEvalMode === 'empty' ? {} : DOMESTIC_ASSET_EVAL);
+        }
+        if (tr === KBSEC_TR.HOLDINGS.toLowerCase()) {
+            if (holdingRowsMode === 'ok') return jsonOk({ Record2: [{ shrt_cd: '005930', is_nm: '삼성전자', gnrl_q: '10', ordr_psbl_q: '10' }] });
+            if (holdingRowsMode === 'filtered') return jsonOk({ Record2: [{ is_nm: '합계', gnrl_q: '10', ordr_psbl_q: '10' }] });
+            if (holdingRowsMode === 'endless') {
+                holdingPage++;
+                return jsonOk({ nxt_key: `k${holdingPage}`, Record2: [{ shrt_cd: '005930', is_nm: '삼성전자', gnrl_q: '10', ordr_psbl_q: '10' }] });
+            }
+            return jsonOk({});
+        }
         return jsonOk({});
     });
 }
@@ -85,6 +107,9 @@ beforeEach(() => {
     mockFetch.mockReset();
     usMode = 'ok';
     depositFails = false;
+    assetEvalMode = 'ok';
+    holdingRowsMode = 'none';
+    holdingPage = 0;
     route();
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-09-20T00:00:00Z'));
@@ -215,5 +240,71 @@ describe('KB fetchBalance — 항목의 모양', () => {
         const b = await makeService().fetchBalance();
 
         expect(b.USD).toMatchObject({ free: 850.5, used: 149.5, total: 1000 });
+    });
+});
+
+describe('KB fetchBalance — 국내 보유의 완전성', () => {
+    it('계좌자산평가가 연결 타임아웃이고 보유주식 폴백이 1행을 주지만 전부 걸러지면 PARTIAL 이고 KR 을 못 읽은 시장으로 표시한다', async () => {
+        assetEvalMode = 'timeout';
+        holdingRowsMode = 'filtered';
+
+        const b = await makeService().fetchBalance();
+
+        expect(b.info.readStatus).toBe('PARTIAL');
+        expect(b.info.unreadMarkets).toEqual(['KR']);
+        expect(codesOf(b)).not.toContain('005930');
+        expect(codesOf(b)).toEqual(expect.arrayContaining(['KRW', 'JNJ']));
+    });
+
+    it('계좌자산평가가 실패해도 보유주식 폴백이 행을 읽으면 COMPLETE 다', async () => {
+        assetEvalMode = 'timeout';
+        holdingRowsMode = 'ok';
+
+        const b = await makeService().fetchBalance();
+
+        expect(b.info.readStatus).toBe('COMPLETE');
+        expect(b.info.unreadMarkets).toEqual([]);
+        expect(codesOf(b)).toContain('005930');
+    });
+
+    it('계좌자산평가가 실패했는데 보유주식 폴백이 비면 "보유 없음"이라고 말할 근거가 없어 PARTIAL 이다', async () => {
+        assetEvalMode = 'timeout';
+        holdingRowsMode = 'none';
+
+        const b = await makeService().fetchBalance();
+
+        expect(b.info.readStatus).toBe('PARTIAL');
+        expect(b.info.unreadMarkets).toEqual(['KR']);
+    });
+
+    it('계좌자산평가가 성공했는데 행이 없고 보유주식도 비면 두 조회가 모두 "보유 없음"이라 COMPLETE 다', async () => {
+        assetEvalMode = 'empty';
+        holdingRowsMode = 'none';
+
+        const b = await makeService().fetchBalance();
+
+        expect(b.info.readStatus).toBe('COMPLETE');
+        expect(codesOf(b)).not.toContain('005930');
+    });
+
+    it('보유주식 연속조회가 상한에서 잘리면 PARTIAL 이다 — 잘린 뒤의 종목이 목록에서 빠진다', async () => {
+        assetEvalMode = 'timeout';
+        holdingRowsMode = 'endless';
+
+        const b = await new kbsec({ apiKey: CREDS.appKey, secret: CREDS.appSecret, rateLimit: 0, options: { holdingsMaxPages: 2 } }).fetchBalance();
+
+        expect(b.info.readStatus).toBe('PARTIAL');
+        expect(b.info.unreadMarkets).toEqual(['KR']);
+    });
+
+    it('국내와 해외를 모두 못 읽으면 두 시장이 다 표시된다', async () => {
+        assetEvalMode = 'timeout';
+        holdingRowsMode = 'filtered';
+        usMode = 'timeout';
+
+        const b = await makeService().fetchBalance();
+
+        expect(b.info.readStatus).toBe('PARTIAL');
+        expect(b.info.unreadMarkets).toEqual(['KR', 'US']);
     });
 });

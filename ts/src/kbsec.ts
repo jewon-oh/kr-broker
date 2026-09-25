@@ -2801,9 +2801,13 @@ export class kbsec extends Exchange {
      * 통화와 보유 종목의 잔고. 현금은 통화 키(`KRW`, `USD`), 보유 종목은 종목 코드 키이며 `total` 이 **수량**이다. 평균 단가·평가금액·종목명은
      * 각 항목의 `info` 에 있다(`averagePrice`, `marketValue`, `name`, `quoteCurrency`).
      *
-     * 국내를 읽지 못하면 던진다(예수금 실패 포함). 해외만 못 읽었으면 던지지 않고 `info.readStatus` 가 `PARTIAL`, 못 읽은 시장이
-     * `info.unreadMarkets` 다. **이때 목록에 없는 해외 종목은 미보유가 아니라 미확인이다.** 해외를 읽었다는 것은 이번 조회가 성공했고 해외 그리드를
-     * 한 번이라도 본 적이 있다는 뜻이다. 그리드를 본 적이 없으면 빈 응답이 "보유 없음"인지 "그리드를 못 알아봄"인지 가를 수 없다.
+     * 예수금을 읽지 못하면 던진다. 보유를 일부만 읽었으면 던지지 않고 `info.readStatus` 가 `PARTIAL`, 못 읽은 시장(`KR`, `US`)이
+     * `info.unreadMarkets` 다. **이때 그 시장에서 목록에 없는 종목은 미보유가 아니라 미확인이다.**
+     * - 국내(`KR`): 계좌자산평가(`SSQM2952`)가 국내 행을 주면 읽은 것이다. 실패해서 보유주식(`SSQM1801`) 경로로 내려갔는데 그 행이 전부
+     *   걸러졌거나, 종목코드를 못 읽어 버린 행이 있거나, 연속조회가 상한에서 잘렸거나, 계좌자산평가가 실패했는데 보유주식도 비었으면 못 읽은 것이다.
+     *   계좌자산평가가 성공했는데 국내 행이 없고 보유주식도 비었으면 두 조회가 모두 "보유 없음"이라 읽은 것으로 본다.
+     * - 해외(`US`): 이번 조회가 성공했고 해외 그리드를 한 번이라도 본 적이 있으면 읽은 것이다. 그리드를 본 적이 없으면 빈 응답이
+     *   "보유 없음"인지 "그리드를 못 알아봄"인지 가를 수 없다.
      *
      * `USD` 항목은 해외 잔고평가(`SPQM2226`)의 통화별 예수금 그리드에서 온다(예수금·주문가능금액). 그 그리드를 못 읽었으면 `USD` 항목이 없다.
      * **없다는 것은 0 이 아니라 모른다는 뜻이다.** `options.krwIntegratedMargin` 이 켜져 있고 원화환산 외화예수금이 있으면 그것을 환율로 환산한 USD 가 우선한다.
@@ -2840,19 +2844,24 @@ export class kbsec extends Exchange {
 
         // 1순위는 계좌자산평가(`SSQM2952`)다. 실보유수량·매입평균가·평가금액을 명시적으로 주므로 추정이 없다. 실패하면 보유주식 경로로 내려간다.
         // 잔고가 조용히 0 이 되는 것이 이 클래스에서 가장 피해가 큰 실패 모드라, 검증 안 된 경로로 통째로 갈아타지 않는다.
-        let holdings = await this.fetchDomesticHoldingsFromAssetEval();
-        if (holdings === undefined) holdings = await this.fetchDomesticHoldingsFromHoldingRows();
+        const assetEval = await this.fetchDomesticHoldingsFromAssetEval();
+        const domestic = assetEval.status === 'ok'
+            ? { rows: assetEval.rows, read: true }
+            : await this.fetchDomesticHoldingsFromHoldingRows(assetEval.status === 'failed');
         const overseas = await this.fetchOverseasHoldings();
 
-        return this.parseBalance({ krw, deposit, holdings: [...holdings, ...overseas.rows], overseas, oneMarketUsd });
+        return this.parseBalance({ krw, deposit, holdings: [...domestic.rows, ...overseas.rows], domesticRead: domestic.read, overseas, oneMarketUsd });
     }
 
     override parseBalance(response: Dict): Balances {
         const overseas = response.overseas as OverseasHoldings;
+        const unreadMarkets: string[] = [];
+        if (response.domesticRead === false) unreadMarkets.push('KR');
+        if (!overseas.read) unreadMarkets.push('US');
         const result: Dict = {
             info: {
-                readStatus: (overseas.read ? 'COMPLETE' : 'PARTIAL') as KbsecReadStatus,
-                unreadMarkets: overseas.read ? [] : ['US'],
+                readStatus: (unreadMarkets.length === 0 ? 'COMPLETE' : 'PARTIAL') as KbsecReadStatus,
+                unreadMarkets,
                 deposit: response.deposit,
             },
             timestamp: undefined,
@@ -2889,18 +2898,18 @@ export class kbsec extends Exchange {
      * 국내 보유 — 계좌자산평가(`SSQM2952`). 실보유수량은 `ec_q` 다. `hld_q`(결제완료)는 판 주식을 T+2 동안 들고 있고 `ordr_psbl_q`(주문가능)는
      * 미체결 매도주문에 물리면 줄어서, 둘 다 단독으로는 보유량이 아니다. 매도 후 결제대기 종목은 `ec_q=0` 으로 와서 추정 없이 걸러진다.
      *
-     * 실패하거나 국내 행을 못 찾으면 `undefined` 를 돌려주고 호출부가 보유주식(`SSQM1801`) 경로로 떨어진다.
+     * 조회가 실패하면 `failed`, 성공했지만 국내 행이 없으면 `empty` 를 돌려주고 호출부가 보유주식(`SSQM1801`) 경로로 떨어진다.
      */
-    private async fetchDomesticHoldingsFromAssetEval(): Promise<HoldingRow[] | undefined> {
+    private async fetchDomesticHoldingsFromAssetEval(): Promise<{ status: 'ok'; rows: HoldingRow[] } | { status: 'empty' | 'failed' }> {
         let rows: Dict[];
         try {
             // A=통합시세. KRX 만 보면 NXT 체결분 현재가가 빈다.
             rows = pickArray(await this.callTr(KBSEC_TR.ASSET_EVAL, { excg_mktpr_ccd: 'A' }));
         } catch (err) {
             logger.warn({ err }, '[kbsec] 계좌자산평가 조회 실패 — 보유주식 경로로 폴백');
-            return undefined;
+            return { status: 'failed' };
         }
-        if (rows.length === 0) return undefined;
+        if (rows.length === 0) return { status: 'empty' };
 
         const out: HoldingRow[] = [];
         let domesticRows = 0;
@@ -2925,14 +2934,18 @@ export class kbsec extends Exchange {
         if (domesticRows === 0) {
             logger.warn({ rows: rows.length, rowKeys: Object.keys(rows[0] ?? {}).slice(0, 40) },
                 '[kbsec] 계좌자산평가에 국내 행이 없다 — 보유주식 경로로 폴백');
-            return undefined;
+            return { status: 'empty' };
         }
-        return out;
+        return { status: 'ok', rows: out };
     }
 
-    /** 국내 보유 — 보유주식(`SSQM1801`) 경로. 계좌자산평가가 실패했을 때만 쓴다. */
-    private async fetchDomesticHoldingsFromHoldingRows(): Promise<HoldingRow[]> {
-        const holdingRows = await this.fetchHoldingRows();
+    /**
+     * 국내 보유 — 보유주식(`SSQM1801`) 경로. 계좌자산평가가 국내 행을 주지 않았을 때만 쓴다. `read` 는 국내 보유를 빠짐없이 읽었는가다.
+     * `primaryFailed` 는 계좌자산평가가 실패(예외)했는가다. 그때 이 경로마저 비면 "보유 없음"이라고 말할 근거가 없다.
+     */
+    private async fetchDomesticHoldingsFromHoldingRows(primaryFailed: boolean): Promise<{ rows: HoldingRow[]; read: boolean }> {
+        const { rows: holdingRows, truncated } = await this.fetchHoldingRows();
+        let dropped = 0;
         // 결제대기 매도 보정은 `gnrl_q > ordr_psbl_q` 인 행이 하나라도 있을 때만 조회한다. 그 부등호가 성립할 때에만 `max()` 가 `gnrl_q` 를
         // 채택하고, 그 값에만 아직 결제되지 않은 매도분이 섞일 수 있다.
         const needsSettlementAdjust = holdingRows.some(r => pickNum(r, 'gnrl_q') > pickNum(r, 'ordr_psbl_q'));
@@ -2947,6 +2960,7 @@ export class kbsec extends Exchange {
             if (code === '' || quantity <= 0) {
                 // 행이 조용히 사라지면 호출하는 쪽에서 "외부에서 팔렸다"와 구분되지 않는다(목록에 없음 = 보유 0). 버릴 때는 흔적을 남긴다.
                 logger.warn({ code: code || null, keys: Object.keys(row).slice(0, 12) }, '[kbsec] 보유 행을 버렸다 — 종목코드 없음 또는 수량 0');
+                if (code === '') dropped++;
                 continue;
             }
             const averagePrice = pickNum(row, 'pchs_avg_prc', 'avg_prc') || undefined;
@@ -2963,11 +2977,17 @@ export class kbsec extends Exchange {
         }
         this.logHoldingFieldsOnce(holdingRows[0]);
         // 행은 왔는데 전부 걸러진 경우 — 필드명 불일치가 원인일 가능성이 높다. 값이 아니라 키만 남긴다.
-        if (holdingRows.length > 0 && out.length === 0) {
+        const allFiltered = holdingRows.length > 0 && out.length === 0;
+        if (allFiltered) {
             logger.warn({ rows: holdingRows.length, rowKeys: Object.keys(holdingRows[0] ?? {}).slice(0, 40) },
                 '[kbsec] 보유주식 행은 있으나 전부 걸러짐 — 종목코드/수량 필드명 불일치');
         }
-        return out;
+        const read = !truncated && dropped === 0 && !allFiltered && !(primaryFailed && holdingRows.length === 0);
+        if (!read) {
+            logger.warn({ primaryFailed, rows: holdingRows.length, kept: out.length, dropped, truncated },
+                '[kbsec] 국내 보유를 다 읽지 못했다 — readStatus PARTIAL, unreadMarkets 에 KR');
+        }
+        return { rows: out, read };
     }
 
     /**
@@ -3101,7 +3121,7 @@ export class kbsec extends Exchange {
      * 연속조회(`nxt_key`)를 끝까지 따라간다. 첫 페이지만 보면 2페이지 이후 보유가 목록에서 사라지고, 목록에서 빠진 종목은 "보유 0"이라
      * 호출하는 쪽이 외부 청산으로 읽는다.
      */
-    private async fetchHoldingRows(): Promise<Dict[]> {
+    private async fetchHoldingRows(): Promise<{ rows: Dict[]; truncated: boolean }> {
         const attempts = [
             { inq_clsf: KBSEC_INQ_STOCK, mkt_tm_ccd: KBSEC_SESSION_REGULAR },
             { inq_clsf: KBSEC_INQ_ALL, mkt_tm_ccd: KBSEC_SESSION_REGULAR },
@@ -3120,7 +3140,8 @@ export class kbsec extends Exchange {
                 if (next === '' || next === nextKey) { nextKey = ''; break; }
                 nextKey = next;
             }
-            if (nextKey !== '') {
+            const truncated = nextKey !== '';
+            if (truncated) {
                 // 상한에 걸려 중단했다. 조용히 자르면 그 종목들이 청산으로 읽힌다.
                 logger.error({ pages: maxPages, rows: rows.length }, '[kbsec] 보유주식 연속조회 상한 도달 — 목록이 잘렸다(청산 오판 위험)');
             }
@@ -3128,12 +3149,12 @@ export class kbsec extends Exchange {
                 if (i > 0) {
                     logger.warn({ attempt: i, params, rows: rows.length }, '[kbsec] 보유주식 — 기본 조합은 0건, 대체 조합에서 조회됨 (조합 고정 필요)');
                 }
-                return rows;
+                return { rows, truncated };
             }
         }
         logger.warn({ attempts: attempts.length, topLevelKeys: Object.keys(lastRaw).slice(0, 20) },
             '[kbsec] 보유주식 0건 — 응답에 배열이 없거나 비어 있다(파라미터/필드명 확인 필요)');
-        return [];
+        return { rows: [], truncated: false };
     }
 
     /**
