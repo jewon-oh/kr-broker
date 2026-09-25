@@ -53,8 +53,8 @@ describe('확장세션 주문 전 종목정보 확인', () => {
         await placeExtended();
 
         const info = mockFetch.mock.calls.findIndex((c) => String(c[0]).includes(INFO_PATH));
-        expect(String(mockFetch.mock.calls[info][0])).toContain('PRDT_TYPE_CD=300');
-        expect(String(mockFetch.mock.calls[info][0])).toContain('PDNO=005930');
+        expect(String(mockFetch.mock.calls[info]![0])).toContain('PRDT_TYPE_CD=300');
+        expect(String(mockFetch.mock.calls[info]![0])).toContain('PDNO=005930');
         expect(headersOf(mockFetch, info).tr_id).toBe('CTPF1002R');
         const order = mockFetch.mock.calls.findIndex((c) => String(c[0]).includes(ORDER_PATH));
         expect(order).toBeGreaterThan(info);

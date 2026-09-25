@@ -53,7 +53,7 @@ describe('krSellTaxRate — 시행일별 매도 증권거래세', () => {
     });
 
     it('표보다 앞선 시각도 값을 돌려준다 (가장 오래된 시행일 값)', () => {
-        const oldest = KR_SELL_TAX_SCHEDULE[KR_SELL_TAX_SCHEDULE.length - 1];
+        const oldest = KR_SELL_TAX_SCHEDULE[KR_SELL_TAX_SCHEDULE.length - 1]!;
         expect(krSellTaxRate(new Date('2019-01-01T00:00:00Z'))).toBe(oldest.rate);
     });
 });

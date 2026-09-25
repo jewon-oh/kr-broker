@@ -55,7 +55,7 @@ function orderDetail(o: Partial<{
     return jsonOk({ orderId: 'OID-X', symbol: '005930', side: 'BUY', status, execution });
 }
 
-const postedOrder = (fake: FakeToss): Record<string, unknown> => fake.requestsTo('POST /api/v1/orders')[0].body as Record<string, unknown>;
+const postedOrder = (fake: FakeToss): Record<string, unknown> => fake.requestsTo('POST /api/v1/orders')[0]!.body as Record<string, unknown>;
 
 describe('주문 본문', () => {
     it('지정가는 LIMIT 본문을 보낸다', async () => {
@@ -315,7 +315,7 @@ describe('확장세션 시장가를 지정가로 바꿔 낸다', () => {
         await makeToss({ options: { nxtRouting: true } }).createOrder('005930', 'market', 'sell', 3, undefined, { confirmExecution: false });
         expect(fake.requestsTo('POST /api/v1/orders')).toHaveLength(1);
         // 미체결 조회는 종목으로 좁혀서 한다.
-        expect(fake.requestsTo('GET /api/v1/orders')[0].query.get('symbol')).toBe('005930');
+        expect(fake.requestsTo('GET /api/v1/orders')[0]!.query.get('symbol')).toBe('005930');
     });
 
     it('기준가를 구하지 못하면 발주하지 않는다', async () => {
@@ -493,7 +493,7 @@ describe('주문 요청 실패', () => {
 
 describe('조건주문', () => {
     const expireDate = '2026-08-30';
-    const conditionalBody = (fake: FakeToss): Record<string, unknown> => fake.requestsTo('POST /api/v1/conditional-orders')[0].body as Record<string, unknown>;
+    const conditionalBody = (fake: FakeToss): Record<string, unknown> => fake.requestsTo('POST /api/v1/conditional-orders')[0]!.body as Record<string, unknown>;
 
     it('SINGLE 시장가는 orderPrice 없이 등록한다(서버측 손절)', async () => {
         const fake = installFakeToss({ 'POST /api/v1/conditional-orders': jsonOk({ conditionalOrderId: 'COND-M' }) });

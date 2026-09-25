@@ -134,7 +134,7 @@ describe('토큰 캐시 — kis.authenticate', () => {
 
         await newKis({ options: { tokenStore: store } }).authenticate();
 
-        const [, , ttlMs] = vi.mocked(store.set).mock.calls[0];
+        const [, , ttlMs] = vi.mocked(store.set).mock.calls[0]!;
         // 3600초에서 안전 마진 30분과 저장소 여유 1분을 뺀 값 안팎이다.
         expect(ttlMs).toBeGreaterThan(0);
         expect(ttlMs).toBeLessThan(3_600_000 - 30 * 60_000);

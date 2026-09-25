@@ -20,7 +20,7 @@ beforeEach(() => {
 const find = (path: string): number => mockFetch.mock.calls.findIndex((c) => String(c[0]).includes(path));
 
 /** 요청 URL 의 쿼리를 객체로. */
-const queryOf = (index: number): Record<string, string> => Object.fromEntries(new URL(String(mockFetch.mock.calls[index][0])).searchParams);
+const queryOf = (index: number): Record<string, string> => Object.fromEntries(new URL(String(mockFetch.mock.calls[index]![0])).searchParams);
 
 describe('fetchFinancials', () => {
     const CASES = [
@@ -43,9 +43,9 @@ describe('fetchFinancials', () => {
         const call = find(c.path);
         expect(headersOf(mockFetch, call).tr_id).toBe(c.tr);
         expect(queryOf(call)).toEqual({ [c.divKey]: '0', fid_cond_mrkt_div_code: 'J', fid_input_iscd: '000660' });
-        expect(record.settlementMonth).toBe('202512');
-        expect(record.values[c.name]).toBe(12.34);
-        expect(record.info).toHaveProperty('extra', 'x');
+        expect(record!.settlementMonth).toBe('202512');
+        expect(record!.values[c.name]).toBe(12.34);
+        expect(record!.info).toHaveProperty('extra', 'x');
     });
 
     it('대차대조표는 항목 10개를 모두 values 에 옮기고, 분기는 1 을 보낸다', async () => {
@@ -59,7 +59,7 @@ describe('fetchFinancials', () => {
         const [record] = await newKis().fetchFinancials('005930/KRW', 'BALANCE_SHEET', 'quarter');
 
         expect(queryOf(find('/finance/balance-sheet')).FID_DIV_CLS_CODE).toBe('1');
-        expect(record.values).toEqual({
+        expect(record!.values).toEqual({
             currentAssets: 100, fixedAssets: 200, totalAssets: 300, currentLiabilities: 40, fixedLiabilities: 60, totalLiabilities: 100,
             capitalStock: 10, capitalSurplus: 20, retainedEarnings: 170, totalEquity: 200,
         });

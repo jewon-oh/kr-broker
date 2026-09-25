@@ -145,7 +145,7 @@ describe('자료 스키마', () => {
     });
 
     it.each(BROKERS.map(([name]) => name))('%s: id 가 겹치지 않는다', (name) => {
-        const ids = coverage.brokers[name].apis.map((e) => e.id);
+        const ids = coverage.brokers[name]!.apis.map((e) => e.id);
 
         expect(ids.filter((id, index) => ids.indexOf(id) !== index)).toEqual([]);
     });
@@ -158,7 +158,7 @@ describe('자료 스키마', () => {
 });
 
 describe.each(BROKERS)('%s: 자료와 코드의 일치', (name, make) => {
-    const data = coverage.brokers[name];
+    const data = coverage.brokers[name]!;
 
     it('프로필이 클래스와 같다(클래스 이름, 모의투자, 인증 필드, 호출 간격)', () => {
         const exchange = make();
@@ -215,7 +215,7 @@ describe.each(BROKERS)('%s: 자료와 코드의 일치', (name, make) => {
         for (const row of coverage.features.features) {
             if (row.hasKeys.length === 0) continue;
             const values = row.hasKeys.map((key) => has[key]);
-            const status = row.cells[name].status;
+            const status = row.cells[name]!.status;
             const expected = values.some((v) => v === true) ? 'implemented' : values.some((v) => v === 'emulated') ? 'emulated' : 'absent';
             const ok = expected === 'implemented' ? ['지원', '부분', '미검증'].includes(status) : expected === 'emulated' ? status === '대체' : ['미구현', '증권사 없음'].includes(status);
             if (!ok) wrong.push(`${row.id}: has=${JSON.stringify(values)} 인데 셀 값이 ${status}`);
@@ -228,7 +228,7 @@ describe.each(BROKERS)('%s: 자료와 코드의 일치', (name, make) => {
         const exchange = make();
         const absent: string[] = [];
         for (const row of coverage.features.features) {
-            const cell = row.cells[name];
+            const cell = row.cells[name]!;
             if (!IMPLEMENTED.has(cell.status)) continue;
             for (const method of cell.methods ?? row.methods) if (!hasMethod(exchange, method)) absent.push(`${row.id}: ${method}`);
         }
@@ -241,7 +241,7 @@ describe.each(BROKERS)('%s: 자료와 코드의 일치', (name, make) => {
         const wrong: string[] = [];
         for (const entry of data.apis) {
             for (const ref of entry.evidence) {
-                const [file, lines] = ref.split(':');
+                const [file, lines] = ref.split(':') as [string, string];
                 const full = path.join(ROOT, file);
                 if (!existsSync(full)) { wrong.push(`${entry.id}: ${file} 가 없다`); continue; }
                 if (!lineCounts.has(file)) lineCounts.set(file, readFileSync(full, 'utf8').split('\n').length);
@@ -263,42 +263,42 @@ describe('스키마 검사기가 어긋난 자료를 잡는다', () => {
     };
 
     it('id 중복', () => {
-        expect(errorsOf((c) => { c.brokers.toss.apis[1].id = c.brokers.toss.apis[0].id; })).toContain('id가 중복됩니다');
+        expect(errorsOf((c) => { c.brokers.toss!.apis[1]!.id = c.brokers.toss!.apis[0]!.id; })).toContain('id가 중복됩니다');
     });
 
     it('알 수 없는 status', () => {
-        expect(errorsOf((c) => { (c.brokers.kbsec.apis[0] as { status: string }).status = 'done'; })).toContain('status는');
+        expect(errorsOf((c) => { (c.brokers.kbsec!.apis[0] as { status: string }).status = 'done'; })).toContain('status는');
     });
 
     it('missing 이 아닌 항목의 priority', () => {
-        expect(errorsOf((c) => { const e = c.brokers.toss.apis.find((a) => a.status === 'integrated'); if (e) e.priority = 1; })).toContain('priority는 missing 항목에만');
+        expect(errorsOf((c) => { const e = c.brokers.toss!.apis.find((a) => a.status === 'integrated'); if (e) e.priority = 1; })).toContain('priority는 missing 항목에만');
     });
 
     it('통합 항목의 method 가 없음', () => {
-        expect(errorsOf((c) => { const e = c.brokers.toss.apis.find((a) => a.status === 'integrated'); if (e) e.method = null; })).toContain('method가 필요합니다');
+        expect(errorsOf((c) => { const e = c.brokers.toss!.apis.find((a) => a.status === 'integrated'); if (e) e.method = null; })).toContain('method가 필요합니다');
     });
 
     it('구현으로 적은 셀이 미구현 API 를 가리킴', () => {
         // 토스는 2단계까지 끝나 missing 이 하나도 없다 — kis 로 검증한다.
-        const missing = coverage.brokers.kis.apis.find((a) => a.status === 'missing')?.id ?? '';
+        const missing = coverage.brokers.kis!.apis.find((a) => a.status === 'missing')?.id ?? '';
         expect(missing).not.toBe('');
-        expect(errorsOf((c) => { c.features.features[0].cells.kis.apis = [missing]; })).toContain('미구현 API를 가리킵니다');
+        expect(errorsOf((c) => { c.features.features[0]!.cells.kis!.apis = [missing]; })).toContain('미구현 API를 가리킵니다');
     });
 
     it('증권사 없음 셀에 apis', () => {
-        const id = coverage.brokers.kbsec.apis[0].id;
-        expect(errorsOf((c) => { c.features.features[0].cells.kbsec = { status: '증권사 없음', apis: [id] }; })).toContain('증권사 없음 셀에는 apis');
+        const id = coverage.brokers.kbsec!.apis[0]!.id;
+        expect(errorsOf((c) => { c.features.features[0]!.cells.kbsec = { status: '증권사 없음', apis: [id] }; })).toContain('증권사 없음 셀에는 apis');
     });
 
     it('마침표로 끝나는 constraint', () => {
-        expect(errorsOf((c) => { c.features.features[0].cells.kis.constraint = '제약입니다.'; })).toContain('마침표 없는 문장');
+        expect(errorsOf((c) => { c.features.features[0]!.cells.kis!.constraint = '제약입니다.'; })).toContain('마침표 없는 문장');
     });
 });
 
 describe('근거 검사기가 어긋난 근거를 잡는다', () => {
     const clone = (): Coverage => JSON.parse(JSON.stringify(coverage)) as Coverage;
     const kbEntry = (c: Coverage, id: string): ApiEntry => {
-        const e = c.brokers.kbsec.apis.find((a) => a.id === id);
+        const e = c.brokers.kbsec!.apis.find((a) => a.id === id);
         if (e === undefined) throw new Error(`kbsec.json 에 ${id} 가 없다`);
         return e;
     };

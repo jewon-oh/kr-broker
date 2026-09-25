@@ -194,7 +194,7 @@ export function stubFetch(steps: FetchStep | FetchStep[]): { calls: RecordedCall
     let index = 0;
     const impl = vi.fn(async (url: string, init: RequestInit) => {
         calls.push({ url, init });
-        const step = Array.isArray(steps) ? steps[Math.min(index++, steps.length - 1)] : steps;
+        const step = (Array.isArray(steps) ? steps[Math.min(index++, steps.length - 1)] : steps)!;
         if (step instanceof Error) throw step;
         if (typeof step === 'function') return step(url, init);
         return step.clone();

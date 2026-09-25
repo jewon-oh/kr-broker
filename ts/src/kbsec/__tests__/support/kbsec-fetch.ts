@@ -57,19 +57,19 @@ export function calledTrs(mockFetch: Mock): string[] {
     return mockFetch.mock.calls
         .map(c => String(c[0]))
         .filter(u => u.includes('/api/v1/'))
-        .map(u => u.split('/api/v1/')[1]);
+        .map(u => u.split('/api/v1/')[1]!);
 }
 
 /** 특정 TR 호출의 요청 본문(마지막 호출). */
 export function trBody(mockFetch: Mock, tr: string): { dataHeader: Record<string, unknown>; dataBody: Record<string, unknown> } {
     const calls = mockFetch.mock.calls.filter(c => String(c[0]).endsWith(`/api/v1/${tr.toLowerCase()}`));
     if (calls.length === 0) throw new Error(`${tr} 호출이 없다`);
-    return JSON.parse((calls[calls.length - 1][1] as { body: string }).body);
+    return JSON.parse((calls[calls.length - 1]![1] as { body: string }).body);
 }
 
 /** 특정 TR 호출의 요청 헤더(마지막 호출). */
 export function trHeaders(mockFetch: Mock, tr: string): Record<string, string> {
     const calls = mockFetch.mock.calls.filter(c => String(c[0]).endsWith(`/api/v1/${tr.toLowerCase()}`));
     if (calls.length === 0) throw new Error(`${tr} 호출이 없다`);
-    return (calls[calls.length - 1][1] as { headers: Record<string, string> }).headers;
+    return (calls[calls.length - 1]![1] as { headers: Record<string, string> }).headers;
 }

@@ -534,7 +534,7 @@ describe('cancelOrder·cancelAllOrders', () => {
         const results = await newExchange().cancelAllOrders();
 
         expect(results.map(r => [r.id, r.status])).toEqual([['O1', 'canceled'], ['O2', 'open']]);
-        expect((results[1].info as { cancelError: string }).cancelError).toContain('취소할 수 없는 주문');
+        expect((results[1]!.info as { cancelError: string }).cancelError).toContain('취소할 수 없는 주문');
     });
 });
 
@@ -556,7 +556,7 @@ describe('fetchOpenOrders·fetchOrder', () => {
             ['O1', '005930/KRW', 'buy', 'open', 10, 0, 10],
             ['O2', '000660/KRW', 'sell', 'open', 4, 1, 3],
         ]);
-        expect(orders[0].info).toEqual(OPEN_ROWS.Record1[0]); // 원본 행은 info 에 있다
+        expect(orders[0]!.info).toEqual(OPEN_ROWS.Record1[0]); // 원본 행은 info 에 있다
     });
 
     it('전체 심볼로 걸러도 잡힌다 — 기초코드로 정규화해 비교한다', async () => {

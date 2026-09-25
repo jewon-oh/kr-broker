@@ -32,7 +32,7 @@ describe('fetchTrades', () => {
             excg_clsf: '1', is_cd: '005930', ovtm_mkt_clsf: '0',
         });
         expect(trade).toMatchObject({ symbol: '005930/KRW', price: 71000, amount: 10, side: undefined, id: undefined });
-        expect(trade.timestamp).toBeTypeOf('number');
+        expect(trade!.timestamp).toBeTypeOf('number');
     });
 
     it('params 로 시간외장구분을 덮어쓸 수 있다', async () => {

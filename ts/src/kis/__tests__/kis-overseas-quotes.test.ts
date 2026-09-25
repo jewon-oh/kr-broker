@@ -26,7 +26,7 @@ afterEach(() => {
 const find = (path: string): number => mockFetch.mock.calls.findIndex((c) => String(c[0]).includes(path));
 
 /** 요청 URL 의 쿼리를 객체로. */
-const queryOf = (index: number): Record<string, string> => Object.fromEntries(new URL(String(mockFetch.mock.calls[index][0])).searchParams);
+const queryOf = (index: number): Record<string, string> => Object.fromEntries(new URL(String(mockFetch.mock.calls[index]![0])).searchParams);
 
 describe('해외 종목 시세', () => {
     it('fetchOverseasOrderBook 은 종목의 거래소로 1호가를 묻고 한 단계 호가를 돌려준다', async () => {

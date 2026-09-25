@@ -36,7 +36,7 @@ function settlement(over: Partial<KbsecSettlementRow> = {}): KbsecSettlementRow 
 
 describe('matchKbsecSettlements — 단일 거래 그룹', () => {
     it('그룹 비용을 통째로 받는다 (매도 1건)', () => {
-        const [m] = matchKbsecSettlements([trade({ id: 't1' })], [settlement()]);
+        const m = matchKbsecSettlements([trade({ id: 't1' })], [settlement()])[0]!;
         expect(m.kind).toBe('matched');
         if (m.kind !== 'matched') return;
         expect(m.costKrw).toBe(200 + 1046 + 3140);
@@ -53,7 +53,7 @@ describe('matchKbsecSettlements — 단일 거래 그룹', () => {
         ];
         const weighted = (152300 + 3 * 152200) / 4;      // = 152,225
         const t = trade({ id: 't1', symbol: '035420', priceUsd: weighted / FX, quantity: 4 });
-        const [m] = matchKbsecSettlements([t], rows);
+        const m = matchKbsecSettlements([t], rows)[0]!;
 
         expect(m.kind).toBe('matched');
         if (m.kind !== 'matched') return;
@@ -97,7 +97,7 @@ describe('matchKbsecSettlements — 같은 단가 다중 거래', () => {
             trade({ id: 'b', symbol: '068270', priceUsd: px, quantity: 7 }),
         ];
         const ms = matchKbsecSettlements(trades, rows);
-        const a = ms[0], b = ms[1];
+        const a = ms[0]!, b = ms[1]!;
         expect(a.kind).toBe('matched');
         expect(b.kind).toBe('matched');
         if (a.kind !== 'matched' || b.kind !== 'matched') return;
@@ -119,7 +119,7 @@ describe('matchKbsecSettlements — 안전장치', () => {
     it('우리 명목 합이 KB 합과 어긋나면 그룹 전체를 안 덮는다', () => {
         // 우리 장부엔 38주뿐인데 KB 는 60주어치를 정산했다 — 장부 밖 매매가 섞였다는 뜻.
         const rows = [settlement({ quantity: 60, notionalKrw: 3306000, feeKrw: 320, taxKrw: 6612 })];
-        const [m] = matchKbsecSettlements([trade({ id: 't1', quantity: 38 })], rows);
+        const m = matchKbsecSettlements([trade({ id: 't1', quantity: 38 })], rows)[0]!;
         expect(m.kind).toBe('notional-mismatch');
         if (m.kind !== 'notional-mismatch') return;
         expect(Math.round(m.ourKrw)).toBe(2093800);
@@ -129,24 +129,24 @@ describe('matchKbsecSettlements — 안전장치', () => {
     it('환율 왕복의 부동소수 꼬리는 허용오차 안이다', () => {
         // 원화 단가를 `priceUsd × fx` 로 되짚으므로 정확히 정수로 안 떨어진다.
         const t = trade({ id: 't1', priceUsd: 55100 / FX + 1e-9 });
-        const [m] = matchKbsecSettlements([t], [settlement()]);
+        const m = matchKbsecSettlements([t], [settlement()])[0]!;
         expect(m.kind).toBe('matched');
     });
 
     it('정산 행이 없으면 `no-settlement` — 미정산 구간이라 추정치를 남긴다', () => {
-        const [m] = matchKbsecSettlements([trade({ id: 't1' })], []);
+        const m = matchKbsecSettlements([trade({ id: 't1' })], [])[0]!;
         expect(m.kind).toBe('no-settlement');
     });
 
     it('매수 정산만 온 날의 매도 거래는 `no-settlement` — 방향을 섞지 않는다', () => {
         const rows = [settlement({ side: 'buy' })];
-        const [m] = matchKbsecSettlements([trade({ id: 't1', side: 'SELL' })], rows);
+        const m = matchKbsecSettlements([trade({ id: 't1', side: 'SELL' })], rows)[0]!;
         expect(m.kind).toBe('no-settlement');
     });
 
     it('방향·종목을 못 읽은 정산 행은 버린다 — 어느 쪽에 붙일지 모르는 비용은 안 쓴다', () => {
         const rows = [settlement({ side: null }), settlement({ symbol: '' })];
-        const [m] = matchKbsecSettlements([trade({ id: 't1' })], rows);
+        const m = matchKbsecSettlements([trade({ id: 't1' })], rows)[0]!;
         expect(m.kind).toBe('no-settlement');
     });
 

@@ -22,7 +22,7 @@ beforeEach(() => {
 const find = (path: string): number => mockFetch.mock.calls.findIndex((c) => String(c[0]).includes(path));
 
 /** 요청 URL 의 쿼리를 객체로. */
-const queryOf = (index: number): Record<string, string> => Object.fromEntries(new URL(String(mockFetch.mock.calls[index][0])).searchParams);
+const queryOf = (index: number): Record<string, string> => Object.fromEntries(new URL(String(mockFetch.mock.calls[index]![0])).searchParams);
 
 describe('프로그램매매 종합현황', () => {
     it('fetchProgramTradingDaily 는 시장 코드와 기간을 보내고 행을 원문으로 돌려준다', async () => {
@@ -34,9 +34,9 @@ describe('프로그램매매 종합현황', () => {
         await k.fetchProgramTradingDaily('KOSPI');
 
         const calls = mockFetch.mock.calls.flatMap((c, i) => (String(c[0]).includes('/quotations/comp-program-trade-daily') ? [i] : []));
-        expect(headersOf(mockFetch, calls[0]).tr_id).toBe('FHPPG04600001');
-        expect(queryOf(calls[0])).toEqual({ FID_COND_MRKT_DIV_CODE: 'J', FID_MRKT_CLS_CODE: 'Q', FID_INPUT_DATE_1: '20260901', FID_INPUT_DATE_2: '20260922' });
-        expect(queryOf(calls[1])).toMatchObject({ FID_MRKT_CLS_CODE: 'K', FID_INPUT_DATE_1: '', FID_INPUT_DATE_2: '' });
+        expect(headersOf(mockFetch, calls[0]!).tr_id).toBe('FHPPG04600001');
+        expect(queryOf(calls[0]!)).toEqual({ FID_COND_MRKT_DIV_CODE: 'J', FID_MRKT_CLS_CODE: 'Q', FID_INPUT_DATE_1: '20260901', FID_INPUT_DATE_2: '20260922' });
+        expect(queryOf(calls[1]!)).toMatchObject({ FID_MRKT_CLS_CODE: 'K', FID_INPUT_DATE_1: '', FID_INPUT_DATE_2: '' });
         expect(result).toEqual(rows);
     });
 

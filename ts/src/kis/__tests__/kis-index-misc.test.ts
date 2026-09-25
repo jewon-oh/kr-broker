@@ -22,7 +22,7 @@ afterEach(() => {
 const find = (path: string): number => mockFetch.mock.calls.findIndex((c) => String(c[0]).includes(path));
 
 /** 요청 URL 의 쿼리를 객체로. */
-const queryOf = (index: number): Record<string, string> => Object.fromEntries(new URL(String(mockFetch.mock.calls[index][0])).searchParams);
+const queryOf = (index: number): Record<string, string> => Object.fromEntries(new URL(String(mockFetch.mock.calls[index]![0])).searchParams);
 
 describe('업종 지수', () => {
     it('fetchIndexQuote 는 업종코드로 현재가와 등락 종목 수를 정리한다', async () => {

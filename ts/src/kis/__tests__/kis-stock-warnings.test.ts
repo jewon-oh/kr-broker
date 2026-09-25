@@ -31,8 +31,8 @@ describe('fetchStockWarnings', () => {
         const [warning] = await newKis().fetchStockWarnings('005930/KRW');
 
         const call = mockFetch.mock.calls.findIndex((c) => String(c[0]).includes(VI_PATH));
-        expect(String(mockFetch.mock.calls[call][0])).toContain('FID_INPUT_ISCD=005930');
-        expect(String(mockFetch.mock.calls[call][0])).toContain('FID_COND_SCR_DIV_CODE=20139');
+        expect(String(mockFetch.mock.calls[call]![0])).toContain('FID_INPUT_ISCD=005930');
+        expect(String(mockFetch.mock.calls[call]![0])).toContain('FID_COND_SCR_DIV_CODE=20139');
         expect(headersOf(mockFetch, call).tr_id).toBe('FHPST01390000');
         expect(warning).toMatchObject({
             businessDate: '20260922', statusCode: '1', kindCode: '2', triggeredAt: '093015',

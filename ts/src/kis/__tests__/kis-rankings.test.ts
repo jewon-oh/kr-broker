@@ -24,7 +24,7 @@ afterEach(() => {
 });
 
 /** 요청 URL 의 쿼리를 객체로. */
-const queryOf = (index: number): Record<string, string> => Object.fromEntries(new URL(String(mockFetch.mock.calls[index][0])).searchParams);
+const queryOf = (index: number): Record<string, string> => Object.fromEntries(new URL(String(mockFetch.mock.calls[index]![0])).searchParams);
 
 describe('fetchRankings', () => {
     it('FLUCTUATION은 등락률 순위 엔드포인트를 부르고 공통 필드로 정리한다', async () => {
@@ -35,7 +35,7 @@ describe('fetchRankings', () => {
         const [item] = await newKis().fetchRankings('FLUCTUATION');
 
         const call = mockFetch.mock.calls.findIndex((c) => String(c[0]).includes(FLUCTUATION_PATH));
-        expect(String(mockFetch.mock.calls[call][0])).toContain('fid_rank_sort_cls_code=0');
+        expect(String(mockFetch.mock.calls[call]![0])).toContain('fid_rank_sort_cls_code=0');
         expect(headersOf(mockFetch, call).tr_id).toBe('FHPST01700000');
         expect(item).toMatchObject({ rank: 1, symbol: '005930/KRW', name: '삼성전자', last: 71000, change: 1500, percentage: 2.16, volume: 12345 });
     });
@@ -48,7 +48,7 @@ describe('fetchRankings', () => {
         const [item] = await newKis().fetchRankings('VOLUME');
 
         const call = mockFetch.mock.calls.findIndex((c) => String(c[0]).includes(VOLUME_PATH));
-        expect(String(mockFetch.mock.calls[call][0])).toContain('FID_COND_MRKT_DIV_CODE=J');
+        expect(String(mockFetch.mock.calls[call]![0])).toContain('FID_COND_MRKT_DIV_CODE=J');
         expect(headersOf(mockFetch, call).tr_id).toBe('FHPST01710000');
         expect(item).toMatchObject({ rank: 1, symbol: '000660/KRW', name: 'SK하이닉스', last: 180000, change: 3000, percentage: 1.7, volume: 987654 });
     });
@@ -92,7 +92,7 @@ describe('fetchRankings — 표로 정의한 순위', () => {
         expect(headersOf(mockFetch, call).tr_id).toBe(tr);
         expect(queryOf(call)[screenKey]).toBe(screen);
         expect(item).toMatchObject({ rank: 1, symbol: '005930/KRW', name: '삼성전자', last: 71000, change: 500, percentage: 0.71, volume: 1000 });
-        expect(item.info).toHaveProperty('extra', 'x');
+        expect(item!.info).toHaveProperty('extra', 'x');
     });
 
     it('신고가 근접과 신저가 근접은 가격구분(fid_prc_cls_code)으로 갈린다', async () => {
@@ -127,8 +127,8 @@ describe('fetchRankings — 표로 정의한 순위', () => {
         await ex.fetchRankings('TRADED_BY_COMPANY', { fid_rank_sort_cls_code: '1', fid_input_date_1: '20260901' });
 
         const calls = mockFetch.mock.calls.map((c, i) => [String(c[0]), i] as const).filter(([u]) => u.includes('/ranking/traded-by-company'));
-        expect(queryOf(calls[0][1])).toMatchObject({ fid_input_date_1: '20260923', fid_input_date_2: '20260923', fid_rank_sort_cls_code: '0' });
-        expect(queryOf(calls[1][1])).toMatchObject({ fid_input_date_1: '20260901', fid_input_date_2: '20260923', fid_rank_sort_cls_code: '1' });
+        expect(queryOf(calls[0]![1])).toMatchObject({ fid_input_date_1: '20260923', fid_input_date_2: '20260923', fid_rank_sort_cls_code: '0' });
+        expect(queryOf(calls[1]![1])).toMatchObject({ fid_input_date_1: '20260901', fid_input_date_2: '20260923', fid_rank_sort_cls_code: '1' });
     });
 
     it('예상체결 상승·하락은 예상 체결량(cntg_vol)을 거래량으로 쓴다', async () => {
@@ -149,8 +149,8 @@ describe('fetchRankings — 표로 정의한 순위', () => {
 
         const [item] = await newKis().fetchRankings('EXPECTED_CHANGE');
 
-        expect(item.rank).toBeUndefined();
-        expect(item.symbol).toBe('005930/KRW');
+        expect(item!.rank).toBeUndefined();
+        expect(item!.symbol).toBe('005930/KRW');
     });
 });
 
@@ -227,7 +227,7 @@ describe('fetchRankings — 행 키나 필드가 다른 순위', () => {
         expect(q).toMatchObject({ GB1: '1', UPJONG: '0001', GB3: '2', F_DT: '20250923', T_DT: '20260923', GB4: '0' });
         expect(q).not.toHaveProperty('dividendType');
         expect(item).toMatchObject({ rank: 1, symbol: '005930/KRW', name: '삼성전자' });
-        expect(item.info).toHaveProperty('divi_rate', '2.3');
+        expect(item!.info).toHaveProperty('divi_rate', '2.3');
     });
 
     it('재무 순위의 회계연도 기본값은 직전 연도, 분기는 결산(3)이다', async () => {
@@ -253,7 +253,7 @@ describe('fetchRankings — 행 키나 필드가 다른 순위', () => {
             FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: '0000', FID_RANK_SORT_CLS_CODE: '0', FID_COND_SCR_DIV_CODE: '11173', FID_BLNG_CLS_CODE: '0',
         });
         expect(item).toMatchObject({ rank: undefined, symbol: '005930/KRW', last: 71000, change: 500, percentage: 0.71, volume: 300 });
-        expect(item.info).toHaveProperty('sdpr_vrss_prpr', '100');
+        expect(item!.info).toHaveProperty('sdpr_vrss_prpr', '100');
     });
 
     it('외국인·기관 가집계와 외국계 가집계는 예제의 시장구분, 화면 코드, 정렬을 보내고 전체를 묻는다', async () => {
@@ -277,7 +277,7 @@ describe('fetchRankings — 행 키나 필드가 다른 순위', () => {
         });
         expect(institution).toMatchObject({ rank: undefined, symbol: '005930/KRW', last: 71000, volume: 9000000 });
         expect(broker).toMatchObject({ rank: undefined, symbol: '000660/KRW', last: 200000, volume: 3000000 });
-        expect(broker.info).toHaveProperty('glob_ntsl_qty', '500');
+        expect(broker!.info).toHaveProperty('glob_ntsl_qty', '500');
     });
 
     it('상하한가 포착은 상하한 구분이 없으면 보내기 전에 ArgumentsRequired 다', async () => {
@@ -293,13 +293,13 @@ describe('fetchRankings — 행 키나 필드가 다른 순위', () => {
         await ex.fetchRankings('PRICE_LIMIT', { priceLimit: 'lower', FID_DIV_CLS_CODE: '6' });
 
         const calls = mockFetch.mock.calls.map((c, i) => [String(c[0]), i] as const).filter(([u]) => u.includes('/quotations/capture-uplowprice'));
-        expect(headersOf(mockFetch, calls[0][1]).tr_id).toBe('FHKST130000C0');
-        expect(queryOf(calls[0][1])).toEqual({
+        expect(headersOf(mockFetch, calls[0]![1]).tr_id).toBe('FHKST130000C0');
+        expect(queryOf(calls[0]![1])).toEqual({
             FID_COND_MRKT_DIV_CODE: 'J', FID_COND_SCR_DIV_CODE: '11300', FID_PRC_CLS_CODE: '0', FID_DIV_CLS_CODE: '0', FID_INPUT_ISCD: '0000',
             FID_TRGT_CLS_CODE: '', FID_TRGT_EXLS_CLS_CODE: '', FID_INPUT_PRICE_1: '', FID_INPUT_PRICE_2: '', FID_VOL_CNT: '',
         });
-        expect(queryOf(calls[1][1])).toMatchObject({ FID_PRC_CLS_CODE: '1', FID_DIV_CLS_CODE: '6' });
-        expect(queryOf(calls[1][1])).not.toHaveProperty('priceLimit');
+        expect(queryOf(calls[1]![1])).toMatchObject({ FID_PRC_CLS_CODE: '1', FID_DIV_CLS_CODE: '6' });
+        expect(queryOf(calls[1]![1])).not.toHaveProperty('priceLimit');
     });
 });
 
@@ -345,7 +345,7 @@ describe('fetchRankings — 해외 순위', () => {
 
         const [item] = await newKis().fetchRankings('OVERSEAS_MARKET_CAP', { exchange: 'HKS' });
 
-        expect(item.symbol).toBe('00700/HKD');
+        expect(item!.symbol).toBe('00700/HKD');
         expect(queryOf(mockFetch.mock.calls.findIndex((x) => String(x[0]).includes('/overseas-stock/v1/ranking/market-cap'))).EXCD).toBe('HKS');
     });
 

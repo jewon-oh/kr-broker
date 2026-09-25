@@ -48,7 +48,7 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 
-const lastFrame = (ws: FakeWs): unknown[] => JSON.parse(ws.sent[ws.sent.length - 1]);
+const lastFrame = (ws: FakeWs): unknown[] => JSON.parse(ws.sent[ws.sent.length - 1]!);
 
 describe('TossPriceWs — 연결과 구독 선언', () => {
     it('연결하면 Authorization 헤더를 싣고, open 되면 구독을 채널·시장별로 묶어 선언한다', async () => {
@@ -61,7 +61,7 @@ describe('TossPriceWs — 연결과 구독 선언', () => {
         ]);
         await vi.advanceTimersByTimeAsync(0);
 
-        const ws = FakeWs.instances[0];
+        const ws = FakeWs.instances[0]!;
         expect(ws.options?.headers).toEqual({ Authorization: 'Bearer tok-1' });
         ws.emit('open');
 
@@ -76,7 +76,7 @@ describe('TossPriceWs — 연결과 구독 선언', () => {
         const ws1 = new TossPriceWs({ getAccessToken: vi.fn().mockResolvedValue('tok-1') });
         ws1.start([{ channel: 'trade', market: 'kr', symbol: '005930' }]);
         await vi.advanceTimersByTimeAsync(0);
-        const ws = FakeWs.instances[0];
+        const ws = FakeWs.instances[0]!;
         ws.emit('open');
 
         ws1.updateSubs([{ channel: 'trade', market: 'kr', symbol: '000660' }]);
@@ -91,7 +91,7 @@ describe('TossPriceWs — 연결과 구독 선언', () => {
         const ws1 = new TossPriceWs({ getAccessToken: vi.fn().mockResolvedValue('tok-1'), onTrade, onOrderbook });
         ws1.start([]);
         await vi.advanceTimersByTimeAsync(0);
-        const ws = FakeWs.instances[0];
+        const ws = FakeWs.instances[0]!;
         ws.emit('open');
 
         ws.emit('message', { data: JSON.stringify({ type: 'message', topic: 'trade:us:AAPL', data: { price: '185.5', volume: '10', timestamp: '2026-09-24T12:23:00.000Z' } }) });
@@ -111,7 +111,7 @@ describe('TossPriceWs — 연결과 구독 선언', () => {
             { channel: 'order', accountSeq: '3' },
         ]);
         await vi.advanceTimersByTimeAsync(0);
-        const ws = FakeWs.instances[0];
+        const ws = FakeWs.instances[0]!;
         ws.emit('open');
 
         expect(lastFrame(ws)).toEqual([
@@ -126,7 +126,7 @@ describe('TossPriceWs — 연결과 구독 선언', () => {
         const ws1 = new TossPriceWs({ getAccessToken: vi.fn().mockResolvedValue('tok-1'), onOrder });
         ws1.start([{ channel: 'order', accountSeq: '3' }]);
         await vi.advanceTimersByTimeAsync(0);
-        const ws = FakeWs.instances[0];
+        const ws = FakeWs.instances[0]!;
         ws.emit('open');
 
         const order = { orderId: 'O1', symbol: 'AAPL', status: 'FILLED' };
@@ -142,7 +142,7 @@ describe('TossPriceWs — keepalive', () => {
         const ws1 = new TossPriceWs({ getAccessToken: vi.fn().mockResolvedValue('tok-1') });
         ws1.start([]);
         await vi.advanceTimersByTimeAsync(0);
-        const ws = FakeWs.instances[0];
+        const ws = FakeWs.instances[0]!;
         ws.emit('open');
         ws.sent = [];
 
@@ -157,9 +157,9 @@ describe('TossPriceWs — keepalive', () => {
         const ws1 = new TossPriceWs({ getAccessToken: vi.fn().mockResolvedValue('tok-1') });
         ws1.start([]);
         await vi.advanceTimersByTimeAsync(0);
-        FakeWs.instances[0].emit('open');
+        FakeWs.instances[0]!.emit('open');
 
-        const timer = setIntervalSpy.mock.results[0].value as NodeJS.Timeout;
+        const timer = setIntervalSpy.mock.results[0]!.value as NodeJS.Timeout;
         expect(timer.hasRef()).toBe(false);
         ws1.stop();
     });
@@ -173,13 +173,13 @@ describe('TossPriceWs — 재연결', () => {
         await vi.advanceTimersByTimeAsync(0);
         expect(getAccessToken).toHaveBeenCalledTimes(1);
 
-        FakeWs.instances[0].emit('close', { code: 1006, reason: 'abnormal', wasClean: false });
+        FakeWs.instances[0]!.emit('close', { code: 1006, reason: 'abnormal', wasClean: false });
         await vi.advanceTimersByTimeAsync(1_000); // RECONNECT_BASE_MS
 
         expect(getAccessToken).toHaveBeenCalledTimes(2);
         expect(FakeWs.instances).toHaveLength(2);
-        FakeWs.instances[1].emit('open');
-        expect(lastFrame(FakeWs.instances[1])).toEqual([{ type: 'trade:kr', codes: ['005930'] }]);
+        FakeWs.instances[1]!.emit('open');
+        expect(lastFrame(FakeWs.instances[1]!)).toEqual([{ type: 'trade:kr', codes: ['005930'] }]);
         ws1.stop();
     });
 
@@ -187,7 +187,7 @@ describe('TossPriceWs — 재연결', () => {
         const ws1 = new TossPriceWs({ getAccessToken: vi.fn().mockResolvedValue('tok-1') });
         ws1.start([]);
         await vi.advanceTimersByTimeAsync(0);
-        const first = FakeWs.instances[0];
+        const first = FakeWs.instances[0]!;
 
         first.emit('close', { code: 1006 });
         await vi.advanceTimersByTimeAsync(1_000);
@@ -200,7 +200,7 @@ describe('TossPriceWs — 재연결', () => {
         const ws1 = new TossPriceWs({ getAccessToken: vi.fn().mockResolvedValue('tok-1') });
         ws1.start([{ channel: 'trade', market: 'kr', symbol: '005930' }]);
         await vi.advanceTimersByTimeAsync(0);
-        const ws = FakeWs.instances[0];
+        const ws = FakeWs.instances[0]!;
         ws.emit('open');
         ws.sent = [];
 
@@ -217,7 +217,7 @@ describe('TossPriceWs — 재연결', () => {
         const ws1 = new TossPriceWs({ getAccessToken });
         ws1.start([]);
         await vi.advanceTimersByTimeAsync(0);
-        const ws = FakeWs.instances[0];
+        const ws = FakeWs.instances[0]!;
 
         ws1.stop();
         ws.emit('close', { code: 1000 });
@@ -258,10 +258,10 @@ describe('TossPriceWs — 연결 준비 중 stop, 옛 소켓', () => {
         const ws1 = new TossPriceWs({ getAccessToken });
         ws1.start([]);
         await vi.advanceTimersByTimeAsync(0);
-        const first = FakeWs.instances[0];
+        const first = FakeWs.instances[0]!;
         first.emit('error', { message: 'reset' });
         await vi.advanceTimersByTimeAsync(1_000);
-        const second = FakeWs.instances[1];
+        const second = FakeWs.instances[1]!;
         second.emit('open');
         second.sent = [];
 
@@ -280,14 +280,14 @@ describe('TossPriceWs — 연결 준비 중 stop, 옛 소켓', () => {
         const ws1 = new TossPriceWs({ getAccessToken });
         ws1.start([]);
         await vi.advanceTimersByTimeAsync(0);
-        issues[0]('tok-1');
+        issues[0]!('tok-1');
         await vi.advanceTimersByTimeAsync(0);
-        const first = FakeWs.instances[0];
+        const first = FakeWs.instances[0]!;
         first.emit('error', { message: 'reset' });
         await vi.advanceTimersByTimeAsync(1_000);
 
         first.emit('close', { code: 1006 });
-        issues[1]('tok-2');
+        issues[1]!('tok-2');
         await vi.advanceTimersByTimeAsync(60_000);
 
         expect(FakeWs.instances).toHaveLength(2);
@@ -300,7 +300,7 @@ describe('TossPriceWs — 연결 준비 중 stop, 옛 소켓', () => {
         const ws1 = new TossPriceWs({ getAccessToken: vi.fn().mockResolvedValue('tok-1'), onTrade });
         ws1.start([]);
         await vi.advanceTimersByTimeAsync(0);
-        const first = FakeWs.instances[0];
+        const first = FakeWs.instances[0]!;
         first.emit('close', { code: 1006 });
         await vi.advanceTimersByTimeAsync(1_000);
 

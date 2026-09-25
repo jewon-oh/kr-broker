@@ -183,8 +183,8 @@ export function matchKbsecOverseasSettlements(
 
         // 거래가 하나뿐이면 안분이 없다 — 그룹 비용을 통째로 받는다. 명목은 입력 값이
         // 있으면 그걸, 없으면 KB 의 약정금액을 쓴다(요율 계산에만 쓰이는 분모다).
-        if (group.length === 1) {
-            const only = group[0];
+        const only = group[0];
+        if (group.length === 1 && only !== undefined) {
             const notional = weights[0] ?? kb.notionalUsd;
             result.set(only.id, {
                 kind: 'matched', tradeId: only.id,
@@ -204,11 +204,11 @@ export function matchKbsecOverseasSettlements(
             continue;
         }
 
-        for (let i = 0; i < group.length; i++) {
+        for (const [i, t] of group.entries()) {
             const notional = weights[i] as number;
             const share = kb.costUsd * (notional / ourUsd);
-            result.set(group[i].id, {
-                kind: 'matched', tradeId: group[i].id,
+            result.set(t.id, {
+                kind: 'matched', tradeId: t.id,
                 costUsd: share,
                 rate: share / notional,
                 notionalUsd: notional,

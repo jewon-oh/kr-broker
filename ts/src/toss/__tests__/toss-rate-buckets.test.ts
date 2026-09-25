@@ -77,9 +77,9 @@ describe('그룹 버킷', () => {
     });
 
     it('가장 엄격한 그룹(계좌 목록·보유 주식)은 1 TPS 이하로 직렬화한다', () => {
-        expect(exchange.rateLimitBuckets.account.rateLimit).toBeGreaterThanOrEqual(1000);
-        expect(exchange.rateLimitBuckets.asset.rateLimit).toBeGreaterThanOrEqual(1000);
-        expect(exchange.rateLimitBuckets.stock_all.rateLimit).toBeGreaterThanOrEqual(1000);
+        expect(exchange.rateLimitBuckets.account!.rateLimit).toBeGreaterThanOrEqual(1000);
+        expect(exchange.rateLimitBuckets.asset!.rateLimit).toBeGreaterThanOrEqual(1000);
+        expect(exchange.rateLimitBuckets.stock_all!.rateLimit).toBeGreaterThanOrEqual(1000);
     });
 
     it('계정 전체 상한은 초당 10건이다', () => {

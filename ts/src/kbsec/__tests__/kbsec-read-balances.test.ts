@@ -222,10 +222,10 @@ describe('KB fetchBalance — 항목의 모양', () => {
     it('보유 종목의 total 은 수량이고, 평균 단가·평가금액·종목명·통화는 info 에 있다', async () => {
         const b = await makeService().fetchBalance();
 
-        expect(b['005930'].total).toBe(10);
-        expect(b['005930'].info).toEqual({ quoteCurrency: 'KRW', averagePrice: 68000, marketValue: 700000, name: '삼성전자' });
-        expect(b['JNJ'].total).toBe(2);
-        expect(b['JNJ'].info).toMatchObject({ quoteCurrency: 'USD', averagePrice: 365.8251, marketValue: 732, name: '존슨앤드존슨' });
+        expect(b['005930']!.total).toBe(10);
+        expect(b['005930']!.info).toEqual({ quoteCurrency: 'KRW', averagePrice: 68000, marketValue: 700000, name: '삼성전자' });
+        expect(b['JNJ']!.total).toBe(2);
+        expect(b['JNJ']!.info).toMatchObject({ quoteCurrency: 'USD', averagePrice: 365.8251, marketValue: 732, name: '존슨앤드존슨' });
     });
 
     it('현금은 통화 키다 — KRW 는 예수금 TR, USD 는 해외 잔고평가의 통화별 예수금 그리드에서 온다', async () => {
@@ -242,7 +242,7 @@ describe('KB fetchBalance — 항목의 모양', () => {
         const b = await makeService().fetchBalance();
 
         expect(b.USD).toBeUndefined();
-        expect(b.KRW.free).toBe(5_000_000);
+        expect(b.KRW!.free).toBe(5_000_000);
     });
 
     it('USD 주문가능금액이 예수금보다 작으면 나머지는 used 다', async () => {

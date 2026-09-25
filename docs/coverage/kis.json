@@ -2420,7 +2420,7 @@
       "status": "extended",
       "method": "candles().fetchDailyOHLCV",
       "evidence": [
-        "ts/src/kis/kis-candle-service.ts:138",
+        "ts/src/kis/kis-candle-service.ts:137",
         "ts/src/kis/kis-candle-pagination.ts:8"
       ],
       "suggested": null,
@@ -2938,7 +2938,7 @@
       "status": "extended",
       "method": "candles().fetchMinuteOHLCV",
       "evidence": [
-        "ts/src/kis/kis-candle-service.ts:197"
+        "ts/src/kis/kis-candle-service.ts:196"
       ],
       "suggested": null,
       "proposal": null,

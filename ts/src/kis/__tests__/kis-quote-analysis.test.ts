@@ -26,7 +26,7 @@ afterEach(() => {
 const find = (path: string): number => mockFetch.mock.calls.findIndex((c) => String(c[0]).includes(path));
 
 /** 요청 URL 의 쿼리를 객체로. */
-const queryOf = (index: number): Record<string, string> => Object.fromEntries(new URL(String(mockFetch.mock.calls[index][0])).searchParams);
+const queryOf = (index: number): Record<string, string> => Object.fromEntries(new URL(String(mockFetch.mock.calls[index]![0])).searchParams);
 
 /** KST 2026-09-23 01:30 에 고정한다. */
 const fixKstSep23 = () => {
@@ -175,13 +175,13 @@ describe('fetchInvestorTradingHistory', () => {
         expect(headersOf(mockFetch, call).tr_id).toBe('FHPTJ04160001');
         expect(queryOf(call)).toEqual({ FID_COND_MRKT_DIV_CODE: 'J', FID_INPUT_ISCD: '005930', FID_INPUT_DATE_1: '20260923', FID_ORG_ADJ_PRC: '', FID_ETC_CLS_CODE: '' });
         expect(day).toMatchObject({ businessDate: '20260922', open: 70500, high: 71500, low: 70000, close: 71000, volume: 9000000, amount: 639000000000 });
-        expect(Object.keys(day.investors)).toHaveLength(15);
-        expect(day.investors.foreign).toEqual({ netBuyVolume: 1000, netBuyAmount: 71000000, buyVolume: 3000, buyAmount: 213000000, sellVolume: 2000, sellAmount: 142000000 });
-        expect(day.investors.foreignRegistered).toEqual({ netBuyVolume: 900, netBuyAmount: 63900000, buyVolume: 2800, buyAmount: 198800000, sellVolume: 1900, sellAmount: 134900000 });
-        expect(day.investors.privateFund).toMatchObject({ netBuyVolume: -50, netBuyAmount: -3550000, sellVolume: 80, buyVolume: 30 });
-        expect(day.investors.otherCorporation.netBuyVolume).toBe(20);
-        expect(day.investors.otherOrganization.netBuyVolume).toBe(-5);
-        expect(day.investors.pensionFund.netBuyVolume).toBe(400);
+        expect(Object.keys(day!.investors)).toHaveLength(15);
+        expect(day!.investors.foreign).toEqual({ netBuyVolume: 1000, netBuyAmount: 71000000, buyVolume: 3000, buyAmount: 213000000, sellVolume: 2000, sellAmount: 142000000 });
+        expect(day!.investors.foreignRegistered).toEqual({ netBuyVolume: 900, netBuyAmount: 63900000, buyVolume: 2800, buyAmount: 198800000, sellVolume: 1900, sellAmount: 134900000 });
+        expect(day!.investors.privateFund).toMatchObject({ netBuyVolume: -50, netBuyAmount: -3550000, sellVolume: 80, buyVolume: 30 });
+        expect(day!.investors.otherCorporation.netBuyVolume).toBe(20);
+        expect(day!.investors.otherOrganization.netBuyVolume).toBe(-5);
+        expect(day!.investors.pensionFund.netBuyVolume).toBe(400);
     });
 });
 
@@ -356,8 +356,8 @@ describe('fetchMarketInvestorTrading', () => {
             FID_COND_MRKT_DIV_CODE: 'U', FID_INPUT_ISCD: '0001', FID_INPUT_DATE_1: '20260923', FID_INPUT_ISCD_1: 'KSP', FID_INPUT_DATE_2: '20260923', FID_INPUT_ISCD_2: '0001',
         });
         expect(day).toMatchObject({ businessDate: '20260923', indexPrice: 2600.5, indexChange: 10.5, indexChangeRate: 0.41, indexOpen: 2590, indexHigh: 2605, indexLow: 2588 });
-        expect(day.investors.foreign).toEqual({ netBuyVolume: 1000, netBuyAmount: 71000000, buyVolume: undefined, buyAmount: undefined, sellVolume: undefined, sellAmount: undefined });
-        expect(day.investors.privateFund.netBuyVolume).toBe(-30);
+        expect(day!.investors.foreign).toEqual({ netBuyVolume: 1000, netBuyAmount: 71000000, buyVolume: undefined, buyAmount: undefined, sellVolume: undefined, sellAmount: undefined });
+        expect(day!.investors.privateFund.netBuyVolume).toBe(-30);
     });
 
     it('업종코드가 네 자리가 아니면 보내기 전에 BadRequest 다', async () => {

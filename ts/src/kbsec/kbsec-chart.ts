@@ -31,8 +31,8 @@ export function kbsecChartParams(timeframe: string): { chrt_clsf: string; minute
     if (tf === '1d') return { chrt_clsf: KBSEC_CHART_KIND.DAY, minute: '' };
     if (tf === '1w') return { chrt_clsf: KBSEC_CHART_KIND.WEEK, minute: '' };
     if (tf === '1M' || tf === '1mo') return { chrt_clsf: KBSEC_CHART_KIND.MONTH, minute: '' };
-    const m = /^(\d+)m$/.exec(tf);
-    if (m) return { chrt_clsf: KBSEC_CHART_KIND.MINUTE, minute: m[1] };
+    const minute = /^(\d+)m$/.exec(tf)?.[1];
+    if (minute !== undefined) return { chrt_clsf: KBSEC_CHART_KIND.MINUTE, minute };
     const h = /^(\d+)h$/.exec(tf);
     if (h) return { chrt_clsf: KBSEC_CHART_KIND.MINUTE, minute: String(Number(h[1]) * 60) };
     throw new NotSupported(`kbsec 이 지원하지 않는 timeframe 이다: ${timeframe}`);

@@ -24,7 +24,7 @@ afterEach(() => {
 const find = (path: string): number => mockFetch.mock.calls.findIndex((c) => String(c[0]).includes(path));
 
 /** 요청 URL 의 쿼리를 객체로. */
-const queryOf = (index: number): Record<string, string> => Object.fromEntries(new URL(String(mockFetch.mock.calls[index][0])).searchParams);
+const queryOf = (index: number): Record<string, string> => Object.fromEntries(new URL(String(mockFetch.mock.calls[index]![0])).searchParams);
 
 const SINCE = Date.parse('2026-01-01T00:00:00Z');
 
@@ -39,11 +39,11 @@ describe('fetchCreditStocks', () => {
         await broker.fetchCreditStocks(false);
 
         const calls = mockFetch.mock.calls.map((c, i) => [String(c[0]), i] as const).filter(([u]) => u.includes('/quotations/credit-by-company'));
-        expect(headersOf(mockFetch, calls[0][1]).tr_id).toBe('FHPST04770000');
-        expect(queryOf(calls[0][1])).toEqual({
+        expect(headersOf(mockFetch, calls[0]![1]).tr_id).toBe('FHPST04770000');
+        expect(queryOf(calls[0]![1])).toEqual({
             fid_rank_sort_cls_code: '1', fid_slct_yn: '0', fid_input_iscd: '0000', fid_cond_scr_div_code: '20477', fid_cond_mrkt_div_code: 'J',
         });
-        expect(queryOf(calls[1][1]).fid_slct_yn).toBe('1');
+        expect(queryOf(calls[1]![1]).fid_slct_yn).toBe('1');
         expect(stock).toMatchObject({ symbol: '005930/KRW', name: '삼성전자', creditRate: 45 });
     });
 

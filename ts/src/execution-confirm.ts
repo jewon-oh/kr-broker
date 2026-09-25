@@ -177,10 +177,11 @@ export function tradeListProbe(params: {
         const filled = rows.reduce((a, t) => a + num(t.amount), 0);
         if (!(filled > 0)) {
             // 우리 주문의 행이 **있는데** 수량이 0 이면 "아직 미체결" 이 아니라 **필드명 불일치**다. 원본 응답(`info`)의 키만 남긴다.
-            if (rows.length > 0 && !zeroQtyWarned) {
+            const firstRow = rows[0];
+            if (firstRow !== undefined && !zeroQtyWarned) {
                 zeroQtyWarned = true;
-                const raw = rows[0].info;
-                const rowKeys = Object.keys((typeof raw === 'object' && raw !== null ? raw : rows[0]) as object).slice(0, 40);
+                const raw = firstRow.info;
+                const rowKeys = Object.keys((typeof raw === 'object' && raw !== null ? raw : firstRow) as object).slice(0, 40);
                 logger.warn({ orderId: params.orderId, rows: rows.length, rowKeys },
                     '[execution-confirm] 주문의 체결 행은 있으나 수량이 0 으로 읽힘 — 응답 필드명 대조 필요');
             }

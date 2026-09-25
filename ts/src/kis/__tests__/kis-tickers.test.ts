@@ -30,9 +30,9 @@ describe('fetchTickers', () => {
         const tickers = await newKis().fetchTickers(['005930/KRW', '000660/KRW']);
 
         const call = mockFetch.mock.calls.findIndex((c) => String(c[0]).includes(MULTI_PATH));
-        expect(String(mockFetch.mock.calls[call][0])).toContain('FID_COND_MRKT_DIV_CODE_1=J');
-        expect(String(mockFetch.mock.calls[call][0])).toContain('FID_INPUT_ISCD_1=005930');
-        expect(String(mockFetch.mock.calls[call][0])).toContain('FID_INPUT_ISCD_2=000660');
+        expect(String(mockFetch.mock.calls[call]![0])).toContain('FID_COND_MRKT_DIV_CODE_1=J');
+        expect(String(mockFetch.mock.calls[call]![0])).toContain('FID_INPUT_ISCD_1=005930');
+        expect(String(mockFetch.mock.calls[call]![0])).toContain('FID_INPUT_ISCD_2=000660');
         expect(headersOf(mockFetch, call).tr_id).toBe('FHKST11300006');
         expect(Object.keys(tickers)).toEqual(expect.arrayContaining(['005930/KRW', '000660/KRW']));
         expect(tickers['005930/KRW']).toMatchObject({ symbol: '005930/KRW', last: 71000 });

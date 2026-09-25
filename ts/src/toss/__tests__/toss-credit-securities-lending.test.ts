@@ -6,8 +6,8 @@ import { describe, it, expect } from 'vitest';
 
 import { installFakeToss, jsonOk, makeToss, type FakeToss } from './support/toss-fake';
 
-const creditQuery = (fake: FakeToss): URLSearchParams => fake.requestsTo('GET /api/v1/stocks/005930/credit-trades')[0].query;
-const lendingQuery = (fake: FakeToss): URLSearchParams => fake.requestsTo('GET /api/v1/stocks/005930/securities-lending')[0].query;
+const creditQuery = (fake: FakeToss): URLSearchParams => fake.requestsTo('GET /api/v1/stocks/005930/credit-trades')[0]!.query;
+const lendingQuery = (fake: FakeToss): URLSearchParams => fake.requestsTo('GET /api/v1/stocks/005930/securities-lending')[0]!.query;
 
 describe('fetchCreditTrades', () => {
     it('기록과 다음 페이지 커서를 그대로 옮긴다', async () => {
@@ -26,7 +26,7 @@ describe('fetchCreditTrades', () => {
         const result = await makeToss().fetchCreditTrades('005930/KRW');
 
         expect(result.nextUntil).toBe('2026-07-14');
-        expect(result.records[0].marginLoan).toMatchObject({ balanceQuantity: '2513400' });
+        expect(result.records[0]!.marginLoan).toMatchObject({ balanceQuantity: '2513400' });
         expect(creditQuery(fake).get('count')).toBe('5');
     });
 
@@ -40,8 +40,8 @@ describe('fetchCreditTrades', () => {
 
         const result = await makeToss().fetchCreditTrades('005930/KRW');
 
-        expect(result.records[0].marginLoan).toBeNull();
-        expect(result.records[0].stockLoan).not.toBeNull();
+        expect(result.records[0]!.marginLoan).toBeNull();
+        expect(result.records[0]!.stockLoan).not.toBeNull();
     });
 
     it('데이터가 없으면 빈 배열과 null 커서를 돌려준다', async () => {

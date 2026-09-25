@@ -25,7 +25,7 @@ afterEach(() => {
 const find = (path: string): number => mockFetch.mock.calls.findIndex((c) => String(c[0]).includes(path));
 
 /** 요청 URL 의 쿼리를 객체로. */
-const queryOf = (index: number): Record<string, string> => Object.fromEntries(new URL(String(mockFetch.mock.calls[index][0])).searchParams);
+const queryOf = (index: number): Record<string, string> => Object.fromEntries(new URL(String(mockFetch.mock.calls[index]![0])).searchParams);
 
 describe('해외 뉴스', () => {
     it('fetchBreakingNewsTitles 는 제공업체 전체와 화면 코드를 보내고 관련 종목 10칸에서 빈 칸을 뺀다', async () => {
@@ -78,11 +78,11 @@ describe('fetchOverseasScreener', () => {
         await broker.fetchOverseasScreener('HKS', { price: [100, 200], per: [0, 15] });
 
         const calls = mockFetch.mock.calls.map((c, i) => [String(c[0]), i] as const).filter(([u]) => u.includes('/quotations/inquire-search'));
-        expect(headersOf(mockFetch, calls[0][1]).tr_id).toBe('HHDFS76410000');
-        const first = queryOf(calls[0][1]);
+        expect(headersOf(mockFetch, calls[0]![1]).tr_id).toBe('HHDFS76410000');
+        const first = queryOf(calls[0]![1]);
         expect(first).toMatchObject({ AUTH: '', EXCD: 'NAS', KEYB: '', CO_YN_PRICECUR: '', CO_ST_PRICECUR: '', CO_EN_PRICECUR: '', CO_YN_PER: '' });
         expect(Object.keys(first)).toHaveLength(27);
-        expect(queryOf(calls[1][1])).toMatchObject({ EXCD: 'HKS', CO_YN_PRICECUR: '1', CO_ST_PRICECUR: '100', CO_EN_PRICECUR: '200', CO_YN_PER: '1', CO_ST_PER: '0', CO_EN_PER: '15', CO_YN_RATE: '' });
+        expect(queryOf(calls[1]![1])).toMatchObject({ EXCD: 'HKS', CO_YN_PRICECUR: '1', CO_ST_PRICECUR: '100', CO_EN_PRICECUR: '200', CO_YN_PER: '1', CO_ST_PER: '0', CO_EN_PER: '15', CO_YN_RATE: '' });
         expect(item).toMatchObject({
             symbol: 'AAPL/USD', name: '애플', rank: 1, price: 227.5, change: 2, percentage: 0.9, open: 225, high: 228, low: 224,
             volume: 5000, amount: 1100, marketCap: 3400000, shares: 15000, eps: 6.6, per: 34,

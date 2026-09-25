@@ -58,7 +58,7 @@ describe('refreshTokenWithLock — 락을 잡았을 때', () => {
         await expect(refreshTokenWithLock(p)).resolves.toBe('issued');
 
         expect(store.tryLock).toHaveBeenCalledWith(LOCK_KEY, expect.any(String), 10_000);
-        const owner = vi.mocked(store.tryLock).mock.calls[0][1];
+        const owner = vi.mocked(store.tryLock).mock.calls[0]![1];
         expect(store.unlock).toHaveBeenCalledWith(LOCK_KEY, owner);
         expect(p.issueAndCache).toHaveBeenCalledTimes(1);
         expect(p.readCached).toHaveBeenCalledTimes(1);   // 락을 잡은 직후 한 번 다시 읽는다

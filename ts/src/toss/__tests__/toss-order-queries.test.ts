@@ -23,9 +23,9 @@ describe('미체결 주문', () => {
         const orders = await makeToss().fetchOpenOrders();
         expect(orders).toHaveLength(1);
         expect(orders[0]).toMatchObject({ id: 'O1', symbol: '005930/KRW', side: 'sell', type: 'limit', status: 'open', amount: 5, filled: 2, remaining: 3, price: 70000, average: 70000 });
-        expect(orders[0].timestamp).toBe(Date.parse('2026-07-16T01:00:00Z'));
-        expect(fake.requestsTo('GET /api/v1/orders')[0].query.get('status')).toBe('OPEN');
-        expect(fake.requestsTo('GET /api/v1/orders')[0].query.has('symbol')).toBe(false);
+        expect(orders[0]!.timestamp).toBe(Date.parse('2026-07-16T01:00:00Z'));
+        expect(fake.requestsTo('GET /api/v1/orders')[0]!.query.get('status')).toBe('OPEN');
+        expect(fake.requestsTo('GET /api/v1/orders')[0]!.query.has('symbol')).toBe(false);
     });
 
     it('종목을 주면 서버 조회에 symbol 을 넣고, 응답에 섞인 다른 종목은 거른다', async () => {
@@ -33,7 +33,7 @@ describe('미체결 주문', () => {
             'GET /api/v1/orders': jsonOk({ orders: [order('O1', '005930'), order('O2', '000660')] }),
         });
         const orders = await makeToss().fetchOpenOrders('005930/KRW');
-        expect(fake.requestsTo('GET /api/v1/orders')[0].query.get('symbol')).toBe('005930');
+        expect(fake.requestsTo('GET /api/v1/orders')[0]!.query.get('symbol')).toBe('005930');
         expect(orders.map((o) => o.id)).toEqual(['O1']);
     });
 
@@ -88,8 +88,8 @@ describe('미체결 주문', () => {
                 }),
             });
             const [conditional] = await makeToss().fetchOpenOrders(undefined, undefined, undefined, { includeTrigger: true });
-            expect(conditional.side).toBe('sell');
-            expect(conditional.triggerPrice).toBe(110000);
+            expect(conditional!.side).toBe('sell');
+            expect(conditional!.triggerPrice).toBe(110000);
         });
 
         it('leg 이 오면 상세를 부르지 않는다. leg 자체가 없을 때만 상세로 채운다', async () => {
@@ -114,7 +114,7 @@ describe('미체결 주문', () => {
                 'GET /api/v1/conditional-orders': jsonOk({ conditionalOrders: [{ conditionalOrderId: 'C-8', symbol: '005930', type: 'OCO', quantity: '2' }] }),
             });
             const [conditional] = await makeToss().fetchOpenOrders(undefined, undefined, undefined, { includeTrigger: true });
-            expect(conditional.side).toBe('sell');
+            expect(conditional!.side).toBe('sell');
         });
 
         it('방향 대소문자가 달라도 매도로 읽는다', async () => {
@@ -123,7 +123,7 @@ describe('미체결 주문', () => {
                 'GET /api/v1/conditional-orders': jsonOk({ conditionalOrders: [{ conditionalOrderId: 'C-7', symbol: '005930', type: 'SINGLE', quantity: '1', first: { orderSide: 'sell', triggerPrice: '70000' } }] }),
             });
             const [conditional] = await makeToss().fetchOpenOrders(undefined, undefined, undefined, { includeTrigger: true });
-            expect(conditional.side).toBe('sell');
+            expect(conditional!.side).toBe('sell');
         });
     });
 });
@@ -248,8 +248,8 @@ describe('조건주문 목록 페이지', () => {
 
         const [request] = fake.requestsTo('GET /api/v1/orders');
         expect(fake.requestsTo('GET /api/v1/orders')).toHaveLength(1);
-        expect(request.query.has('limit')).toBe(false);
-        expect(request.query.has('cursor')).toBe(false);
+        expect(request!.query.has('limit')).toBe(false);
+        expect(request!.query.has('cursor')).toBe(false);
     });
 });
 
@@ -270,7 +270,7 @@ describe('체결 완료 주문과 체결 내역', () => {
         const fake = installFakeToss({ 'GET /api/v1/orders': jsonOk({ orders: [], hasNext: false }) });
         const since = Date.parse('2026-07-16T03:00:00Z');
         await makeToss().fetchClosedOrders('005930/KRW', since, 50);
-        const query = fake.requestsTo('GET /api/v1/orders')[0].query;
+        const query = fake.requestsTo('GET /api/v1/orders')[0]!.query;
         expect(query.get('status')).toBe('CLOSED');
         expect(Number(query.get('limit'))).toBeLessThanOrEqual(100);
         expect(query.get('symbol')).toBe('005930');
@@ -301,8 +301,8 @@ describe('체결 완료 주문과 체결 내역', () => {
         const until = Date.parse('2026-07-16T03:00:00Z');
         const exchange = makeToss();
         expect((await exchange.fetchClosedOrders('005930', undefined, undefined, { until })).map((o) => o.id)).toEqual(['BEFORE', 'AT']);
-        expect(fake.requestsTo('GET /api/v1/orders')[0].query.get('to')).toBe('2026-07-16');
-        expect(fake.requestsTo('GET /api/v1/orders')[0].query.has('until')).toBe(false);
+        expect(fake.requestsTo('GET /api/v1/orders')[0]!.query.get('to')).toBe('2026-07-16');
+        expect(fake.requestsTo('GET /api/v1/orders')[0]!.query.has('until')).toBe(false);
         // 같은 조회를 쓰는 취소 주문도 until 뒤를 뺀다.
         expect(await exchange.fetchCanceledOrders('005930', undefined, undefined, { until })).toEqual([]);
     });
@@ -330,8 +330,8 @@ describe('체결 완료 주문과 체결 내역', () => {
         const trades = await makeToss().fetchMyTrades('005930/KRW');
         expect(trades).toHaveLength(1);
         expect(trades[0]).toMatchObject({ order: 'C1', symbol: '005930/KRW', side: 'buy', amount: 3, price: 70000, cost: 210000 });
-        expect(trades[0].fee).toMatchObject({ currency: 'KRW', cost: 31 });
-        expect(trades[0].timestamp).toBe(Date.parse('2026-07-16T01:00:05Z'));
+        expect(trades[0]!.fee).toMatchObject({ currency: 'KRW', cost: 31 });
+        expect(trades[0]!.timestamp).toBe(Date.parse('2026-07-16T01:00:05Z'));
     });
 
     it('★fetchMyTrades 는 일부 체결된 채 걸려 있는 미체결 주문의 누적 체결도 거래로 넣는다(id 는 주문번호)', async () => {
@@ -426,7 +426,7 @@ describe('취소', () => {
     it('주문번호는 경로에 인코딩해 넣는다', async () => {
         const fake = installFakeToss({ 'POST /api/v1/orders/*': jsonOk({ orderId: 'N' }) });
         await makeToss().cancelOrder('A/B C');
-        expect(fake.requests()[0].path).toBe('/api/v1/orders/A%2FB%20C/cancel');
+        expect(fake.requests()[0]!.path).toBe('/api/v1/orders/A%2FB%20C/cancel');
     });
 });
 
@@ -464,10 +464,10 @@ describe('전체 취소', () => {
         const results = await makeToss().cancelAllOrders();
         // ★취소 사이에 전량 체결된 주문을 취소로 적지 않는다. 정정으로 대체된 주문은 새 주문이 살아 있을 수 있어 open 으로 둔다.
         expect(results.map((o) => [o.id, o.status])).toEqual([['O1', 'canceled'], ['O2', 'closed'], ['O3', 'open'], ['O4', 'canceled'], ['O5', 'open']]);
-        expect(results[1]).toMatchObject({ filled: results[1].amount, remaining: 0 });
-        expect(results[1].info).toMatchObject({ alreadyGone: true, cancelErrorDetail: 'already-filled' });
-        expect(results[4].info).toMatchObject({ alreadyGone: true, cancelErrorDetail: 'already-modified' });
-        expect((results[2].info as { cancelError: string }).cancelError).toContain('알 수 없다');
+        expect(results[1]).toMatchObject({ filled: results[1]!.amount, remaining: 0 });
+        expect(results[1]!.info).toMatchObject({ alreadyGone: true, cancelErrorDetail: 'already-filled' });
+        expect(results[4]!.info).toMatchObject({ alreadyGone: true, cancelErrorDetail: 'already-modified' });
+        expect((results[2]!.info as { cancelError: string }).cancelError).toContain('알 수 없다');
     });
 
     it('includeTrigger 는 조건주문도 취소한다', async () => {

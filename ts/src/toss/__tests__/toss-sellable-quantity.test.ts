@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 
 import { installFakeToss, jsonOk, makeToss, type FakeToss } from './support/toss-fake';
 
-const requestedQuery = (fake: FakeToss): URLSearchParams => fake.requestsTo('GET /api/v1/sellable-quantity')[0].query;
+const requestedQuery = (fake: FakeToss): URLSearchParams => fake.requestsTo('GET /api/v1/sellable-quantity')[0]!.query;
 
 describe('fetchSellableQuantity', () => {
     it('국내 — 정수 수량을 숫자로 돌려준다', async () => {

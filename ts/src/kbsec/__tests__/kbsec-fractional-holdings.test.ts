@@ -44,7 +44,7 @@ describe('fetchFractionalHoldings', () => {
 
         const { rows } = await newExchange().fetchFractionalHoldings();
 
-        expect(rows[0].symbol).toBe('005930/KRW');
+        expect(rows[0]!.symbol).toBe('005930/KRW');
     });
 
     it('다음키를 따라 두 번째 페이지까지 읽는다', async () => {

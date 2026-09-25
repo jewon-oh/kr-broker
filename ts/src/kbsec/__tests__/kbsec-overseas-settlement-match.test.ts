@@ -51,7 +51,7 @@ describe('(a) 단일 거래', () => {
         const { matches } = matchKbsecOverseasSettlements([trade()], [row()]);
 
         expect(matches).toHaveLength(1);
-        const m = matches[0];
+        const m = matches[0]!;
         expect(m.kind).toBe('matched');
         if (m.kind !== 'matched') return;
         expect(m.costUsd).toBeCloseTo(COST, 6);
@@ -61,7 +61,7 @@ describe('(a) 단일 거래', () => {
 
     it('수량을 몰라도 단일 거래면 KB 약정금액을 분모로 덮는다', () => {
         const { matches } = matchKbsecOverseasSettlements([trade({ quantity: null })], [row()]);
-        const m = matches[0];
+        const m = matches[0]!;
         expect(m.kind).toBe('matched');
         if (m.kind !== 'matched') return;
         expect(m.notionalUsd).toBeCloseTo(NOTIONAL, 6);
@@ -93,7 +93,7 @@ describe('(b)(g) 안분 — TR 은 가중평균 한 행으로 준다', () => {
 
     it('명목이 큰 쪽이 더 많이 가져간다 — 가중치는 명목이다', () => {
         const { matches } = matchKbsecOverseasSettlements(two, [merged]);
-        const [a, b] = matches;
+        const a = matches[0]!, b = matches[1]!;
         if (a.kind !== 'matched' || b.kind !== 'matched') throw new Error('matched 여야 한다');
         expect(a.costUsd).toBeGreaterThan(b.costUsd);
         // 비용이 명목에 정률이므로 두 거래의 실효율은 같아야 한다.
@@ -124,18 +124,18 @@ describe('(c) 안분 근거가 없으면 덮지 않는다', () => {
 describe('(d) 정산이 없는 거래', () => {
     it('행이 없으면 no-settlement — 추정치를 유지한다', () => {
         const { matches } = matchKbsecOverseasSettlements([trade()], []);
-        expect(matches[0].kind).toBe('no-settlement');
+        expect(matches[0]!.kind).toBe('no-settlement');
     });
 
     it('비용이 0 인 묶음도 no-settlement 로 본다', () => {
         const { matches } = matchKbsecOverseasSettlements(
             [trade()], [row({ feeUsd: 0, taxUsd: 0, settledUsd: NOTIONAL })]);
-        expect(matches[0].kind).toBe('no-settlement');
+        expect(matches[0]!.kind).toBe('no-settlement');
     });
 
     it('방향이 다르면 안 붙는다', () => {
         const { matches } = matchKbsecOverseasSettlements([trade({ side: 'BUY' })], [row()]);
-        expect(matches[0].kind).toBe('no-settlement');
+        expect(matches[0]!.kind).toBe('no-settlement');
     });
 });
 
@@ -147,7 +147,7 @@ describe('(e) 명목 대조', () => {
         });
         const { matches } = matchKbsecOverseasSettlements([trade()], [bigger]);
 
-        const m = matches[0];
+        const m = matches[0]!;
         expect(m.kind).toBe('notional-mismatch');
         if (m.kind !== 'notional-mismatch') return;
         expect(m.ourUsd).toBeCloseTo(QTY * PRICE, 6);
@@ -157,7 +157,7 @@ describe('(e) 명목 대조', () => {
     it('소수 절사분은 통과시킨다 — 허용 오차 안이다', () => {
         const { matches } = matchKbsecOverseasSettlements(
             [trade({ priceUsd: PRICE + 0.0001 })], [row()]);
-        expect(matches[0].kind).toBe('matched');
+        expect(matches[0]!.kind).toBe('matched');
     });
 });
 
@@ -166,18 +166,18 @@ describe('(f) 일자 축', () => {
         // 우리 거래를 KST 일자로 잡으면 미국 주문일자보다 하루 뒤가 된다.
         const { matches } = matchKbsecOverseasSettlements(
             [trade({ orderDateUs: '20260214' })], [row()]);
-        expect(matches[0].kind).toBe('no-settlement');
+        expect(matches[0]!.kind).toBe('no-settlement');
     });
 
     it('안 붙은 KB 묶음을 세어 돌려준다 — 매칭 결과만 보면 "매매 없음" 과 같아 보인다', () => {
         const { matches, unmatched } = matchKbsecOverseasSettlements(
             [trade({ orderDateUs: '20260214' })], [row()]);
 
-        expect(matches[0].kind).toBe('no-settlement');
+        expect(matches[0]!.kind).toBe('no-settlement');
         expect(unmatched).toHaveLength(1);
-        expect(unmatched[0].key).toContain(DATE_US);
-        expect(unmatched[0].rows).toBe(1);
-        expect(unmatched[0].costUsd).toBeCloseTo(COST, 6);
+        expect(unmatched[0]!.key).toContain(DATE_US);
+        expect(unmatched[0]!.rows).toBe(1);
+        expect(unmatched[0]!.costUsd).toBeCloseTo(COST, 6);
     });
 
     it('제대로 붙으면 남는 묶음이 없다', () => {
@@ -195,7 +195,7 @@ describe('(f) 일자 축', () => {
         ], [day1, day2]);
 
         expect(unmatched).toEqual([]);
-        const [a, b] = matches;
+        const a = matches[0]!, b = matches[1]!;
         if (a.kind !== 'matched' || b.kind !== 'matched') throw new Error('matched 여야 한다');
         expect(a.costUsd).toBeCloseTo(FEE + TAX, 6);
         expect(b.costUsd).toBeCloseTo(FEE * 2, 6);
@@ -205,13 +205,13 @@ describe('(f) 일자 축', () => {
 describe('행 위생', () => {
     it('방향을 못 읽은 행은 버린다 — 어느 쪽에 붙일지 모르는 비용이다', () => {
         const { matches, unmatched } = matchKbsecOverseasSettlements([trade()], [row({ side: null })]);
-        expect(matches[0].kind).toBe('no-settlement');
+        expect(matches[0]!.kind).toBe('no-settlement');
         expect(unmatched).toEqual([]);
     });
 
     it('일자를 못 읽은 행도 버린다', () => {
         const { matches } = matchKbsecOverseasSettlements([trade()], [row({ orderDateUs: '' })]);
-        expect(matches[0].kind).toBe('no-settlement');
+        expect(matches[0]!.kind).toBe('no-settlement');
     });
 
     it('결과는 입력 순서를 지킨다 — 호출하는 쪽이 인덱스로 맞춘다', () => {

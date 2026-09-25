@@ -4330,10 +4330,11 @@ export class kis extends Exchange {
         const f = record.fields;
         if (f === undefined) return;
         const num = (key: string): number | undefined => this.safeNumber(f, key);
+        const watched = (key: string | undefined): string | undefined => (key === undefined ? undefined : this.watchKeys.get(key));
         switch (record.trId) {
             case 'H0STCNT0':
             case 'H0UNCNT0': {
-                const symbol = this.watchKeys.get(f.mksc_shrn_iscd) ?? `${f.mksc_shrn_iscd}/KRW`;
+                const symbol = watched(f.mksc_shrn_iscd) ?? `${f.mksc_shrn_iscd}/KRW`;
                 const stamp = this.kstStamp(f.bsop_date, f.stck_cntg_hour);
                 // 체결구분은 1 매수, 5 매도다(KRX 는 `ccld_dvsn`, 통합은 `cntg_cls_code`).
                 const sideCode = f.ccld_dvsn ?? f.cntg_cls_code;
@@ -4349,7 +4350,7 @@ export class kis extends Exchange {
             }
             case 'H0STASP0':
             case 'H0UNASP0': {
-                const symbol = this.watchKeys.get(f.mksc_shrn_iscd) ?? `${f.mksc_shrn_iscd}/KRW`;
+                const symbol = watched(f.mksc_shrn_iscd) ?? `${f.mksc_shrn_iscd}/KRW`;
                 const levels = (price: string, size: string): Array<[number, number]> => Array.from({ length: 10 }, (_, i): [number, number] => [
                     num(`${price}${i + 1}`) ?? 0, num(`${size}${i + 1}`) ?? 0,
                 ]).filter(([p]) => p > 0);
@@ -4361,7 +4362,7 @@ export class kis extends Exchange {
                 return;
             }
             case 'HDFSCNT0': {
-                const symbol = this.watchKeys.get(f.rsym) ?? `${f.symb}/USD`;
+                const symbol = watched(f.rsym) ?? `${f.symb}/USD`;
                 // 해외 체결에는 현지 일시(`xymd`, `xhms`)와 한국 일시(`kymd`, `khms`)가 함께 온다.
                 const stamp = this.kstStamp(f.kymd, f.khms);
                 this.watchHub.resolve(`ticker:${symbol}`, this.safeTicker({
@@ -4373,7 +4374,7 @@ export class kis extends Exchange {
                 return;
             }
             case 'HDFSASP0': {
-                const symbol = this.watchKeys.get(f.rsym) ?? `${f.symb}/USD`;
+                const symbol = watched(f.rsym) ?? `${f.symb}/USD`;
                 const stamp = this.kstStamp(f.kymd, f.khms);
                 const bid = num('pbid1');
                 const ask = num('pask1');
@@ -4596,8 +4597,7 @@ export class kis extends Exchange {
 
     /** 심볼(또는 종목코드)을 종목 식별 결과로 바꾼다. 국내는 마스터 없이도 되고, 해외는 마스터에서 거래소를 찾는다. */
     private instrumentOf(symbol: string): KisInstrument {
-        const suffixed = /^(.+)\/(KRW|USD)$/.exec(symbol);
-        const base = (suffixed ? suffixed[1] : symbol).trim();
+        const base = (/^(.+)\/(KRW|USD)$/.exec(symbol)?.[1] ?? symbol).trim();
         if (isKrxDomesticCode(base)) {
             return { symbol: `${base}/KRW`, code: base, overseas: false, quote: 'KRW', quoteExchange: undefined, orderExchange: undefined };
         }
@@ -4909,7 +4909,7 @@ export class kis extends Exchange {
             tr_id: this.tr('TTTC8434R'),
         }, ['CTX_AREA_FK100', 'CTX_AREA_NK100']);
         // 합계(`output2`)는 계좌 전체 값이라 첫 쪽 것을 쓴다. 쪽마다 같은 값이 온다는 것은 추정이다.
-        const raw: Dict = { holdings: pages.flatMap((page) => rowsOf(page.output1)), summary: firstRow(pages[0].output2) };
+        const raw: Dict = { holdings: pages.flatMap((page) => rowsOf(page.output1)), summary: firstRow(pages[0]?.output2) };
         if (orderable) {
             // 주문가능금액은 잔고 응답의 `ord_psbl_amt` 가 아니라 매수가능조회의 `ord_psbl_cash` 를 쓴다(공식 응답 필드에 `ord_psbl_amt` 가 없다).
             // 시장가(`01`)로 물으면 종목 증거금율이 반영된다.

@@ -150,7 +150,8 @@ export function extractParams(path: string): string[] {
     const matches: string[] = [];
     let match = re.exec(path);
     while (match) {
-        matches.push(match[1]);
+        const name = match[1];
+        if (name !== undefined) matches.push(name);
         match = re.exec(path);
     }
     return matches;

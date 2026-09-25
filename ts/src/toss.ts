@@ -724,7 +724,7 @@ export class toss extends Exchange {
         body: string | undefined = undefined,
     ): SignedRequest {
         const group = Array.isArray(api) ? api[0] : api;
-        const base = this.implodeParams(this.urls.api[group], { hostname: this.hostname, version: this.version });
+        const base = this.implodeParams(group === undefined ? undefined : this.urls.api[group], { hostname: this.hostname, version: this.version });
         const pathParams = this.extractParams(path);
         const encoded: Dict = {};
         for (const key of pathParams) encoded[key] = encodeURIComponent(String(params[key]));
@@ -891,7 +891,7 @@ export class toss extends Exchange {
 
     /** 심볼(`005930`, `005930/KRW`, `AAPL`)에서 종목을 만든다. 종목을 불러오지 않았을 때 코드의 모양으로 시장을 판별한다. */
     private marketFromSymbol(symbol: string): MarketInterface {
-        const code = symbol.split('/')[0];
+        const [code = ''] = symbol.split('/');
         const country = tossMarketCountry(code);
         const quote = country === 'KR' ? 'KRW' : 'USD';
         return this.safeMarketStructure({
@@ -2409,7 +2409,7 @@ export class toss extends Exchange {
             return this.cancelOrder(order.id as string, order.symbol, { trigger });
         }));
         const results = settled.map((outcome, index): Order => {
-            const order = orders[index];
+            const order = orders[index]!;
             if (outcome.status === 'fulfilled') return { ...order, status: 'canceled' };
             const message = outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason);
             if (!(outcome.reason instanceof OrderNotFound)) return { ...order, info: { ...order.info, cancelError: message } };

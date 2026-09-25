@@ -69,8 +69,8 @@ describe('fetchMarkets / loadMarkets — 종목 마스터 데이터로 만든다
             id: '005930', base: '005930', quote: 'KRW', type: 'spot', spot: true, active: true, info: { name: '삼성전자', market: 'KOSPI' },
         });
         expect(markets['AAPL/USD']).toMatchObject({ id: 'AAPL', quote: 'USD', precision: { amount: 1, price: 0.01 } });
-        expect(markets['AAPL/USD'].options).toMatchObject({ exchange: 'NAS', orderExchange: 'NASD' });
-        expect(markets['V/USD'].options?.orderExchange).toBe('NYSE');
+        expect(markets['AAPL/USD']!.options).toMatchObject({ exchange: 'NAS', orderExchange: 'NASD' });
+        expect(markets['V/USD']!.options?.orderExchange).toBe('NYSE');
     });
 
     it('슬래시가 든 티커(BRK/B)는 BRK.B/USD 로 통합하고 market.id 에 KIS 표기를 둔다', async () => {
@@ -184,7 +184,7 @@ describe('fetchOHLCV — 야후 우선, 미국 일봉은 KIS 폴백', () => {
         const candles = await newKis().fetchOHLCV('AAPL/USD', '1d', undefined, 100);
 
         expect(candles).toHaveLength(2);
-        expect(candles[1][4]).toBe(308.82); // 오래된 봉이 앞이므로 최근 봉이 뒤에 있다
+        expect(candles[1]![4]).toBe(308.82); // 오래된 봉이 앞이므로 최근 봉이 뒤에 있다
     });
 
     it('★미국 일봉인데 야후가 실패하면 KIS 해외 일봉으로 폴백하고, KIS 도 비면 야후의 오류를 던진다', async () => {
@@ -218,7 +218,7 @@ describe('fetchOHLCV — 야후 우선, 미국 일봉은 KIS 폴백', () => {
 
         await newKis({ masterData: { ...KIS_MASTER_FIXTURE, nyse } }).fetchOHLCV('BRK/B', '1d', undefined, 2);
 
-        expect(mockYahoo.mock.calls[0][0]).toBe('BRK.B/USD');
+        expect(mockYahoo.mock.calls[0]![0]).toBe('BRK.B/USD');
     });
 
     it('★미국 일봉 KIS 폴백도 since 부터 until 까지의 봉을 앞에서부터 limit 개 준다', async () => {
@@ -296,7 +296,7 @@ describe('candles() — KIS 원본 캔들', () => {
         // 첫 기준일은 지금이 아니라 since 에서 150개를 덮는 날(since + 232일)이고, 한 쪽을 다 받아도 since 에 못 닿았으면 더 넘긴다.
         expect(bymds).toEqual(['20250820', '20250512']);
         expect(candles).toHaveLength(127);
-        expect(candles[0][0]).toBe(Date.UTC(2025, 0, 1));
+        expect(candles[0]![0]).toBe(Date.UTC(2025, 0, 1));
     });
 
     it('★국내 일봉의 조회 기간은 실행 환경의 시간대가 아니라 한국 날짜이고, 시각은 인스턴스의 시계로 읽는다', async () => {

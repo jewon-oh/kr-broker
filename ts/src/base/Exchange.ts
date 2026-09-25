@@ -455,7 +455,7 @@ export class Exchange {
     ): void {
         const suffix = path.split(/[^a-zA-Z0-9]/).map(CAPITALIZE).join('');
         const prefix = [paths[0]].concat(paths.slice(1).map(CAPITALIZE)).join('');
-        const apiName: ApiName = paths.length > 1 ? paths : paths[0];
+        const apiName: ApiName | undefined = paths.length > 1 ? paths : paths[0];
         this[prefix + camelcaseMethod + CAPITALIZE(suffix)] = async (params: Dict = {}) =>
             this[methodName](path, apiName, uppercaseMethod, params, undefined, undefined, config);
     }
@@ -585,7 +585,7 @@ export class Exchange {
         body: string | undefined = undefined,
     ): SignedRequest {
         const key = Array.isArray(api) ? api[0] : api;
-        const base = isDict(this.urls.api) ? this.urls.api[key] : this.urls.api;
+        const base = isDict(this.urls.api) ? (key === undefined ? undefined : this.urls.api[key]) : this.urls.api;
         if (typeof base !== 'string') throw new ExchangeError(`${this.id} sign() 에 쓸 urls.api 가 없다: ${key}`);
         let url = implodeParams(base, { hostname: this.hostname }).replace(/\/+$/, '') + '/' + implodeParams(path, params);
         const query = omit(params, extractParams(path));
@@ -746,14 +746,16 @@ export class Exchange {
     /** `exact` 표에 이 문자열이 키로 있으면 그 오류를 던진다. */
     throwExactlyMatchedException(exact: Dictionary<ErrorClass> | undefined, text: Str, message: string, options?: BaseErrorOptions): void {
         if (exact === undefined || text === undefined) return;
-        if (Object.prototype.hasOwnProperty.call(exact, text)) throw new exact[text](message, options);
+        const ErrorType = Object.prototype.hasOwnProperty.call(exact, text) ? exact[text] : undefined;
+        if (ErrorType !== undefined) throw new ErrorType(message, options);
     }
 
     /** `broad` 표의 키 중 이 문자열에 들어 있는 첫 번째(선언 순서)의 오류를 던진다. */
     throwBroadlyMatchedException(broad: Dictionary<ErrorClass> | undefined, text: Str, message: string, options?: BaseErrorOptions): void {
         if (broad === undefined) return;
         const broadKey = this.findBroadlyMatchedKey(broad, text);
-        if (broadKey !== undefined) throw new broad[broadKey](message, options);
+        const ErrorType = broadKey === undefined ? undefined : broad[broadKey];
+        if (ErrorType !== undefined) throw new ErrorType(message, options);
     }
 
     findBroadlyMatchedKey(broad: Dictionary<ErrorClass>, text: Str): Str {
@@ -1006,7 +1008,7 @@ export class Exchange {
         const byId = this.markets_by_id?.[symbol];
         if (byId !== undefined) {
             const defaultType = safeString2(this.options, 'defaultType', 'defaultSubType', 'spot') as string;
-            return byId.find((candidate) => (candidate as Dict)[defaultType] === true) ?? byId[0];
+            return byId.find((candidate) => (candidate as Dict)[defaultType] === true) ?? byId[0]!;
         }
         throw new BadSymbol(`${this.id} does not have market symbol ${symbol}`);
     }
@@ -1047,7 +1049,8 @@ export class Exchange {
         if (marketId !== undefined) {
             const candidates = this.markets_by_id?.[marketId];
             if (candidates !== undefined) {
-                if (candidates.length === 1) return candidates[0];
+                const only = candidates[0];
+                if (candidates.length === 1 && only !== undefined) return only;
                 const type = marketType ?? market?.type;
                 if (type === undefined) {
                     throw new ArgumentsRequired(`${this.id} safeMarket() requires a fourth argument for ${marketId} to disambiguate between different markets with the same market id`);
@@ -1277,12 +1280,13 @@ export class Exchange {
             // 이미 통합 구조로 파싱된 체결이면 그대로 쓴다.
             const tradesAreParsed = firstTrade !== undefined && 'info' in firstTrade && 'id' in firstTrade;
             trades = tradesAreParsed ? rawTrades : this.parseTrades(rawTrades, market);
-            if (Array.isArray(trades) && trades.length > 0) {
+            const leadTrade = Array.isArray(trades) ? trades[0] : undefined;
+            if (leadTrade !== undefined) {
                 // 체결에 있는 값을 주문으로 끌어올린다.
-                if (order.symbol === undefined) order.symbol = trades[0].symbol;
-                if (order.side === undefined) order.side = trades[0].side;
-                if (order.type === undefined) order.type = trades[0].type;
-                if (order.id === undefined) order.id = trades[0].order;
+                if (order.symbol === undefined) order.symbol = leadTrade.symbol;
+                if (order.side === undefined) order.side = leadTrade.side;
+                if (order.type === undefined) order.type = leadTrade.type;
+                if (order.id === undefined) order.id = leadTrade.order;
                 if (parseFilled) filled = '0';
                 if (parseCost) cost = '0';
                 for (const trade of trades) {
@@ -1594,9 +1598,11 @@ export class Exchange {
     filterByLimit(array: Dict[], limit: Int = undefined, key: IndexType = 'timestamp', fromStart = false): any[] {
         if (limit === undefined || array.length === 0) return array;
         let ascending = true;
-        if (key in array[0]) {
-            const first = array[0][key];
-            const last = array[array.length - 1][key];
+        const head = array[0];
+        const tail = array[array.length - 1];
+        if (head !== undefined && tail !== undefined && key in head) {
+            const first = head[key];
+            const last = tail[key];
             if (first !== undefined && last !== undefined) ascending = first <= last;
         }
         // 시각 오름차순이면 앞에서 자를 때 처음 `limit` 개, 뒤에서 자를 때 마지막 `limit` 개다. 내림차순이면 반대다.

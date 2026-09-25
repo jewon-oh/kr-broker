@@ -38,7 +38,7 @@ describe('종목', () => {
         const markets = await exchange.loadMarkets();
         expect(fake.requestsTo('GET /api/v1/stocks/all')).toHaveLength(7);
         expect(Object.keys(markets).sort()).toEqual(['005930/KRW', '0101N0/KRW', 'AAPL/USD']);
-        expect(markets['005930/KRW'].options).toMatchObject({ market: 'KOSPI', securityType: 'STOCK', country: 'KR' });
+        expect(markets['005930/KRW']!.options).toMatchObject({ market: 'KOSPI', securityType: 'STOCK', country: 'KR' });
         expect(markets['AAPL/USD']).toMatchObject({ quote: 'USD', precision: { amount: 1e-6 } });
     });
 
@@ -56,7 +56,7 @@ describe('종목', () => {
         expect(markets['005930/KRW']).toMatchObject({ taker: TOSS_BROKERAGE_FEE, maker: TOSS_BROKERAGE_FEE });
         expect(markets['AAPL/USD']).toMatchObject({ taker: TOSS_US_BROKERAGE_FEE, maker: TOSS_US_BROKERAGE_FEE });
         // 종목 표의 값이 fetchTradingFee 의 미국 기본값과 같다(공시 요율 조회에 실패해 기본값을 쓰는 경우).
-        expect(exchange.effectiveFeeRate('AAPL', 'buy')).toBe(markets['AAPL/USD'].taker);
+        expect(exchange.effectiveFeeRate('AAPL', 'buy')).toBe(markets['AAPL/USD']!.taker);
     });
 
     it('종목 유형을 불러온 ETF 는 매도에도 증권거래세가 붙지 않는다', async () => {
@@ -98,7 +98,7 @@ describe('시세', () => {
         const tickers = await makeToss().fetchTickers(codes.map((code) => `${code}/KRW`));
         expect(fake.requestsTo('GET /api/v1/prices')).toHaveLength(2);
         expect(Object.keys(tickers)).toHaveLength(250);
-        expect(tickers['100249/KRW'].last).toBe(1000);
+        expect(tickers['100249/KRW']!.last).toBe(1000);
     });
 
     it('fetchTickers 는 종목 없이 부를 수 없다', async () => {
@@ -152,7 +152,7 @@ describe('봉', () => {
     it('1분봉의 timestamp 는 봉의 시작 시각이다(토스는 종료 시각으로 준다)', async () => {
         installFakeToss({ 'GET /api/v1/candles': jsonOk({ candles: [candle('2026-07-16T09:01:00+09:00', '70500')], nextBefore: null }) });
         const rows = await makeToss().fetchOHLCV('005930', '1m', undefined, 1);
-        expect(rows[0][0]).toBe(Date.parse('2026-07-16T09:00:00+09:00'));
+        expect(rows[0]![0]).toBe(Date.parse('2026-07-16T09:00:00+09:00'));
     });
 
     it('since 이전 봉은 받지 않고, until 은 before 로 보낸다', async () => {
@@ -165,7 +165,7 @@ describe('봉', () => {
         const until = Date.parse('2026-07-17T00:00:00Z');
         const rows = await makeToss().fetchOHLCV('005930', '1d', Date.parse('2026-07-16T00:00:00+09:00'), 10, { until });
         expect(rows.map((row) => row[4])).toEqual([70500]);
-        expect(fake.requestsTo('GET /api/v1/candles')[0].query.get('before')).toBe('2026-07-17T00:00:00.000Z');
+        expect(fake.requestsTo('GET /api/v1/candles')[0]!.query.get('before')).toBe('2026-07-17T00:00:00.000Z');
     });
 
     /** `before`(없으면 07-21 0시) 전날부터 거꾸로 하루 한 봉씩, 쪽마다 `perPage` 봉을 준다. 종가는 그날의 일(日)이다. */
@@ -176,7 +176,7 @@ describe('봉', () => {
             const kst = new Date(end - (i + 1) * 86_400_000 + 9 * 3_600_000);
             return candle(`${kst.toISOString().slice(0, 10)}T00:00:00+09:00`, String(kst.getUTCDate()));
         });
-        return jsonOk({ candles, nextBefore: candles[candles.length - 1].timestamp });
+        return jsonOk({ candles, nextBefore: candles[candles.length - 1]!.timestamp });
     };
 
     it('since 가 있으면 since 까지 거슬러 받고 since 부터 limit 개를 돌려준다(최근 limit 개가 아니다)', async () => {
@@ -224,7 +224,7 @@ describe('잔고', () => {
         expect(balance.KRW).toMatchObject({ free: 300000, used: 0, total: 300000 });
         expect(balance.USD).toMatchObject({ free: 2609.73, total: 2609.73 });
         expect(balance['005930']).toMatchObject({ free: 4, total: 4 });
-        expect(balance['005930'].info).toMatchObject({ name: '삼성전자', averagePurchasePrice: '249250' });
+        expect(balance['005930']!.info).toMatchObject({ name: '삼성전자', averagePurchasePrice: '249250' });
         // 수량이 0 인 보유는 싣지 않는다.
         expect(balance['000660']).toBeUndefined();
         expect(balance.total).toMatchObject({ KRW: 300000, '005930': 4 });
@@ -233,16 +233,16 @@ describe('잔고', () => {
     it('종목을 지정하면 그 종목의 보유만 받고 현금은 부르지 않는다', async () => {
         const fake = installFakeToss({ 'GET /api/v1/holdings': jsonOk(holdings), 'GET /api/v1/buying-power': buyingPower });
         const balance = await makeToss().fetchBalance({ symbol: '005930/KRW' });
-        expect(balance['005930'].total).toBe(4);
+        expect(balance['005930']!.total).toBe(4);
         expect(balance.KRW).toBeUndefined();
-        expect(fake.requestsTo('GET /api/v1/holdings')[0].query.get('symbol')).toBe('005930');
+        expect(fake.requestsTo('GET /api/v1/holdings')[0]!.query.get('symbol')).toBe('005930');
         expect(fake.requestsTo('GET /api/v1/buying-power')).toHaveLength(0);
     });
 
     it('통화를 지정하면 그 현금만 받고 보유는 부르지 않는다', async () => {
         const fake = installFakeToss({ 'GET /api/v1/holdings': jsonOk(holdings), 'GET /api/v1/buying-power': buyingPower });
         const balance = await makeToss().fetchBalance({ currency: 'KRW' });
-        expect(balance.KRW.free).toBe(300000);
+        expect(balance.KRW!.free).toBe(300000);
         expect(fake.requestsTo('GET /api/v1/holdings')).toHaveLength(0);
         expect(fake.requestsTo('GET /api/v1/buying-power')).toHaveLength(1);
     });
@@ -250,10 +250,10 @@ describe('잔고', () => {
     it('종목과 통화를 함께 주면 그 종목의 보유와 그 통화의 현금을 모두 받는다', async () => {
         const fake = installFakeToss({ 'GET /api/v1/holdings': jsonOk(holdings), 'GET /api/v1/buying-power': buyingPower });
         const balance = await makeToss().fetchBalance({ symbol: '005930/KRW', currency: 'KRW' });
-        expect(balance['005930'].total).toBe(4);
-        expect(balance.KRW.free).toBe(300000);
+        expect(balance['005930']!.total).toBe(4);
+        expect(balance.KRW!.free).toBe(300000);
         expect(balance.USD).toBeUndefined();
-        expect(fake.requestsTo('GET /api/v1/holdings')[0].query.get('symbol')).toBe('005930');
+        expect(fake.requestsTo('GET /api/v1/holdings')[0]!.query.get('symbol')).toBe('005930');
         expect(fake.requestsTo('GET /api/v1/buying-power').map((r) => r.query.get('currency'))).toEqual(['KRW']);
     });
 
@@ -280,9 +280,9 @@ describe('잔고', () => {
         });
         const exchange = makeToss({ uid: undefined });
         await exchange.fetchBalance({ currency: 'KRW' });
-        expect(fake.requestsTo('GET /api/v1/buying-power')[0].headers['X-Tossinvest-Account']).toBe('9');
+        expect(fake.requestsTo('GET /api/v1/buying-power')[0]!.headers['X-Tossinvest-Account']).toBe('9');
         expect(exchange.uid).toBe('9');
-        expect(fake.requestsTo('GET /api/v1/accounts')[0].headers['X-Tossinvest-Account']).toBeUndefined();
+        expect(fake.requestsTo('GET /api/v1/accounts')[0]!.headers['X-Tossinvest-Account']).toBeUndefined();
     });
 
     describe('통합증거금', () => {
@@ -294,7 +294,7 @@ describe('잔고', () => {
         it('옵션이 꺼져 있으면 순수 달러만 돌려주고 원화와 환율을 조회하지 않는다', async () => {
             const fake = installFakeToss({ 'GET /api/v1/buying-power': usdAndKrw('0', '1450000'), 'GET /api/v1/exchange-rate': rate });
             const balance = await makeToss().fetchBalance({ currency: 'USD' });
-            expect(balance.USD.free).toBe(0);
+            expect(balance.USD!.free).toBe(0);
             expect(fake.requestsTo('GET /api/v1/exchange-rate')).toHaveLength(0);
             expect(fake.requestsTo('GET /api/v1/buying-power')).toHaveLength(1);
         });
@@ -302,26 +302,26 @@ describe('잔고', () => {
         it('옵션이 켜져 있으면 원화 예수금을 환산해 달러에 더한다', async () => {
             installFakeToss({ 'GET /api/v1/buying-power': usdAndKrw('3.5', '1450000'), 'GET /api/v1/exchange-rate': rate });
             const balance = await makeToss({ options: { krwIntegratedMargin: true } }).fetchBalance({ currency: 'USD' });
-            expect(balance.USD.free).toBeCloseTo(1003.5, 2);
-            expect(balance.USD.info.integratedMargin).toMatchObject({ krw: 1450000, usdKrw: 1450 });
+            expect(balance.USD!.free).toBeCloseTo(1003.5, 2);
+            expect(balance.USD!.info.integratedMargin).toMatchObject({ krw: 1450000, usdKrw: 1450 });
         });
 
         it('원화 잔고가 0 이면 달러만이다', async () => {
             installFakeToss({ 'GET /api/v1/buying-power': usdAndKrw('250', '0'), 'GET /api/v1/exchange-rate': rate });
             const balance = await makeToss({ options: { krwIntegratedMargin: true } }).fetchBalance({ currency: 'USD' });
-            expect(balance.USD.free).toBe(250);
+            expect(balance.USD!.free).toBe(250);
         });
 
         it('전체 잔고에는 합산하지 않는다(이중 계상이 된다)', async () => {
             installFakeToss({ 'GET /api/v1/holdings': jsonOk({ items: [] }), 'GET /api/v1/buying-power': usdAndKrw('3.5', '1450000'), 'GET /api/v1/exchange-rate': rate });
             const balance = await makeToss({ options: { krwIntegratedMargin: true } }).fetchBalance();
-            expect(balance.USD.free).toBe(3.5);
+            expect(balance.USD!.free).toBe(3.5);
         });
 
         it('토스 환율 조회가 실패하면 usdKrwRate 옵션으로 폴백한다', async () => {
             installFakeToss({ 'GET /api/v1/buying-power': usdAndKrw('0', '500000'), 'GET /api/v1/exchange-rate': errorReply(500, 'internal-error') });
             const balance = await makeToss({ options: { krwIntegratedMargin: true, usdKrwRate: async () => 1000 } }).fetchBalance({ currency: 'USD' });
-            expect(balance.USD.free).toBeCloseTo(500, 2);
+            expect(balance.USD!.free).toBeCloseTo(500, 2);
         });
     });
 });
@@ -417,10 +417,10 @@ describe('종목 부가 정보', () => {
         });
         const exchange = makeToss();
         expect(await exchange.fetchStockWarnings('005930/KRW')).toEqual([{ warningType: 'OVERHEATED' }]);
-        expect((await exchange.fetchInvestorTrading('KOSPI'))[0].foreigner?.buyAmount).toBe('100');
-        expect((await exchange.fetchRankings('TOSS_SECURITIES_TRADING_AMOUNT'))[0].rank).toBe(1);
-        expect((await exchange.fetchStocks(['005930/KRW', 'AAPL']))[0].name).toBe('삼성전자');
-        expect(fake.requestsTo('GET /api/v1/stocks')[0].query.get('symbols')).toBe('005930,AAPL');
+        expect((await exchange.fetchInvestorTrading('KOSPI'))[0]!.foreigner?.buyAmount).toBe('100');
+        expect((await exchange.fetchRankings('TOSS_SECURITIES_TRADING_AMOUNT'))[0]!.rank).toBe(1);
+        expect((await exchange.fetchStocks(['005930/KRW', 'AAPL']))[0]!.name).toBe('삼성전자');
+        expect(fake.requestsTo('GET /api/v1/stocks')[0]!.query.get('symbols')).toBe('005930,AAPL');
     });
 });
 

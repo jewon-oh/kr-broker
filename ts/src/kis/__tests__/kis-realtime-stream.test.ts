@@ -63,14 +63,14 @@ const encrypt = (plain: string): string => {
 
 describe('필드 이름과 건수 나누기', () => {
     it('필드 이름을 아는 TR 은 필드 수로 나눠 이름을 붙인다', () => {
-        const columns = KIS_REALTIME_COLUMNS.H0IFCNT0;
+        const columns = KIS_REALTIME_COLUMNS.H0IFCNT0!;
         const one = columns.map((_, i) => String(i));
         const records = splitKisRealtimeRecords('H0IFCNT0', 2, [...one, ...one.map((v) => `b${v}`)].join('^'));
 
         expect(records).toHaveLength(2);
-        expect(records[0].fields?.[columns[0]]).toBe('0');
-        expect(records[1].fields?.[columns[columns.length - 1]]).toBe(`b${columns.length - 1}`);
-        expect(records[1].values).toHaveLength(columns.length);
+        expect(records[0]!.fields?.[columns[0]!]).toBe('0');
+        expect(records[1]!.fields?.[columns[columns.length - 1]!]).toBe(`b${columns.length - 1}`);
+        expect(records[1]!.values).toHaveLength(columns.length);
     });
 
     it('모르는 TR 은 값 수를 건수로 나눈 길이로 자르고 이름을 붙이지 않는다', () => {
@@ -82,8 +82,8 @@ describe('필드 이름과 건수 나누기', () => {
     it('값이 필드 수보다 모자라면 건수로 나눈 길이로 자르고 있는 값만 이름을 붙인다', () => {
         const [record] = splitKisRealtimeRecords('H0STNAV0', 1, 'A005930^10500');
 
-        expect(record.values).toEqual(['A005930', '10500']);
-        expect(Object.keys(record.fields ?? {})).toHaveLength(2);
+        expect(record!.values).toEqual(['A005930', '10500']);
+        expect(Object.keys(record!.fields ?? {})).toHaveLength(2);
     });
 
     it('모의투자 체결통보 TR 은 실전 TR 의 필드 목록을 쓴다', () => {
@@ -105,7 +105,7 @@ describe('KisRealtimeStream', () => {
         const stream = new KisRealtimeStream({ getApprovalKey: async () => 'ak', isVirtual: true, onRecord: (r) => records.push(r), onSubscribeError });
         stream.subscribe('H0IFCNT0', '101W12');
         await flush();
-        const ws = FakeWs.instances[0];
+        const ws = FakeWs.instances[0]!;
         ws.emit('open');
         return { stream, ws, onSubscribeError };
     };
@@ -119,22 +119,22 @@ describe('KisRealtimeStream', () => {
         expect(ws.url).toBe('ws://ops.koreainvestment.com:31000/tryitout');
         const frames = ws.sent.map((s) => JSON.parse(s) as { header: Record<string, string>; body: { input: Record<string, string> } });
         expect(frames.map((f) => [f.header.tr_type, f.body.input.tr_id])).toEqual([['1', 'H0IFCNT0'], ['1', 'H0IFASP0'], ['2', 'H0IFCNT0']]);
-        expect(frames[0].header).toMatchObject({ approval_key: 'ak', custtype: 'P', 'content-type': 'utf-8' });
-        expect(frames[0].body.input.tr_key).toBe('101W12');
+        expect(frames[0]!.header).toMatchObject({ approval_key: 'ak', custtype: 'P', 'content-type': 'utf-8' });
+        expect(frames[0]!.body.input.tr_key).toBe('101W12');
         stream.stop();
     });
 
     it('평문 프레임을 필드 이름으로 묶어 넘기고, PINGPONG 은 되돌려 보낸다', async () => {
         const records: KisRealtimeRecord[] = [];
         const { stream, ws } = await open(records);
-        const values = KIS_REALTIME_COLUMNS.H0IFCNT0.map((_, i) => (i === 0 ? '101W12' : String(i)));
+        const values = KIS_REALTIME_COLUMNS.H0IFCNT0!.map((_, i) => (i === 0 ? '101W12' : String(i)));
         ws.emit('message', { data: `0|H0IFCNT0|001|${values.join('^')}` });
         const ping = '{"header":{"tr_id":"PINGPONG","datetime":"20260923101500"}}';
         ws.emit('message', { data: ping });
         await flush();
 
         expect(records).toHaveLength(1);
-        expect(records[0].fields?.[KIS_REALTIME_COLUMNS.H0IFCNT0[0]]).toBe('101W12');
+        expect(records[0]!.fields?.[KIS_REALTIME_COLUMNS.H0IFCNT0![0]!]).toBe('101W12');
         expect(ws.sent.at(-1)).toBe(ping);
         stream.stop();
     });
@@ -144,12 +144,12 @@ describe('KisRealtimeStream', () => {
         const { stream, ws } = await open(records);
         stream.subscribe('H0STCNI9', 'HTSID');
         ws.emit('message', { data: JSON.stringify({ header: { tr_id: 'H0STCNI9', tr_key: 'HTSID', encrypt: 'N' }, body: { rt_cd: '0', msg1: 'SUBSCRIBE SUCCESS', output: { key: KEY, iv: IV } } }) });
-        const values = KIS_REALTIME_COLUMNS.H0STCNI0.map((_, i) => (i === 0 ? 'HTSID' : String(i)));
+        const values = KIS_REALTIME_COLUMNS.H0STCNI0!.map((_, i) => (i === 0 ? 'HTSID' : String(i)));
         ws.emit('message', { data: `1|H0STCNI9|001|${encrypt(values.join('^'))}` });
         await vi.waitFor(() => expect(records).toHaveLength(1));
 
-        expect(records[0].trId).toBe('H0STCNI9');
-        expect(records[0].fields?.[KIS_REALTIME_COLUMNS.H0STCNI0[0]]).toBe('HTSID');
+        expect(records[0]!.trId).toBe('H0STCNI9');
+        expect(records[0]!.fields?.[KIS_REALTIME_COLUMNS.H0STCNI0![0]!]).toBe('HTSID');
         stream.stop();
     });
 
@@ -169,7 +169,7 @@ describe('KisRealtimeStream', () => {
         const records: KisRealtimeRecord[] = [];
         const { stream, ws } = await open(records);
         stream.subscribe('H0STCNI0', 'HTSID');
-        const values = KIS_REALTIME_COLUMNS.H0STCNI0.map((_, i) => (i === 0 ? 'HTSID' : String(i)));
+        const values = KIS_REALTIME_COLUMNS.H0STCNI0!.map((_, i) => (i === 0 ? 'HTSID' : String(i)));
         for (const trId of ['H0STCNI0', 'H0STCNI9', 'H0GSCNI0', 'H0GSCNI9']) ws.emit('message', { data: `0|${trId}|001|${values.join('^')}` });
         await flush();
 
@@ -185,7 +185,7 @@ describe('KisRealtimeStream', () => {
         stream.subscribe('H0IFCNT0', '101W12');
         await vi.waitFor(() => expect(FakeWs.instances).toHaveLength(1));
 
-        expect(FakeWs.instances[0].url).toBe('wss://example.invalid:21000/tryitout');
+        expect(FakeWs.instances[0]!.url).toBe('wss://example.invalid:21000/tryitout');
         stream.stop();
     });
 
@@ -199,12 +199,12 @@ describe('KisRealtimeStream', () => {
 
 describe('다건 프레임의 레코드 길이', () => {
     it('값 수가 건수로 나눠떨어지면 그 몫으로 자른다 — KIS 가 필드를 뒤에 더해도 두 번째 건이 어긋나지 않는다', () => {
-        const columns = KIS_REALTIME_COLUMNS.H0IFCNT0;
+        const columns = KIS_REALTIME_COLUMNS.H0IFCNT0!;
         const one = [...columns.map((_, i) => String(i)), 'extra'];
         const records = splitKisRealtimeRecords('H0IFCNT0', 2, [...one, ...one.map((v) => `b${v}`)].join('^'));
 
-        expect(records[1].fields?.[columns[0]]).toBe('b0');
-        expect(records[1].values).toHaveLength(columns.length + 1);
+        expect(records[1]!.fields?.[columns[0]!]).toBe('b0');
+        expect(records[1]!.values).toHaveLength(columns.length + 1);
     });
 });
 
@@ -219,14 +219,14 @@ describe('KisRealtimeStream 연결 수명', () => {
             const seen: string[] = [];
             const stream = newStream({
                 onRecord: (r) => {
-                    seen.push(r.values[0]);
+                    seen.push(r.values[0]!);
                     if (seen.length === 1) throw new Error('boom');
                 },
             });
             stream.subscribe('H0XXXXX0', 'K');
             await flush();
-            FakeWs.instances[0].emit('open');
-            FakeWs.instances[0].emit('message', { data: '0|H0XXXXX0|002|a^b^c^d' });
+            FakeWs.instances[0]!.emit('open');
+            FakeWs.instances[0]!.emit('message', { data: '0|H0XXXXX0|002|a^b^c^d' });
             await flush();
             await flush();
 
@@ -298,11 +298,11 @@ describe('KisRealtimeStream 연결 수명', () => {
             const stream = newStream({ getApprovalKey });
             stream.subscribe('H0IFCNT0', '101W12');
             await vi.advanceTimersByTimeAsync(0);
-            const first = FakeWs.instances[0];
+            const first = FakeWs.instances[0]!;
             first.emit('open');
             first.emit('close', { code: 1006 });
             await vi.advanceTimersByTimeAsync(2_000);
-            const second = FakeWs.instances[1];
+            const second = FakeWs.instances[1]!;
 
             expect(first.readyState).toBe(3);
             first.emit('close', { code: 1006 });
@@ -324,7 +324,7 @@ describe('KisRealtimeStream 연결 수명', () => {
         const stream = newStream({ onSubscribeError });
         stream.subscribe('H0STCNT0', '005930');
         await flush();
-        const ws = FakeWs.instances[0];
+        const ws = FakeWs.instances[0]!;
         ws.emit('open');
         ws.emit('message', { data: JSON.stringify({ header: { tr_id: 'H0STCNT0', tr_key: '005930' }, body: { rt_cd: '1', msg1: 'MAX SUBSCRIBE OVER' } }) });
 

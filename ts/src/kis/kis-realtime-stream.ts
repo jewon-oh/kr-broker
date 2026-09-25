@@ -229,8 +229,8 @@ export class KisRealtimeStream {
 
     private async onData(raw: string): Promise<void> {
         const parts = raw.split('|');
-        if (parts.length < 4) return;
         const [flag, trId, countText] = parts;
+        if (parts.length < 4 || trId === undefined) return;
         let payload = parts.slice(3).join('|');
         // KIS 실시간 연결은 평문이다. 체결통보는 늘 암호화되어 오므로, 평문 체결통보는 경로 위에서 끼워 넣은 프레임으로 보고 버린다.
         if (flag !== '1' && ENCRYPTED_NOTICE_TRS.has(trId)) {

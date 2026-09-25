@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 
 import { installFakeToss, jsonOk, makeToss, type FakeToss } from './support/toss-fake';
 
-const requestedQuery = (fake: FakeToss): URLSearchParams => fake.requestsTo('GET /api/v1/stocks/005930/investor-trading')[0].query;
+const requestedQuery = (fake: FakeToss): URLSearchParams => fake.requestsTo('GET /api/v1/stocks/005930/investor-trading')[0]!.query;
 
 describe('fetchStockInvestorTrading', () => {
     it('기록과 다음 페이지 커서를 그대로 옮긴다', async () => {
@@ -56,8 +56,8 @@ describe('fetchStockInvestorTrading', () => {
 
         const result = await makeToss().fetchStockInvestorTrading('005930/KRW');
 
-        expect(result.records[0].individual).toBeNull();
-        expect(result.records[0].otherCorporation).toBeNull();
+        expect(result.records[0]!.individual).toBeNull();
+        expect(result.records[0]!.otherCorporation).toBeNull();
     });
 
     it('데이터가 없으면 빈 배열과 null 커서를 돌려준다', async () => {

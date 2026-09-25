@@ -233,7 +233,7 @@ describe('safeBalance', () => {
 
     it('부채가 있으면 debt 사전도 만든다', () => {
         const balances = ex.safeBalance({ info: {}, KRW: { total: '5', free: '5', debt: '2' } });
-        expect(balances.KRW.debt).toBe(2);
+        expect(balances.KRW!.debt).toBe(2);
         expect(balances.debt).toEqual({ KRW: 2 });
         expect(ex.safeBalance({ info: {}, KRW: { total: '5', free: '5' } }).debt).toBeUndefined();
     });

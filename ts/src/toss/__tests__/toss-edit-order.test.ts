@@ -7,7 +7,7 @@ import { describe, it, expect } from 'vitest';
 import { ArgumentsRequired, NotSupported, OrderOutcomeUnknown } from '../../base';
 import { errorReply, installFakeToss, jsonOk, makeToss, networkFailure, type FakeToss } from './support/toss-fake';
 
-const modified = (fake: FakeToss, path: string): Record<string, unknown> => fake.requestsTo(`POST /api/v1/${path}`)[0].body as Record<string, unknown>;
+const modified = (fake: FakeToss, path: string): Record<string, unknown> => fake.requestsTo(`POST /api/v1/${path}`)[0]!.body as Record<string, unknown>;
 
 /** 미국 정정 전에 읽는 주문 상세(`GET /orders/{orderId}`). */
 const usOrder = (quantity: string, filledQuantity: string) => jsonOk({

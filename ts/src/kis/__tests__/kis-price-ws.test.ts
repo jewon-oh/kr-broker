@@ -65,7 +65,7 @@ describe('KisPriceWs 구독', () => {
         const kws = newWs();
         kws.start([{ trId: 'H0STCNT0', trKey: '005930' }, { trId: 'H0STCNT0', trKey: '000660' }]);
         await flush();
-        const ws = FakeWs.instances[0];
+        const ws = FakeWs.instances[0]!;
         ws.emit('open');
 
         kws.updateSubs([{ trId: 'H0STCNT0', trKey: '000660' }, { trId: 'H0STASP0', trKey: '000660' }]);
@@ -82,7 +82,7 @@ describe('KisPriceWs 구독', () => {
         const kws = newWs({ onSubscribeError });
         kws.start([{ trId: 'H0STCNT0', trKey: '005930' }]);
         await flush();
-        const ws = FakeWs.instances[0];
+        const ws = FakeWs.instances[0]!;
         ws.emit('open');
 
         ws.emit('message', { data: JSON.stringify({ header: { tr_id: 'H0STCNT0', tr_key: '005930' }, body: { rt_cd: '0', msg1: 'SUBSCRIBE SUCCESS' } }) });
@@ -98,7 +98,7 @@ describe('KisPriceWs 구독', () => {
         const kws = newWs();
         kws.start([]);
         await flush();
-        FakeWs.instances[0].emit('message', { data: JSON.stringify({ header: { tr_id: 'H0STCNT0', tr_key: '000660' }, body: { rt_cd: '1', msg1: 'MAX SUBSCRIBE OVER' } }) });
+        FakeWs.instances[0]!.emit('message', { data: JSON.stringify({ header: { tr_id: 'H0STCNT0', tr_key: '000660' }, body: { rt_cd: '1', msg1: 'MAX SUBSCRIBE OVER' } }) });
 
         expect(logger.warn).toHaveBeenCalledWith(expect.objectContaining({ trKey: '000660' }), '[KisPriceWs] 구독 거부');
         kws.stop();
@@ -115,7 +115,7 @@ describe('KisPriceWs 구독', () => {
         kws.start([]);
         await flush();
 
-        expect(() => FakeWs.instances[0].emit('message', { data: '0|H0STCNT0|002|005930^093000^79000^5^100^2.5^000660^093000^180000^5^100^1.5' }))
+        expect(() => FakeWs.instances[0]!.emit('message', { data: '0|H0STCNT0|002|005930^093000^79000^5^100^2.5^000660^093000^180000^5^100^1.5' }))
             .not.toThrow();
         expect(seen).toEqual([79000, 180000]);
         kws.stop();
@@ -129,7 +129,7 @@ describe('KisPriceWs 구독', () => {
         kws.start([]);
         await vi.waitFor(() => expect(FakeWs.instances).toHaveLength(1));
 
-        FakeWs.instances[0].emit('message', { data: JSON.stringify({ header: { tr_id: 'H0STCNT0', tr_key: '000660' }, body: { rt_cd: '1', msg1: 'MAX SUBSCRIBE OVER' } }) });
+        FakeWs.instances[0]!.emit('message', { data: JSON.stringify({ header: { tr_id: 'H0STCNT0', tr_key: '000660' }, body: { rt_cd: '1', msg1: 'MAX SUBSCRIBE OVER' } }) });
 
         expect(onSubscribeError).toHaveBeenCalledWith('H0STCNT0', '000660', 'MAX SUBSCRIBE OVER');
         kws.stop();
@@ -156,11 +156,11 @@ describe('KisPriceWs 연결 수명', () => {
         const kws = newWs({ getApprovalKey });
         kws.start([{ trId: 'H0STCNT0', trKey: '005930' }]);
         await vi.advanceTimersByTimeAsync(0);
-        const first = FakeWs.instances[0];
+        const first = FakeWs.instances[0]!;
         first.emit('open');
         first.emit('close', { code: 1006 });
         await vi.advanceTimersByTimeAsync(2_000);
-        const second = FakeWs.instances[1];
+        const second = FakeWs.instances[1]!;
 
         expect(first.closeCallCount).toBe(1);
         first.emit('close', { code: 1006 });

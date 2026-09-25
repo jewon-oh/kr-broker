@@ -103,7 +103,7 @@ describe('KisPriceWs — error/close 이벤트 필드', () => {
         kws.start([]);
         await vi.advanceTimersByTimeAsync(0);
 
-        const ws = FakeWs.instances[0];
+        const ws = FakeWs.instances[0]!;
         expect(ws, 'connect() 가 WebSocket 인스턴스를 만들지 않았다').toBeTruthy();
 
         const boom = new Error('ECONNRESET');
@@ -124,7 +124,7 @@ describe('KisPriceWs — error/close 이벤트 필드', () => {
         await vi.advanceTimersByTimeAsync(0);
 
         expect(getApprovalKey).toHaveBeenCalledTimes(1);
-        const ws = FakeWs.instances[0];
+        const ws = FakeWs.instances[0]!;
         ws.errorOnClose = true;
 
         // close 는 이 테스트 끝까지 한 번도 전달하지 않는다 — 실측이 재현한 그 상태 그대로.
@@ -158,7 +158,7 @@ describe('KisPriceWs — error/close 이벤트 필드', () => {
         await vi.advanceTimersByTimeAsync(0);
 
         expect(getApprovalKey).toHaveBeenCalledTimes(1);
-        const ws = FakeWs.instances[0];
+        const ws = FakeWs.instances[0]!;
 
         ws.emit('close', { code: 1006, reason: 'abnormal closure', wasClean: false });
 

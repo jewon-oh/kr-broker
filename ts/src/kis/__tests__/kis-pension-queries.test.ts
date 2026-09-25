@@ -23,7 +23,7 @@ beforeEach(() => {
 const find = (path: string): number => mockFetch.mock.calls.findIndex((c) => String(c[0]).includes(path));
 
 /** 요청 URL 의 쿼리를 객체로. */
-const queryOf = (index: number): Record<string, string> => Object.fromEntries(new URL(String(mockFetch.mock.calls[index][0])).searchParams);
+const queryOf = (index: number): Record<string, string> => Object.fromEntries(new URL(String(mockFetch.mock.calls[index]![0])).searchParams);
 
 describe('퇴직연금 잔고', () => {
     it('fetchPensionBalance 는 예제값을 보내고 보유 종목과 예수금 요약을 정리한다', async () => {
@@ -108,9 +108,9 @@ describe('퇴직연금 주문과 매수가능', () => {
 
         const calls = mockFetch.mock.calls.flatMap((c, i) => (String(c[0]).includes('/trading/pension/inquire-psbl-order') ? [i] : []));
         expect(calls).toHaveLength(2);
-        expect(headersOf(mockFetch, calls[0]).tr_id).toBe('TTTC0503R');
-        expect(queryOf(calls[0])).toEqual({ ...ACCOUNT, PDNO: '069500', ACCA_DVSN_CD: '00', CMA_EVLU_AMT_ICLD_YN: 'Y', ORD_UNPR: '30800', ORD_DVSN: '00' });
-        expect(queryOf(calls[1])).toMatchObject({ ORD_UNPR: '0', ORD_DVSN: '01' });
+        expect(headersOf(mockFetch, calls[0]!).tr_id).toBe('TTTC0503R');
+        expect(queryOf(calls[0]!)).toEqual({ ...ACCOUNT, PDNO: '069500', ACCA_DVSN_CD: '00', CMA_EVLU_AMT_ICLD_YN: 'Y', ORD_UNPR: '30800', ORD_DVSN: '00' });
+        expect(queryOf(calls[1]!)).toMatchObject({ ORD_UNPR: '0', ORD_DVSN: '01' });
         expect(limit).toMatchObject({ orderableCash: 500000, reusableAmount: 0, calculationPrice: 30800, maxBuyAmount: 492800, maxBuyQuantity: 16 });
         expect(market.maxBuyQuantity).toBe(15);
     });

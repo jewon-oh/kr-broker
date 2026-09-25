@@ -31,8 +31,8 @@ describe('fetchForeignBrokers', () => {
         const [row] = await newExchange().fetchForeignBrokers('005930/KRW');
 
         expect(trBody(mockFetch, KBSEC_TR.FOREIGN_BROKERS).dataBody).toEqual({ excg_clsf: '1', is_cd: '005930' });
-        expect(row.sell).toEqual({ code: '035', name: '매도035', quantity: 1200, change: -300, ratio: 12.5 });
-        expect(row.buy).toEqual({ code: '036', name: '매수036', quantity: 900, change: 100, ratio: 9.25 });
+        expect(row!.sell).toEqual({ code: '035', name: '매도035', quantity: 1200, change: -300, ratio: 12.5 });
+        expect(row!.buy).toEqual({ code: '036', name: '매수036', quantity: 900, change: 100, ratio: 9.25 });
     });
 
     it('매도와 매수 거래원이 모두 빈 줄은 거르고, 한쪽만 있는 줄은 남긴다', async () => {

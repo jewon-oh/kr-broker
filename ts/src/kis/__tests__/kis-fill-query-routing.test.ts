@@ -29,7 +29,7 @@ afterEach(() => {
 
 /** 호출 순번의 쿼리 값. */
 function query(index: number, key: string): string | null {
-    return new URL(String(mockFetch.mock.calls[index][0])).searchParams.get(key);
+    return new URL(String(mockFetch.mock.calls[index]![0])).searchParams.get(key);
 }
 
 describe('fetchMyTrades 가 시장으로 갈린다', () => {
@@ -119,7 +119,7 @@ describe('국내 체결조회 — 조회일은 KST', () => {
 
         const indexes = mockFetch.mock.calls.map((c, i) => (String(c[0]).includes('inquire-daily-ccld') ? i : -1)).filter((i) => i >= 0);
         expect(indexes.map((i) => headersOf(mockFetch, i).tr_id)).toEqual(['TTTC0081R', 'VTTC0081R']);
-        expect(query(indexes[0], 'EXCG_ID_DVSN_CD')).toBe('ALL');
+        expect(query(indexes[0]!, 'EXCG_ID_DVSN_CD')).toBe('ALL');
     });
 
     it('since 가 있으면 그 날부터 조회한다', async () => {
@@ -145,8 +145,8 @@ describe('국내 체결조회 — 조회일은 KST', () => {
 
         expect(trades).toHaveLength(1);
         expect(trades[0]).toMatchObject({ order: 'D-1', symbol: '005930/KRW', side: 'sell', price: 70100, amount: 10, cost: 701000 });
-        expect(trades[0].fee.cost).toBeUndefined();
-        expect(trades[0].timestamp).toBe(Date.parse('2026-09-21T09:30:15+09:00'));
+        expect(trades[0]!.fee.cost).toBeUndefined();
+        expect(trades[0]!.timestamp).toBe(Date.parse('2026-09-21T09:30:15+09:00'));
     });
 });
 

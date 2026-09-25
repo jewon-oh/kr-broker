@@ -36,8 +36,8 @@ describe('fetchInvestorTrading', () => {
         const [record] = await newKis().fetchInvestorTrading('005930/KRW');
 
         const call = mockFetch.mock.calls.findIndex((c) => String(c[0]).includes(INVESTOR_PATH));
-        expect(String(mockFetch.mock.calls[call][0])).toContain('FID_INPUT_ISCD=005930');
-        expect(String(mockFetch.mock.calls[call][0])).toContain('FID_COND_MRKT_DIV_CODE=J');
+        expect(String(mockFetch.mock.calls[call]![0])).toContain('FID_INPUT_ISCD=005930');
+        expect(String(mockFetch.mock.calls[call]![0])).toContain('FID_COND_MRKT_DIV_CODE=J');
         expect(headersOf(mockFetch, call).tr_id).toBe('FHKST01010900');
         expect(record).toMatchObject({
             businessDate: '20260922', close: 71000, change: 500, changeSign: '2',
@@ -55,7 +55,7 @@ describe('fetchInvestorTrading', () => {
         const records = await newKis().fetchInvestorTrading('005930/KRW');
 
         expect(records).toHaveLength(1);
-        expect(records[0].businessDate).toBe('20260922');
+        expect(records[0]!.businessDate).toBe('20260922');
     });
 
     it('해외 종목은 BadSymbol이고 요청을 보내지 않는다', async () => {

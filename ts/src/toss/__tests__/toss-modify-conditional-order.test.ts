@@ -10,7 +10,7 @@ import { errorReply, installFakeToss, jsonOk, makeToss, type FakeToss } from './
 
 const expireDate = '2026-08-30';
 const modifiedBody = (fake: FakeToss): Record<string, unknown> =>
-    fake.requestsTo('POST /api/v1/conditional-orders/COND-1/modify')[0].body as Record<string, unknown>;
+    fake.requestsTo('POST /api/v1/conditional-orders/COND-1/modify')[0]!.body as Record<string, unknown>;
 
 describe('editOrder — 조건주문 정정', () => {
     it('SINGLE — 조건 전체를 다시 보내고 새 conditionalOrderId 를 돌려준다', async () => {

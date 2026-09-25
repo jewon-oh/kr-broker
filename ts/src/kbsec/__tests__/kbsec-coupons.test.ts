@@ -42,7 +42,7 @@ describe('fetchCoupons', () => {
             code: 'C001', name: '국내주식 수수료 우대', statusCode: '1', amount: 10000, remainingDays: 12,
             startDate: '20260901', endDate: '20261004', usedDate: '', applicableProduct: '국내주식',
         });
-        expect(first.info).toHaveProperty('knd_ccd', '01');
+        expect(first!.info).toHaveProperty('knd_ccd', '01');
     });
 
     it('쿠폰코드와 쿠폰명이 모두 빈 행은 거르고, 하나라도 있으면 남긴다', async () => {

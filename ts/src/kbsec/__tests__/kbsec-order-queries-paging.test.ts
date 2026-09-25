@@ -65,11 +65,11 @@ describe('국내 주문·체결 조회(SSQM2341)의 연속조회', () => {
         const open = await newExchange().fetchOpenOrders('005930/KRW');
 
         expect(open.map((o) => o.id)).toEqual(['0000000002']);
-        expect(seen[KBSEC_TR.TRADES_KR].map((b) => [b.nxt_key, b.cn_clsf])).toEqual([['', '0'], ['K2', '1']]);
+        expect(seen[KBSEC_TR.TRADES_KR]!.map((b) => [b.nxt_key, b.cn_clsf])).toEqual([['', '0'], ['K2', '1']]);
     });
 
     it('페이지 상한에서 잘리면 일부만 돌려주지 않고 던진다', async () => {
-        serve({ [KBSEC_TR.TRADES_KR]: (b) => ok({ nxt_key: `K${Number(b.nxt_key.slice(1) || 0) + 1}`, Record1: [pending('0000000001', 'A005930')] }) });
+        serve({ [KBSEC_TR.TRADES_KR]: (b) => ok({ nxt_key: `K${Number(b.nxt_key!.slice(1) || 0) + 1}`, Record1: [pending('0000000001', 'A005930')] }) });
 
         const exchange = new kbsec({ apiKey: 'kb-app-key-123456', secret: 'kb-secret', rateLimit: 0, options: { holdingsMaxPages: 2 } });
 
@@ -84,7 +84,7 @@ describe('해외 체결 조회(SPQM2103)의 날짜 축', () => {
 
         await newExchange().fetchMyTrades('AAPL/USD');
 
-        expect(seen[KBSEC_TR.ORDERS_US][0].ordr_dt).toBe('20260922');
+        expect(seen[KBSEC_TR.ORDERS_US]![0]!.ordr_dt).toBe('20260922');
     });
 
     it('★해외 조회의 휴장일 되감기가 같은 날 국내 조회 날짜를 밀어내지 않는다(되감기 캐시는 시장별)', async () => {
@@ -99,8 +99,8 @@ describe('해외 체결 조회(SPQM2103)의 날짜 축', () => {
         vi.setSystemTime(new Date('2026-09-23T00:30:00Z'));   // 같은 날 09:30 KST
         await exchange.fetchOpenOrders('005930/KRW');
 
-        expect(seen[KBSEC_TR.ORDERS_US].map((b) => b.ordr_dt)).toEqual(['20260922', '20260921']);
-        expect(seen[KBSEC_TR.TRADES_KR].map((b) => b.ordr_dt)).toEqual(['20260923']);
+        expect(seen[KBSEC_TR.ORDERS_US]!.map((b) => b.ordr_dt)).toEqual(['20260922', '20260921']);
+        expect(seen[KBSEC_TR.TRADES_KR]!.map((b) => b.ordr_dt)).toEqual(['20260923']);
     });
 });
 
@@ -125,7 +125,7 @@ describe('주문 경로', () => {
 
         await newExchange().cancelAllOrders('005930/KRW');
 
-        expect(seen[KBSEC_TR.CANCEL_KR][0]).toMatchObject({ orgn_ordr_no: '0000000007', sor_ordr_ccd: 'S' });
+        expect(seen[KBSEC_TR.CANCEL_KR]![0]).toMatchObject({ orgn_ordr_no: '0000000007', sor_ordr_ccd: 'S' });
         expect(seen[KBSEC_TR.TRADES_KR]).toHaveLength(1);   // 주문마다 목록을 다시 조회하지 않는다
     });
 });

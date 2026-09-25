@@ -156,13 +156,13 @@ describe('토큰 발급 요청(클래스)', () => {
         const fake = installFakeToss({ 'GET /api/v1/prices': jsonOk([{ symbol: '005930', lastPrice: '1' }]) }, tokenOk('tok-abc'));
         await makeToss({ apiKey: CLIENT, secret: 'toss-secret' }).fetchTicker('005930');
         const [request] = fake.requests(true);
-        expect(request.method).toBe('POST');
-        expect(request.path).toBe('/oauth2/token');
-        expect(request.headers['Content-Type']).toBe('application/x-www-form-urlencoded');
-        expect(request.rawBody).toContain('grant_type=client_credentials');
-        expect(request.rawBody).toContain(`client_id=${CLIENT}`);
-        expect(request.rawBody).toContain('client_secret=toss-secret');
-        expect(fake.requestsTo('GET /api/v1/prices')[0].headers.Authorization).toBe('Bearer tok-abc');
+        expect(request!.method).toBe('POST');
+        expect(request!.path).toBe('/oauth2/token');
+        expect(request!.headers['Content-Type']).toBe('application/x-www-form-urlencoded');
+        expect(request!.rawBody).toContain('grant_type=client_credentials');
+        expect(request!.rawBody).toContain(`client_id=${CLIENT}`);
+        expect(request!.rawBody).toContain('client_secret=toss-secret');
+        expect(fake.requestsTo('GET /api/v1/prices')[0]!.headers.Authorization).toBe('Bearer tok-abc');
     });
 
     it('한 번 받은 토큰은 여러 요청에 다시 쓴다', async () => {

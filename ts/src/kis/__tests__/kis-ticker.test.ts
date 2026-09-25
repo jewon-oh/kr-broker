@@ -107,7 +107,7 @@ describe('fetchTicker — 심볼 라우팅 (base 추출)', () => {
             },
         }));
         await newKis().fetchTicker(symbol);
-        return String(mockFetch.mock.calls[1][0]);
+        return String(mockFetch.mock.calls[1]![0]);
     }
 
     it("bare '005930' → 국내 inquire-price(FID_INPUT_ISCD=005930)", async () => {
