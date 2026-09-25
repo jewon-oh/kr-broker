@@ -121,6 +121,9 @@ describe('market() — 심볼 모양으로 종목을 만든다', () => {
         expect(exchange.market('AAPL/USD')).toMatchObject({ id: 'AAPL', symbol: 'AAPL/USD', quote: 'USD' });
         expect(exchange.market('aapl').symbol).toBe('AAPL/USD');
         expect(exchange.market('BRK.B/USD').id).toBe('BRK.B');
+        // 클래스 주식의 슬래시 표기도 같은 종목이다. 첫 슬래시에서 잘라 BRK 로 만들지 않는다.
+        expect(exchange.market('BRK/B')).toMatchObject({ id: 'BRK.B', symbol: 'BRK.B/USD' });
+        expect(exchange.market('BRK/B/USD').id).toBe('BRK.B');
     });
 
     it('심볼이 없으면 ArgumentsRequired, 읽을 수 없으면 BadSymbol 이다', () => {

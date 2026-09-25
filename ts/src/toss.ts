@@ -103,7 +103,7 @@ import {
 } from './base';
 import { confirmExecution, type ExecutionSnapshot } from './execution-confirm';
 import { buildExtendedSessionLimit } from './extended-session-limit';
-import type { StockMarketGroup } from './broker-market-group';
+import { symbolBaseCode, type StockMarketGroup } from './broker-market-group';
 import { candlePeriodUtcMs, isDailyOrLongerTimeframe } from './broker-time';
 import { logger } from './logger';
 import type { UsdKrwRateOption } from './options';
@@ -889,9 +889,12 @@ export class toss extends Exchange {
 
     // ============ 종목 ============
 
-    /** 심볼(`005930`, `005930/KRW`, `AAPL`)에서 종목을 만든다. 종목을 불러오지 않았을 때 코드의 모양으로 시장을 판별한다. */
+    /**
+     * 심볼(`005930`, `005930/KRW`, `AAPL`)에서 종목을 만든다. 종목을 불러오지 않았을 때 코드의 모양으로 시장을 판별한다.
+     * 클래스 주식의 `BRK/B` 는 통합 표기 `BRK.B` 로 바꾼다.
+     */
     private marketFromSymbol(symbol: string): MarketInterface {
-        const [code = ''] = symbol.split('/');
+        const code = symbolBaseCode(symbol);
         const country = tossMarketCountry(code);
         const quote = country === 'KR' ? 'KRW' : 'USD';
         return this.safeMarketStructure({

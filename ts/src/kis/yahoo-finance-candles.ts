@@ -15,6 +15,7 @@ import type { HttpResponseLike } from '../base/Exchange';
 import { logger } from '../logger';
 import { resampleCandles } from './candle-resample';
 import { candlePeriodUtcMs, isDailyOrLongerTimeframe, timeframeToMs } from '../broker-time';
+import { symbolBaseCode } from '../broker-market-group';
 import { isKrxDomesticCode } from './kis-types';
 import { sliceCandleWindow } from './kis-candle-pagination';
 
@@ -424,14 +425,14 @@ function toYahooRange(windowMs: number, maxRangeMs?: number): string {
 /**
  * 종목코드 → Yahoo Finance 티커 변환
  * - 한국 주식: 005930 → 005930.KS (KOSPI), KOSDAQ 종목은 058470 → 058470.KQ
- * - 미국 주식: AAPL → AAPL (접미사 없음). 클래스 주식의 점은 야후 표기인 하이픈으로 바꾼다(BRK.B → BRK-B)
+ * - 미국 주식: AAPL → AAPL (접미사 없음). 클래스 주식의 점과 슬래시는 야후 표기인 하이픈으로 바꾼다(BRK.B, BRK/B → BRK-B)
  * - `stock:` 접두사와 `/KRW` 같은 접미사는 뗀다
  */
 function toYahooTicker(stockCode: string, krMarket?: 'KOSPI' | 'KOSDAQ'): string {
     // 'stock:' 접두사 제거
     let code = stockCode.startsWith('stock:') ? stockCode.slice(6) : stockCode;
-    // '/' 포함 시 종목코드만 추출
-    code = code.includes('/') ? code.slice(0, code.indexOf('/')) : code;
+    // 끝의 '/KRW'·'/USD' 를 떼고, 클래스 주식의 '/' 는 '.' 로 바꾼다
+    code = symbolBaseCode(code);
     // 이미 .KS/.KQ 접미사 포함 시 그대로 반환
     if (code.endsWith('.KS') || code.endsWith('.KQ')) return code;
     // 국내 KR 코드(6자리 숫자·신형 영숫자) → 한국 주식 (.KS/.KQ 접미사)

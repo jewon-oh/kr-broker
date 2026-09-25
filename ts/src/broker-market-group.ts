@@ -1,5 +1,5 @@
 /**
- * @fileoverview 증권사 ID 판정과 상장 시장 → 시장 그룹(KR/US) 판정 — **어떤 모듈도 import 하지 않는다.**
+ * @fileoverview 증권사 ID 판정, 심볼의 종목코드, 상장 시장 → 시장 그룹(KR/US) 판정 — **어떤 모듈도 import 하지 않는다.**
  *
  * 거래 시간 판정(`trading-hours.ts`)이 쓰는 순수 표와 함수를 이 파일에 독립적으로 둔다.
  */
@@ -13,6 +13,14 @@ export const STOCK_BROKER_EXCHANGES: ReadonlySet<string> = new Set(['kis', 'toss
 /** `exchangeId` 가 이 패키지가 다루는 증권사인가. */
 export function isStockBrokerExchange(exchangeId: string): boolean {
     return STOCK_BROKER_EXCHANGES.has(exchangeId);
+}
+
+/**
+ * 심볼에서 종목코드를 꺼낸다. 끝의 `/KRW`·`/USD` 만 떼고, 남은 `/` 는 클래스 주식 표기로 보고 통합 표기의 `.` 로 바꾼다
+ * (`BRK/B` → `BRK.B`, `BRK.B/USD` → `BRK.B`). 대소문자와 공백은 그대로 둔다.
+ */
+export function symbolBaseCode(symbol: string): string {
+    return symbol.replace(/\/(KRW|USD)$/, '').replaceAll('/', '.');
 }
 
 /**
