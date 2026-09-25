@@ -2750,6 +2750,20 @@
             "error": { "class": "ArgumentsRequired" }
         },
         {
+            "description": "OCO 의 둘째 조건에 triggerPrice 가 없으면 트리거 없는 조건을 보내지 않고 ArgumentsRequired 다",
+            "method": "createOrder",
+            "args": ["005930", "limit", "sell", 10, 79900, { "triggerPrice": 80000, "conditionalType": "OCO", "expireDate": "2026-04-30", "second": { "side": "sell", "price": 64900 } }],
+            "http": [],
+            "error": { "class": "ArgumentsRequired" }
+        },
+        {
+            "description": "조건주문의 triggerPrice 가 0 이하면 요청 없이 InvalidOrder 다",
+            "method": "editOrder",
+            "args": ["COND-0004", "005930", "market", "sell", 10, null, { "trigger": true, "triggerPrice": 0, "expireDate": "2026-04-30" }],
+            "http": [],
+            "error": { "class": "InvalidOrder" }
+        },
+        {
             "description": "editOrder 국내는 가격과 수량을 함께 정정하고 새 주문번호를 돌려준다",
             "now": 1774400400000,
             "method": "editOrder",

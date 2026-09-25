@@ -129,7 +129,9 @@ import {
     type TossConditionalOrder,
     type TossConditionalOrderCreateRequest,
     type TossConditionalOrderCreateResponse,
+    type TossConditionalOrderFields,
     type TossConditionalOrderLeg,
+    type TossConditionalOrderModifyRequest,
     type TossConditionalOrderType,
     type TossHoldingsOverview,
     type TossInvestorTradingRecord,
@@ -156,6 +158,23 @@ import {
     type TossUsMarketCalendar,
     type TossUsSession,
 } from './toss/toss-types';
+
+/** 조건주문의 조건 하나(요청 전 모양). */
+interface TossConditionalLeg {
+    side: OrderSide;
+    triggerPrice: number;
+    orderPrice: Num;
+}
+
+/** `planConditionalOrder` 가 검사하고 정리한 조건주문. */
+interface TossConditionalPlan {
+    conditionalType: TossConditionalOrderType;
+    orderType: 'LIMIT' | 'MARKET';
+    expireDate: string;
+    first: TossConditionalLeg;
+    second: TossConditionalLeg | undefined;
+    clientOrderId: Str;
+}
 
 // ============ 상수 ============
 
@@ -1861,14 +1880,7 @@ export class toss extends Exchange {
         side: OrderSide,
         price: Num,
         params: Dict,
-    ): {
-        conditionalType: TossConditionalOrderType;
-        orderType: 'LIMIT' | 'MARKET';
-        expireDate: string;
-        first: { side: OrderSide; triggerPrice: number; orderPrice: Num };
-        second: { side: OrderSide; triggerPrice: number; orderPrice: Num } | undefined;
-        clientOrderId: Str;
-    } {
+    ): TossConditionalPlan {
         const conditionalType = (this.safeStringUpper(params, 'conditionalType') ?? 'SINGLE') as TossConditionalOrderType;
         if (conditionalType !== 'SINGLE' && conditionalType !== 'OCO' && conditionalType !== 'OTO') {
             throw new InvalidOrder(`${this.id} createOrder() conditionalType must be SINGLE, OCO or OTO`);
@@ -1877,11 +1889,11 @@ export class toss extends Exchange {
         const expireDate = this.safeString(params, 'expireDate');
         if (expireDate === undefined) throw new ArgumentsRequired(`${this.id} 조건주문에는 expireDate(YYYY-MM-DD)가 필요하다`);
 
-        const first = { side, triggerPrice: this.safeNumber(params, 'triggerPrice') as number, orderPrice: price };
+        const first: TossConditionalLeg = { side, triggerPrice: this.conditionalTriggerPrice(params, 'triggerPrice'), orderPrice: price };
         const secondParams = this.safeDict(params, 'second');
-        const second = secondParams === undefined ? undefined : {
-            side: this.safeStringLower(secondParams, 'side') ?? (conditionalType === 'OTO' ? (side === 'buy' ? 'sell' : 'buy') : side),
-            triggerPrice: this.safeNumber(secondParams, 'triggerPrice') as number,
+        const second: TossConditionalLeg | undefined = secondParams === undefined ? undefined : {
+            side: (this.safeStringLower(secondParams, 'side') ?? (conditionalType === 'OTO' ? (side === 'buy' ? 'sell' : 'buy') : side)) as OrderSide,
+            triggerPrice: this.conditionalTriggerPrice(secondParams, 'second.triggerPrice'),
             orderPrice: this.safeNumber(secondParams, 'price'),
         };
 
@@ -1900,6 +1912,39 @@ export class toss extends Exchange {
         return { conditionalType, orderType, expireDate, first, second, clientOrderId: this.safeString(params, 'clientOrderId') };
     }
 
+    /** 조건의 트리거 가격. 없거나 숫자가 아니면 `ArgumentsRequired`, 0 이하면 `InvalidOrder` 다. 빠진 채로 보내면 트리거 없는 조건이 나간다. */
+    private conditionalTriggerPrice(source: Dict, label: string): number {
+        const value = this.safeNumber(source, 'triggerPrice');
+        if (value === undefined) {
+            throw new ArgumentsRequired(`${this.id} 조건주문의 ${label} 가 없거나 숫자가 아니다: ${this.safeString(source, 'triggerPrice')}`);
+        }
+        if (!(value > 0) || !Number.isFinite(value)) throw new InvalidOrder(`${this.id} 조건주문의 ${label} 는 0 보다 커야 한다: ${value}`);
+        return value;
+    }
+
+    /** 조건주문 등록과 정정이 같이 보내는 필드(수량, 호가유형, 만료일, 감시조건, 고액주문 확인). */
+    private async conditionalOrderFields(
+        market: MarketInterface, amount: number, plan: TossConditionalPlan,
+    ): Promise<TossConditionalOrderFields> {
+        const { conditionalType, orderType, expireDate, first, second } = plan;
+        const toLeg = (leg: TossConditionalLeg): TossConditionalLegRequest => ({
+            orderSide: leg.side === 'sell' ? 'SELL' : 'BUY',
+            triggerPrice: this.numberToString(leg.triggerPrice),
+            ...(orderType === 'LIMIT' && leg.orderPrice !== undefined ? { orderPrice: this.numberToString(leg.orderPrice) } : {}),
+        });
+        const fields: TossConditionalOrderFields = {
+            type: conditionalType,
+            quantity: this.numberToString(amount),
+            orderType,
+            expireDate,
+            first: toLeg(first),
+            ...(second !== undefined ? { second: toLeg(second) } : {}),
+        };
+        // 고액주문 확인은 첫 조건의 명목가로 본다(지정가는 주문가, 시장가는 트리거 가격 기준).
+        if (await this.isHighValue(amount * (first.orderPrice ?? first.triggerPrice), this.countryOf(market))) fields.confirmHighValueOrder = true;
+        return fields;
+    }
+
     /** 조건주문 인자만 검사한다(요청은 보내지 않는다). 모의 주문처럼 등록 없이 인자가 맞는지 확인할 때 쓴다. 맞지 않으면 던진다. */
     validateConditionalOrder(type: OrderType, side: OrderSide, price: Num, params: Dict): void {
         this.planConditionalOrder(type, side, price, params);
@@ -1913,25 +1958,13 @@ export class toss extends Exchange {
         price: Num,
         params: Dict,
     ): Promise<Order> {
-        const { conditionalType, orderType, expireDate, first, second, clientOrderId } = this.planConditionalOrder(type, side, price, params);
-
-        const toLeg = (leg: { side: OrderSide; triggerPrice: number; orderPrice: Num }): TossConditionalLegRequest => ({
-            orderSide: leg.side === 'sell' ? 'SELL' : 'BUY',
-            triggerPrice: this.numberToString(leg.triggerPrice),
-            ...(orderType === 'LIMIT' && leg.orderPrice !== undefined ? { orderPrice: this.numberToString(leg.orderPrice) } : {}),
-        });
+        const plan = this.planConditionalOrder(type, side, price, params);
+        const { conditionalType, orderType, first, clientOrderId } = plan;
         const body: TossConditionalOrderCreateRequest = {
             symbol: market.id as string,
-            type: conditionalType,
-            quantity: this.numberToString(amount),
-            orderType,
-            expireDate,
-            first: toLeg(first),
-            ...(second !== undefined ? { second: toLeg(second) } : {}),
+            ...(await this.conditionalOrderFields(market, amount, plan)),
             ...(clientOrderId !== undefined ? { clientOrderId } : {}),
         };
-        // 고액주문 확인은 첫 조건의 명목가로 본다(지정가는 주문가, 시장가는 트리거 가격 기준).
-        if (await this.isHighValue(amount * (first.orderPrice ?? first.triggerPrice), this.countryOf(market))) body.confirmHighValueOrder = true;
 
         const response = this.unwrap<TossConditionalOrderCreateResponse>(await this.privateAccountPostConditionalOrders(body as unknown as Dict));
         const conditionalOrderId = this.safeString(response, 'conditionalOrderId');
@@ -1972,25 +2005,11 @@ export class toss extends Exchange {
         price: Num,
         params: Dict,
     ): Promise<Order> {
-        const { conditionalType, orderType, expireDate, first, second } = this.planConditionalOrder(type, side, price, params);
+        const plan = this.planConditionalOrder(type, side, price, params);
+        const { conditionalType, orderType, first } = plan;
+        const body: TossConditionalOrderModifyRequest = { conditionalOrderId: id, ...(await this.conditionalOrderFields(market, amount, plan)) };
 
-        const toLeg = (leg: { side: OrderSide; triggerPrice: number; orderPrice: Num }): TossConditionalLegRequest => ({
-            orderSide: leg.side === 'sell' ? 'SELL' : 'BUY',
-            triggerPrice: this.numberToString(leg.triggerPrice),
-            ...(orderType === 'LIMIT' && leg.orderPrice !== undefined ? { orderPrice: this.numberToString(leg.orderPrice) } : {}),
-        });
-        const body: Dict = {
-            conditionalOrderId: id,
-            type: conditionalType,
-            quantity: this.numberToString(amount),
-            orderType,
-            expireDate,
-            first: toLeg(first),
-            ...(second !== undefined ? { second: toLeg(second) } : {}),
-        };
-        if (await this.isHighValue(amount * (first.orderPrice ?? first.triggerPrice), this.countryOf(market))) body.confirmHighValueOrder = true;
-
-        const response = this.unwrap<TossConditionalOrderCreateResponse>(await this.privateAccountPostConditionalOrdersConditionalOrderIdModify(body));
+        const response = this.unwrap<TossConditionalOrderCreateResponse>(await this.privateAccountPostConditionalOrdersConditionalOrderIdModify(body as unknown as Dict));
         const newConditionalOrderId = this.safeString(response, 'conditionalOrderId');
         if (newConditionalOrderId === undefined) {
             throw new OrderOutcomeUnknown(`${this.id} 조건주문 정정 응답에 conditionalOrderId 가 없다. 정정 여부를 조회로 확인해야 한다`);

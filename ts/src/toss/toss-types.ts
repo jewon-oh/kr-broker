@@ -314,6 +314,14 @@ export interface TossConditionalOrderCreateRequest {
     confirmHighValueOrder?: boolean;
 }
 
+/** 조건주문 등록과 정정이 같이 보내는 필드. */
+export type TossConditionalOrderFields = Omit<TossConditionalOrderCreateRequest, 'symbol' | 'clientOrderId'>;
+
+/** `POST /conditional-orders/{conditionalOrderId}/modify` 요청 본문. 정정은 재설정이라 등록과 같은 필드 전체를 다시 보낸다. */
+export interface TossConditionalOrderModifyRequest extends TossConditionalOrderFields {
+    conditionalOrderId: string;
+}
+
 /** 조건주문 등록 응답. */
 export interface TossConditionalOrderCreateResponse {
     conditionalOrderId: string;

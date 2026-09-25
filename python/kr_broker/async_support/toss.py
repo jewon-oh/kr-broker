@@ -1416,7 +1416,7 @@ class toss(Exchange, ImplicitAPI):
         expire_date = self.safe_string(params, 'expireDate')
         if expire_date is None:
             raise ArgumentsRequired(f'{self.id} 조건주문에는 expireDate(YYYY-MM-DD)가 필요하다')
-        first = {'side': side, 'triggerPrice': self.safe_number(params, 'triggerPrice'), 'orderPrice': price}
+        first = {'side': side, 'triggerPrice': self._conditional_trigger_price(params, 'triggerPrice'), 'orderPrice': price}
         second_params = self.safe_dict(params, 'second')
         second = None
         if second_params is not None:
@@ -1425,7 +1425,7 @@ class toss(Exchange, ImplicitAPI):
                 second_side = ('sell' if side == 'buy' else 'buy') if conditional_type == 'OTO' else side
             second = {
                 'side': second_side,
-                'triggerPrice': self.safe_number(second_params, 'triggerPrice'),
+                'triggerPrice': self._conditional_trigger_price(second_params, 'second.triggerPrice'),
                 'orderPrice': self.safe_number(second_params, 'price'),
             }
         if conditional_type in ('OCO', 'OTO') and second is None:
@@ -1441,6 +1441,15 @@ class toss(Exchange, ImplicitAPI):
             'first': first, 'second': second, 'clientOrderId': self.safe_string(params, 'clientOrderId'),
         }
 
+    def _conditional_trigger_price(self, source: Dict[str, Any], label: str) -> float:
+        """조건의 트리거 가격. 없거나 숫자가 아니면 `ArgumentsRequired`, 0 이하면 `InvalidOrder` 다. 빠진 채로 보내면 트리거 없는 조건이 나간다."""
+        value = self.safe_number(source, 'triggerPrice')
+        if value is None:
+            raise ArgumentsRequired(f"{self.id} 조건주문의 {label} 가 없거나 숫자가 아니다: {self.safe_string(source, 'triggerPrice')}")
+        if not _is_finite_number(value) or not value > 0:
+            raise InvalidOrder(f'{self.id} 조건주문의 {label} 는 0 보다 커야 한다: {value}')
+        return value
+
     def _conditional_leg(self, leg: Dict[str, Any], order_type: str) -> Dict[str, Any]:
         """조건주문 요청의 leg. `orderPrice` 는 지정가일 때만 보낸다."""
         result = {'orderSide': 'SELL' if leg['side'] == 'sell' else 'BUY', 'triggerPrice': self.number_to_string(leg['triggerPrice'])}
@@ -1453,26 +1462,31 @@ class toss(Exchange, ImplicitAPI):
         unit = first['orderPrice'] if first['orderPrice'] is not None else first['triggerPrice']
         return amount * unit if _is_finite_number(amount) and _is_finite_number(unit) else math.nan
 
+    async def _conditional_order_fields(self, market: Dict[str, Any], amount: float, plan: Dict[str, Any]) -> Dict[str, Any]:
+        """조건주문 등록과 정정이 같이 보내는 필드(수량, 호가유형, 만료일, 감시조건, 고액주문 확인)."""
+        order_type = plan['orderType']
+        fields: Dict[str, Any] = {
+            'type': plan['conditionalType'],
+            'quantity': self.number_to_string(amount),
+            'orderType': order_type,
+            'expireDate': plan['expireDate'],
+            'first': self._conditional_leg(plan['first'], order_type),
+        }
+        if plan['second'] is not None:
+            fields['second'] = self._conditional_leg(plan['second'], order_type)
+        if await self._is_high_value(self._conditional_notional(amount, plan['first']), self._country_of(market)):
+            fields['confirmHighValueOrder'] = True
+        return fields
+
     async def _create_conditional_order(self, market: Dict[str, Any], type: str, side: str, amount: float, price: Num,
                                   params: Dict[str, Any]) -> Dict[str, Any]:
         """조건주문을 등록한다(`create_order` 가 `params['triggerPrice']` 를 보고 부른다)."""
         plan = self._plan_conditional_order(type, side, price, params)
         order_type = plan['orderType']
         first = plan['first']
-        body: Dict[str, Any] = {
-            'symbol': market['id'],
-            'type': plan['conditionalType'],
-            'quantity': self.number_to_string(amount),
-            'orderType': order_type,
-            'expireDate': plan['expireDate'],
-            'first': self._conditional_leg(first, order_type),
-        }
-        if plan['second'] is not None:
-            body['second'] = self._conditional_leg(plan['second'], order_type)
+        body: Dict[str, Any] = self.extend({'symbol': market['id']}, await self._conditional_order_fields(market, amount, plan))
         if plan['clientOrderId'] is not None:
             body['clientOrderId'] = plan['clientOrderId']
-        if await self._is_high_value(self._conditional_notional(amount, first), self._country_of(market)):
-            body['confirmHighValueOrder'] = True
 
         response = self.unwrap(await self.private_account_post_conditional_orders(body))
         conditional_order_id = self.safe_string(response, 'conditionalOrderId')
@@ -1504,18 +1518,7 @@ class toss(Exchange, ImplicitAPI):
         plan = self._plan_conditional_order(type, side, price, params)
         order_type = plan['orderType']
         first = plan['first']
-        body: Dict[str, Any] = {
-            'conditionalOrderId': id,
-            'type': plan['conditionalType'],
-            'quantity': self.number_to_string(amount),
-            'orderType': order_type,
-            'expireDate': plan['expireDate'],
-            'first': self._conditional_leg(first, order_type),
-        }
-        if plan['second'] is not None:
-            body['second'] = self._conditional_leg(plan['second'], order_type)
-        if await self._is_high_value(self._conditional_notional(amount, first), self._country_of(market)):
-            body['confirmHighValueOrder'] = True
+        body: Dict[str, Any] = self.extend({'conditionalOrderId': id}, await self._conditional_order_fields(market, amount, plan))
 
         response = self.unwrap(await self.private_account_post_conditional_orders_conditionalorderid_modify(body))
         new_id = self.safe_string(response, 'conditionalOrderId')
