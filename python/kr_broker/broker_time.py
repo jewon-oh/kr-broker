@@ -32,7 +32,7 @@ def is_daily_or_longer_timeframe(timeframe: str) -> bool:
     return _DAILY_OR_LONGER_RE.fullmatch(timeframe) is not None
 
 
-def candle_period_utc_ms(timestamp: int, timeframe: str, market: str) -> int:
+def candle_period_utc_ms(timestamp: float, timeframe: str, market: str) -> int:
     """일·주·월·연봉의 시각 규칙: 그 봉이 덮는 기간 첫날(그 시장의 현지 날짜)의 00:00 UTC 다. 주봉은 월요일, 월봉은 1일, 연봉은 1월 1일이다.
     TypeScript 판 `candlePeriodUtcMs` 와 같다."""
     if market == 'KR':
