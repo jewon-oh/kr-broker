@@ -5,9 +5,13 @@ TypeScript 판과 같은 저장소에 있고, 같은 엔드포인트 표(`ts/src
 
 ## 설치
 
+PyPI 에는 아직 게시하지 않았습니다. GitHub 주소로 설치합니다.
+
 ```bash
-pip install kr-broker
+pip install "kr-broker @ git+https://github.com/jewon-oh/kr-broker.git#subdirectory=python"
 ```
+
+특정 커밋에 고정하려면 `.git` 뒤에 `@<커밋>`을 붙입니다(`...kr-broker.git@9759def#subdirectory=python`).
 
 Python 3.10 이상이 필요하고, 의존성은 `requests`(동기 판), `aiohttp`(비동기 판과 실시간 판), `cryptography`(한국투자증권 체결통보 복호)입니다.
 
