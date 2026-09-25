@@ -255,6 +255,36 @@ def test_stream_decrypts_order_notice_with_key_and_iv_from_subscribe_response() 
     asyncio.run(main())
 
 
+def test_stream_drops_plaintext_order_notice(caplog: pytest.LogCaptureFixture) -> None:
+    # KIS 실시간 연결은 평문이라, 경로 위에서 끼워 넣은 평문 체결통보를 받지 않는다(TS 판과 같다).
+    async def main() -> None:
+        rig = StreamRig()
+        ws = await rig.open()
+        rig.stream.subscribe('H0STCNI0', 'HTSID')
+        columns = KIS_REALTIME_COLUMNS['H0STCNI0']
+        values = ['HTSID' if i == 0 else str(i) for i in range(len(columns))]
+        for tr_id in ('H0STCNI0', 'H0STCNI9', 'H0GSCNI0', 'H0GSCNI9'):
+            ws.feed(f"0|{tr_id}|001|{'^'.join(values)}")
+        await settle()
+        assert rig.records == []
+        await rig.stream.stop()
+
+    caplog.set_level(logging.WARNING, logger='kr_broker')
+    asyncio.run(main())
+
+
+def test_stream_url_override() -> None:
+    async def main() -> None:
+        connector = FakeConnector(0)
+        stream = KisRealtimeStream(ApprovalKey(), True, connector, lambda r: None, None, RecordingSleep(), url='wss://example.invalid:31000/tryitout')
+        stream.subscribe('H0IFCNT0', '101W12')
+        await settle(10)
+        assert connector.last.url == 'wss://example.invalid:31000/tryitout'
+        await stream.stop()
+
+    asyncio.run(main())
+
+
 def test_stream_drops_encrypted_frame_before_key_and_reports_subscribe_failure(caplog: pytest.LogCaptureFixture) -> None:
     async def main() -> None:
         rig = StreamRig()

@@ -106,6 +106,10 @@ KB증권의 미국 주문은 `fetchOpenOrders`가 조회하지 않으므로 `fet
 
 `last_*` 값은 요청마다 덮어씁니다. 토큰 발급 요청의 값은 다음 요청을 보내면 사라집니다. 다음 요청 전에 오류 보고 도구가 인스턴스를 수집하면 값이 함께 외부로 전송됩니다.
 
+## 실시간 체결통보를 주문 판단의 근거로 쓰지 않습니다
+
+한국투자증권의 실시간 연결(`ws://ops.koreainvestment.com`)은 암호화되지 않은 평문 연결입니다. 같은 망에 있는 제3자는 접속키와 HTS ID 를 읽을 수 있습니다. 라이브러리는 체결통보 TR(`H0STCNI0`, `H0STCNI9`, `H0GSCNI0`, `H0GSCNI9`) 가운데 암호화되지 않은 프레임을 버립니다. 그래도 `watchOrders()`가 알려 준 체결을 근거로 다음 주문을 내기 전에는 `fetchOrder`나 `fetchMyTrades`로 한 번 더 확인하십시오. 증권사가 암호화된 주소를 제공하면 `urls.ws`와 `urls.wsTest`로 바꿀 수 있습니다.
+
 ## 로그에 비밀이 남지 않게 하는 방법
 
 1. 실전 환경에서 `verbose`를 켜지 않습니다. `verbose`는 기본이 `false`입니다. TypeScript 판은 `setLogger`로 로거를 전달했을 때만 로그를 출력합니다. Python 판은 표준 `logging`의 `kr_broker` 로거로 남기므로, 앱이 `logging.basicConfig(level=logging.DEBUG)`만 해도 출력됩니다.

@@ -222,3 +222,13 @@ describe('호출 빈도 제한(429)', () => {
         expect(fake.requestsTo('GET /api/v1/prices')).toHaveLength(1);
     });
 });
+
+describe('TossTokenRejected 의 토큰 원문', () => {
+    it('★failedToken 은 읽을 수 있지만 열거되지 않아 JSON 직렬화와 로그에 나가지 않는다', () => {
+        const error = new TossTokenRejected('401', { detail: 'token-revoked' }, 'tok-secret-value');
+        expect(error.failedToken).toBe('tok-secret-value');
+        expect(Object.keys(error)).not.toContain('failedToken');
+        expect(JSON.stringify(error)).not.toContain('tok-secret-value');
+        expect(error.detail).toBe('token-revoked');
+    });
+});

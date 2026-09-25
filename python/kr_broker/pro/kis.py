@@ -28,6 +28,7 @@ from kr_broker.async_support.base.ws.watch_hub import WatchHub
 from kr_broker.async_support.kis import _tpl, kst_ymd
 from kr_broker.base.errors import ArgumentsRequired, BadSymbol, ExchangeError
 from kr_broker.base.types import Int, Str
+from kr_broker.kis_types import KIS_WS_PATH
 from kr_broker.pro.kis_price_ws import KisPriceWs, OnOrderbook, OnTrade
 from kr_broker.pro.kis_realtime_stream import KisRealtimeRecord, KisRealtimeStream
 
@@ -56,14 +57,20 @@ class kis(kr_broker.async_support.kis):
 
     def create_price_stream(self, on_trade: Optional[OnTrade] = None, on_orderbook: Optional[OnOrderbook] = None) -> KisPriceWs:
         """실시간 시세 스트림을 만든다. 이 인스턴스의 접속키와 모의 여부를 쓴다. 구독은 반환값의 `start(subs)` 로 시작한다."""
-        return KisPriceWs(self.get_approval_key, self.isSandboxModeEnabled, session_connector(self), on_trade, on_orderbook)
+        return KisPriceWs(self.get_approval_key, self.isSandboxModeEnabled, session_connector(self), on_trade, on_orderbook, url=self._realtime_url())
 
     def create_realtime_stream(self, on_record: Callable[[KisRealtimeRecord], None],
                                on_subscribe_error: Optional[Callable[[str, str, str], None]] = None) -> KisRealtimeStream:
         """범용 실시간 구독. 어떤 실시간 TR 이든 `subscribe(tr_id, tr_key)` 로 구독하고 `unsubscribe` 로 해지한다. 받은 값은 공식 예제의 필드
         순서로 이름을 붙여 원문 문자열 그대로 `on_record` 에 넘긴다. 체결통보 TR 의 구독 키는 HTS ID 이고, 모의투자 체결통보는 `H0STCNI9`,
         `H0GSCNI9` 다. 체결과 호가를 가격으로만 받으려면 `create_price_stream` 을 쓴다."""
-        return KisRealtimeStream(self.get_approval_key, self.isSandboxModeEnabled, session_connector(self), on_record, on_subscribe_error)
+        return KisRealtimeStream(self.get_approval_key, self.isSandboxModeEnabled, session_connector(self), on_record, on_subscribe_error,
+                                 url=self._realtime_url())
+
+    def _realtime_url(self) -> Optional[str]:
+        """실시간 접속 주소. `urls['ws']`(모의는 `urls['wsTest']`)의 `public` 에 경로를 붙인다. 사용하는 쪽이 `urls` 로 바꿀 수 있다."""
+        base = self.safe_string(self.urls.get('wsTest' if self.isSandboxModeEnabled else 'ws'), 'public')
+        return None if base is None else base + KIS_WS_PATH
 
     # ============ 실시간(ccxt pro) ============
 

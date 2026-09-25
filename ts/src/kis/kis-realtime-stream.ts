@@ -26,9 +26,14 @@ export interface KisRealtimeRecord {
     fields: Record<string, string> | undefined;
 }
 
+/** 늘 암호화되어 오는 체결통보 TR(국내, 해외, 실전, 모의). */
+const ENCRYPTED_NOTICE_TRS: ReadonlySet<string> = new Set(['H0STCNI0', 'H0STCNI9', 'H0GSCNI0', 'H0GSCNI9']);
+
 export interface KisRealtimeStreamOptions {
     getApprovalKey: () => Promise<string>;
     isVirtual: boolean;
+    /** 접속 주소. 없으면 `isVirtual` 에 따라 KIS 기본 주소다. */
+    url?: string;
     onRecord: (record: KisRealtimeRecord) => void;
     /** 구독 응답이 실패(`rt_cd`가 `0`이 아님)면 부른다 */
     onSubscribeError?: (trId: string, trKey: string, message: string) => void;
@@ -123,7 +128,7 @@ export class KisRealtimeStream {
             this.scheduleReconnect();
             return;
         }
-        const url = (this.opts.isVirtual ? KIS_WS_DOMAINS.VIRTUAL : KIS_WS_DOMAINS.REAL) + KIS_WS_PATH;
+        const url = this.opts.url ?? (this.opts.isVirtual ? KIS_WS_DOMAINS.VIRTUAL : KIS_WS_DOMAINS.REAL) + KIS_WS_PATH;
         const ws = new Ctor(url);
         this.ws = ws;
         ws.addEventListener('open', () => {
@@ -183,6 +188,11 @@ export class KisRealtimeStream {
         if (parts.length < 4) return;
         const [flag, trId, countText] = parts;
         let payload = parts.slice(3).join('|');
+        // KIS 실시간 연결은 평문이다. 체결통보는 늘 암호화되어 오므로, 평문 체결통보는 경로 위에서 끼워 넣은 프레임으로 보고 버린다.
+        if (flag !== '1' && ENCRYPTED_NOTICE_TRS.has(trId)) {
+            logger.warn({ trId }, '[KisRealtimeStream] 암호화되지 않은 체결통보 프레임 — 버린다');
+            return;
+        }
         if (flag === '1') {
             const cipher = this.cipherKeys.get(trId);
             if (cipher === undefined) {
