@@ -28,7 +28,7 @@ const broker = new kis({ apiKey, secret, uid, sandbox: true });
 - 요청 간격이 500ms로 늘어납니다. 소스 주석은 모의투자의 상한을 초당 2건으로 적었습니다.
 - 캐시한 접근 토큰을 버립니다.
 - 모의투자가 지원하지 않는 조회는 `NotSupported`를 던집니다. 예를 들어 휴장일 조회(`fetchMarketCalendar`)가 있습니다.
-- 미국 주문 취소에는 `params.amount`(취소 수량)가 필요합니다.
+- 미국 주문 취소와 정정에는 `params.amount`(취소나 정정 수량)가 필요합니다. `editOrder`에 `amount`(정정 뒤 총수량)를 주면, 미체결 조회가 없어 원주문과 대조할 수 없으므로 `NotSupported`를 던집니다.
 - 미국 주식 시장가 주문은 장마감지정가(LOC)가 아니라 지정가로 나갑니다.
 
 모의투자 앱키는 실전 앱키와 따로 발급받습니다. 발급 절차는 [앱키 발급 가이드](guides/credentials.md)에 있습니다.

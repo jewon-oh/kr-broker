@@ -120,6 +120,7 @@ import { applyMarketCalendar } from './market-calendar';
 import { krxAuctionBuyBlockReason } from './krx-trading-hours';
 import { usAuctionBuyBlockReason } from './us-market-hours';
 import { getKrxTickSize, KRX_TICK_INVALID_DETAIL, krxTickViolation } from './krx-tick-size';
+import { assertWholeRemainingEdit, editOrderTotal, type EditOrderOriginal } from './edit-order-amount';
 import { TossAuth, type TossIssuedToken } from './toss/toss-auth';
 import { OrderNotSent, TossRateLimited, TossTokenRejected } from './toss/toss-errors';
 import { TossPriceWs, type TossPriceWsOptions, type TossWsSub } from './toss/toss-price-ws';
@@ -271,7 +272,7 @@ const ORDER_HANDLED_PARAMS = ['triggerPrice', 'cost', 'clientOrderId', 'timeInFo
 const ORDER_COMPUTED_FIELDS = ['symbol', 'side', 'orderType', 'quantity', 'orderAmount', 'price', 'confirmHighValueOrder'] as const;
 
 /** 일반 정정 경로가 `params` 에서 읽는 키. 본문에 합치지 않는다. */
-const EDIT_HANDLED_PARAMS = ['trigger', 'stop'];
+const EDIT_HANDLED_PARAMS = ['trigger', 'stop', 'partial'];
 
 /** 라이브러리가 인자로 채우는 정정 본문 필드(`orderId` 는 경로에 실린다). */
 const EDIT_COMPUTED_FIELDS = ['orderId', 'orderType', 'quantity', 'price', 'confirmHighValueOrder'] as const;
@@ -1625,9 +1626,12 @@ export class toss extends Exchange {
     }
 
     /**
-     * 주문을 정정한다. 국내는 가격과 수량을 함께 정정한다(`amount` 필수). 미국은 가격만 정정한다(`amount` 를 주면 `NotSupported` 다).
-     * 미국은 고액주문 확인에 쓸 남은 수량을 정정 전에 주문 상세(`GET /orders/{orderId}`)로 읽는다.
-     * 정정하면 새 `orderId` 가 발급된다 — 반환한 `Order.id` 를 써야 한다.
+     * 주문을 정정한다. 잔량 전부를 새 가격으로 옮긴다. 국내는 정정 본문의 수량(`quantity`)에 주문 상세(`GET /orders/{orderId}`)로 읽은 잔량을
+     * 싣고, 미국은 가격만 보낸다. `amount` 는 ccxt 와 같이 정정 뒤 주문의 총수량(체결분 포함)이고, 주면 주문 상세로 대조해 총수량과 다르면
+     * 정정 요청 없이 `NotSupported` 다(수량을 바꾸는 정정은 한 요청으로 낼 수 없다). 명세의 `quantity` 가 정정 뒤 총수량인지 새 가격으로 옮길
+     * 수량인지 정해지지 않아, 국내는 두 뜻이 같은 값이 되는 체결 없는 주문만 정정하고 일부 체결된 주문은 `NotSupported` 다. 일부정정
+     * (`params.partial`)은 받지 않는다. 주문 상세 조회가 실패하면 던진다. 미국에서 `amount` 를 주지 않으면 조회는 고액주문 확인에만 쓰므로
+     * 실패해도 정정한다. 정정하면 새 `orderId` 가 발급된다 — 반환한 `Order.id` 를 써야 한다.
      *
      * `params.trigger: true` 는 조건주문 정정이다(`modifyConditionalOrder` 로 넘긴다). 조건주문은 등록과 같은 인자
      * (`triggerPrice`·`expireDate` 등 `params`)로 조건 전체를 다시 선언한다 — 부분 필드만 바꿀 수 없다.
@@ -1645,20 +1649,25 @@ export class toss extends Exchange {
         const market = this.market(symbol);
         const country = this.countryOf(market);
         if (type === 'limit' && price === undefined) throw new ArgumentsRequired(`${this.id} editOrder() requires a price argument for a limit order`);
-        if (country === 'US' && amount !== undefined) {
-            throw new NotSupported(`${this.id} editOrder() 는 미국 종목의 수량 정정을 지원하지 않는다(가격만 가능)`);
-        }
-        if (country === 'KR' && amount === undefined) {
-            throw new ArgumentsRequired(`${this.id} editOrder() 는 국내 종목의 수량 정정에 amount 인자가 필요하다`);
+        if (this.safeBool(params, 'partial', false) === true) {
+            throw new NotSupported(`${this.id} editOrder() 의 일부정정(params.partial)은 지원하지 않는다. 토스 정정은 잔량 전부를 새 가격으로 옮긴다`);
         }
         if (type === 'limit' && price !== undefined) this.assertKrxTickAligned(market, price, 'editOrder');
 
+        // 국내는 정정 수량을 싣기 위해, `amount` 를 주면 대조하기 위해 원주문을 조회한다. 이때 조회가 실패하면 던진다.
+        const original = country === 'KR' || amount !== undefined ? await this.editOriginal(id) : undefined;
+        if (country === 'KR' && (original?.filled ?? 0) > 0) {
+            throw new NotSupported(`${this.id} editOrder() 는 일부 체결된 국내 주문(${id}, 체결 ${original?.filled})을 정정하지 않는다. `
+                + '정정 수량(quantity)이 정정 뒤 총수량인지 옮길 수량인지 확인하지 못했다. 취소한 뒤 다시 주문한다');
+        }
+        if (amount !== undefined) assertWholeRemainingEdit(this.id, id, amount, original ?? {});
+
         const body: Dict = { orderId: id, orderType: type === 'market' ? 'MARKET' : 'LIMIT' };
-        if (country === 'KR') body.quantity = this.numberToString(this.normalizeQuantity(symbol, type, side, amount as number));
+        if (country === 'KR') body.quantity = this.numberToString(original?.remaining as number);
         if (type === 'limit') body.price = this.orderPriceString(market, price);
 
-        // 국내 명목가는 정정 수량 × 가격이다. 미국 정정은 수량을 받지 않으므로 주문 상세의 남은 수량 × 가격으로 본다.
-        const notional = country === 'KR' ? (amount ?? 0) * (price ?? 0) : await this.usEditNotional(id, price);
+        // 명목가는 잔량 × 가격이다. 미국에서 원주문을 조회하지 않았으면 고액주문 확인용으로만 읽는다.
+        const notional = original !== undefined ? (original.remaining ?? 0) * (price ?? 0) : await this.usEditNotional(id, price);
         if (await this.isHighValue(notional, country)) body.confirmHighValueOrder = true;
 
         const response = this.unwrap<TossOrderCreateResponse>(await this.privateAccountPostOrdersOrderIdModify(this.extend(body, this.omit(params, EDIT_HANDLED_PARAMS))));
@@ -1677,10 +1686,21 @@ export class toss extends Exchange {
             type,
             side,
             price,
-            amount,
+            // 정정 뒤 총수량. 국내는 조회한 잔량을 실었으므로 알고, 미국에서 `amount` 를 주지 않았으면 확인하지 않았으므로 비운다.
+            amount: amount ?? (country === 'KR' && original !== undefined ? editOrderTotal(original) : undefined),
             status: 'open',
             trades: [],
         }, market);
+    }
+
+    /** 정정할 원주문의 체결 수량과 잔량(주문 상세). 조회가 실패하면 던지고, 없거나 잔량이 없으면 `OrderNotFound` 다. */
+    private async editOriginal(orderId: string): Promise<EditOrderOriginal> {
+        const order = this.unwrap<TossOrder | null>(await this.privateAccountGetOrdersOrderId({ orderId }));
+        const quantity = this.safeNumber(order, 'quantity');
+        const filled = this.safeNumber(this.safeDict(order, 'execution'), 'filledQuantity', 0) as number;
+        const remaining = quantity !== undefined ? Number(Precise.stringSub(this.numberToString(quantity), this.numberToString(filled))) : undefined;
+        if (remaining === undefined || !(remaining > 0)) throw new OrderNotFound(`${this.id} editOrder() 정정할 잔량이 있는 주문을 찾지 못했다: ${orderId}`);
+        return { filled, remaining };
     }
 
     /**

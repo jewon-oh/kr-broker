@@ -3411,11 +3411,37 @@
             "error": { "class": "InvalidOrder" }
         },
         {
-            "description": "editOrder 국내는 가격과 수량을 함께 정정하고 새 주문번호를 돌려준다",
+            "description": "editOrder 국내는 주문 상세의 잔량을 수량으로 싣고 가격을 정정해 새 주문번호를 돌려준다. amount 는 정정 뒤 총수량이다",
             "now": 1774400400000,
             "method": "editOrder",
             "args": ["ORD-0011", "005930", "limit", "buy", 3, 70500],
             "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders/ORD-0011",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "orderId": "ORD-0011",
+                                "symbol": "005930",
+                                "side": "BUY",
+                                "orderType": "LIMIT",
+                                "timeInForce": "DAY",
+                                "status": "PENDING",
+                                "price": "70000",
+                                "quantity": "3",
+                                "currency": "KRW",
+                                "orderedAt": "2026-03-25T01:00:00Z",
+                                "execution": { "filledQuantity": "0" }
+                            }
+                        }
+                    }
+                },
                 {
                     "request": {
                         "method": "POST",
@@ -3442,6 +3468,138 @@
             }
         },
         {
+            "description": "editOrder 국내는 amount 없이도 주문 상세의 잔량 전부를 정정하고, 확인한 총수량을 돌려준다",
+            "now": 1774400400000,
+            "method": "editOrder",
+            "args": ["ORD-0011", "005930", "limit", "buy", null, 70500],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders/ORD-0011",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "orderId": "ORD-0011",
+                                "symbol": "005930",
+                                "side": "BUY",
+                                "orderType": "LIMIT",
+                                "timeInForce": "DAY",
+                                "status": "PENDING",
+                                "price": "70000",
+                                "quantity": "3",
+                                "currency": "KRW",
+                                "orderedAt": "2026-03-25T01:00:00Z",
+                                "execution": { "filledQuantity": "0" }
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders/ORD-0011/modify",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001", "Content-Type": "application/json" },
+                        "body": "{\"orderType\":\"LIMIT\",\"quantity\":\"3\",\"price\":\"70500\"}"
+                    },
+                    "response": { "status": 200, "body": { "result": { "orderId": "ORD-0012" } } }
+                }
+            ],
+            "output": {
+                "info": { "orderId": "ORD-0012" },
+                "id": "ORD-0012",
+                "timestamp": 1774400400000,
+                "datetime": "2026-03-25T01:00:00.000Z",
+                "symbol": "005930/KRW",
+                "type": "limit",
+                "side": "buy",
+                "price": 70500,
+                "amount": 3,
+                "status": "open",
+                "trades": [],
+                "fees": []
+            }
+        },
+        {
+            "description": "editOrder 국내 amount 로 수량을 바꾸는 정정은 주문 상세를 확인한 뒤 정정 요청 없이 NotSupported 다",
+            "method": "editOrder",
+            "args": ["ORD-0011", "005930", "limit", "buy", 2, 70500],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders/ORD-0011",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "orderId": "ORD-0011",
+                                "symbol": "005930",
+                                "side": "BUY",
+                                "orderType": "LIMIT",
+                                "timeInForce": "DAY",
+                                "status": "PENDING",
+                                "price": "70000",
+                                "quantity": "3",
+                                "currency": "KRW",
+                                "orderedAt": "2026-03-25T01:00:00Z",
+                                "execution": { "filledQuantity": "0" }
+                            }
+                        }
+                    }
+                }
+            ],
+            "error": { "class": "NotSupported" }
+        },
+        {
+            "description": "editOrder 국내 일부 체결된 주문은 quantity 의 뜻을 확인하기 전까지 정정 요청 없이 NotSupported 다",
+            "method": "editOrder",
+            "args": ["ORD-0011", "005930", "limit", "buy", 3, 70500],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders/ORD-0011",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "orderId": "ORD-0011",
+                                "symbol": "005930",
+                                "side": "BUY",
+                                "orderType": "LIMIT",
+                                "timeInForce": "DAY",
+                                "status": "PARTIAL_FILLED",
+                                "price": "70000",
+                                "quantity": "3",
+                                "currency": "KRW",
+                                "orderedAt": "2026-03-25T01:00:00Z",
+                                "execution": { "filledQuantity": "1" }
+                            }
+                        }
+                    }
+                }
+            ],
+            "error": { "class": "NotSupported" }
+        },
+        {
+            "description": "editOrder 일부정정(params.partial)은 토스 정정이 잔량 전부를 옮기므로 요청 없이 NotSupported 다",
+            "method": "editOrder",
+            "args": ["ORD-0011", "005930", "limit", "buy", 1, 70500, { "partial": true }],
+            "http": [],
+            "error": { "class": "NotSupported" }
+        },
+        {
             "description": "editOrder 는 불러온 종목이 주식(STOCK)이면 호가 단위에 맞지 않는 국내 정정 가격을 요청 없이 InvalidOrder 로 막는다",
             "config": {
                 "markets": [
@@ -3466,11 +3624,95 @@
             "error": { "class": "InvalidOrder", "detail": "price-tick-invalid" }
         },
         {
-            "description": "editOrder 미국은 수량 정정을 NotSupported 로 막는다",
+            "description": "editOrder 미국 amount 가 총수량(체결 + 잔량)과 다르면 주문 상세를 확인한 뒤 정정 요청 없이 NotSupported 다",
             "method": "editOrder",
             "args": ["ORD-0013", "AAPL", "limit", "buy", 3, 228],
-            "http": [],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders/ORD-0013",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "orderId": "ORD-0013",
+                                "symbol": "AAPL",
+                                "side": "BUY",
+                                "orderType": "LIMIT",
+                                "timeInForce": "DAY",
+                                "status": "PENDING",
+                                "price": "227",
+                                "quantity": "5",
+                                "currency": "USD",
+                                "orderedAt": "2026-03-25T01:00:00Z",
+                                "execution": { "filledQuantity": "0" }
+                            }
+                        }
+                    }
+                }
+            ],
             "error": { "class": "NotSupported" }
+        },
+        {
+            "description": "editOrder 미국 amount 가 총수량과 같으면 가격만 정정하고 그 총수량을 돌려준다",
+            "now": 1774449000000,
+            "method": "editOrder",
+            "args": ["ORD-0028", "AAPL", "limit", "buy", 3, 229.5],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders/ORD-0028",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "orderId": "ORD-0028",
+                                "symbol": "AAPL",
+                                "side": "BUY",
+                                "orderType": "LIMIT",
+                                "timeInForce": "DAY",
+                                "status": "PARTIAL_FILLED",
+                                "price": "228",
+                                "quantity": "3",
+                                "currency": "USD",
+                                "orderedAt": "2026-03-25T14:00:00Z",
+                                "execution": { "filledQuantity": "1" }
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders/ORD-0028/modify",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001", "Content-Type": "application/json" },
+                        "body": "{\"orderType\":\"LIMIT\",\"price\":\"229.5\"}"
+                    },
+                    "response": { "status": 200, "body": { "result": { "orderId": "ORD-0029" } } }
+                }
+            ],
+            "output": {
+                "info": { "orderId": "ORD-0029" },
+                "id": "ORD-0029",
+                "timestamp": 1774449000000,
+                "datetime": "2026-03-25T14:30:00.000Z",
+                "symbol": "AAPL/USD",
+                "type": "limit",
+                "side": "buy",
+                "price": 229.5,
+                "amount": 3,
+                "status": "open",
+                "trades": [],
+                "fees": []
+            }
         },
         {
             "description": "editOrder 미국은 주문 상세로 남은 수량을 확인한 뒤 가격만 정정한다. 명목가가 기준 아래면 고액주문 표시를 붙이지 않는다",

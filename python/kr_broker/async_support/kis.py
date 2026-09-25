@@ -80,6 +80,7 @@ from kr_broker.kis_types import (
     KIS_OVERSEAS_ORD_DVSN, KIS_PRESENT_BALANCE_PARAMS, KIS_WS_DOMAINS,
 )
 from kr_broker.krx_sell_tax import krx_sell_tax_rate
+from kr_broker.edit_order_amount import assert_whole_remaining_edit, edit_order_total
 from kr_broker.krx_tick_size import KRX_TICK_INVALID_DETAIL, get_krx_tick_size, krx_tick_violation
 from kr_broker.krx_trading_hours import is_nxt_extended_tradable, krx_order_block_reason
 from kr_broker.us_market_hours import et_wall_clock_to_utc_ms, et_ymd, us_order_block_reason
@@ -2054,24 +2055,34 @@ class kis(Exchange, ImplicitAPI):
     async def edit_order(self, id: str, symbol: str, type: str, side: str, amount: Num = None, price: Num = None,
                    params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """정정. 취소와 같은 엔드포인트(`order-rvsecncl`)를 `RVSE_CNCL_DVSN_CD` 로 나눈다(`01` 정정, `02` 취소). `price` 가 필요하다.
-        `amount` 를 주면 그 수량으로 일부 정정(`QTY_ALL_ORD_YN: 'N'`)하고, 주지 않으면 국내는 전량(`'Y'`)을 정정한다.
-        국내는 KRX 정규장과 NXT 확장세션이 모두 닫혀 있으면, 미국은 완전 마감이면 `MarketClosed` 다."""
+
+        `amount` 는 ccxt 와 같이 정정 뒤 주문의 총수량(체결분 포함)이다. 주면 미체결 조회로 원주문의 체결 수량과 잔량을 확인하고, 둘의 합과
+        같을 때만 잔량 전부를 새 가격으로 정정한다. 수량을 바꾸는 조합은 정정 요청 없이 `NotSupported` 다. 주지 않으면 확인 없이 잔량 전부를
+        정정한다(국내 `QTY_ALL_ORD_YN: 'Y'`). 국내 일부정정(`'N'`)은 `params['partial']` 이 참일 때만 보내고, 이때 `amount` 는 옮길 수량이다.
+        반환 주문의 `amount` 는 정정 뒤 총수량(일부정정이면 옮긴 수량)이고, 확인하지 않은 값은 싣지 않는다.
+        국내는 KRX 정규장과 NXT 확장세션이 모두 닫혀 있으면, 미국은 정규장 밖이면 `MarketClosed` 다."""
         amount, price = fn.decimal_to_float(amount), fn.decimal_to_float(price)
         if price is None:
             raise ArgumentsRequired(f'{self.id} editOrder() requires a price argument')
+        partial = self.safe_bool(params, 'partial', False) is True
+        if partial and amount is None:
+            raise ArgumentsRequired(f'{self.id} editOrder() 의 일부정정(params.partial)에는 옮길 수량 amount 가 필요하다')
+        params = self.omit(params, 'partial')
         instrument = self._instrument_of(symbol)
         if instrument.overseas:
-            return await self._edit_overseas_order(id, instrument, price, amount, params)
+            return await self._edit_overseas_order(id, instrument, price, amount, partial, params)
         self._assert_krx_tick_aligned(instrument, price, 'editOrder')
         await self._assert_domestic_edit_open()
+        if not partial and amount is not None:
+            assert_whole_remaining_edit(self.id, id, amount, await self._find_open_order(instrument, id))
         response = await self.private_post_uapi_domestic_stock_v1_trading_order_rvsecncl(self.extend(self.extend(self._account_params(), {
             'KRX_FWDG_ORD_ORGNO': self.safe_string(params, 'orderOrgNo', ''),
             'ORGN_ODNO': id,
             'ORD_DVSN': KIS_ORDER_TYPE['LIMIT'],
             'RVSE_CNCL_DVSN_CD': '01',  # 정정
-            'ORD_QTY': '0' if amount is None else fn.js_string(amount),
+            'ORD_QTY': fn.js_string(amount) if partial else '0',
             'ORD_UNPR': fn.js_string(price),
-            'QTY_ALL_ORD_YN': 'Y' if amount is None else 'N',
+            'QTY_ALL_ORD_YN': 'N' if partial else 'Y',
             'tr_id': self.tr('TTTC0803U'),
         }), self.omit(params, 'orderOrgNo')))
         new_id = self.safe_string(self.safe_dict(response, 'output', {}), 'ODNO', id)
@@ -2080,21 +2091,40 @@ class kis(Exchange, ImplicitAPI):
             'id': new_id, 'symbol': instrument.symbol, 'type': 'limit', 'price': price, 'amount': amount, 'status': 'open', 'info': response,
         }, self._market_of(instrument))
 
-    async def _edit_overseas_order(self, id: str, instrument: KisInstrument, price: float, amount: Num,
+    async def _find_open_order(self, instrument: KisInstrument, id: str) -> Dict[str, Any]:
+        """정정할 원주문을 미체결 목록에서 찾는다. 조회가 실패하면 던지고, 목록에 없으면 `OrderNotFound` 다."""
+        open_orders = await self.fetch_open_orders(instrument.symbol)
+        found = next((order for order in open_orders if order.get('id') == id), None)
+        if found is None:
+            raise OrderNotFound(f'{self.id} 미체결 주문을 찾지 못했다: {id} ({instrument.symbol})')
+        return found
+
+    async def _edit_overseas_order(self, id: str, instrument: KisInstrument, price: float, amount: Num, partial: bool,
                              params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-        """해외 정정. 수량(`amount` 나 `params['amount']`)이 없으면 미체결 조회에서 잔량을 찾는다. 모의투자는 미체결 조회가 없어 반드시 넘긴다.
-        공식 예제처럼 정정 요청에 실제 수량과 단가를 싣는다."""
+        """해외 정정. 정정 수량(`ORD_QTY`)에는 미체결 조회로 찾은 잔량을 싣고, `amount` 를 주면 국내처럼 원주문의 총수량과 대조한다.
+        `params['amount']` 를 주면 조회와 대조 없이 그 값을 정정 수량으로 싣는다. 모의투자는 미국 미체결 조회가 없어 `params['amount']` 가 필요하고
+        `amount` 는 대조할 수 없어 `NotSupported` 다. 일부정정(`params['partial']`)은 받지 않는다. 공식 예제처럼 정정 요청에 실제 수량과 단가를 싣는다."""
         exchange = instrument.order_exchange
         if exchange is None:
             raise BadSymbol(f'해외 마스터에 없는 ticker: {instrument.symbol}')
+        if partial:
+            raise NotSupported(f'{self.id} editOrder() 의 일부정정(params.partial)은 미국 주문에서 지원하지 않는다')
         quantity = self.safe_string(params, 'amount')
-        if quantity is None and amount is not None:
-            quantity = self.number_to_string(amount)
         if quantity is None and self.isSandboxModeEnabled:
-            raise ArgumentsRequired(f'{self.id} 모의투자의 해외 주문 정정에는 amount나 params.amount(정정 수량)가 필요하다')
+            if amount is not None:
+                raise NotSupported(f'{self.id} 모의투자는 미국 미체결 조회가 없어 editOrder() 의 amount 를 원주문과 대조할 수 없다. params.amount(정정 수량)로 준다')
+            raise ArgumentsRequired(f'{self.id} 모의투자의 해외 주문 정정에는 params.amount(정정 수량)가 필요하다')
         self._assert_us_edit_open(exchange)
+        total = None
         if quantity is None:
-            quantity = await self._open_quantity(id, instrument)
+            open_order = await self._find_open_order(instrument, id)
+            if amount is not None:
+                assert_whole_remaining_edit(self.id, id, amount, open_order)
+            total = edit_order_total(open_order)
+            remaining = open_order.get('remaining')
+            if remaining is None:
+                remaining = open_order.get('amount')
+            quantity = self.number_to_string(0 if remaining is None else remaining)
         response = await self.private_post_uapi_overseas_stock_v1_trading_order_rvsecncl(self.extend(self.extend(self._account_params(), {
             'OVRS_EXCG_CD': exchange,
             'PDNO': instrument.code,
@@ -2110,7 +2140,7 @@ class kis(Exchange, ImplicitAPI):
         logger.info('[kis] 해외 주문 정정 성공 (orderId=%s, newOrderId=%s, symbol=%s, price=%s, quantity=%s)', id, new_id, instrument.symbol,
                     price, quantity)
         return self.safe_order({
-            'id': new_id, 'symbol': instrument.symbol, 'type': 'limit', 'price': price, 'amount': fn.js_number(quantity), 'status': 'open',
+            'id': new_id, 'symbol': instrument.symbol, 'type': 'limit', 'price': price, 'amount': total, 'status': 'open',
             'info': response,
         }, self._market_of(instrument))
 

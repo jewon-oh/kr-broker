@@ -45,6 +45,7 @@ import type { UsdKrwRateOption } from './options';
 import { masterDataOf } from './kis/kis-master-data';
 import { getKRXStockByCode } from './kis/kis-stock-master';
 import { getKrxTickSize, KRX_TICK_INVALID_DETAIL, krxTickViolation } from './krx-tick-size';
+import { assertWholeRemainingEdit } from './edit-order-amount';
 import {
     ArgumentsRequired,
     AuthenticationError,
@@ -4706,8 +4707,12 @@ export class kbsec extends Exchange {
      *
      * - **정정하면 주문번호가 바뀐다.** 이후 취소는 반드시 새 번호(`order.id`)로 해야 한다. 옛 번호로 취소하면 주문이 살아남는다.
      * - 국내는 원주문과 **같은 라우팅**으로 보내야 한다(SOR 주문을 KRX 로 정정하면 거부된다).
-     * - 국내 전부정정(`params.partial` 이 아님)은 수량을 0 으로 보낸다. 수량을 실으면 거부된다. 수량을 바꾸려면 `params.partial: true` 와 `amount` 다.
-     * - 해외 정정은 가격만 바꾼다(`SKAM2102` 에 수량 필드가 없다). 수량을 바꾸려면 취소 후 재접수해야 한다.
+     * - `amount` 는 ccxt 와 같이 정정 뒤 주문의 총수량(체결분 포함)이다. 국내는 주면 미체결 목록으로 체결 수량과 잔량의 합과 대조하고, 같을 때만
+     *   잔량 전부를 정정한다. 다르면 정정 요청 없이 `NotSupported` 다. 조회가 실패하면 던진다. 해외는 원주문의 체결 수량을 믿을 만한 조회로
+     *   확인할 수 없어 `amount` 를 주면 요청 없이 `NotSupported` 다.
+     * - 국내 전부정정은 수량을 0 으로 보낸다. 수량을 실으면 거부된다. 잔량 일부만 새 가격으로 옮기는 일부정정은 `params.partial: true` 일 때만
+     *   보내고(`crct_clsf: '1'`), 이때 `amount` 는 옮길 수량이다.
+     * - 해외 정정은 잔량 전부의 가격만 바꾼다(`SKAM2102` 에 수량 필드가 없다). 일부정정은 `NotSupported` 다. 수량을 바꾸려면 취소 후 재접수해야 한다.
      * - **`price` 가 필요하다.** 국내·해외 모두 정정은 단가를 바꾸는 주문이라, 빼면 요청 없이 `ArgumentsRequired` 다(빼고 보내면 단가 `0` 이 나간다).
      */
     override async editOrder(
@@ -4719,7 +4724,15 @@ export class kbsec extends Exchange {
         if (price === undefined || price === null) {
             throw new ArgumentsRequired(`${this.id} editOrder() requires a price argument`);
         }
+        const isPartial = params.partial === true;
+        if (isPartial && amount === undefined) throw new ArgumentsRequired(`${this.id} editOrder() 의 일부정정(params.partial)에는 옮길 수량 amount 가 필요하다`);
         if (this.isUs(market)) {
+            if (isPartial) throw new NotSupported(`${this.id} editOrder() 의 일부정정(params.partial)은 해외 주문에서 지원하지 않는다(해외 정정은 가격만 바꾼다)`);
+            // 해외 원주문의 체결 수량은 체결내역과 체결현황을 맞춰 추정해야 한다. 체결 반영이 늦으면 잔량을 크게 잡으므로 amount 를 대조하지 않고 막는다.
+            if (amount !== undefined) {
+                throw new NotSupported(`${this.id} editOrder() 는 해외 주문의 amount 를 받지 않는다. 원주문의 체결 수량을 믿을 만한 조회로 확인할 수 없다. `
+                    + 'amount 를 빼면 잔량 전부의 가격만 정정하고, 수량을 바꾸려면 취소한 뒤 다시 주문한다');
+            }
             const response = await this.callTr(KBSEC_TR.AMEND_CANCEL_US, {
                 is_cd: base,
                 orgn_ordr_no: id,
@@ -4727,16 +4740,17 @@ export class kbsec extends Exchange {
                 crct_cncl_clsf: '1',
                 frgn_ordr_prc_p4: kbsecNum(price, 4),
             });
-            if (amount !== undefined) {
-                logger.warn({ orderId: id, symbol, amount }, '[kbsec] 해외 정정은 가격만 가능 — 수량 변경은 취소 후 재접수 필요');
-            }
             return this.editedOrder(response, market, price, undefined);
         }
         this.assertKrxTickAligned(market, price, 'editOrder');
-        const sor = await this.resolveOrderSor(id, symbol);
-        const isPartial = params.partial === true && amount !== undefined;
+        let sor: string;
         if (!isPartial && amount !== undefined) {
-            logger.warn({ orderId: id, symbol, amount }, '[kbsec] params.partial 이 없어 전부정정한다 — 수량은 바꾸지 않고 잔량 전체의 가격만 바꾼다');
+            // 수량을 대조하므로 원주문 조회 실패를 발주 정책으로 덮지 않고 던진다.
+            const original = await this.findOpenOrder(id, symbol);
+            assertWholeRemainingEdit(this.id, id, amount, original);
+            sor = pickStr((original.info ?? {}) as Dict, 'sor_ordr_ccd') || await this.defaultOrderSor(symbol);
+        } else {
+            sor = await this.resolveOrderSor(id, symbol);
         }
         const response = await this.callTr(KBSEC_TR.AMEND_KR, buildKrOrderBody(
             { base, amount: isPartial ? amount : 0, price, sor, jbClsf: KBSEC_ORDER_SIDE_KR.AMEND },
@@ -4744,8 +4758,8 @@ export class kbsec extends Exchange {
         ));
         const newId = pickStr(response, 'ordr_no', 'odno');
         logger.info({ orderId: id, newOrderId: newId, symbol, price, sor, isPartial }, '[kbsec] ✅ 정정주문 — 주문번호가 바뀌었다');
-        // 전부정정은 수량을 보내지 않으므로 반환값에도 싣지 않는다(정정 뒤 수량은 잔량이고 이 응답으로는 알 수 없다).
-        return this.editedOrder(response, market, price, isPartial ? amount : undefined);
+        // 일부정정은 옮긴 수량, 전부정정은 대조한 총수량을 싣는다. `amount` 없이 부른 전부정정의 수량은 이 응답으로 알 수 없어 싣지 않는다.
+        return this.editedOrder(response, market, price, amount);
     }
 
     private editedOrder(response: Dict, market: MarketInterface, price: Num, amount: Num): Order {
@@ -4775,8 +4789,20 @@ export class kbsec extends Exchange {
         } catch (err) {
             logger.warn({ err, orderId, symbol }, '[kbsec] 원주문 라우팅 조회 실패 — 발주 정책으로 폴백');
         }
+        return this.defaultOrderSor(symbol);
+    }
+
+    /** 발주 때와 같은 라우팅 정책(`nxtRouting` 옵션과 NXT 미상장 캐시). */
+    private async defaultOrderSor(symbol: string): Promise<string> {
         return await this.isOptionEnabled('nxtRouting') && !this.nxtIneligible.has(kbsecBaseSymbol(symbol))
             ? KBSEC_SOR.SOR : KBSEC_SOR.KRX;
+    }
+
+    /** 정정할 국내 원주문을 미체결 목록에서 찾는다. 조회가 실패하면 던지고, 목록에 없으면 `OrderNotFound` 다. */
+    private async findOpenOrder(orderId: string, symbol: string): Promise<Order> {
+        const found = (await this.fetchOpenOrders(symbol)).find(order => order.id === orderId);
+        if (found === undefined) throw new OrderNotFound(`${this.id} editOrder() 미체결 주문을 찾지 못했다: ${orderId} (${symbol})`);
+        return found;
     }
 
     /**

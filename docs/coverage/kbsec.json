@@ -1064,7 +1064,7 @@
       "suggested": null,
       "proposal": null,
       "verified": "real",
-      "note": "일부정정과 전부정정을 모두 씁니다. `price`가 없으면 요청 전에 `ArgumentsRequired`를 던집니다.",
+      "note": "일부정정과 전부정정을 모두 씁니다. `amount`는 정정 뒤 총수량이고 미체결 목록과 대조한 뒤 전부정정합니다. 일부정정은 `params.partial: true`일 때만 보냅니다. `price`가 없으면 요청 전에 `ArgumentsRequired`를 던집니다.",
       "spec": "https://github.com/kbsecurities/kb-openapi/blob/159480c/frontend/src/app/openapi-test/samples.generated.json#Tkb_SSAM1805_B2C"
     },
     {
@@ -1476,7 +1476,7 @@
       "suggested": null,
       "proposal": null,
       "verified": "real",
-      "note": "정정은 가격만 바꿉니다. 함께 노출: cancelOrder. `price`가 없으면 요청 전에 `ArgumentsRequired`를 던집니다.",
+      "note": "정정은 잔량 전부의 가격만 바꿉니다. 원주문의 체결 수량을 믿을 만한 조회로 확인할 수 없어 `editOrder`에 `amount`를 주면 요청 전에 `NotSupported`입니다. 함께 노출: cancelOrder. `price`가 없으면 요청 전에 `ArgumentsRequired`를 던집니다.",
       "spec": "https://github.com/kbsecurities/kb-openapi/blob/159480c/frontend/src/app/openapi-test/samples.generated.json#Tkb_SKAM2102_B2C"
     },
     {

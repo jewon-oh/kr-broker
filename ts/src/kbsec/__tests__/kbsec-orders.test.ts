@@ -468,14 +468,44 @@ describe('editOrder', () => {
         expect(order.amount).toBe(2);
     });
 
-    it('국내 전부정정은 수량을 0 으로 보낸다 — 수량을 실으면 거부된다(2329)', async () => {
+    /** 원주문 O9 가 5주 가운데 2주 체결된 미체결 목록. */
+    const openO9 = { Record1: [{ ordr_no: 'O9', stnd_is_no: 'A005930', trd_dl_ccd_nm: '현금매수', ordr_q: '5', tl_ccls_q: '2', nccls_q: '3', sor_ordr_ccd: 'K' }] };
+
+    it('국내 전부정정은 수량을 0 으로 보낸다 — 수량을 실으면 거부된다(2329). amount 없이 부르면 반환값에 수량을 싣지 않는다', async () => {
         routeTr(mockFetch, { [KBSEC_TR.AMEND_KR]: { ordr_no: 'AM2' } });
+
+        const order = await newExchange().editOrder('O9', '005930/KRW', 'limit', 'buy', undefined, 71000);
+
+        expect(trBody(mockFetch, KBSEC_TR.AMEND_KR).dataBody).toMatchObject({ crct_clsf: '2', ordr_q: '0' });
+        expect(order.amount).toBeUndefined();
+    });
+
+    it('★amount 는 정정 뒤 총수량이다. 미체결 목록의 체결 + 잔량과 같으면 전부정정하고 그 총수량을 돌려준다', async () => {
+        routeTr(mockFetch, { [KBSEC_TR.TRADES_KR]: openO9, [KBSEC_TR.AMEND_KR]: { ordr_no: 'AM2' } });
 
         const order = await newExchange().editOrder('O9', '005930/KRW', 'limit', 'buy', 5, 71000);
 
-        expect(trBody(mockFetch, KBSEC_TR.AMEND_KR).dataBody).toMatchObject({ crct_clsf: '2', ordr_q: '0' });
-        // ★보내지 않은 수량 5 를 반환값에 싣지 않는다. 호출자의 장부가 실제 주문과 어긋나지 않게 한다.
-        expect(order.amount).toBeUndefined();
+        expect(trBody(mockFetch, KBSEC_TR.AMEND_KR).dataBody).toMatchObject({ crct_clsf: '2', ordr_q: '0', sor_ordr_ccd: 'K' });
+        expect(order.amount).toBe(5);
+    });
+
+    it('★amount 가 총수량과 다르면 받은 수량을 버리지 않고 정정 요청 없이 NotSupported 다', async () => {
+        routeTr(mockFetch, { [KBSEC_TR.TRADES_KR]: openO9, [KBSEC_TR.AMEND_KR]: { ordr_no: 'AM2' } });
+
+        await expect(newExchange().editOrder('O9', '005930/KRW', 'limit', 'buy', 3, 71000)).rejects.toBeInstanceOf(NotSupported);
+        expect(calledTrs(mockFetch)).not.toContain(KBSEC_TR.AMEND_KR.toLowerCase());
+    });
+
+    it('amount 를 줬는데 원주문이 미체결 목록에 없으면 발주 정책으로 폴백하지 않고 OrderNotFound 다', async () => {
+        routeTr(mockFetch, { [KBSEC_TR.TRADES_KR]: { Record1: [] }, [KBSEC_TR.AMEND_KR]: { ordr_no: 'AM2' } });
+
+        await expect(newExchange().editOrder('O9', '005930/KRW', 'limit', 'buy', 5, 71000)).rejects.toBeInstanceOf(OrderNotFound);
+        expect(calledTrs(mockFetch)).not.toContain(KBSEC_TR.AMEND_KR.toLowerCase());
+    });
+
+    it('일부정정(params.partial)에 amount 가 없으면 요청 없이 ArgumentsRequired 다', async () => {
+        await expect(newExchange().editOrder('O9', '005930/KRW', 'limit', 'buy', undefined, 71000, { partial: true })).rejects.toBeInstanceOf(ArgumentsRequired);
+        expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it('정정은 원주문과 같은 라우팅으로 나간다 — 미체결 목록의 sor_ordr_ccd 가 정본이다', async () => {
@@ -492,12 +522,24 @@ describe('editOrder', () => {
     it('해외 정정은 가격만 바꾼다 — crct_cncl_clsf 1 이고 수량 필드를 보내지 않는다', async () => {
         routeTr(mockFetch, { [KBSEC_TR.AMEND_CANCEL_US]: { ordr_no: 'UM1' } });
 
-        const order = await newExchange().editOrder('O9', 'AAPL/USD', 'limit', 'buy', 5, 230.25);
+        const order = await newExchange().editOrder('O9', 'AAPL/USD', 'limit', 'buy', undefined, 230.25);
 
         const body = trBody(mockFetch, KBSEC_TR.AMEND_CANCEL_US).dataBody;
         expect(body).toMatchObject({ crct_cncl_clsf: '1', orgn_ordr_no: 'O9', frgn_ordr_prc_p4: '230.2500' });
         expect(body.frgn_ordr_q).toBeUndefined();
         expect(order.id).toBe('UM1');
+    });
+
+    it('★해외 amount 는 원주문의 체결 수량을 믿을 만한 조회로 확인할 수 없어 요청(조회 포함) 없이 NotSupported 다', async () => {
+        routeTr(mockFetch, { [KBSEC_TR.AMEND_CANCEL_US]: { ordr_no: 'UM1' } });
+
+        await expect(newExchange().editOrder('O9', 'AAPL/USD', 'limit', 'buy', 3, 230.25)).rejects.toBeInstanceOf(NotSupported);
+        expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('해외 일부정정(params.partial)은 요청 없이 NotSupported 다', async () => {
+        await expect(newExchange().editOrder('O9', 'AAPL/USD', 'limit', 'buy', 1, 230.25, { partial: true })).rejects.toBeInstanceOf(NotSupported);
+        expect(mockFetch).not.toHaveBeenCalled();
     });
 });
 

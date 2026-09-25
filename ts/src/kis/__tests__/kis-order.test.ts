@@ -9,7 +9,7 @@ const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 global.fetch = mockFetch as unknown as typeof fetch;
 
 import { logger } from '../../logger';
-import { ExchangeError, InvalidOrder, MarketClosed, OrderNotFound, ArgumentsRequired } from '../../base/errors';
+import { ExchangeError, InvalidOrder, MarketClosed, NotSupported, OrderNotFound, ArgumentsRequired } from '../../base/errors';
 import { KIS_MASTER_FIXTURE } from '../../__tests__/support/kis-master-fixture';
 import { bodyOf, businessError, dataOk, headersOf, MARKET_TIMES, newKis as newKisBase, tokenOk } from './support/kis-test-utils';
 
@@ -436,12 +436,51 @@ describe('정정', () => {
         expect(edited).toMatchObject({ id: '3', status: 'open', symbol: '005930/KRW', price: 71000 });
     });
 
-    it('국내 정정 — amount 를 주면 일부정정(QTY_ALL_ORD_YN: N)', async () => {
+    it('국내 일부정정은 params.partial 과 옮길 수량 amount 로 낸다(QTY_ALL_ORD_YN: N)', async () => {
         mockFetch.mockResolvedValueOnce(tokenOk()).mockResolvedValueOnce(dataOk({ output: { ODNO: '0000001' } }));
 
-        await newKis().editOrder('0000001', '005930/KRW', 'limit', 'buy', 5, 71000);
+        const edited = await newKis().editOrder('0000001', '005930/KRW', 'limit', 'buy', 5, 71000, { partial: true });
 
         expect(bodyOf(mockFetch, 1)).toMatchObject({ ORD_QTY: '5', ORD_UNPR: '71000', QTY_ALL_ORD_YN: 'N' });
+        expect(bodyOf(mockFetch, 1).partial).toBeUndefined();
+        expect(edited.amount).toBe(5);
+    });
+
+    it('일부정정(params.partial)에 amount 가 없으면 요청 없이 ArgumentsRequired', async () => {
+        await expect(newKis().editOrder('0000001', '005930/KRW', 'limit', 'buy', undefined, 71000, { partial: true })).rejects.toThrow(ArgumentsRequired);
+        expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    /** 원주문이 10주 가운데 3주 체결된 미체결 목록. */
+    const openRow = () => dataOk({ output: [
+        { odno: '0000001', pdno: '005930', sll_buy_dvsn_cd: '02', ord_qty: '10', ord_unpr: '70000', tot_ccld_qty: '3', psbl_qty: '7', ord_dvsn_cd: '00' },
+    ] });
+
+    it('★국내 amount 는 정정 뒤 총수량이다. 미체결 조회로 체결 + 잔량과 같은지 확인한 뒤 잔량 전부를 정정한다(QTY_ALL_ORD_YN: Y)', async () => {
+        mockFetch.mockImplementation(async (url: string) => {
+            const u = String(url);
+            if (u.includes('/oauth2/')) return tokenOk();
+            if (u.includes('inquire-psbl-rvsecncl')) return openRow();
+            return dataOk({ output: { ODNO: '2' } });
+        });
+
+        const edited = await newKis().editOrder('0000001', '005930/KRW', 'limit', 'buy', 10, 71000);
+
+        const call = mockFetch.mock.calls.find((c) => String(c[0]).includes('order-rvsecncl'))!;
+        expect(JSON.parse((call[1] as { body: string }).body)).toMatchObject({ ORD_QTY: '0', ORD_UNPR: '71000', QTY_ALL_ORD_YN: 'Y' });
+        expect(edited).toMatchObject({ id: '2', amount: 10 });
+    });
+
+    it('★국내 amount 로 수량을 바꾸는 정정은 한 요청으로 낼 수 없어 정정 요청 없이 NotSupported 다(주문이 두 가격으로 나뉘지 않는다)', async () => {
+        mockFetch.mockImplementation(async (url: string) => {
+            const u = String(url);
+            if (u.includes('/oauth2/')) return tokenOk();
+            if (u.includes('inquire-psbl-rvsecncl')) return openRow();
+            return dataOk({ output: { ODNO: '2' } });
+        });
+
+        await expect(newKis().editOrder('0000001', '005930/KRW', 'limit', 'buy', 5, 71000)).rejects.toThrow(NotSupported);
+        expect(mockFetch.mock.calls.some((c) => String(c[0]).includes('order-rvsecncl'))).toBe(false);
     });
 
     it('해외 정정 — 해외 정정 TR 로 낸다. 수량은 params.amount 로 받는다', async () => {
@@ -473,5 +512,17 @@ describe('정정', () => {
 
     it('모의투자의 해외 정정은 미체결 조회가 없어 수량이 없으면 ArgumentsRequired', async () => {
         await expect(newKis({ sandbox: true }).editOrder('US-1', 'AAPL/USD', 'limit', 'buy', undefined, 226)).rejects.toThrow(ArgumentsRequired);
+    });
+
+    it('모의투자의 해외 정정은 amount 를 원주문과 대조할 수 없어 요청 없이 NotSupported 다(params.amount 로 준다)', async () => {
+        vi.setSystemTime(MARKET_TIMES.usRegular);
+
+        await expect(newKis({ sandbox: true }).editOrder('US-1', 'AAPL/USD', 'limit', 'buy', 5, 226)).rejects.toThrow(NotSupported);
+        expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('해외 정정의 일부정정(params.partial)은 요청 없이 NotSupported 다', async () => {
+        await expect(newKis({ sandbox: false }).editOrder('US-1', 'AAPL/USD', 'limit', 'buy', 1, 226, { partial: true })).rejects.toThrow(NotSupported);
+        expect(mockFetch).not.toHaveBeenCalled();
     });
 });

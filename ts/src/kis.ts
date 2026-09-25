@@ -111,6 +111,7 @@ import {
     isKrxDomesticCode,
 } from './kis/kis-types';
 import { getKrxTickSize, KRX_TICK_INVALID_DETAIL, krxTickViolation } from './krx-tick-size';
+import { assertWholeRemainingEdit, editOrderTotal } from './edit-order-amount';
 import {
     getOverseasMarketForCode,
     getOverseasStockByCode,
@@ -10004,9 +10005,14 @@ export class kis extends Exchange {
 
     /**
      * 정정. 취소와 같은 엔드포인트(`order-rvsecncl`)를 `RVSE_CNCL_DVSN_CD`로 나눈다(공식 예제: `01`=정정, `02`=취소).
-     * `price`가 필수다(정정은 단가를 바꾸는 주문이라 빼면 KB증권과 같은 이유로 위험하다). `amount`를 주면 그 수량으로
-     * 일부정정(`QTY_ALL_ORD_YN: 'N'`)하고, 안 주면 국내는 전량(`'Y'`)을 그대로 정정한다. 공식 예제는 정정 가능 수량이
-     * 원주문 수량을 넘지 못한다고 적었다. 국내는 KRX 정규장과 NXT 확장세션이 모두 닫혀 있으면, 미국은 완전 마감이면 `MarketClosed` 다.
+     * `price`가 필수다(정정은 단가를 바꾸는 주문이라 빼면 KB증권과 같은 이유로 위험하다).
+     *
+     * `amount` 는 ccxt 와 같이 정정 뒤 주문의 총수량(체결분 포함)이다. 주면 미체결 조회로 원주문의 체결 수량과 잔량을 확인하고, 둘의 합과 같을 때만
+     * 잔량 전부를 새 가격으로 정정한다. 수량을 바꾸는 조합은 한 요청으로 낼 수 없어 정정 요청 없이 `NotSupported` 다. 주지 않으면 확인 없이 잔량
+     * 전부를 정정한다(국내 `QTY_ALL_ORD_YN: 'Y'`). 잔량 일부만 새 가격으로 옮기는 국내 일부정정(`'N'`)은 `params.partial: true` 일 때만 보내고,
+     * 이때 `amount` 는 옮길 수량이다(나머지가 옛 가격에 남는다는 것은 공식 예제의 인자 설명에 기댄 추정이다). 반환 주문의 `amount` 는 정정 뒤 총수량이고,
+     * 일부정정이면 옮긴 수량이다. 확인하지 않은 값은 싣지 않는다.
+     * 국내는 KRX 정규장과 NXT 확장세션이 모두 닫혀 있으면, 미국은 정규장 밖이면 `MarketClosed` 다.
      */
     override async editOrder(
         id: string, symbol: string, _type: OrderType, _side: OrderSide, amount: Num = undefined, price: Num = undefined, params: Dict = {},
@@ -10014,43 +10020,62 @@ export class kis extends Exchange {
         if (price === undefined || price === null) {
             throw new ArgumentsRequired(`${this.id} editOrder() requires a price argument`);
         }
+        const partial = this.safeBool(params, 'partial', false) === true;
+        if (partial && amount === undefined) throw new ArgumentsRequired(`${this.id} editOrder() 의 일부정정(params.partial)에는 옮길 수량 amount 가 필요하다`);
+        params = this.omit(params, 'partial');
         const instrument = this.instrumentOf(symbol);
-        if (instrument.overseas) return this.editOverseasOrder(id, instrument, price, amount, params);
+        if (instrument.overseas) return this.editOverseasOrder(id, instrument, price, amount, partial, params);
         this.assertKrxTickAligned(instrument, price, 'editOrder');
         await this.assertDomesticEditOpen();
+        if (!partial && amount !== undefined) assertWholeRemainingEdit(this.id, id, amount, await this.findOpenOrder(instrument, id));
         const response = await this.privatePostUapiDomesticStockV1TradingOrderRvsecncl(this.extend({
             ...this.accountParams(),
             KRX_FWDG_ORD_ORGNO: this.safeString(params, 'orderOrgNo', ''),
             ORGN_ODNO: id,
             ORD_DVSN: KIS_ORDER_TYPE.LIMIT,
             RVSE_CNCL_DVSN_CD: '01', // 정정
-            ORD_QTY: amount === undefined ? '0' : String(amount),
+            ORD_QTY: partial ? String(amount) : '0',
             ORD_UNPR: String(price),
-            QTY_ALL_ORD_YN: amount === undefined ? 'Y' : 'N',
+            QTY_ALL_ORD_YN: partial ? 'N' : 'Y',
             tr_id: this.tr('TTTC0803U'),
         }, this.omit(params, 'orderOrgNo')));
         const newId = this.safeString(this.safeDict(response, 'output', {}) as Dict, 'ODNO', id);
-        logger.info({ orderId: id, newOrderId: newId, symbol, price, amount }, '[kis] 주문 정정 성공');
+        logger.info({ orderId: id, newOrderId: newId, symbol, price, amount, partial }, '[kis] 주문 정정 성공');
         return this.safeOrder({
             id: newId, symbol: instrument.symbol, type: 'limit', price, amount, status: 'open', info: response,
         }, this.marketOf(instrument));
     }
 
+    /** 정정할 원주문을 미체결 목록에서 찾는다. 조회가 실패하면 던지고, 목록에 없으면 `OrderNotFound` 다. */
+    private async findOpenOrder(instrument: KisInstrument, id: string): Promise<Order> {
+        const open = (await this.fetchOpenOrders(instrument.symbol)).find((order) => order.id === id);
+        if (open === undefined) throw new OrderNotFound(`${this.id} 미체결 주문을 찾지 못했다: ${id} (${instrument.symbol})`);
+        return open;
+    }
+
     /**
-     * 해외 정정. `amount`나 `params.amount`가 없으면 미체결 조회에서 잔량을 찾는다(취소와 같은 정책). 모의투자는 미체결 조회가
-     * 없어 반드시 넘겨야 한다. 공식 예제는 정정 요청에 실제 수량과 실제 단가를 그대로 싣는다(취소처럼 `'0'`을 넣지 않는다).
+     * 해외 정정. 정정 수량(`ORD_QTY`)에는 미체결 조회로 찾은 잔량을 싣고, `amount` 를 주면 국내처럼 원주문의 총수량과 대조한다. `params.amount` 를
+     * 주면 조회와 대조 없이 그 값을 정정 수량으로 싣는다(취소와 같은 정책). 모의투자는 미국 미체결 조회가 없어 `params.amount` 가 필요하고,
+     * `amount` 는 대조할 수 없어 `NotSupported` 다. 해외 정정 수량의 뜻은 확인하지 못해 일부정정(`params.partial`)은 받지 않는다.
+     * 공식 예제는 정정 요청에 실제 수량과 실제 단가를 그대로 싣는다(취소처럼 `'0'`을 넣지 않는다).
      */
-    private async editOverseasOrder(id: string, instrument: KisInstrument, price: number, amount: Num, params: Dict): Promise<Order> {
+    private async editOverseasOrder(id: string, instrument: KisInstrument, price: number, amount: Num, partial: boolean, params: Dict): Promise<Order> {
         const exchange = instrument.orderExchange;
         if (exchange === undefined) throw new BadSymbol(`해외 마스터에 없는 ticker: ${instrument.symbol}`);
-        let quantity = this.safeString(params, 'amount') ?? (amount === undefined ? undefined : numberToString(amount));
+        if (partial) throw new NotSupported(`${this.id} editOrder() 의 일부정정(params.partial)은 미국 주문에서 지원하지 않는다`);
+        let quantity = this.safeString(params, 'amount');
         if (quantity === undefined && this.isSandboxModeEnabled) {
-            throw new ArgumentsRequired(`${this.id} 모의투자의 해외 주문 정정에는 amount나 params.amount(정정 수량)가 필요하다`);
+            if (amount !== undefined) {
+                throw new NotSupported(`${this.id} 모의투자는 미국 미체결 조회가 없어 editOrder() 의 amount 를 원주문과 대조할 수 없다. params.amount(정정 수량)로 준다`);
+            }
+            throw new ArgumentsRequired(`${this.id} 모의투자의 해외 주문 정정에는 params.amount(정정 수량)가 필요하다`);
         }
         this.assertUsEditOpen(exchange);
+        let total: number | undefined;
         if (quantity === undefined) {
-            const open = (await this.fetchOpenOrders(instrument.symbol)).find((order) => order.id === id);
-            if (open === undefined) throw new OrderNotFound(`${this.id} 미체결 해외 주문을 찾지 못했다: ${id}`);
+            const open = await this.findOpenOrder(instrument, id);
+            if (amount !== undefined) assertWholeRemainingEdit(this.id, id, amount, open);
+            total = editOrderTotal(open);
             quantity = numberToString(open.remaining ?? open.amount ?? 0);
         }
         const response = await this.privatePostUapiOverseasStockV1TradingOrderRvsecncl(this.extend({
@@ -10068,7 +10093,7 @@ export class kis extends Exchange {
         const newId = this.safeString(this.safeDict(response, 'output', {}) as Dict, 'ODNO', id);
         logger.info({ orderId: id, newOrderId: newId, symbol: instrument.symbol, price, quantity }, '[kis] 해외 주문 정정 성공');
         return this.safeOrder({
-            id: newId, symbol: instrument.symbol, type: 'limit', price, amount: Number(quantity), status: 'open', info: response,
+            id: newId, symbol: instrument.symbol, type: 'limit', price, amount: total, status: 'open', info: response,
         }, this.marketOf(instrument));
     }
 

@@ -61,6 +61,7 @@ from kr_broker.base.token_store import BrokerTokenStore, legacy_token_store_key,
 from kr_broker.base.types import ApiName, Int, Num, Str, Strings
 from kr_broker.broker_market_group import symbol_base_code
 from kr_broker.broker_time import candle_period_utc_ms, is_daily_or_longer_timeframe
+from kr_broker.edit_order_amount import assert_whole_remaining_edit, edit_order_total
 from kr_broker.krx_tick_size import KRX_TICK_INVALID_DETAIL, get_krx_tick_size, krx_tick_violation
 from kr_broker.krx_trading_hours import krx_auction_buy_block_reason
 from kr_broker.market_calendar import apply_market_calendar
@@ -107,7 +108,7 @@ ORDER_HANDLED_PARAMS = ['triggerPrice', 'cost', 'clientOrderId', 'timeInForce', 
 # 라이브러리가 인자로 채우는 주문 본문 필드. `params` 로 덮으면 돌려주는 주문과 실제 요청이 어긋나므로 받지 않는다.
 ORDER_COMPUTED_FIELDS = ('symbol', 'side', 'orderType', 'quantity', 'orderAmount', 'price', 'confirmHighValueOrder')
 # 일반 정정 경로가 `params` 에서 읽는 키. 본문에 합치지 않는다.
-EDIT_HANDLED_PARAMS = ['trigger', 'stop']
+EDIT_HANDLED_PARAMS = ['trigger', 'stop', 'partial']
 # 라이브러리가 인자로 채우는 정정 본문 필드(`orderId` 는 경로에 실린다).
 EDIT_COMPUTED_FIELDS = ('orderId', 'orderType', 'quantity', 'price', 'confirmHighValueOrder')
 # 미국 소수점 수량의 최대 자릿수.
@@ -1288,9 +1289,11 @@ class toss(Exchange, ImplicitAPI):
 
     async def edit_order(self, id: str, symbol: str, type: str, side: str, amount: Num = None, price: Num = None,
                    params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """주문을 정정한다. 국내는 가격과 수량을 함께(`amount` 필수), 미국은 가격만 정정한다(`amount` 를 주면 `NotSupported`).
-        미국은 고액주문 확인에 쓸 남은 수량을 정정 전에 주문 상세(`GET /orders/{orderId}`)로 읽는다.
-        정정하면 새 주문번호가 나온다. `params['trigger']` 가 `True` 면 조건주문 정정이고, 조건 전체를 등록과 같은 인자로 다시 선언한다."""
+        """주문을 정정한다. 잔량 전부를 새 가격으로 옮긴다. 국내는 정정 본문의 수량(`quantity`)에 주문 상세(`GET /orders/{orderId}`)로 읽은
+        잔량을 싣고, 미국은 가격만 보낸다. `amount` 는 ccxt 와 같이 정정 뒤 주문의 총수량(체결분 포함)이고, 주면 주문 상세로 대조해 총수량과
+        다르면 정정 요청 없이 `NotSupported` 다. 명세의 `quantity` 뜻이 정해지지 않아 국내는 체결 없는 주문만 정정하고, 일부 체결된 주문은
+        `NotSupported` 다. 일부정정(`params['partial']`)은 받지 않는다. 주문 상세 조회가 실패하면 던진다(미국에서 `amount` 가 없으면 조회는
+        고액주문 확인에만 쓰므로 실패해도 정정한다). 정정하면 새 주문번호가 나온다. `params['trigger']` 가 `True` 면 조건주문 정정이고, 조건 전체를 등록과 같은 인자로 다시 선언한다."""
         params = {} if params is None else params
         amount, price = fn.decimal_to_float(amount), fn.decimal_to_float(price)
         if self.safe_bool_2(params, 'trigger', 'stop', False) is True:
@@ -1305,21 +1308,27 @@ class toss(Exchange, ImplicitAPI):
         country = self._country_of(market)
         if type == 'limit' and price is None:
             raise ArgumentsRequired(f'{self.id} editOrder() requires a price argument for a limit order')
-        if country == 'US' and amount is not None:
-            raise NotSupported(f'{self.id} editOrder() 는 미국 종목의 수량 정정을 지원하지 않는다(가격만 가능)')
-        if country == 'KR' and amount is None:
-            raise ArgumentsRequired(f'{self.id} editOrder() 는 국내 종목의 수량 정정에 amount 인자가 필요하다')
+        if self.safe_bool(params, 'partial', False) is True:
+            raise NotSupported(f'{self.id} editOrder() 의 일부정정(params.partial)은 지원하지 않는다. 토스 정정은 잔량 전부를 새 가격으로 옮긴다')
         if type == 'limit' and price is not None:
             self._assert_krx_tick_aligned(market, price, 'editOrder')
 
+        # 국내는 정정 수량을 싣기 위해, `amount` 를 주면 대조하기 위해 원주문을 조회한다. 이때 조회가 실패하면 던진다.
+        original = await self._edit_original(id) if country == 'KR' or amount is not None else None
+        if country == 'KR' and original is not None and original['filled'] > 0:
+            raise NotSupported(f"{self.id} editOrder() 는 일부 체결된 국내 주문({id}, 체결 {fn.js_string(original['filled'])})을 정정하지 않는다. "
+                               '정정 수량(quantity)이 정정 뒤 총수량인지 옮길 수량인지 확인하지 못했다. 취소한 뒤 다시 주문한다')
+        if amount is not None:
+            assert_whole_remaining_edit(self.id, id, amount, original if original is not None else {})
+
         body: Dict[str, Any] = {'orderId': id, 'orderType': 'MARKET' if type == 'market' else 'LIMIT'}
-        if country == 'KR':
-            body['quantity'] = self.number_to_string(self.normalize_quantity(symbol, type, side, amount))
+        if country == 'KR' and original is not None:
+            body['quantity'] = self.number_to_string(original['remaining'])
         if type == 'limit':
             body['price'] = self._order_price_string(market, price)
-        # 국내 명목가는 정정 수량 × 가격이다. 미국 정정은 수량을 받지 않으므로 주문 상세의 남은 수량 × 가격으로 본다.
-        if country == 'KR':
-            notional = (amount if amount is not None else 0) * (price if price is not None else 0)
+        # 명목가는 잔량 × 가격이다. 미국에서 원주문을 조회하지 않았으면 고액주문 확인용으로만 읽는다.
+        if original is not None:
+            notional = original['remaining'] * (price if price is not None else 0)
         else:
             notional = await self._us_edit_notional(id, price)
         if await self._is_high_value(notional, country):
@@ -1340,10 +1349,21 @@ class toss(Exchange, ImplicitAPI):
             'type': type,
             'side': side,
             'price': price,
-            'amount': amount,
+            # 정정 뒤 총수량. 국내는 조회한 잔량을 실었으므로 알고, 미국에서 `amount` 를 주지 않았으면 확인하지 않았으므로 비운다.
+            'amount': amount if amount is not None else (edit_order_total(original) if country == 'KR' and original is not None else None),
             'status': 'open',
             'trades': [],
         }, market)
+
+    async def _edit_original(self, order_id: str) -> Dict[str, Any]:
+        """정정할 원주문의 체결 수량과 잔량(주문 상세). 조회가 실패하면 던지고, 없거나 잔량이 없으면 `OrderNotFound` 다."""
+        order = self.unwrap(await self.private_account_get_orders_orderid({'orderId': order_id}))
+        quantity = self.safe_number(order, 'quantity')
+        filled = self.safe_number(self.safe_dict(order, 'execution'), 'filledQuantity', 0)
+        remaining = fn.js_number(Precise.string_sub(self.number_to_string(quantity), self.number_to_string(filled))) if quantity is not None else None
+        if remaining is None or not remaining > 0:
+            raise OrderNotFound(f'{self.id} editOrder() 정정할 잔량이 있는 주문을 찾지 못했다: {order_id}')
+        return {'filled': filled, 'remaining': remaining}
 
     async def _us_edit_notional(self, order_id: str, price: Num) -> float:
         """미국 정정의 명목가. 주문 상세(`GET /orders/{orderId}`)의 남은 수량(주문 수량 − 체결 수량)에 새 가격을 곱한다.
