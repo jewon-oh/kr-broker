@@ -1,4 +1,4 @@
-"""한국투자증권 상수와 호가 단위. TypeScript 판 `ts/src/kis/kis-types.ts` 에서 웹소켓 프레임 배치를 뺀 것을 옮겼다."""
+"""한국투자증권 상수와 호가 단위. TypeScript 판 `ts/src/kis/kis-types.ts` 를 옮겼다."""
 
 from typing import Optional
 
@@ -7,7 +7,8 @@ from kr_broker.broker_krx_code import KIS_KRX_CODE_DIGITS, KNOWN_ALNUM_KRX_CODES
 from kr_broker.krx_sell_tax import krx_sell_tax_rate
 
 __all__ = [
-    'KIS_API_DOMAINS', 'KIS_WS_DOMAINS', 'KIS_RATE_LIMIT_ERROR_CODE', 'KIS_LEDGER_RATE_LIMIT_ERROR_CODE', 'KIS_RATE_LIMIT_ERROR_CODES',
+    'KIS_API_DOMAINS', 'KIS_WS_DOMAINS', 'KIS_WS_PATH', 'KIS_WS_TR', 'KIS_WS_FIELD',
+    'KIS_RATE_LIMIT_ERROR_CODE', 'KIS_LEDGER_RATE_LIMIT_ERROR_CODE', 'KIS_RATE_LIMIT_ERROR_CODES',
     'KIS_BROKERAGE_FEE', 'KIS_DEFAULT_FEE_RATE', 'KIS_OVERSEAS_DEFAULT_FEE_RATE', 'KIS_CUSTOMER_TYPE', 'KIS_DEFAULT_ACCOUNT_SUFFIX',
     'KIS_ORDER_TYPE', 'KIS_OVERSEAS_ORD_DVSN', 'KIS_PRESENT_BALANCE_PARAMS', 'KIS_KRX_CODE_DIGITS', 'KNOWN_ALNUM_KRX_CODES',
     'get_kis_effective_fee_rate', 'get_tick_size', 'is_krx_domestic_code', 'is_overseas_symbol', 'krx_sell_tax_rate',
@@ -20,6 +21,31 @@ KIS_API_DOMAINS = {
 KIS_WS_DOMAINS = {
     'REAL': 'ws://ops.koreainvestment.com:21000',
     'VIRTUAL': 'ws://ops.koreainvestment.com:31000',
+}
+# 실시간 웹소켓 구독 경로(KIS 공통 실시간 엔드포인트).
+KIS_WS_PATH = '/tryitout'
+# 실시간 TR ID. 국내는 체결가 H0STCNT0, 호가 H0STASP0 이고 해외는 지연체결가 HDFSCNT0, 지연호가 HDFSASP0 다(유료 실시간인 R* 계열은 쓰지 않는다).
+KIS_WS_TR = {
+    'DOMESTIC_TRADE': 'H0STCNT0',
+    'DOMESTIC_ASKING': 'H0STASP0',
+    'OVERSEAS_TRADE': 'HDFSCNT0',
+    'OVERSEAS_ASKING': 'HDFSASP0',
+    'PINGPONG': 'PINGPONG',
+}
+# 실시간 체결·호가 프레임에서 `^` 로 나뉜 본문의 필드 위치. KIS 공식 문서 기준이고, 실제 연결에서 다르면 이 값만 고친다.
+KIS_WS_FIELD = {
+    # 국내 체결 H0STCNT0: [0] 종목코드, [2] 현재가(STCK_PRPR), [5] 전일대비율(PRDY_CTRT)
+    'DOMESTIC_TRADE_LAST': 2,
+    'DOMESTIC_TRADE_CHANGE_PCT': 5,
+    # 해외 체결 HDFSCNT0: [1] 종목코드(SYMB), [11] 현재가(LAST), [14] 등락율(RATE)
+    'OVERSEAS_TRADE_SYMBOL': 1,
+    'OVERSEAS_TRADE_LAST': 11,
+    'OVERSEAS_TRADE_CHANGE_PCT': 14,
+    # 국내 호가 H0STASP0: [0] 종목코드, 매도호가 ASKP1..10 = [3+i], 매수호가 BIDP1..10 = [13+i], 매도잔량 = [23+i], 매수잔량 = [33+i]
+    'DOMESTIC_ASKP_BASE': 3,
+    'DOMESTIC_BIDP_BASE': 13,
+    'DOMESTIC_ASKP_RSQN_BASE': 23,
+    'DOMESTIC_BIDP_RSQN_BASE': 33,
 }
 
 # 초당 거래건수 초과. 조회는 다시 보내고 주문은 다시 보내지 않는다(이중 주문 위험).

@@ -1,6 +1,6 @@
 """한국투자증권 Open API(`class kis(Exchange, ImplicitAPI)`). TypeScript 판 `ts/src/kis.ts` 를 옮겼다. 국내와 미국 주식 현물의 시세와 종목,
-잔고, 주문, 주문과 체결 조회, 휴장일 캘린더와 순위 같은 고유 조회를 ccxt 와 같은 모양으로 다룬다. 웹소켓(`watch_*`)과 통합 메서드가 부르지
-않는 고유 메서드(채권, 선물옵션 등)는 옮기지 않았다.
+잔고, 주문, 주문과 체결 조회, 휴장일 캘린더와 순위 같은 고유 조회를 ccxt 와 같은 모양으로 다룬다. 실시간(`watch_*`)은 이 클래스를 상속한
+`kr_broker.pro.kis` 에 있다. 통합 메서드가 부르지 않는 고유 메서드(채권, 선물옵션 등)는 옮기지 않았다.
 
 .. code-block:: python
 
@@ -784,7 +784,7 @@ class kis(Exchange, ImplicitAPI):
             'rateLimit': REAL_RATE_LIMIT_MS,
             'timeout': READ_TIMEOUT_MS,
             'orderTimeout': ORDER_TIMEOUT_MS,
-            # 옮긴 통합 메서드만 True 다. 웹소켓(`ws`, `watch*`)은 옮기지 않아 False 다.
+            # 옮긴 통합 메서드만 True 다. 실시간(`ws`, `watch*`)은 `kr_broker.pro.kis` 가 True 로 바꾼다.
             'has': {
                 'ws': False,
                 'watchTicker': False,
