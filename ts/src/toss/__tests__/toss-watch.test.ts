@@ -84,6 +84,37 @@ describe('watchOrders', () => {
     });
 });
 
+describe('params.signal', () => {
+    it('신호가 오면 기다리던 watchTicker·watchOrderBook 을 AbortError 로 거절한다', async () => {
+        const { ex } = withFakeSocket();
+        const controller = new AbortController();
+        const ticker = ex.watchTicker('005930/KRW', { signal: controller.signal });
+        const book = ex.watchOrderBook('005930/KRW', undefined, { signal: controller.signal });
+
+        controller.abort();
+
+        await expect(ticker).rejects.toMatchObject({ name: 'AbortError' });
+        await expect(book).rejects.toMatchObject({ name: 'AbortError' });
+    });
+
+    it('포기한 watchTrades·watchOrders 는 체결과 주문을 가져가지 않는다. 다음 호출이 받는다', async () => {
+        const { ex, on } = withFakeSocket();
+        const controller = new AbortController();
+        const trades = ex.watchTrades('005930/KRW', undefined, undefined, { signal: controller.signal });
+        const orders = ex.watchOrders(undefined, undefined, undefined, { signal: controller.signal });
+        await flush();
+        controller.abort();
+        await expect(trades).rejects.toMatchObject({ name: 'AbortError' });
+        await expect(orders).rejects.toMatchObject({ name: 'AbortError' });
+
+        on().onTrade?.('kr', '005930', 71000, 15, AT);
+        on().onOrder?.('ACC-001', 'FILL', { orderId: 'O1', symbol: '005930', side: 'BUY', orderType: 'LIMIT', price: '71000', quantity: '10', status: 'FILLED' });
+
+        expect((await ex.watchTrades('005930/KRW')).map((t) => t.amount)).toEqual([15]);
+        expect((await ex.watchOrders()).map((o) => o.id)).toEqual(['O1']);
+    });
+});
+
 describe('close', () => {
     it('연결을 멈추고 기다리던 watch 를 거절한다', async () => {
         const { ex, socket } = withFakeSocket();

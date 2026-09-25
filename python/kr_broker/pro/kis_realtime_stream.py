@@ -46,13 +46,17 @@ class KisRealtimeRecord(NamedTuple):
 
 
 def split_kis_realtime_records(tr_id: str, count: float, payload: str) -> List[KisRealtimeRecord]:
-    """받은 값을 건수만큼 나눈다. 필드 이름을 아는 TR 은 필드 수로 자르고, 값이 모자라거나 모르는 TR 이면 전체 값 수를 건수로 나눈 길이로
-    자른다. 필드 이름은 위치대로 붙인다."""
+    """받은 값을 건수만큼 나눈다. 값 수가 건수로 나눠떨어지면 그 몫으로 자른다. 나눠떨어지지 않으면 필드 이름을 아는 TR 은 필드 수로 자르고,
+    값이 모자라거나 모르는 TR 이면 전체 값 수를 건수로 나눈 길이로 자른다. 필드 이름은 위치대로 붙인다."""
     values = payload.split('^')
     columns = kis_realtime_columns(tr_id)
     # JavaScript 의 `Number.isInteger(count) && count > 0 ? count : 1`
     n = int(count) if isinstance(count, (int, float)) and math.isfinite(count) and count == int(count) and count > 0 else 1
-    size = len(columns) if columns is not None and len(columns) * n <= len(values) else len(values) // n
+    # KIS 가 필드를 뒤에 더해도 두 번째 건부터 어긋나지 않게 필드 수보다 값 수를 먼저 믿는다.
+    if len(values) % n == 0:
+        size = len(values) // n
+    else:
+        size = len(columns) if columns is not None and len(columns) * n <= len(values) else len(values) // n
     if size <= 0:
         return []
     records: List[KisRealtimeRecord] = []
@@ -112,6 +116,9 @@ class KisRealtimeStream(ReconnectingWebSocket):
         """구독을 등록한다. 처음 부르면 접속하고, 접속 뒤에는 바로 등록 프레임(`tr_type` 1)을 보낸다. 같은 구독은 한 번만 보낸다."""
         sub_id = f'{tr_id}|{tr_key}'
         if sub_id in self._subs:
+            # 앞선 이벤트 루프가 끝나 연결 작업이 멈췄으면 다시 연결한다. 연결되면 등록된 구독을 모두 다시 보낸다.
+            if not self.running:
+                self.start()
             return
         if len(self._subs) >= MAX_REGISTRATIONS:
             logger.warning('[KisRealtimeStream] 연결당 등록 한계를 넘는다 (trId=%s, trKey=%s, subs=%s)', tr_id, tr_key, len(self._subs))
@@ -148,7 +155,7 @@ class KisRealtimeStream(ReconnectingWebSocket):
         self._on_data(text)
 
     def _on_system_message(self, raw: str) -> None:
-        """구독 응답. 실패면 알리고, 체결통보의 복호 key 와 iv 를 TR 별로 기억한다."""
+        """구독 응답. 실패면 그 구독을 지우고 알린다. 성공이면 체결통보의 복호 key 와 iv 를 TR 별로 기억한다."""
         try:
             message = json.loads(raw)
         except ValueError:
@@ -160,8 +167,11 @@ class KisRealtimeStream(ReconnectingWebSocket):
         tr_id = _text(header.get('tr_id'))
         # TypeScript 판처럼 `rt_cd` 가 없을 때만 넘어가고, null 은 실패로 본다.
         if 'rt_cd' in body and fn.js_string(body['rt_cd']) != '0':
+            tr_key = _text(header.get('tr_key'))
+            # 거부된 구독을 남겨 두면 같은 구독을 다시 불러도 등록 프레임을 보내지 않는다.
+            self._subs.pop(f'{tr_id}|{tr_key}', None)
             if self._on_subscribe_error is not None:
-                self._on_subscribe_error(tr_id, _text(header.get('tr_key')), _text(body.get('msg1')))
+                self._on_subscribe_error(tr_id, tr_key, _text(body.get('msg1')))
             return
         output = body.get('output') if isinstance(body.get('output'), dict) else {}
         key, iv = output.get('key'), output.get('iv')
@@ -189,4 +199,8 @@ class KisRealtimeStream(ReconnectingWebSocket):
                 logger.warning('[KisRealtimeStream] 복호 실패 — 버린다 (trId=%s)', tr_id, exc_info=True)
                 return
         for record in split_kis_realtime_records(tr_id, fn.js_number(count_text), payload):
-            self._on_record(record)
+            # 한 건의 콜백이 던져도 나머지 건은 계속 넘긴다.
+            try:
+                self._on_record(record)
+            except Exception:
+                logger.warning('[KisRealtimeStream] on_record 처리 실패 (trId=%s)', tr_id, exc_info=True)

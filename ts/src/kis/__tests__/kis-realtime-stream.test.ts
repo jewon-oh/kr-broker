@@ -196,3 +196,144 @@ describe('KisRealtimeStream', () => {
         expect(stream.isConnected()).toBe(false);
     });
 });
+
+describe('다건 프레임의 레코드 길이', () => {
+    it('값 수가 건수로 나눠떨어지면 그 몫으로 자른다 — KIS 가 필드를 뒤에 더해도 두 번째 건이 어긋나지 않는다', () => {
+        const columns = KIS_REALTIME_COLUMNS.H0IFCNT0;
+        const one = [...columns.map((_, i) => String(i)), 'extra'];
+        const records = splitKisRealtimeRecords('H0IFCNT0', 2, [...one, ...one.map((v) => `b${v}`)].join('^'));
+
+        expect(records[1].fields?.[columns[0]]).toBe('b0');
+        expect(records[1].values).toHaveLength(columns.length + 1);
+    });
+});
+
+describe('KisRealtimeStream 연결 수명', () => {
+    const newStream = (overrides: Partial<ConstructorParameters<typeof KisRealtimeStream>[0]> = {}) =>
+        new KisRealtimeStream({ getApprovalKey: async () => 'ak', isVirtual: true, onRecord: () => undefined, ...overrides });
+
+    it('onRecord 가 던져도 같은 프레임의 나머지 건을 넘기고 처리되지 않은 거부를 남기지 않는다', async () => {
+        const unhandled = vi.fn();
+        process.on('unhandledRejection', unhandled);
+        try {
+            const seen: string[] = [];
+            const stream = newStream({
+                onRecord: (r) => {
+                    seen.push(r.values[0]);
+                    if (seen.length === 1) throw new Error('boom');
+                },
+            });
+            stream.subscribe('H0XXXXX0', 'K');
+            await flush();
+            FakeWs.instances[0].emit('open');
+            FakeWs.instances[0].emit('message', { data: '0|H0XXXXX0|002|a^b^c^d' });
+            await flush();
+            await flush();
+
+            expect(seen).toEqual(['a', 'c']);
+            expect(unhandled).not.toHaveBeenCalled();
+            stream.stop();
+        } finally {
+            process.off('unhandledRejection', unhandled);
+        }
+    });
+
+    it('소켓 생성이 던지면 로그를 남기고 재연결을 예약한다', async () => {
+        vi.useFakeTimers();
+        try {
+            let calls = 0;
+            g.WebSocket = class extends FakeWs {
+                constructor(url: string) {
+                    if (++calls === 1) throw new Error('bad url');
+                    super(url);
+                }
+            } as unknown as typeof WebSocket;
+            const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
+            const stream = newStream();
+            stream.subscribe('H0IFCNT0', '101W12');
+            await vi.advanceTimersByTimeAsync(0);
+
+            expect(errorSpy).toHaveBeenCalledWith(expect.objectContaining({ err: expect.any(Error) }), '[KisRealtimeStream] WS 생성 실패 — 재연결 예약');
+            await vi.advanceTimersByTimeAsync(2_000);
+            expect(FakeWs.instances).toHaveLength(1);
+            stream.stop();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('접속키를 기다리는 사이에 stop() 을 부르면 소켓을 만들지 않는다', async () => {
+        let release: (key: string) => void = () => undefined;
+        const stream = newStream({ getApprovalKey: () => new Promise<string>((resolve) => { release = resolve; }) });
+        stream.subscribe('H0IFCNT0', '101W12');
+        await flush();
+
+        stream.stop();
+        release('ak');
+        await flush();
+
+        expect(FakeWs.instances).toHaveLength(0);
+    });
+
+    it('stop() 뒤 곧바로 다시 구독해도 연결은 하나다', async () => {
+        const releases: Array<(key: string) => void> = [];
+        const stream = newStream({ getApprovalKey: () => new Promise<string>((resolve) => { releases.push(resolve); }) });
+        stream.subscribe('H0IFCNT0', '101W12');
+        await flush();
+        stream.stop();
+        stream.subscribe('H0IFASP0', '101W12');
+        await flush();
+
+        for (const release of releases) release('ak');
+        await flush();
+
+        expect(FakeWs.instances).toHaveLength(1);
+        stream.stop();
+    });
+
+    it('재연결은 옛 소켓을 닫고, 옛 소켓의 늦은 이벤트로 재연결이나 구독을 하지 않는다', async () => {
+        vi.useFakeTimers();
+        try {
+            const getApprovalKey = vi.fn(async () => 'ak');
+            const stream = newStream({ getApprovalKey });
+            stream.subscribe('H0IFCNT0', '101W12');
+            await vi.advanceTimersByTimeAsync(0);
+            const first = FakeWs.instances[0];
+            first.emit('open');
+            first.emit('close', { code: 1006 });
+            await vi.advanceTimersByTimeAsync(2_000);
+            const second = FakeWs.instances[1];
+
+            expect(first.readyState).toBe(3);
+            first.emit('close', { code: 1006 });
+            first.emit('open');
+            await vi.advanceTimersByTimeAsync(30_000);
+
+            expect(FakeWs.instances).toHaveLength(2);
+            expect(getApprovalKey).toHaveBeenCalledTimes(2);
+            expect(first.sent).toHaveLength(1);
+            expect(second.sent).toHaveLength(0);
+            stream.stop();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('구독이 거부되면 그 구독을 지워, 다시 구독하면 등록 프레임을 또 보낸다', async () => {
+        const onSubscribeError = vi.fn();
+        const stream = newStream({ onSubscribeError });
+        stream.subscribe('H0STCNT0', '005930');
+        await flush();
+        const ws = FakeWs.instances[0];
+        ws.emit('open');
+        ws.emit('message', { data: JSON.stringify({ header: { tr_id: 'H0STCNT0', tr_key: '005930' }, body: { rt_cd: '1', msg1: 'MAX SUBSCRIBE OVER' } }) });
+
+        stream.subscribe('H0STCNT0', '005930');
+
+        const registers = ws.sent.map((s) => JSON.parse(s) as { header: { tr_type: string }; body: { input: { tr_id: string } } })
+            .filter((f) => f.header.tr_type === '1' && f.body.input.tr_id === 'H0STCNT0');
+        expect(registers).toHaveLength(2);
+        expect(onSubscribeError).toHaveBeenCalledWith('H0STCNT0', '005930', 'MAX SUBSCRIBE OVER');
+        stream.stop();
+    });
+});

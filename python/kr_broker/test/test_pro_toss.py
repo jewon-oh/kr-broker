@@ -335,15 +335,18 @@ class FakeStream:
         self.started: List[List[Dict[str, str]]] = []
         self.updates: List[List[Dict[str, str]]] = []
         self.stopped = False
+        self.running = False
 
     def start(self, subs: List[Dict[str, str]]) -> None:
         self.started.append(list(subs))
+        self.running = True
 
     def update_subs(self, subs: List[Dict[str, str]]) -> None:
         self.updates.append(list(subs))
 
     async def stop(self) -> None:
         self.stopped = True
+        self.running = False
 
 
 def with_fake_stream(config: Optional[Dict[str, Any]] = None) -> Tuple[toss, List[FakeStream]]:
@@ -508,3 +511,27 @@ def test_price_stream_uses_instance_token_and_session() -> None:
         assert ws.closed
 
     asyncio.run(main())
+
+
+def test_watch_ticker_reconnects_in_a_new_event_loop() -> None:
+    """앞선 `asyncio.run` 이 끝나며 연결 작업이 취소됐다. 같은 종목을 다시 기다리면 새로 연결해 구독을 선언한다."""
+    session = FakeSession()
+    ex = toss({**CREDS, 'session': session})
+
+    async def issue() -> Dict[str, Any]:
+        return {'accessToken': 'access-token-1', 'expiresInSeconds': 86400, 'tokenType': 'Bearer'}
+
+    ex._issue_access_token = issue  # type: ignore[method-assign]
+
+    async def next_price(price: str) -> Any:
+        pending = asyncio.ensure_future(ex.watch_ticker('AAPL/USD'))
+        await settle(10)
+        ws = session.connector.last
+        assert not ws.closed and last_frame(ws) == [{'type': 'trade:us', 'codes': ['AAPL']}]
+        ws.feed(json.dumps({'type': 'message', 'topic': 'trade:us:AAPL', 'data': {'price': price, 'volume': '1', 'timestamp': '2026-09-24T12:23:00.000Z'}}))
+        return (await asyncio.wait_for(pending, 1))['last']
+
+    assert asyncio.run(next_price('228.5')) == 228.5
+    assert asyncio.run(next_price('229')) == 229
+    assert session.connector.calls == 2
+    asyncio.run(ex.close())

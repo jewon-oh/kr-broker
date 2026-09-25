@@ -2432,28 +2432,28 @@ export class toss extends Exchange {
     }
 
     /** 다음 시세. 체결 프레임으로 만들어 현재가만 채운다. */
-    async watchTicker(symbol: string, _params: Dict = {}): Promise<Ticker> {
-        return await this.watchHub.next<Ticker>(`ticker:${this.watchMarketSub('trade', symbol)}`);
+    async watchTicker(symbol: string, params: Dict = {}): Promise<Ticker> {
+        return await this.watchHub.next<Ticker>(`ticker:${this.watchMarketSub('trade', symbol)}`, params.signal);
     }
 
     /** 새 체결. 지난 호출 뒤로 받은 체결을 한꺼번에 돌려준다. */
-    async watchTrades(symbol: string, since: Int = undefined, limit: Int = undefined, _params: Dict = {}): Promise<Trade[]> {
-        const trades = await this.watchHub.nextBatch<Trade>(`trades:${this.watchMarketSub('trade', symbol)}`);
+    async watchTrades(symbol: string, since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<Trade[]> {
+        const trades = await this.watchHub.nextBatch<Trade>(`trades:${this.watchMarketSub('trade', symbol)}`, params.signal);
         return this.filterBySinceLimit(trades as unknown as Dict[], since, limit, 'timestamp', true) as unknown as Trade[];
     }
 
     /** 다음 호가. 토스는 구독 직후 스냅샷을 보내지 않는다. 첫 값은 다음 호가 변경 때 온다. */
-    async watchOrderBook(symbol: string, limit: Int = undefined, _params: Dict = {}): Promise<OrderBook> {
-        const book = await this.watchHub.next<OrderBook>(`orderbook:${this.watchMarketSub('orderbook', symbol)}`);
+    async watchOrderBook(symbol: string, limit: Int = undefined, params: Dict = {}): Promise<OrderBook> {
+        const book = await this.watchHub.next<OrderBook>(`orderbook:${this.watchMarketSub('orderbook', symbol)}`, params.signal);
         return limit === undefined ? book : { ...book, bids: book.bids.slice(0, limit), asks: book.asks.slice(0, limit) };
     }
 
     /** 본인 주문 변화. 계좌 순번(`accountSeq`)이 없으면 계좌 조회로 먼저 얻는다. 주문은 REST 주문 조회와 같은 원본을 `parseOrder` 로 옮긴다. */
-    async watchOrders(symbol: Str = undefined, since: Int = undefined, limit: Int = undefined, _params: Dict = {}): Promise<Order[]> {
+    async watchOrders(symbol: Str = undefined, since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<Order[]> {
         if (this.uid === undefined) await this.loadAccountSeq();
         const accountSeq = String(this.uid);
         this.watchSubscribe(`order:${accountSeq}`, { channel: 'order', accountSeq });
-        const orders = await this.watchHub.nextBatch<Order>(symbol === undefined ? 'orders' : `orders:${this.market(symbol).symbol}`);
+        const orders = await this.watchHub.nextBatch<Order>(symbol === undefined ? 'orders' : `orders:${this.market(symbol).symbol}`, params.signal);
         return this.filterBySinceLimit(orders as unknown as Dict[], since, limit, 'timestamp', true) as unknown as Order[];
     }
 

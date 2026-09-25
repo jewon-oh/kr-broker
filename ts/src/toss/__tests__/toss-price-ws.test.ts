@@ -151,6 +151,18 @@ describe('TossPriceWs — keepalive', () => {
         expect(ws.sent).toEqual(['PING']);
         ws1.stop();
     });
+
+    it('핑 타이머는 unref 해 프로세스 종료를 막지 않는다', async () => {
+        const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
+        const ws1 = new TossPriceWs({ getAccessToken: vi.fn().mockResolvedValue('tok-1') });
+        ws1.start([]);
+        await vi.advanceTimersByTimeAsync(0);
+        FakeWs.instances[0].emit('open');
+
+        const timer = setIntervalSpy.mock.results[0].value as NodeJS.Timeout;
+        expect(timer.hasRef()).toBe(false);
+        ws1.stop();
+    });
 });
 
 describe('TossPriceWs — 재연결', () => {
@@ -213,5 +225,88 @@ describe('TossPriceWs — 재연결', () => {
 
         expect(getAccessToken).toHaveBeenCalledTimes(1); // 재연결 안 됨
         expect(ws.closeCallCount).toBe(1);
+    });
+});
+
+describe('TossPriceWs — 연결 준비 중 stop, 옛 소켓', () => {
+    it('ws 모듈을 불러오는 사이에 stop() 하면 토큰도 받지 않고 소켓도 만들지 않는다', async () => {
+        const getAccessToken = vi.fn().mockResolvedValue('tok-1');
+        const ws1 = new TossPriceWs({ getAccessToken });
+        ws1.start([]);
+        ws1.stop();
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(getAccessToken).not.toHaveBeenCalled();
+        expect(FakeWs.instances).toHaveLength(0);
+    });
+
+    it('토큰을 받는 사이에 stop() 하면 소켓을 만들지 않는다', async () => {
+        let issue: (token: string) => void = () => undefined;
+        const ws1 = new TossPriceWs({ getAccessToken: () => new Promise<string>((resolve) => { issue = resolve; }) });
+        ws1.start([{ channel: 'trade', market: 'kr', symbol: '005930' }]);
+        await vi.advanceTimersByTimeAsync(0);
+
+        ws1.stop();
+        issue('tok-1');
+        await vi.advanceTimersByTimeAsync(60_000);
+
+        expect(FakeWs.instances).toHaveLength(0);
+    });
+
+    it('재연결 뒤 늦게 온 옛 소켓의 close 는 재연결을 다시 걸지 않고, 새 소켓의 핑을 멈추지 않는다', async () => {
+        const getAccessToken = vi.fn().mockResolvedValue('tok-1');
+        const ws1 = new TossPriceWs({ getAccessToken });
+        ws1.start([]);
+        await vi.advanceTimersByTimeAsync(0);
+        const first = FakeWs.instances[0];
+        first.emit('error', { message: 'reset' });
+        await vi.advanceTimersByTimeAsync(1_000);
+        const second = FakeWs.instances[1];
+        second.emit('open');
+        second.sent = [];
+
+        first.emit('close', { code: 1006 });
+        await vi.advanceTimersByTimeAsync(60_000);
+
+        expect(FakeWs.instances).toHaveLength(2);
+        expect(getAccessToken).toHaveBeenCalledTimes(2);
+        expect(second.sent).toEqual(['PING']);
+        ws1.stop();
+    });
+
+    it('재연결 토큰을 기다리는 사이에 온 옛 소켓의 close 도 재연결을 다시 걸지 않는다', async () => {
+        const issues: ((token: string) => void)[] = [];
+        const getAccessToken = vi.fn(() => new Promise<string>((resolve) => { issues.push(resolve); }));
+        const ws1 = new TossPriceWs({ getAccessToken });
+        ws1.start([]);
+        await vi.advanceTimersByTimeAsync(0);
+        issues[0]('tok-1');
+        await vi.advanceTimersByTimeAsync(0);
+        const first = FakeWs.instances[0];
+        first.emit('error', { message: 'reset' });
+        await vi.advanceTimersByTimeAsync(1_000);
+
+        first.emit('close', { code: 1006 });
+        issues[1]('tok-2');
+        await vi.advanceTimersByTimeAsync(60_000);
+
+        expect(FakeWs.instances).toHaveLength(2);
+        expect(getAccessToken).toHaveBeenCalledTimes(2);
+        ws1.stop();
+    });
+
+    it('옛 소켓의 메시지는 콜백으로 넘기지 않는다', async () => {
+        const onTrade = vi.fn();
+        const ws1 = new TossPriceWs({ getAccessToken: vi.fn().mockResolvedValue('tok-1'), onTrade });
+        ws1.start([]);
+        await vi.advanceTimersByTimeAsync(0);
+        const first = FakeWs.instances[0];
+        first.emit('close', { code: 1006 });
+        await vi.advanceTimersByTimeAsync(1_000);
+
+        first.emit('message', { data: JSON.stringify({ type: 'message', topic: 'trade:us:AAPL', data: { price: '185.5', volume: '10' } }) });
+
+        expect(onTrade).not.toHaveBeenCalled();
+        ws1.stop();
     });
 });

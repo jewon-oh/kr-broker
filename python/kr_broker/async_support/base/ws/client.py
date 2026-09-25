@@ -2,7 +2,7 @@
 
 TypeScript 판 `KisRealtimeStream`, `TossPriceWs` 의 연결 관리를 한곳에 모았다.
 
-- `start()` 가 연결 작업을 띄운다. 실행 중인 이벤트 루프 안에서 부른다.
+- `start()` 가 연결 작업을 띄운다. 실행 중인 이벤트 루프 안에서 부른다. 작업이 끝났으면(앞선 `asyncio.run` 이 끝나며 취소됐으면) 다시 띄운다.
 - 연결할 때마다 `connect_target()` 이 주소와 헤더를 준다(접속키나 토큰 발급). 던지면 백오프 뒤 다시 시도한다.
 - 연결되면 `on_open()` 을, 텍스트 프레임마다 `on_message(text)` 를 부른다. 두 훅이 던진 오류는 로그만 남긴다.
 - 끊기면 이전 연결을 닫고 `reconnect_base_ms × 2^(시도-1)`(상한 `reconnect_max_ms`) 뒤 다시 잇는다. 연결되면 시도 횟수를 0 으로 되돌린다.
@@ -47,7 +47,6 @@ class ReconnectingWebSocket:
         self._connect = connect
         self._sleep = sleep
         self.ws: Any = None
-        self.running = False
         self.reconnect_attempts = 0
         self._task: Optional['asyncio.Task[None]'] = None
         self._ping_task: Optional['asyncio.Task[None]'] = None
@@ -67,15 +66,18 @@ class ReconnectingWebSocket:
 
     # ---- 연결 관리 ----
 
+    @property
+    def running(self) -> bool:
+        """연결 작업이 돌고 있는가. `stop()` 뒤나 작업을 띄운 이벤트 루프가 끝난 뒤에는 거짓이다."""
+        return self._task is not None and not self._task.done()
+
     def start(self) -> None:
         if self.running:
             return
-        self.running = True
         self._task = asyncio.ensure_future(self._run())
 
     async def stop(self) -> None:
         """연결을 닫고 다시 잇지 않는다."""
-        self.running = False
         self._stop_ping()
         task, self._task = self._task, None
         if task is not None and not task.done():

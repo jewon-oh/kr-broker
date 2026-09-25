@@ -62,15 +62,16 @@ class toss(kr_broker.async_support.toss):
     # ============ 실시간(ccxt pro) ============
 
     def _watch_subscribe(self, key: str, sub: TossWsSub) -> None:
-        """구독을 더한다. 처음이면 연결하고, 아니면 전체 구독을 다시 선언한다."""
-        if key in self._watch_subs:
-            return
+        """구독을 더한다. 연결 작업이 돌고 있지 않으면(처음이거나 앞선 이벤트 루프가 끝났으면) 띄우고, 돌고 있으면 새 구독일 때 전체 구독을
+        다시 선언한다."""
+        added = key not in self._watch_subs
         self._watch_subs[key] = sub
         if self._watch_socket is None:
             self._watch_socket = self.create_price_stream(on_trade=self._watch_on_trade, on_orderbook=self._watch_on_orderbook,
                                                           on_order=self._watch_on_order)
+        if not self._watch_socket.running:
             self._watch_socket.start(list(self._watch_subs.values()))
-        else:
+        elif added:
             self._watch_socket.update_subs(list(self._watch_subs.values()))
 
     def _watch_on_trade(self, market: str, code: str, price: float, volume: float, timestamp: Optional[int]) -> None:

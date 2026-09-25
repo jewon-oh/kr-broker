@@ -3,6 +3,7 @@
  *
  * 메시지 해시(`ticker:005930/KRW` 등)마다 기다리는 약속을 모아 두고 새 값이 오면 한꺼번에 푼다. 체결과 주문처럼 여러 건이 쌓이는 것은
  * 기다리는 쪽이 없을 때 모아 두었다가 다음 호출에 한꺼번에 돌려준다(ccxt pro 의 `newUpdates` 와 같다).
+ * `signal` 을 받은 대기자는 신호가 오면 목록에서 빠지고 `AbortError` 로 거절된다.
  */
 
 /** 쌓아 두는 항목 수의 상한(ccxt pro 의 `tradesLimit` 기본값과 같다). 넘으면 오래된 것부터 버린다. */
@@ -13,17 +14,39 @@ interface Waiter {
     reject: (reason: unknown) => void;
 }
 
+/** Node 의 `AbortError` 와 같은 모양이다. 신호의 `reason` 은 `cause` 에 싣는다. */
+function abortError(signal: AbortSignal): Error {
+    return Object.assign(new Error('watch 대기를 중단했다', { cause: signal.reason }), { name: 'AbortError', code: 'ABORT_ERR' });
+}
+
 export class WatchHub {
     private readonly waiters = new Map<string, Waiter[]>();
     private readonly buffers = new Map<string, unknown[]>();
 
     /** `hash` 의 다음 값을 기다린다. */
-    next<T>(hash: string): Promise<T> {
+    next<T>(hash: string, signal: AbortSignal | undefined = undefined): Promise<T> {
+        if (signal?.aborted) return Promise.reject(abortError(signal));
         return new Promise<T>((resolve, reject) => {
+            const onAbort = (): void => {
+                this.removeWaiter(hash, waiter);
+                reject(abortError(signal as AbortSignal));
+            };
+            const waiter: Waiter = {
+                resolve: (value) => { signal?.removeEventListener('abort', onAbort); resolve(value as T); },
+                reject: (reason) => { signal?.removeEventListener('abort', onAbort); reject(reason); },
+            };
             const list = this.waiters.get(hash) ?? [];
-            list.push({ resolve: resolve as (value: unknown) => void, reject });
+            list.push(waiter);
             this.waiters.set(hash, list);
+            signal?.addEventListener('abort', onAbort, { once: true });
         });
+    }
+
+    /** 대기자가 남지 않으면 해시를 지운다. 그래야 `push` 가 항목을 쌓아 둔다. */
+    private removeWaiter(hash: string, waiter: Waiter): void {
+        const rest = (this.waiters.get(hash) ?? []).filter((w) => w !== waiter);
+        if (rest.length === 0) this.waiters.delete(hash);
+        else this.waiters.set(hash, rest);
     }
 
     /** 기다리는 쪽을 모두 `value` 로 푼다. */
@@ -35,13 +58,14 @@ export class WatchHub {
     }
 
     /** 쌓아 둔 새 항목이 있으면 바로 돌려주고, 없으면 다음 항목을 기다린다. */
-    nextBatch<T>(hash: string): Promise<T[]> {
+    nextBatch<T>(hash: string, signal: AbortSignal | undefined = undefined): Promise<T[]> {
+        if (signal?.aborted) return Promise.reject(abortError(signal));
         const buffered = this.buffers.get(hash);
         if (buffered !== undefined && buffered.length > 0) {
             this.buffers.delete(hash);
             return Promise.resolve(buffered as T[]);
         }
-        return this.next<T[]>(hash);
+        return this.next<T[]>(hash, signal);
     }
 
     /** 항목을 쌓는다. 기다리는 쪽이 있으면 쌓인 것까지 한꺼번에 넘긴다. */

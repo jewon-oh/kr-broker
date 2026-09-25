@@ -51,6 +51,8 @@ class Exchange(BaseExchange):
         self._markets_loading: Optional['asyncio.Task[Dict[str, Any]]'] = None
         # `spawn` 으로 띄운 태스크. 참조를 쥐고 있어야 끝나기 전에 가비지 컬렉션으로 사라지지 않는다.
         self._background_tasks: Set['asyncio.Task[Any]'] = set()
+        # `open()` 이 연 세션의 이벤트 루프. 세션은 이 루프에서만 쓸 수 있다. 지금 세션을 `open()` 이 열지 않았으면 None 이다.
+        self._session_loop: Optional[asyncio.AbstractEventLoop] = None
         super().__init__(config)
 
     @staticmethod
@@ -60,10 +62,18 @@ class Exchange(BaseExchange):
     # ============ 세션 ============
 
     def open(self) -> None:
-        """HTTP 세션이 없으면 연다. 실행 중인 이벤트 루프 안에서 불러야 한다."""
+        """HTTP 세션이 없으면 연다. 실행 중인 이벤트 루프 안에서 불러야 한다.
+        직접 연 세션이 닫혔거나 다른 이벤트 루프에서 열렸으면 새로 열고, 옛 세션은 이 루프에서 닫는다. 설정으로 넘긴 세션은 그대로 쓴다."""
+        loop = asyncio.get_running_loop()
+        session = self.session
+        if session is not None and self._session_loop is not None and (session.closed or self._session_loop is not loop):
+            self.session = None
+            if not session.closed:
+                self.spawn(session.close)
         if self.session is None:
             self.session = aiohttp.ClientSession(trust_env=self.aiohttp_trust_env)
             self.own_session = True
+            self._session_loop = loop
 
     async def close(self) -> None:  # type: ignore[override]
         """`spawn` 으로 띄운 작업을 `CLOSE_WAIT_SECONDS` 까지 기다린 뒤 이 인스턴스가 연 HTTP 세션을 닫는다. 그때까지 안 끝난 작업은 취소한다."""
@@ -82,6 +92,7 @@ class Exchange(BaseExchange):
         if self.session is not None and self.own_session:
             await self.session.close()
             self.session = None
+            self._session_loop = None
 
     async def __aenter__(self) -> 'Exchange':
         self.open()
@@ -216,7 +227,8 @@ class Exchange(BaseExchange):
         """종목 목록을 받는다. 진행 중인 조회가 있으면 새로 부르지 않고 그 결과를 함께 기다린다(`reload` 는 새 조회를 띄운다).
         조회가 실패하면 진행 중 표시를 지워 다음 호출이 다시 부르게 한다."""
         task = self._markets_loading
-        if task is None or (reload and task.done()):
+        # 취소된 조회(앞선 이벤트 루프가 끝나며 멈춘 것)는 결과가 없으므로 새로 띄운다.
+        if task is None or task.cancelled() or (reload and task.done()):
             task = asyncio.ensure_future(self._load_markets_helper(reload, params))
             self._markets_loading = task
         try:
