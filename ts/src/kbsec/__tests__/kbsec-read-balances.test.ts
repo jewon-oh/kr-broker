@@ -55,10 +55,10 @@ let depositFails = false;
 /** 예수금 TR 이 성공 플래그로 오지만 주문가능현금 필드가 없다. */
 let depositMissingFields = false;
 /** 국내 1순위 계좌자산평가(SSQM2952). ok=삼성전자 10주, alnum=삼성전자와 신형 영숫자 코드 ETF, empty=성공했지만 행 없음, timeout=연결 타임아웃 */
-type AssetEvalMode = 'ok' | 'alnum' | 'empty' | 'timeout';
+type AssetEvalMode = 'ok' | 'alnum' | 'codeless' | 'empty' | 'timeout';
 let assetEvalMode: AssetEvalMode = 'ok';
 /** 국내 폴백 보유주식(SSQM1801). none=0건, ok=삼성전자 10주, filtered=종목코드 없는 1행(전부 걸러짐), endless=연속조회가 끝나지 않음 */
-type HoldingRowsMode = 'none' | 'ok' | 'filtered' | 'endless';
+type HoldingRowsMode = 'none' | 'ok' | 'filtered' | 'endless' | 'repeat';
 let holdingRowsMode: HoldingRowsMode = 'none';
 let holdingPage = 0;
 
@@ -85,6 +85,9 @@ function route() {
         }
         if (tr === KBSEC_TR.ASSET_EVAL.toLowerCase()) {
             if (assetEvalMode === 'timeout') throw connectTimeout();
+            if (assetEvalMode === 'codeless') {
+                return jsonOk({ Record2: [...DOMESTIC_ASSET_EVAL.Record2, { is_cd: '', is_nm: '', ec_q: '5', val_amt: '50000' }, { is_cd: '', is_nm: '합계', val_amt: '750000' }] });
+            }
             if (assetEvalMode === 'alnum') {
                 return jsonOk({ Record2: [...DOMESTIC_ASSET_EVAL.Record2, { is_cd: 'A0193L0', is_nm: '인버스2X', ec_q: '7', val_amt: '70000', now_prc: '10000' }] });
             }
@@ -93,6 +96,9 @@ function route() {
         if (tr === KBSEC_TR.HOLDINGS.toLowerCase()) {
             if (holdingRowsMode === 'ok') return jsonOk({ Record2: [{ shrt_cd: '005930', is_nm: '삼성전자', gnrl_q: '10', ordr_psbl_q: '10' }] });
             if (holdingRowsMode === 'filtered') return jsonOk({ Record2: [{ is_nm: '합계', gnrl_q: '10', ordr_psbl_q: '10' }] });
+            if (holdingRowsMode === 'repeat') {
+                return jsonOk({ nxt_key: 'same', Record2: [{ shrt_cd: '005930', is_nm: '삼성전자', gnrl_q: '10', ordr_psbl_q: '10' }] });
+            }
             if (holdingRowsMode === 'endless') {
                 holdingPage++;
                 return jsonOk({ nxt_key: `k${holdingPage}`, Record2: [{ shrt_cd: '005930', is_nm: '삼성전자', gnrl_q: '10', ordr_psbl_q: '10' }] });
@@ -318,6 +324,26 @@ describe('KB fetchBalance — 국내 보유의 완전성', () => {
         expect(b.info.readStatus).toBe('COMPLETE');
         expect(codesOf(b)).toEqual(expect.arrayContaining(['005930', '0193L0']));
         expect((b['0193L0'] as { total: number }).total).toBe(7);
+    });
+
+    it('★계좌자산평가에 종목코드 없이 수량이 있는 행이 있으면 그 보유를 잃은 것이라 PARTIAL 이다 — 합계 행(코드와 수량 모두 없음)은 세지 않는다', async () => {
+        assetEvalMode = 'codeless';
+
+        const b = await makeService().fetchBalance();
+
+        expect(b.info.readStatus).toBe('PARTIAL');
+        expect(b.info.unreadMarkets).toEqual(['KR']);
+        expect(codesOf(b)).toContain('005930');
+    });
+
+    it('보유주식 연속조회가 같은 다음키를 되풀이하면 끝까지 읽었는지 몰라 PARTIAL 이다', async () => {
+        assetEvalMode = 'timeout';
+        holdingRowsMode = 'repeat';
+
+        const b = await makeService().fetchBalance();
+
+        expect(b.info.readStatus).toBe('PARTIAL');
+        expect(b.info.unreadMarkets).toEqual(['KR']);
     });
 
     it('국내와 해외를 모두 못 읽으면 두 시장이 다 표시된다', async () => {

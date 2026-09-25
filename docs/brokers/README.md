@@ -98,7 +98,7 @@
 
 | 기능 | `kis` | `toss` | `kbsec` | 제약 |
 |---|---|---|---|---|
-| 주문 조회 `fetchOrder` | ✅ | ✅ | ⚠️ | `kbsec` 미국은 체결 내역만 조회합니다. |
+| 주문 조회 `fetchOrder` | ✅ | ✅ | ⚠️ | `kbsec` 미국은 최근 사흘의 주문만 찾습니다. |
 | 주문 목록 `fetchOrders` | ✅ | ➖ | ⚠️ | `toss` 주문 목록 API는 상태(OPEN, CLOSED)를 지정해야 합니다.<br>`kbsec` 국내만 지원합니다. `since`는 적용하지 않습니다. |
 | 미체결 `fetchOpenOrders` | ⚠️ | ✅ | ⚠️ | `kis` 미국은 실전만 지원합니다.<br>`toss` 미체결 조건 주문은 100건씩 최대 10쪽(1,000건)까지 받습니다.<br>`kbsec` 국내만 지원합니다. `since`는 적용하지 않습니다. |
 | 종료 주문 `fetchClosedOrders` | 🔁 | ✅ | ⚠️ | `kis` `fetchOrders` 결과에서 체결 완료만 고릅니다.<br>`toss` 100건씩 최대 10쪽을 받습니다.<br>`kbsec` 국내만 지원합니다. `since`는 적용하지 않습니다. 체결 내역 상세는 `fetchMyTrades`로 봅니다. |

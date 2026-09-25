@@ -17,6 +17,9 @@
 - 캔들 조회가 실패하면 빈 배열이 아니라 오류를 던집니다. 야후에 없는 심볼은 `BadSymbol`, 재시도를 다 쓴 실패는 `ExchangeNotAvailable`, `RateLimitExceeded`, `NetworkError`입니다. 한국투자증권 `candles()`의 기간별 조회와 해외 기간별 조회도 던집니다. 조회에 성공했는데 봉이 없을 때만 빈 배열입니다.
 - 한국투자증권 `fetchBalance`는 `params.scope`에 모르는 값을 주면 `BadRequest`를 던집니다. 예전에는 요청 없이 빈 잔고를 돌려줬습니다.
 - 토스증권 `fetchBalance`는 보유 응답에 `items`가 없거나 매수 가능 금액 응답에 `cashBuyingPower`가 없으면 `BadResponse`를 던집니다. KB증권 `fetchBalance`는 예수금 응답에 주문가능현금 필드가 없으면 `BadResponse`를 던집니다.
+- KB증권 `fetchMyTrades(symbol, since)`는 `since`의 날짜부터 오늘까지 평일마다 조회해 합칩니다(최대 31일, 넘으면 `BadRequest`). 예전에는 `since`의 하루만 조회했습니다. 미국 종목의 조회일자는 미국 현지 날짜입니다.
+- KB증권 `fetchClosedOrders`는 전체 주문에서 종료된 주문(`closed`, `canceled`)만 돌려줍니다. 예전에는 체결이 있는 주문을 `open` 상태까지 돌려줬습니다. 주문 조회 세 개(`fetchOpenOrders`, `fetchOrders`, `fetchClosedOrders`)는 분할체결 행을 주문 단위로 묶고, 남은 수량 없이 덜 체결된 주문을 `canceled`로 냅니다.
+- KB증권 미국 주문은 1주 미만 수량이면 요청 없이 `InvalidOrder`를 던집니다. 소수점 주문은 `params.fractional`로 냅니다.
 - 국내 종목코드 판정(`isKrxDomesticCode`)은 목록이 아니라 모양(숫자로 시작하는 6자리 영숫자)으로 합니다. 세 증권사와 Python 판이 같은 판정을 씁니다. `KNOWN_ALNUM_KRX_CODES`는 예시로만 남았습니다.
 
 ### 추가
@@ -39,6 +42,11 @@
 
 ### 고침
 
+- KB증권 주문·체결 조회(`SSQM2341`, `SPQM2103`)가 첫 페이지만 읽던 것을 고쳤습니다. 모든 페이지를 읽고, 페이지 상한에서 잘리면 일부만 돌려주지 않고 `BadResponse`를 던집니다. 연속 페이지에는 연속구분(`cn_clsf`) `1`을 보냅니다.
+- KB증권 미국 `fetchOrder`가 체결되지 않은 주문을 `OrderNotFound`로 던지던 것을 고쳤습니다. 해외 체결현황(`SPQM2204`)에서 찾아 `open`, `canceled`, `rejected`로 돌려줍니다.
+- KB증권 해외 체결 조회가 조회일자를 한국 날짜로 보내던 것을 고쳤습니다. 조회일자 되감기 캐시를 국내와 해외로 나눠, 한쪽의 휴장일 되감기가 다른 쪽 조회 날짜를 밀어내지 않습니다.
+- KB증권 국내 취소가 원주문의 라우팅(SOR)을 싣지 않고 KRX 로 보내던 것을 고쳤습니다.
+- KB증권 `fetchBalance`가 계좌자산평가에서 종목코드나 수량을 읽지 못한 보유 행을 버린 채 `COMPLETE`로 내던 것을 고쳤습니다. 해외 경로도 같습니다. 보유주식 연속조회가 같은 다음키를 되풀이하면 `PARTIAL`입니다.
 - KB증권이 `A` 접두를 붙여 준 신형 영숫자 국내 코드(`A0193L0`)를 해외 종목으로 분류해 계좌자산평가 경로에서 보유가 빠지던 것을 고쳤습니다.
 - KB증권의 해외 체결 조회와 원마켓 증거금 조회가 연결 끊김이나 5xx 한 번에 인스턴스 수명 내내 꺼지던 것을 고쳤습니다. KB 가 응답으로 거절한 업무 오류만 영구 실패로 봅니다.
 - `options.confirmBudget` 함수가 던지면 주문을 보낸 뒤에 예외가 나가던 것을 고쳤습니다. 기본 예산을 씁니다.
