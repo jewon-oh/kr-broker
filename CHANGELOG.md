@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+### 바뀜(호환되지 않음)
+
+- `editOrder`의 `amount`를 ccxt와 같이 정정 뒤 주문의 총수량(체결분 포함)으로 받습니다. 원주문을 조회해 체결 수량과 잔량의 합과 같을 때만 잔량 전부를 새 가격으로 정정하고, 다르면 정정 요청 없이 `NotSupported`를 던집니다. 한국투자증권 국내에서 `amount`로 일부정정하던 코드는 `params.partial: true`를 더합니다. 토스증권 국내는 `amount` 없이도 부를 수 있고, 일부 체결된 주문은 정정하지 않고 `NotSupported`를 던집니다. 한국투자증권 모의투자의 미국 정정은 `amount` 대신 `params.amount`를 씁니다. KB증권 미국 정정은 원주문의 체결 수량을 확인할 믿을 만한 조회가 없어, `amount`를 주면 요청 없이 `NotSupported`를 던집니다. `amount`를 빼면 잔량 전부의 가격만 정정합니다.
+- 한국투자증권이 국내 15:20~15:30과 미국 15:50~16:00(ET)의 신규 매수를 기본으로 보냅니다. 예전처럼 막으려면 `options.blockAuctionBuys`를 켭니다. 한국투자증권의 미국 주문과 정정은 09:25~09:30(ET)에 요청 없이 `MarketClosed`를 던집니다.
+- 한국투자증권 `cancelAllOrders`는 일부 주문을 취소하지 못해도 던지지 않습니다. 예외로 실패를 잡던 코드는 반환 항목의 `status`를 봅니다. 세 증권사 모두 항목은 미체결 조회로 받은 주문입니다. 취소 응답 원문은 `info.cancelResponse`에, 실패 사유는 `info.cancelError`와 `info.cancelErrorDetail`에 있습니다.
+- 토스증권과 KB증권의 `priceToPrecision`이 국내 주식 가격을 KRX 호가 단위 표로 반올림합니다(70030 → 70000). 세 증권사 모두 종목이 일반 주식인 것을 알면, 호가 단위에 맞지 않는 국내 지정가를 요청 전에 `InvalidOrder`(`detail: 'price-tick-invalid'`)로 막습니다. 주문 가격은 바꾸지 않습니다. KB증권이 서버에서 받은 거절은 예전처럼 `detail`이 `PRICE_INVALID`입니다.
+- 토스증권 `createOrder`와 `editOrder`는 `params`에서 읽지 않은 키를 요청 본문에 합칩니다. 라이브러리가 인자로 채우는 필드(`symbol`, `side`, `orderType`, `quantity`, `orderAmount`, `price`, `confirmHighValueOrder`, 정정의 `orderId`)를 `params`로 주면 요청 없이 `BadRequest`를 던집니다. `editOrder`에 ccxt 조건 인자(`stopPrice` 등)를 주면 요청 없이 `NotSupported`를 던집니다.
+
+### 추가
+
+- `options.blockAuctionBuys`(세 증권사, 기본 꺼짐)를 켜면 종가 동시호가(국내 15:20~15:30, 미국 15:50~16:00 ET)의 신규 매수를 요청 전에 `MarketClosed`로 막습니다.
+- 세 증권사가 함께 쓰는 주문 게이트를 공개합니다. `kr-broker/krx-trading-hours`의 `krxOrderBlockReason`과 `krxAuctionBuyBlockReason`, `kr-broker/us-market-hours`의 `usOrderBlockReason`과 `usAuctionBuyBlockReason`입니다. Python 판 이름은 `krx_order_block_reason` 등입니다. `marketSessionBlockReason`은 다섯째 인자로 `{ side, blockAuctionBuys }`를 받습니다.
+- `kr-broker/krx-tick-size`(Python 판 `kr_broker.krx_tick_size`)에 KRX 주식 호가 단위 표(`KRX_STOCK_TICK_SIZES`)와 `getKrxTickSize`, `krxTickViolation`을 둡니다.
+
 ### 바뀜
 
 - 한국투자증권 실시간 연결 코드를 `KisRealtimeStream` 하나로 모았습니다. `KisPriceWs`(`createPriceStream`)는 그 위에서 체결가와 호가만 읽습니다. `KisPriceWs`의 생성자 옵션과 메서드, 콜백, 내보내는 이름은 그대로입니다. 두 클래스가 다르게 처리하던 부분은 아래처럼 맞췄고, Python 판도 같습니다.
@@ -12,6 +26,7 @@
   - `createRealtimeStream`의 연결 로그를 `KisPriceWs`와 같게 남깁니다. 연결 종료 로그에는 `code`, `reason`, `wasClean`을 싣고, 오류 로그에는 원인을 싣습니다. 접속하면 등록할 구독 수도 남깁니다.
   - `KisPriceWs`는 `start`와 `updateSubs`로 받은 배열을 복사해 둡니다. 옵션의 `url`과 `isVirtual`은 생성할 때 한 번 읽습니다. 넘긴 뒤 배열이나 옵션 객체를 바꿔도 다음 접속에 반영되지 않습니다.
   - Python `KisPriceWs`는 `KisRealtimeStream`을 상속합니다. 그래서 `subscribe`와 `unsubscribe`가 생겼고, 모듈 상수 `RECONNECT_BASE_MS`와 `RECONNECT_MAX_MS`는 없어졌습니다. 재접속 간격은 클래스 속성 `reconnect_base_ms`, `reconnect_max_ms`에 남아 있습니다.
+- `kr-broker/kis/kis-types`의 `getTickSize`(Python 판 `kis_types.get_tick_size`)는 `getKrxTickSize`의 옛 이름으로 남깁니다. 다음 판에서 지웁니다.
 
 ### 고침
 
@@ -19,6 +34,7 @@
 - 한국투자증권 `KisPriceWs`의 구독 목록에 같은 구독이 겹쳐 있으면 등록 프레임을 한 번만 보냅니다. 예전에는 두 번 보내 거부 응답을 받았습니다(Python 판도 같습니다).
 - 한국투자증권 `candles()`의 봉 조회는 달력에 없는 날짜와 범위를 넘는 시각의 행을 건너뜁니다. 예전에는 국내와 해외 날짜 `20260230`을 3월 2일로, 분봉 시각 `240000`을 다음 날 0시로 읽었습니다. 앞의 0이 빠진 분봉 시각(`93000`)은 시각이 `NaN`인 봉이 됐지만, 이제는 09:30으로 읽습니다. Python 판도 같습니다.
 - 범위를 넘는 시각(`240000`)을 그날 0시나 다음 날로 읽던 봉 경로를 더 고쳤습니다. KB증권 국내 `fetchOHLCV`와 해외 `fetchOverseasCandles`는 이런 행을 건너뜁니다. `fetchOverseasCandles`는 날짜를 읽을 수 없는 행도 건너뜁니다. 예전에는 `timestamp`를 비운 채 남겼습니다. 한국투자증권 `fetchIndexOHLCV`의 분봉과 `fetchMinuteOHLCVAt`, `fetchOverseasMinuteOHLCV`도 건너뜁니다. 한국투자증권 `fetchExpectedPriceTrend`의 추이와 KB증권 `fetchTrades`의 체결은 행을 남기고 `timestamp`를 비웁니다.
+- 한국투자증권의 장 시간 게이트와 토스증권의 정적 시간표 폴백이 벽시계 대신 인스턴스 시계(`milliseconds()`)로 시각을 판정합니다.
 
 ## [0.5.0] - 2026-09-25
 
