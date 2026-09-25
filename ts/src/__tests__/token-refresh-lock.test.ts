@@ -61,7 +61,17 @@ describe('refreshTokenWithLock — 락을 잡았을 때', () => {
         const owner = vi.mocked(store.tryLock).mock.calls[0][1];
         expect(store.unlock).toHaveBeenCalledWith(LOCK_KEY, owner);
         expect(p.issueAndCache).toHaveBeenCalledTimes(1);
-        expect(p.readCached).not.toHaveBeenCalled();
+        expect(p.readCached).toHaveBeenCalledTimes(1);   // 락을 잡은 직후 한 번 다시 읽는다
+    });
+
+    it('★락을 잡았는데 저장소에 이미 토큰이 있으면 발급하지 않는다 — 다른 프로세스가 발급을 마치고 락을 막 풀었다', async () => {
+        const store = fakeStore();
+        const p = params({ store, readCached: vi.fn().mockResolvedValue('from-other-process') });
+
+        await expect(refreshTokenWithLock(p)).resolves.toBe('from-other-process');
+
+        expect(p.issueAndCache).not.toHaveBeenCalled();
+        expect(store.unlock).toHaveBeenCalled();
     });
 
     it('락 해제가 실패해도 발급한 토큰을 돌려준다(락은 TTL 로 만료된다)', async () => {

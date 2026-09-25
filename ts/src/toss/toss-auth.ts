@@ -92,11 +92,8 @@ export class TossAuth {
             storeKey: this.storeKey,
             lockTtlMs: TOKEN_FETCH_LOCK_TTL_MS,
             readCached: () => this.readStoredToken(),
+            // 락을 잡은 뒤 저장소를 다시 읽는 단계는 `refreshTokenWithLock` 이 한다.
             issueAndCache: async () => {
-                // 락을 잡은 뒤에 한 번 더 읽는다. 앞의 읽기와 락 획득 사이에 다른 프로세스가 발급을 끝냈을 수 있고,
-                // 그것을 모르고 또 발급하면 방금 발급된 토큰을 무효로 만든다.
-                const alreadyIssued = await this.readStoredToken();
-                if (alreadyIssued !== null) return alreadyIssued;
                 const token = await this.issueToken();
                 const store = this.storeOf();
                 if (store !== null) await this.saveToStore(store);

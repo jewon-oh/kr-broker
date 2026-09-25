@@ -237,11 +237,8 @@ class TossAuth:
         if stored is not None:
             return stored
 
+        # 락을 잡은 뒤 저장소를 다시 읽는 단계는 `refresh_token_with_lock` 이 한다.
         async def issue_and_cache() -> str:
-            # 락을 잡은 뒤 한 번 더 읽는다. 그사이 다른 프로세스가 발급했으면 또 발급해 그 토큰을 무효로 만들지 않는다.
-            already = await self._read_stored_token()
-            if already is not None:
-                return already
             token = await self._issue_token()
             store = self.store_of()
             if store is not None:

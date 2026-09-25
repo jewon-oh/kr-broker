@@ -10,6 +10,7 @@ TypeScript 판의 `BrokerTokenStore`(`ts/src/options.ts`)와 `refreshTokenWithLo
 
 import hashlib
 import logging
+import math
 import os
 import time
 from typing import Any, Callable, Dict, Optional, Protocol, TypeVar, runtime_checkable
@@ -20,8 +21,10 @@ logger = logging.getLogger('kr_broker')
 
 T = TypeVar('T')
 
-# 락을 못 잡았을 때 다른 프로세스의 발급을 기다리는 시간(초).
-DEFAULT_WAIT_SECONDS = 1.5
+# 락을 못 잡았을 때 다른 프로세스의 발급을 기다리는 최대 시간(초). 토스 발급 상한(10초)보다 길게 잡는다.
+DEFAULT_WAIT_SECONDS = 12.0
+# 기다리는 동안 저장소를 다시 읽는 간격(초).
+DEFAULT_POLL_SECONDS = 0.25
 
 
 @runtime_checkable
@@ -110,12 +113,13 @@ def resolve_token_store(option: Any) -> Optional[BrokerTokenStore]:
 
 def refresh_token_with_lock(label: str, store: Optional[BrokerTokenStore], store_key: str, lock_ttl_ms: int,
                             read_cached: Callable[[], Optional[T]], issue_and_cache: Callable[[], T],
-                            wait_seconds: float = DEFAULT_WAIT_SECONDS, sleep: Callable[[float], None] = time.sleep) -> T:
+                            wait_seconds: float = DEFAULT_WAIT_SECONDS, sleep: Callable[[float], None] = time.sleep,
+                            poll_seconds: float = DEFAULT_POLL_SECONDS) -> T:
     """교차 프로세스 락을 걸고 토큰을 발급한다.
 
     1. 저장소가 없으면 그냥 발급한다.
-    2. 락을 잡으면 발급하고 자기 락일 때만 푼다.
-    3. 못 잡으면 잠깐 기다렸다가 저장소를 다시 본다. 다른 프로세스가 넣었으면 그것을 쓴다.
+    2. 락을 잡으면 저장소를 한 번 더 읽고, 없을 때만 발급한다. 자기 락일 때만 푼다.
+    3. 못 잡으면 `poll_seconds` 간격으로 저장소를 다시 보며 `wait_seconds` 까지 기다린다. 다른 프로세스가 넣었으면 그것을 쓴다.
     4. 그래도 없으면 직접 발급한다. 이 경로도 `issue_and_cache` 를 거치므로 저장이 빠지지 않는다.
     """
     if store is None:
@@ -130,19 +134,28 @@ def refresh_token_with_lock(label: str, store: Optional[BrokerTokenStore], store
         logger.warning('%s 토큰 저장소 락 획득 실패, 락 없이 진행한다', label, exc_info=True)
     if acquired:
         try:
+            # 락을 잡기 직전에 다른 프로세스가 발급을 마치고 락을 풀었을 수 있다. 저장소에 있으면 발급하지 않는다.
+            try:
+                cached = read_cached()
+            except Exception:
+                cached = None
+            if cached is not None:
+                return cached
             return issue_and_cache()
         finally:
             try:
                 store.unlock(lock_key, lock_value)
             except Exception:
                 logger.debug('%s 토큰 저장소 락 해제 실패(저절로 만료된다)', label, exc_info=True)
-    sleep(wait_seconds)
-    try:
-        cached = read_cached()
-        if cached is not None:
-            logger.info('%s 다른 프로세스가 발급한 토큰을 쓴다', label)
-            return cached
-    except Exception:
-        logger.debug('%s 저장소 재조회 실패, 직접 발급한다', label, exc_info=True)
+    # 대기는 횟수로 센다. 한 번만 보고 직접 발급하면 상대의 발급이 길어질 때 두 곳이 발급한다.
+    for _ in range(max(1, math.ceil(wait_seconds / poll_seconds))):
+        sleep(poll_seconds)
+        try:
+            cached = read_cached()
+            if cached is not None:
+                logger.info('%s 다른 프로세스가 발급한 토큰을 쓴다', label)
+                return cached
+        except Exception:
+            logger.debug('%s 저장소 재조회 실패', label, exc_info=True)
     logger.warning('%s 다른 프로세스의 발급을 기다렸지만 토큰이 없어 직접 발급한다', label)
     return issue_and_cache()
