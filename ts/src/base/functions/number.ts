@@ -48,7 +48,8 @@ export class Precise {
             return;
         }
         let text = value.trim().toLowerCase();
-        if (!/^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/.test(text)) {
+        // 숫자 열을 나누는 방법이 하나뿐인 식이다(`\d+\.?\d*` 는 소수점이 없으면 되추적이 입력 길이의 제곱으로 늘어난다).
+        if (!/^[+-]?(\d+(\.\d*)?|\.\d+)(e[+-]?\d+)?$/.test(text)) {
             throw new Error(`십진수가 아니다: ${JSON.stringify(value)}`);
         }
         let exponent = 0;

@@ -208,8 +208,8 @@ function validateFeatures(data, err) {
 
 const code = (text) => `\`${text}\``;
 
-/** 표 셀에 넣을 문자열. 세로줄과 줄바꿈을 막는다. */
-const cell = (text) => String(text ?? '').replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ');
+/** 표 셀에 넣을 문자열. 역슬래시를 먼저 이스케이프한 뒤 세로줄을 이스케이프하고 줄바꿈을 막는다. 원문의 `\|` 가 표를 가르지 않게 한다. */
+export const cell = (text) => String(text ?? '').replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ');
 
 const sentence = (text) => (/[.!?)]$/.test(text) ? text : `${text}.`);
 

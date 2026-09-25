@@ -156,6 +156,20 @@ describe('Precise', () => {
         expect(() => Precise.stringMul('1.2.3', '1')).toThrow();
     });
 
+    it('십진 문자열 검사는 같은 형식을 받고, 긴 입력도 입력 길이에 비례하는 시간 안에 거부한다', () => {
+        for (const valid of ['1', '1.', '1.5', '.5', '+1', '-0.25', '1e3', '1.5e-3', '1.E2', '.5E+2']) {
+            expect(() => new Precise(valid)).not.toThrow();
+        }
+        for (const invalid of ['', '.', 'e3', '1..2', '1e', 'abc', '1.2.3', '+']) {
+            expect(() => new Precise(invalid)).toThrow();
+        }
+        // 예전 식(`\d+\.?\d*`)은 이 입력에서 되추적이 입력 길이의 제곱으로 늘어 0.7초쯤 걸렸다(CodeQL js/polynomial-redos).
+        const long = `${'1'.repeat(20_000)}x`;
+        const started = performance.now();
+        expect(() => new Precise(long)).toThrow();
+        expect(performance.now() - started).toBeLessThan(100);
+    });
+
     it('비교와 최솟값·최댓값', () => {
         expect(Precise.stringGt('1.01', '1.001')).toBe(true);
         expect(Precise.stringGe('1', '1.0')).toBe(true);

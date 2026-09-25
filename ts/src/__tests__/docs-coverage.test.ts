@@ -77,6 +77,7 @@ interface Generator {
     checkEvidence(data: Coverage, root: string): Promise<string[]>;
     renderReadmeCoverage(data: Coverage): string;
     spliceReadme(text: string, block: string): string;
+    cell(text: unknown): string;
     README_START: string;
     README_END: string;
 }
@@ -338,6 +339,16 @@ describe('근거 검사기가 어긋난 근거를 잡는다', () => {
     it('파일 밖 줄과 뒤집힌 범위를 잡는다', async () => {
         expect(await problemsOf((c) => { kbEntry(c, 'SSQM2341').evidence = ['ts/src/kbsec.ts:999999']; })).toContain('밖이거나 범위가 뒤집혔습니다');
         expect(await problemsOf((c) => { kbEntry(c, 'SSQM2341').evidence = ['ts/src/kbsec.ts:20-10']; })).toContain('밖이거나 범위가 뒤집혔습니다');
+    });
+});
+
+describe('표 셀', () => {
+    it('역슬래시를 먼저 이스케이프해서 원문의 \\| 가 표를 가르지 않는다', () => {
+        expect(generator.cell('a|b')).toBe('a\\|b');
+        expect(generator.cell('a\\|b')).toBe('a\\\\\\|b');
+        expect(generator.cell('x\\y')).toBe('x\\\\y');
+        expect(generator.cell('줄1\n  줄2')).toBe('줄1 줄2');
+        expect(generator.cell(undefined)).toBe('');
     });
 });
 
