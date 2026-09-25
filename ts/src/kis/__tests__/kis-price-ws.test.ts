@@ -174,4 +174,77 @@ describe('KisPriceWs 연결 수명', () => {
         expect(second.sent).toHaveLength(0);
         kws.stop();
     });
+
+    it('거부된 구독도 목록에 남아 다시 접속하면 다시 등록한다', async () => {
+        vi.useFakeTimers();
+        const kws = newWs();
+        kws.start([{ trId: 'H0STCNT0', trKey: '005930' }, { trId: 'H0STCNT0', trKey: '000660' }]);
+        await vi.advanceTimersByTimeAsync(0);
+        const first = FakeWs.instances[0]!;
+        first.emit('open');
+        first.emit('message', { data: JSON.stringify({ header: { tr_id: 'H0STCNT0', tr_key: '000660' }, body: { rt_cd: '1', msg1: 'MAX SUBSCRIBE OVER' } }) });
+        first.emit('close', { code: 1006 });
+        await vi.advanceTimersByTimeAsync(2_000);
+        const second = FakeWs.instances[1]!;
+        second.emit('open');
+
+        expect(second.frames()).toEqual([['1', 'H0STCNT0', '005930'], ['1', 'H0STCNT0', '000660']]);
+        kws.stop();
+    });
+
+    it('updateSubs 뒤에 다시 접속하면 새 목록 순서대로 등록하고, 겹친 구독은 한 번만 보낸다', async () => {
+        vi.useFakeTimers();
+        const kws = newWs();
+        kws.start([{ trId: 'H0STCNT0', trKey: '005930' }, { trId: 'H0STCNT0', trKey: '005930' }, { trId: 'H0STCNT0', trKey: '000660' }]);
+        await vi.advanceTimersByTimeAsync(0);
+        const first = FakeWs.instances[0]!;
+        first.emit('open');
+        kws.updateSubs([{ trId: 'H0STASP0', trKey: '000660' }, { trId: 'H0STCNT0', trKey: '000660' }]);
+        first.emit('close', { code: 1006 });
+        await vi.advanceTimersByTimeAsync(2_000);
+        const second = FakeWs.instances[1]!;
+        second.emit('open');
+
+        expect(first.frames()).toEqual([
+            ['1', 'H0STCNT0', '005930'], ['1', 'H0STCNT0', '000660'],
+            ['2', 'H0STCNT0', '005930'], ['1', 'H0STASP0', '000660'],
+        ]);
+        expect(second.frames()).toEqual([['1', 'H0STASP0', '000660'], ['1', 'H0STCNT0', '000660']]);
+        kws.stop();
+    });
+
+    it('재접속을 기다리는 사이에 start() 를 다시 부르면 기다리던 재접속을 거두고 한 번만 접속한다', async () => {
+        vi.useFakeTimers();
+        const getApprovalKey = vi.fn(async () => 'ak');
+        const kws = newWs({ getApprovalKey });
+        kws.start([{ trId: 'H0STCNT0', trKey: '005930' }]);
+        await vi.advanceTimersByTimeAsync(0);
+        FakeWs.instances[0]!.emit('open');
+        FakeWs.instances[0]!.emit('close', { code: 1006 });
+
+        kws.start([{ trId: 'H0STCNT0', trKey: '000660' }]);
+        await vi.advanceTimersByTimeAsync(30_000);
+
+        expect(FakeWs.instances).toHaveLength(2);
+        expect(getApprovalKey).toHaveBeenCalledTimes(2);
+        FakeWs.instances[1]!.emit('open');
+        expect(FakeWs.instances[1]!.frames()).toEqual([['1', 'H0STCNT0', '000660']]);
+        kws.stop();
+    });
+
+    it('연결 계층의 체결통보 방어를 함께 쓴다 — 평문 체결통보와 복호 key 없는 암호화 프레임은 버린다', async () => {
+        const onTrade = vi.fn();
+        const kws = newWs({ onTrade });
+        kws.start([]);
+        await flush();
+        const ws = FakeWs.instances[0]!;
+        ws.emit('message', { data: '0|H0STCNI0|001|HTSID^1^2' });
+        ws.emit('message', { data: '1|H0STCNT0|001|005930^093000^79000^5^100^2.5' });
+        await flush();
+
+        expect(onTrade).not.toHaveBeenCalled();
+        expect(logger.warn).toHaveBeenCalledWith({ trId: 'H0STCNI0' }, '[KisPriceWs] 암호화되지 않은 체결통보 프레임 — 버린다');
+        expect(logger.warn).toHaveBeenCalledWith({ trId: 'H0STCNT0' }, '[KisPriceWs] 복호 key 를 받기 전에 암호화 프레임이 왔다 — 버린다');
+        kws.stop();
+    });
 });

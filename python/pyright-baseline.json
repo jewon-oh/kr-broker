@@ -7,7 +7,6 @@
   "base/token_store.py": 1,
   "kis.py": 18,
   "market_calendar.py": 3,
-  "pro/kis_price_ws.py": 5,
   "pro/kis_realtime_stream.py": 10,
   "test/test_base.py": 3,
   "test/test_kis_helpers.py": 10,

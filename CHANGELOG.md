@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+### 바뀜
+
+- 한국투자증권 실시간 연결 코드를 `KisRealtimeStream` 하나로 모았습니다. `KisPriceWs`(`createPriceStream`)는 그 위에서 체결가와 호가만 읽습니다. `KisPriceWs`의 생성자 옵션과 메서드, 콜백, 내보내는 이름은 그대로입니다. 두 클래스가 다르게 처리하던 부분은 아래처럼 맞췄고, Python 판도 같습니다.
+  - `createRealtimeStream`도 구독이 거부되면 경고 로그를 남깁니다. 거부된 구독은 목록에 남아 다시 접속할 때 다시 등록합니다. 예전에는 목록에서 지워 다시 접속해도 등록하지 않았습니다.
+  - `createPriceStream`도 평문 체결통보 프레임과, 복호 key 를 받기 전에 온 암호화 프레임을 버립니다.
+  - `createRealtimeStream`의 연결 로그를 `KisPriceWs`와 같게 남깁니다. 연결 종료 로그에는 `code`, `reason`, `wasClean`을 싣고, 오류 로그에는 원인을 싣습니다. 접속하면 등록할 구독 수도 남깁니다.
+  - `KisPriceWs`는 `start`와 `updateSubs`로 받은 배열을 복사해 둡니다. 옵션의 `url`과 `isVirtual`은 생성할 때 한 번 읽습니다. 넘긴 뒤 배열이나 옵션 객체를 바꿔도 다음 접속에 반영되지 않습니다.
+  - Python `KisPriceWs`는 `KisRealtimeStream`을 상속합니다. 그래서 `subscribe`와 `unsubscribe`가 생겼고, 모듈 상수 `RECONNECT_BASE_MS`와 `RECONNECT_MAX_MS`는 없어졌습니다. 재접속 간격은 클래스 속성 `reconnect_base_ms`, `reconnect_max_ms`에 남아 있습니다.
+
+### 고침
+
+- 한국투자증권 `KisPriceWs.start()`를 재접속 대기 중에 다시 부르면 연결을 두 번 열던 것을 고쳤습니다. 새로 접속한 뒤 예약돼 있던 재접속이 한 번 더 돌아 방금 연 연결을 끊었습니다.
+- 한국투자증권 `KisPriceWs`의 구독 목록에 같은 구독이 겹쳐 있으면 등록 프레임을 한 번만 보냅니다. 예전에는 두 번 보내 거부 응답을 받았습니다(Python 판도 같습니다).
+
 ## [0.5.0] - 2026-09-25
 
 0.1.0 다음으로 태그를 붙인 첫 버전입니다. 저장소의 버전 번호는 태그 없이 0.4.0까지 올랐고, 그 사이의 변경도 모두 이 절에 적었습니다.

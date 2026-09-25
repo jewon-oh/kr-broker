@@ -17,7 +17,7 @@
  *
  * 표준(WHATWG) `WebSocket` 생성자는 커스텀 헤더를 실을 방법이 없다(브라우저·Node 21+ 네이티브 구현
  * 공통 제약 — subprotocol만 가능하다). 토스 인증은 handshake HTTP 헤더로 하므로, 헤더를 세 번째 인자
- * (`{ headers }`)로 받는 `ws` 패키지가 없으면 이 클라이언트는 연결할 수 없다. KIS(`kis-price-ws.ts`)처럼
+ * (`{ headers }`)로 받는 `ws` 패키지가 없으면 이 클라이언트는 연결할 수 없다. KIS(`kis-realtime-stream.ts`)처럼
  * 전역 `WebSocket`을 우선하고 `ws`로 폴백하는 방식이 아니라 `ws` 하나로 고정한다.
  */
 

@@ -1346,7 +1346,7 @@
       "status": "extended",
       "method": "createPriceStream",
       "evidence": [
-        "ts/src/kis/kis-realtime-parser.ts:75"
+        "ts/src/kis/kis-realtime-parser.ts:79"
       ],
       "suggested": null,
       "proposal": null,
@@ -1445,7 +1445,7 @@
       "status": "extended",
       "method": "createPriceStream",
       "evidence": [
-        "ts/src/kis/kis-realtime-parser.ts:57"
+        "ts/src/kis/kis-realtime-parser.ts:61"
       ],
       "suggested": null,
       "proposal": null,
@@ -5937,7 +5937,7 @@
       "status": "extended",
       "method": "createPriceStream",
       "evidence": [
-        "ts/src/kis/kis-realtime-parser.ts:57"
+        "ts/src/kis/kis-realtime-parser.ts:61"
       ],
       "suggested": null,
       "proposal": null,
