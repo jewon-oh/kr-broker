@@ -521,6 +521,7 @@ describe('editOrder', () => {
 
     it('해외 정정은 가격만 바꾼다 — crct_cncl_clsf 1 이고 수량 필드를 보내지 않는다', async () => {
         routeTr(mockFetch, { [KBSEC_TR.AMEND_CANCEL_US]: { ordr_no: 'UM1' } });
+        vi.setSystemTime(US_REGULAR);
 
         const order = await newExchange().editOrder('O9', 'AAPL/USD', 'limit', 'buy', undefined, 230.25);
 
@@ -540,6 +541,55 @@ describe('editOrder', () => {
     it('해외 일부정정(params.partial)은 요청 없이 NotSupported 다', async () => {
         await expect(newExchange().editOrder('O9', 'AAPL/USD', 'limit', 'buy', 1, 230.25, { partial: true })).rejects.toBeInstanceOf(NotSupported);
         expect(mockFetch).not.toHaveBeenCalled();
+    });
+});
+
+describe('editOrder — 장 시간', () => {
+    it('국내 정규장이 끝나기 직전(15:29:59 KST)에는 정정 요청이 나간다', async () => {
+        routeTr(mockFetch, { [KBSEC_TR.AMEND_KR]: { ordr_no: 'AM5' } });
+        vi.setSystemTime(new Date('2026-08-19T06:29:59Z'));
+
+        const order = await newExchange().editOrder('O9', '005930/KRW', 'limit', 'buy', undefined, 71000);
+
+        expect(order.id).toBe('AM5');
+        expect(calledTrs(mockFetch)).toContain(KBSEC_TR.AMEND_KR.toLowerCase());
+    });
+
+    it('★국내 정규장이 끝난 15:30 KST 에는 원주문 조회와 정정 요청 없이 MarketClosed 다. 휴장일 캘린더만 받는다', async () => {
+        routeTr(mockFetch, { [KBSEC_TR.TRADES_KR]: { Record1: [] }, [KBSEC_TR.AMEND_KR]: { ordr_no: 'AM5' } });
+        vi.setSystemTime(new Date('2026-08-19T06:30:00Z'));
+
+        // amount 가 없으면 라우팅을, 있으면 총수량을 확인하려고 미체결 목록을 조회하는 경로다. 둘 다 조회 전에 막는다.
+        await expect(newExchange().editOrder('O9', '005930/KRW', 'limit', 'buy', undefined, 71000)).rejects.toBeInstanceOf(MarketClosed);
+        await expect(newExchange().editOrder('O9', '005930/KRW', 'limit', 'buy', 5, 71000)).rejects.toBeInstanceOf(MarketClosed);
+
+        expect(calledTrs(mockFetch)).toEqual([KBSEC_TR.MARKET_STATUS.toLowerCase()]);
+    });
+
+    it('미국 정규장이 끝나기 직전(15:59:59 ET)에는 정정 요청이 나간다', async () => {
+        routeTr(mockFetch, { [KBSEC_TR.AMEND_CANCEL_US]: { ordr_no: 'UM2' } });
+        vi.setSystemTime(new Date('2026-08-19T19:59:59Z'));
+
+        const order = await newExchange().editOrder('O9', 'AAPL/USD', 'limit', 'buy', undefined, 230.25);
+
+        expect(order.id).toBe('UM2');
+    });
+
+    it('★미국 정규장이 끝난 16:00 ET 에는 요청을 하나도 보내지 않고 MarketClosed 다', async () => {
+        routeTr(mockFetch, { [KBSEC_TR.AMEND_CANCEL_US]: { ordr_no: 'UM2' } });
+        vi.setSystemTime(new Date('2026-08-19T20:00:00Z'));
+
+        await expect(newExchange().editOrder('O9', 'AAPL/USD', 'limit', 'buy', undefined, 230.25)).rejects.toBeInstanceOf(MarketClosed);
+
+        expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('정정은 신규 진입이 아니라서 blockAuctionBuys 를 켜도 종가 동시호가(15:25 KST)의 매수 정정을 막지 않는다', async () => {
+        routeTr(mockFetch, { [KBSEC_TR.AMEND_KR]: { ordr_no: 'AM6' } });
+        vi.setSystemTime(new Date('2026-08-19T06:25:00Z'));
+        const guarded = new kbsec({ ...CREDS, rateLimit: 0, options: { blockAuctionBuys: true, confirmBudget: { intervalMs: 0 } } });
+
+        await expect(guarded.editOrder('O9', '005930/KRW', 'limit', 'buy', undefined, 71000)).resolves.toMatchObject({ id: 'AM6' });
     });
 });
 

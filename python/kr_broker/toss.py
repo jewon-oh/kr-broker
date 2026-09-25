@@ -1324,7 +1324,9 @@ class toss(Exchange, ImplicitAPI):
         잔량을 싣고, 미국은 가격만 보낸다. `amount` 는 ccxt 와 같이 정정 뒤 주문의 총수량(체결분 포함)이고, 주면 주문 상세로 대조해 총수량과
         다르면 정정 요청 없이 `NotSupported` 다. 명세의 `quantity` 뜻이 정해지지 않아 국내는 체결 없는 주문만 정정하고, 일부 체결된 주문은
         `NotSupported` 다. 일부정정(`params['partial']`)은 받지 않는다. 주문 상세 조회가 실패하면 던진다(미국에서 `amount` 가 없으면 조회는
-        고액주문 확인에만 쓰므로 실패해도 정정한다). 정정하면 새 주문번호가 나온다. `params['trigger']` 가 `True` 면 조건주문 정정이고, 조건 전체를 등록과 같은 인자로 다시 선언한다."""
+        고액주문 확인에만 쓰므로 실패해도 정정한다). 정정하면 새 주문번호가 나온다. 장 시간 밖이면 원주문 조회와 정정 요청 없이 `MarketClosed` 다.
+        판정은 `create_order` 와 같고, 정정은 신규 진입이 아니라서 동시호가 매수 차단은 걸지 않는다. `params['trigger']` 가 `True` 면 조건주문 정정이고,
+        조건 전체를 등록과 같은 인자로 다시 선언한다. 등록처럼 장 시간 게이트는 거치지 않는다."""
         params = {} if params is None else params
         amount, price = fn.decimal_to_float(amount), fn.decimal_to_float(price)
         if self.safe_bool_2(params, 'trigger', 'stop', False) is True:
@@ -1343,6 +1345,12 @@ class toss(Exchange, ImplicitAPI):
             raise NotSupported(f'{self.id} editOrder() 의 일부정정(params.partial)은 지원하지 않는다. 토스 정정은 잔량 전부를 새 가격으로 옮긴다')
         if type == 'limit' and price is not None:
             self._assert_krx_tick_aligned(market, price, 'editOrder')
+
+        # 원주문 조회보다 먼저 판정한다. 정정 본문의 수량은 국내 잔량(정수)이거나 없어서(미국) 소수점 제한에 걸리지 않는 0 을 넘긴다.
+        gate = self._check_orderable_session(symbol, country, {'isMarket': type == 'market', 'useAmountBased': False, 'quantity': 0}, None)
+        if gate is not None:
+            logger.info('[toss] 거래시간 밖이라 정정 요청을 보내지 않는다(%s %s): %s', id, symbol, gate)
+            raise MarketClosed(gate)
 
         # 국내는 정정 수량을 싣기 위해, `amount` 를 주면 대조하기 위해 원주문을 조회한다. 이때 조회가 실패하면 던진다.
         original = self._edit_original(id) if country == 'KR' or amount is not None else None
@@ -1445,14 +1453,15 @@ class toss(Exchange, ImplicitAPI):
             raise InvalidOrder(f"{self.id} createOrder() timeInForce must be one of {', '.join(ORDER_TIME_IN_FORCE)}")
         return value
 
-    def _check_orderable_session(self, symbol: str, country: str, form: Dict[str, Any], side: str) -> Optional[str]:
+    def _check_orderable_session(self, symbol: str, country: str, form: Dict[str, Any], side: Optional[str]) -> Optional[str]:
         """주문 접수 가능 시간과 형태를 검사한다. 막는 사유(한국어)이고, 접수할 수 있으면 `None`.
         캘린더를 받지 못하면 정적 시간표(`is_toss_orderable`)로 판정한다. 그 폴백에서 국내 휴장일은 공용 캘린더가 알 때만 막고(모르면 연다),
-        미국 확장세션은 막는다(좁히는 쪽). 정규장의 종가 동시호가 신규 매수는 `options['blockAuctionBuys']` 가 켜졌을 때만 막는다."""
+        미국 확장세션은 막는다(좁히는 쪽). 정규장의 종가 동시호가 신규 매수는 `options['blockAuctionBuys']` 가 켜졌을 때만 막는다.
+        정정은 `side` 를 비워 이 차단을 걸지 않는다."""
         now = _now_ms()
 
         def auction() -> Optional[str]:
-            if not self.is_option_enabled('blockAuctionBuys'):
+            if side is None or not self.is_option_enabled('blockAuctionBuys'):
                 return None
             return krx_auction_buy_block_reason(now, side) if country == 'KR' else us_auction_buy_block_reason(now, side)
 
