@@ -165,6 +165,14 @@ def test_async_source_awaits_every_coroutine_call(name: str) -> None:
     assert _await_problems(async_modules()[name]) == []
 
 
+PRO_MODULES = ['kis', 'toss', 'kis_price_ws', 'kis_realtime_stream', 'toss_price_ws']
+
+
+@pytest.mark.parametrize('name', PRO_MODULES)
+def test_pro_source_awaits_every_coroutine_call(name: str) -> None:
+    assert _await_problems(__import__(f'kr_broker.pro.{name}', fromlist=['_'])) == []
+
+
 @pytest.mark.parametrize('name', generated_modules())
 def test_async_source_does_not_block_the_event_loop(name: str) -> None:
     text = (ASYNC_ROOT / f'{name}.py').read_text(encoding='utf-8')
@@ -244,11 +252,15 @@ def test_broker_overrides_match_base_coroutine_kind(broker: str) -> None:
     assert wrong == []
 
 
-def test_async_package_exports_same_names_as_sync() -> None:
-    assert kr_broker.async_support.exchanges == kr_broker.exchanges
-    assert set(kr_broker.async_support.__all__) == set(kr_broker.__all__)
-    assert kr_broker.async_support.__version__ == kr_broker.__version__
-    assert kr_broker.async_support.ExchangeError is kr_broker.ExchangeError
+def test_async_and_pro_packages_export_same_names_as_sync() -> None:
+    import kr_broker.pro
+    for package in (kr_broker.async_support, kr_broker.pro):
+        assert package.exchanges == kr_broker.exchanges
+        assert set(package.__all__) == set(kr_broker.__all__)
+        assert package.__version__ == kr_broker.__version__
+        assert package.ExchangeError is kr_broker.ExchangeError
+    assert issubclass(kr_broker.pro.kis, kr_broker.async_support.kis) and issubclass(kr_broker.pro.toss, kr_broker.async_support.toss)
+    assert kr_broker.pro.kis({}).has['watchTicker'] is True and kr_broker.async_support.kis({}).has['watchTicker'] is False
 
 
 # ============ 실행 도구 ============

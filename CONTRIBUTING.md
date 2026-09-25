@@ -26,6 +26,7 @@ ts/src/                  TypeScript 판
 python/kr_broker/        Python 판
   base/  abstract/       공통 계층과 엔드포인트 표에서 만든 암묵 API 선언
   async_support/         비동기 판. 증권사 클래스의 정본이다
+  pro/                   실시간 판. 비동기 판을 상속하고 watch_* 를 더한다
   kis.py, toss.py        동기 판 증권사 클래스(async_support/ 에서 만든다)
   test/                  Python 테스트
 examples/ts/, examples/py/

@@ -1,5 +1,5 @@
 """토스증권 Open API(`class toss(Exchange, ImplicitAPI)`). TypeScript 판 `ts/src/toss.ts` 를 옮겼다. 국내와 미국 주식 현물의 시세·잔고·주문·조회를
-ccxt 와 같은 모양으로 다룬다. 웹소켓(`watch*`)은 옮기지 않았다.
+ccxt 와 같은 모양으로 다룬다. 실시간(`watch_*`)은 이 클래스를 상속한 `kr_broker.pro.toss` 에 있다.
 
 .. code-block:: python
 
@@ -331,7 +331,7 @@ class toss(Exchange, ImplicitAPI):
             'rateLimit': GLOBAL_RATE_LIMIT_MS,
             'timeout': READ_TIMEOUT_MS,
             'orderTimeout': ORDER_TIMEOUT_MS,
-            # TypeScript 판과 같은 값이다. 웹소켓(`ws`, `watch*`)만 옮기지 않아 False 다.
+            # TypeScript 판과 같은 값이다. 실시간(`ws`, `watch*`)은 `kr_broker.pro.toss` 가 True 로 바꾼다.
             'has': {
                 'CORS': None,
                 'spot': True,

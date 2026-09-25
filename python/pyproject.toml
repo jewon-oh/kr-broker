@@ -9,7 +9,7 @@ description = "한국투자증권·토스증권 Open API 를 ccxt 방식으로 �
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
-dependencies = ["requests>=2.31", "aiohttp>=3.9"]
+dependencies = ["requests>=2.31", "aiohttp>=3.9", "cryptography>=42"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",

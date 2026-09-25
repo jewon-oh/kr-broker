@@ -9,13 +9,13 @@ TypeScript 판과 같은 저장소에 있고, 같은 엔드포인트 표(`ts/src
 pip install kr-broker
 ```
 
-Python 3.10 이상이 필요하고, 의존성은 `requests`(동기 판)와 `aiohttp`(비동기 판)입니다.
+Python 3.10 이상이 필요하고, 의존성은 `requests`(동기 판), `aiohttp`(비동기 판과 실시간 판), `cryptography`(한국투자증권 체결통보 복호)입니다.
 
 ## 지금 되는 것
 
 - 한국투자증권(`kr_broker.kis`)과 토스증권(`kr_broker.toss`)의 인증, 서명, 오류 처리, 호출 간격 조절입니다.
 - 두 증권사의 모든 엔드포인트를 암묵 메서드로 부를 수 있습니다. 한국투자증권 272개, 토스증권 36개입니다.
-- 두 증권사 모두 아래 표의 통합 메서드를 부를 수 있습니다. 웹소켓(`watch_*`)은 아직 없어서 `broker.has`에서 `False`입니다.
+- 두 증권사 모두 아래 표의 통합 메서드를 부를 수 있습니다. 실시간(`watch_ticker`, `watch_trades`, `watch_order_book`, `watch_orders`)은 `kr_broker.pro`에 있습니다.
 
 | 분류 | 한국투자증권 통합 메서드 | 토스증권 통합 메서드 |
 |---|---|---|
@@ -127,6 +127,32 @@ asyncio.run(main())
 - 동기 판은 비동기 판 소스에서 만들므로 요청과 응답 해석이 같습니다. 요청 픽스처를 두 판으로 모두 돌립니다.
 - 토큰 저장소는 메서드가 값을 돌려주는 동기 구현과 코루틴을 돌려주는 비동기 구현(예: `redis.asyncio`)을 모두 받습니다.
 - 한국투자증권이 토큰 만료로 응답하면 두 판 모두 메모리의 토큰을 바로 비웁니다. 저장소의 토큰은 동기 판이 그 자리에서 지우고, 비동기 판은 기다리지 않는 작업으로 지웁니다(TypeScript 판과 같습니다).
+
+### 실시간 판(Pro)
+
+ccxt 의 `ccxt.pro` 처럼 `kr_broker.pro` 의 증권사 클래스가 비동기 판을 상속하고 `watch_*` 를 더합니다. 웹소켓은 aiohttp 로 엽니다.
+
+```python
+import asyncio
+
+import kr_broker.pro as kr_broker
+
+
+async def main():
+    async with kr_broker.kis({'apiKey': APP_KEY, 'secret': APP_SECRET, 'uid': '12345678-01'}) as kis:
+        while True:
+            ticker = await kis.watch_ticker('005930/KRW')   # 부를 때마다 다음 갱신을 돌려준다
+            print(ticker['last'])
+
+asyncio.run(main())
+```
+
+- `watch_*` 는 처음 부를 때 구독합니다. 체결과 주문은 기다리는 쪽이 없을 때 쌓아 두었다가 다음 호출에 한꺼번에 돌려줍니다.
+- 연결이 끊기면 다시 잇고 구독을 다시 보냅니다. `close()` 는 실시간 연결과 HTTP 세션을 함께 닫고, 기다리던 `watch_*` 는 `ExchangeError` 로 끝납니다.
+- 한국투자증권의 `watch_orders` 는 체결통보를 HTS ID 로 구독하므로 `options['htsId']` 가 필요합니다. 체결통보 본문은 구독 응답이 준 키로 복호합니다(`cryptography` 패키지).
+- 같은 앱키와 접속키로 다른 프로그램이 이미 연결돼 있으면 한국투자증권이 새 연결을 끊습니다.
+- 토스증권의 `watch_ticker` 는 체결 가격만 채웁니다. 호가는 구독 직후 스냅샷을 보내지 않아서 첫 값이 다음 호가 변경 때 옵니다.
+- 가격만 콜백으로 받으려면 `create_price_stream()`, 한국투자증권의 다른 실시간 TR 을 받으려면 `create_realtime_stream()` 을 씁니다. TypeScript 판의 같은 이름 메서드와 같습니다.
 
 ## 개발
 
