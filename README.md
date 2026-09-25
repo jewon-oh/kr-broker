@@ -334,7 +334,8 @@ print(price['output']['stck_prpr'])
 
 - 지금은 한국투자증권과 토스증권의 인증, 서명, 오류 처리, 호출 간격 조절이 있고, 모든 엔드포인트를 암묵 메서드로 부를 수 있습니다. 두 증권사의 통합 메서드(`fetch_ticker`, `create_order` 등)도 옮겼습니다. 웹소켓(`watch_*`)은 옮기지 않아 `has`에서 `False`입니다. KB증권은 아직 없습니다.
 - 두 판은 같은 엔드포인트 표(`ts/src/spec/`)와 요청 픽스처(`ts/src/test/static/request/`)를 씁니다. CI가 두 판에서 같은 픽스처를 돌려 같은 요청을 만들고 같은 오류를 던지는지 확인합니다.
-- Python 3.10 이상이 필요하고 의존성은 `requests` 하나입니다. PyPI에는 아직 게시하지 않았습니다.
+- 비동기 판은 `kr_broker.async_support`에 있습니다. ccxt의 `ccxt.async_support`와 같은 구조이고, 요청을 보내는 메서드가 코루틴이라는 것만 다릅니다.
+- Python 3.10 이상이 필요하고 의존성은 `requests`와 `aiohttp`입니다. PyPI에는 아직 게시하지 않았습니다.
 
 ## 알려진 한계
 
@@ -371,7 +372,7 @@ pnpm build
 
 `examples/ts/`의 파일은 타입 검사 대상이라 README의 코드와 항상 같은 API를 사용합니다. `examples/py/`는 CI가 문법을 검사합니다.
 
-Python 판은 `python/`에서 따로 설치하고 테스트합니다. `python/kr_broker/abstract/`는 `node scripts/gen-python-abstract.mjs`가 엔드포인트 표에서 만드는 파일이라 직접 고치지 않습니다.
+Python 판은 `python/`에서 따로 설치하고 테스트합니다. `python/kr_broker/abstract/`는 `node scripts/gen-python-abstract.mjs`가 엔드포인트 표에서 만드는 파일이라 직접 고치지 않습니다. `python/kr_broker/kis.py` 같은 동기 판 증권사 파일은 `node scripts/gen-python-sync.mjs`가 `python/kr_broker/async_support/`의 비동기 판에서 만듭니다.
 
 ```bash
 cd python

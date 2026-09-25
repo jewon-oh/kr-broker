@@ -9,7 +9,7 @@ TypeScript 판과 같은 저장소에 있고, 같은 엔드포인트 표(`ts/src
 pip install kr-broker
 ```
 
-Python 3.10 이상이 필요하고, 의존성은 `requests` 하나입니다.
+Python 3.10 이상이 필요하고, 의존성은 `requests`(동기 판)와 `aiohttp`(비동기 판)입니다.
 
 ## 지금 되는 것
 
@@ -105,6 +105,29 @@ except kr_broker.InsufficientFunds as e:
 `options['tokenStore']`에 `kr_broker.BrokerTokenStore` 계약(`get`, `set`, `delete`, `delete_if_access_token_equals`, `try_lock`, `unlock`)을
 따르는 저장소를 넘깁니다. 넘기지 않으면 프로세스 메모리에만 둡니다.
 
+### 비동기 판
+
+ccxt 의 `ccxt.async_support` 처럼 `kr_broker.async_support` 에 같은 이름의 증권사 클래스가 있습니다. 요청을 보내는 메서드는 코루틴이고, HTTP 는 aiohttp 로 보냅니다.
+
+```python
+import asyncio
+
+import kr_broker.async_support as kr_broker
+
+
+async def main():
+    async with kr_broker.kis({'apiKey': APP_KEY, 'secret': APP_SECRET, 'uid': '12345678-01'}) as kis:
+        ticker = await kis.fetch_ticker('005930/KRW')
+        balance = await kis.fetch_balance()
+
+asyncio.run(main())
+```
+
+- `async with` 를 쓰지 않으면 다 쓴 뒤 `await kis.close()` 로 HTTP 세션을 닫습니다. 설정에 `session` 으로 넘긴 aiohttp 세션은 닫지 않습니다.
+- 동기 판은 비동기 판 소스에서 만들므로 요청과 응답 해석이 같습니다. 요청 픽스처를 두 판으로 모두 돌립니다.
+- 토큰 저장소는 메서드가 값을 돌려주는 동기 구현과 코루틴을 돌려주는 비동기 구현(예: `redis.asyncio`)을 모두 받습니다.
+- 한국투자증권이 토큰 만료로 응답하면 두 판 모두 메모리의 토큰을 바로 비웁니다. 저장소의 토큰은 동기 판이 그 자리에서 지우고, 비동기 판은 기다리지 않는 작업으로 지웁니다(TypeScript 판과 같습니다).
+
 ## 개발
 
 ```bash
@@ -114,3 +137,6 @@ uv venv && uv pip install -e '.[dev]'
 ```
 
 `kr_broker/abstract/*.py`는 `node scripts/gen-python-abstract.mjs`가 엔드포인트 표에서 만듭니다. 직접 고치지 않습니다.
+
+`kr_broker/kis.py`, `kr_broker/toss.py` 같은 동기 판 여섯 파일은 `node scripts/gen-python-sync.mjs`가 `kr_broker/async_support/`의 같은 이름 파일에서 만듭니다.
+ccxt 와 같은 규칙으로 `async`와 `await`를 지웁니다. 고칠 때는 `async_support/` 쪽 파일을 고치고 생성 스크립트를 돌립니다. 파일 첫 줄에 생성 표시가 있습니다.

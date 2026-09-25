@@ -114,23 +114,42 @@ def refresh_market_calendar(market: str, fetch_days: Callable[[], Iterable[Dict[
     """캘린더를 API 로 갱신한다. 아직 신선하면 부르지 않고, 실패하면 `False` 를 돌려준다(던지지 않는다).
 
     `fetch_days` 는 API 를 불러 날짜별 개장 여부를 돌려주는 함수이고, 던지면 실패로 센다. 신선한 캘린더가 있으면 `True` 다.
+    비동기 판은 `kr_broker.async_support.market_calendar.refresh_market_calendar` 이고 같은 상태를 쓴다.
     """
     now = fn.milliseconds() if now_ms is None else now_ms
     with _refresh_locks[market]:
-        state = _refresh_state[market]
-        if state['okAtMs'] is not None and now - state['okAtMs'] < ttl_ms:
-            return True
-        if state['failedAtMs'] is not None and now - state['failedAtMs'] < CALENDAR_RETRY_MS:
-            return state['okAtMs'] is not None
+        skipped = _refresh_skipped(market, ttl_ms, now)
+        if skipped is not None:
+            return skipped
         try:
             apply_market_calendar(market, fetch_days())
-            state['okAtMs'] = now
-            state['failedAtMs'] = None
-            return True
         except Exception:
-            state['failedAtMs'] = now
-            logger.warning('[market-calendar] %s 캘린더 API 호출 실패. 10분 뒤 다시 시도한다', market, exc_info=True)
-            return state['okAtMs'] is not None
+            return _record_refresh_failure(market, now)
+        return _record_refresh_success(market, now)
+
+
+def _refresh_skipped(market: str, ttl_ms: int, now: int) -> Optional[bool]:
+    """API 를 부르지 않아도 되면 돌려줄 값이다. 불러야 하면 `None` 이다."""
+    state = _refresh_state[market]
+    if state['okAtMs'] is not None and now - state['okAtMs'] < ttl_ms:
+        return True
+    if state['failedAtMs'] is not None and now - state['failedAtMs'] < CALENDAR_RETRY_MS:
+        return state['okAtMs'] is not None
+    return None
+
+
+def _record_refresh_success(market: str, now: int) -> bool:
+    state = _refresh_state[market]
+    state['okAtMs'] = now
+    state['failedAtMs'] = None
+    return True
+
+
+def _record_refresh_failure(market: str, now: int) -> bool:
+    state = _refresh_state[market]
+    state['failedAtMs'] = now
+    logger.warning('[market-calendar] %s 캘린더 API 호출 실패. 10분 뒤 다시 시도한다', market, exc_info=True)
+    return state['okAtMs'] is not None
 
 
 def reset_market_calendar() -> None:

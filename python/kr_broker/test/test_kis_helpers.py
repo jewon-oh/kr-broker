@@ -14,6 +14,7 @@ import kr_broker
 from kr_broker import kis_yahoo_candles
 from kr_broker.base import functions as fn
 from kr_broker.base.errors import BadSymbol, NotSupported
+from kr_broker.base.exchange import Exchange
 from kr_broker.broker_time import timeframe_to_ms
 from kr_broker.kis import et_timestamp, kst_timestamp, kst_ymd, et_ymd
 from kr_broker.kis_candle_pagination import (
@@ -224,47 +225,47 @@ def no_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_yahoo_rejects_unsupported_timeframe(timeframe: str) -> None:
     session = FakeSession([YAHOO_EMPTY])
     with pytest.raises(NotSupported, match=f"미지원 타임프레임 '{timeframe}'"):
-        fetch_yahoo_candles('005930', timeframe, session=session)
+        fetch_yahoo_candles('005930', timeframe, exchange=Exchange({'session': session}))
     assert session.urls == []
 
 
 def test_yahoo_retries_empty_then_succeeds(no_backoff: None) -> None:
     session = FakeSession([YAHOO_EMPTY, yahoo_ok(ONE)])
-    out = fetch_yahoo_candles('005930', '1d', 10, session=session)
+    out = fetch_yahoo_candles('005930', '1d', 10, exchange=Exchange({'session': session}))
     assert len(session.urls) == 2
     assert out == [[1_700_000_000_000, 1, 2, 0.5, 1.5, 100]]
 
 
 def test_yahoo_chart_error_does_not_retry(no_backoff: None) -> None:
     session = FakeSession([YAHOO_CHART_ERROR])
-    assert fetch_yahoo_candles('BADSYM', '1d', 10, session=session) == []
+    assert fetch_yahoo_candles('BADSYM', '1d', 10, exchange=Exchange({'session': session})) == []
     assert len(session.urls) == 1
 
 
 def test_yahoo_gives_up_after_three_empty(no_backoff: None) -> None:
     session = FakeSession([YAHOO_EMPTY])
-    assert fetch_yahoo_candles('005930', '1d', 10, session=session) == []
+    assert fetch_yahoo_candles('005930', '1d', 10, exchange=Exchange({'session': session})) == []
     assert len(session.urls) == 3
 
 
 def test_yahoo_retries_429(no_backoff: None) -> None:
     session = FakeSession([YAHOO_429, yahoo_ok(ONE)])
-    assert len(fetch_yahoo_candles('NVDA', '1d', 10, session=session)) == 1
+    assert len(fetch_yahoo_candles('NVDA', '1d', 10, exchange=Exchange({'session': session}))) == 1
     assert len(session.urls) == 2
 
 
 def test_yahoo_uses_range_not_period(no_backoff: None) -> None:
     session = FakeSession([yahoo_ok(ONE)])
     now = fn.milliseconds()
-    fetch_yahoo_candles('005930', '4h', 200, now - 200 * 24 * 3600 * 1000, now, session=session)
+    fetch_yahoo_candles('005930', '4h', 200, now - 200 * 24 * 3600 * 1000, now, exchange=Exchange({'session': session}))
     assert 'range=1y' in session.urls[0] and 'interval=1h' in session.urls[0] and 'period1' not in session.urls[0]
     assert session.urls[0].startswith('https://query1.finance.yahoo.com/v8/finance/chart/005930.KS?')
 
 
 def test_yahoo_ticker_suffix(no_backoff: None) -> None:
     session = FakeSession([yahoo_ok(ONE)])
-    fetch_yahoo_candles('247540/KRW', '1d', 10, kr_market='KOSDAQ', session=session)
-    fetch_yahoo_candles('stock:AAPL', '1d', 10, session=session)
+    fetch_yahoo_candles('247540/KRW', '1d', 10, kr_market='KOSDAQ', exchange=Exchange({'session': session}))
+    fetch_yahoo_candles('stock:AAPL', '1d', 10, exchange=Exchange({'session': session}))
     assert '/247540.KQ?' in session.urls[0] and '/AAPL?' in session.urls[1]
 
 
@@ -277,7 +278,7 @@ def test_yahoo_ticker_uses_hyphen_for_us_class_shares() -> None:
 
 def test_yahoo_concurrency_is_capped() -> None:
     session = FakeSession([yahoo_ok(ONE)], delay=0.03)
-    threads = [threading.Thread(target=fetch_yahoo_candles, args=('005930', '1d', 10), kwargs={'session': session}) for _ in range(20)]
+    threads = [threading.Thread(target=fetch_yahoo_candles, args=('005930', '1d', 10), kwargs={'exchange': Exchange({'session': session})}) for _ in range(20)]
     for thread in threads:
         thread.start()
     for thread in threads:

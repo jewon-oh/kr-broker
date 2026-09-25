@@ -1,0 +1,79 @@
+#!/usr/bin/env node
+/**
+ * @fileoverview Python 판의 비동기 소스(`python/<패키지>/async_support/*.py`)에서 동기 판(`python/<패키지>/*.py`)을 만든다.
+ *
+ * ccxt 가 `async_support/<거래소>.py` 에서 동기 판을 만드는 규칙과 같다. 줄마다 다음만 바꾸므로 줄 번호가 바뀌지 않는다
+ * (맨 위에 생성 표시 한 줄이 붙는다).
+ *
+ * - `async def`·`async with`·`async for` → `def`·`with`·`for`
+ * - `await ` → 지운다
+ * - `<패키지>.async_support.` → `<패키지>.` (가져오는 곳을 동기 짝으로 바꾼다. 짝 모듈은 이름과 인자가 같다.)
+ *
+ * 바꾼 결과에 `async`·`await`·`asyncio` 가 남으면 실패한다. 비동기 소스는 asyncio 를 직접 쓰지 않고
+ * `async_support/base/runtime.py` 의 `sleep_seconds`·`new_lock`·`new_semaphore`·`maybe_await` 를 쓴다.
+ *
+ * ```bash
+ * node scripts/gen-python-sync.mjs          # 동기 판을 다시 쓴다
+ * node scripts/gen-python-sync.mjs --check  # 동기 판이 비동기 소스에서 만든 것과 같은지만 본다(다르면 종료 코드 1)
+ * ```
+ */
+
+import { readFile, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { pythonPackageName } from './gen-python-abstract.mjs';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const PY_ROOT = path.join(ROOT, 'python');
+
+/** 비동기 소스가 정본인 모듈. 전역 상태를 두 판이 함께 써야 하는 모듈(`market_calendar` 등)은 여기 넣지 않고 짝을 손으로 쓴다. */
+export const GENERATED_MODULES = [
+    'kis.py',
+    'toss.py',
+    'kis_candle_service.py',
+    'kis_yahoo_candles.py',
+    'execution_confirm.py',
+    'extended_session_limit.py',
+];
+
+const LEFTOVER = /\bawait\b|\basync\s+(?:def|with|for)\b|\basyncio\b/;
+
+/** 비동기 소스 한 파일을 동기 판으로 바꾼다. `source` 는 비동기 소스의 저장소 기준 경로다(생성 표시에 쓴다). */
+export function toSync(text, pkg, source) {
+    const asyncPrefix = new RegExp(`\\b${pkg}\\.async_support\\.`, 'g');
+    const lines = text.split('\n').map((line) => line
+        .replace(/^(\s*)async\s+(def|with|for)\b/, '$1$2')
+        .replace(/\bawait\s+/g, '')
+        .replace(asyncPrefix, `${pkg}.`));
+    lines.forEach((line, index) => {
+        if (LEFTOVER.test(line)) {
+            throw new Error(`${source}:${index + 1} 동기 판으로 바꾸지 못한 비동기 구문이 남는다: ${line.trim()}`);
+        }
+    });
+    return [`# 이 파일은 scripts/gen-python-sync.mjs 가 ${source} 에서 만든다. 직접 고치지 않는다.`, ...lines].join('\n');
+}
+
+async function main() {
+    const check = process.argv.includes('--check');
+    const pkg = pythonPackageName(PY_ROOT);
+    const stale = [];
+    for (const name of GENERATED_MODULES) {
+        const source = `python/${pkg}/async_support/${name}`;
+        const target = path.join(PY_ROOT, pkg, name);
+        const generated = toSync(await readFile(path.join(ROOT, source), 'utf8'), pkg, source);
+        const current = await readFile(target, 'utf8').catch(() => null);
+        if (current === generated) continue;
+        if (check) stale.push(path.relative(ROOT, target));
+        else await writeFile(target, generated);
+    }
+    if (stale.length > 0) {
+        process.stderr.write(`동기 판이 비동기 소스와 다르다. node scripts/gen-python-sync.mjs 로 다시 만든다:\n${stale.map((f) => `  ${f}`).join('\n')}\n`);
+        process.exit(1);
+    }
+    process.stdout.write(check ? `동기 판 ${GENERATED_MODULES.length}개가 비동기 소스와 같다\n` : `동기 판 ${GENERATED_MODULES.length}개를 만들었다\n`);
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+    await main();
+}

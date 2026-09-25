@@ -1,4 +1,3 @@
-# 이 파일은 scripts/gen-python-sync.mjs 가 python/kr_broker/async_support/kis.py 에서 만든다. 직접 고치지 않는다.
 """한국투자증권 Open API(`class kis(Exchange, ImplicitAPI)`). TypeScript 판 `ts/src/kis.ts` 를 옮겼다. 국내와 미국 주식 현물의 시세와 종목,
 잔고, 주문, 주문과 체결 조회, 휴장일 캘린더와 순위 같은 고유 조회를 ccxt 와 같은 모양으로 다룬다. 웹소켓(`watch_*`)과 통합 메서드가 부르지
 않는 고유 메서드(채권, 선물옵션 등)는 옮기지 않았다.
@@ -50,13 +49,13 @@ import re
 from typing import Any, Callable, Dict, List, NamedTuple, Optional
 
 from kr_broker.abstract.kis import ImplicitAPI
-from kr_broker.base.exchange import Exchange
-from kr_broker.base.runtime import maybe_await, new_lock, sleep_seconds
-from kr_broker.base.token_store import refresh_token_with_lock
-from kr_broker.extended_session_limit import build_extended_session_limit
-from kr_broker.kis_candle_service import KISCandleService
-from kr_broker.kis_yahoo_candles import fetch_yahoo_candles
-from kr_broker.market_calendar import refresh_market_calendar as refresh_shared_market_calendar
+from kr_broker.async_support.base.exchange import Exchange
+from kr_broker.async_support.base.runtime import maybe_await, new_lock, sleep_seconds
+from kr_broker.async_support.base.token_store import refresh_token_with_lock
+from kr_broker.async_support.extended_session_limit import build_extended_session_limit
+from kr_broker.async_support.kis_candle_service import KISCandleService
+from kr_broker.async_support.kis_yahoo_candles import fetch_yahoo_candles
+from kr_broker.async_support.market_calendar import refresh_market_calendar as refresh_shared_market_calendar
 from kr_broker.base import functions as fn
 from kr_broker.base.decimal_to_precision import NO_PADDING, ROUND, TICK_SIZE, decimal_to_precision
 from kr_broker.base.errors import (
@@ -613,10 +612,10 @@ def _now_ms() -> int:
 #
 # 예약표는 `kis_rate_limit` 에 있다. 동기 판과 비동기 판이 같은 표를 나눠 쓴다.
 
-def acquire_kis_slot(app_key: str, interval_ms: float, sleep: Callable[[float], Any] = sleep_seconds) -> None:
+async def acquire_kis_slot(app_key: str, interval_ms: float, sleep: Callable[[float], Any] = sleep_seconds) -> None:
     wait_ms = reserve_kis_slot(app_key, interval_ms)
     if wait_ms > 0:
-        sleep(wait_ms / 1000)
+        await sleep(wait_ms / 1000)
 
 
 def resolve_token_lifetime_ms(expires_in_sec: Any) -> int:
@@ -660,34 +659,34 @@ class KISAuth:
     def approval_store_key(self) -> str:
         return f'{KIS_APPROVAL_KEY_PREFIX}{self.app_key[:KEY_DIGITS]}'
 
-    def get_access_token(self) -> str:
+    async def get_access_token(self) -> str:
         cached = self.cached_token
         if cached is not None and cached['expiresAt'] > _now_ms():
             return cached['accessToken']
-        with self._lock:
+        async with self._lock:
             cached = self.cached_token
             if cached is not None and cached['expiresAt'] > _now_ms():
                 return cached['accessToken']
-            stored = self._read_cached_token()
+            stored = await self._read_cached_token()
             if stored is not None:
                 return stored
 
-            def issue_and_cache() -> str:
-                token = self._issue_token_and_cache_local()
+            async def issue_and_cache() -> str:
+                token = await self._issue_token_and_cache_local()
                 store = self.store_of()
                 if store is not None:
-                    self._save_token_to_store(store)
+                    await self._save_token_to_store(store)
                 return token
 
-            return refresh_token_with_lock('[KISAuth]', self.store_of(), self.store_key, TOKEN_FETCH_LOCK_TTL_MS,
+            return await refresh_token_with_lock('[KISAuth]', self.store_of(), self.store_key, TOKEN_FETCH_LOCK_TTL_MS,
                                            self._read_cached_token, issue_and_cache)
 
-    def _read_cached_token(self) -> Optional[str]:
+    async def _read_cached_token(self) -> Optional[str]:
         store = self.store_of()
         if store is None:
             return None
         try:
-            raw = maybe_await(store.get(self.store_key))
+            raw = await maybe_await(store.get(self.store_key))
             if not raw:
                 return None
             parsed = json.loads(raw)
@@ -699,38 +698,38 @@ class KISAuth:
             logger.warning('[KISAuth] 토큰 저장소 조회 실패, 새로 발급한다', exc_info=True)
             return None
 
-    def _issue_token_and_cache_local(self) -> str:
+    async def _issue_token_and_cache_local(self) -> str:
         logger.info('[KISAuth] 접근 토큰을 발급한다')
-        issued = self.request_token()
+        issued = await self.request_token()
         self.cached_token = {
             'accessToken': issued['accessToken'],
             'expiresAt': _now_ms() + resolve_token_lifetime_ms(issued.get('expiresInSec')),
         }
         return issued['accessToken']
 
-    def _save_token_to_store(self, store: BrokerTokenStore) -> None:
+    async def _save_token_to_store(self, store: BrokerTokenStore) -> None:
         if self.cached_token is None:
             return
         try:
             ttl_ms = self.cached_token['expiresAt'] - _now_ms() - STORE_TTL_MARGIN_MS
             if ttl_ms > 0:
-                maybe_await(store.set(self.store_key, fn.json_stringify(self.cached_token), int(ttl_ms)))
+                await maybe_await(store.set(self.store_key, fn.json_stringify(self.cached_token), int(ttl_ms)))
         except Exception:
             logger.warning('[KISAuth] 토큰 저장소 저장 실패(프로세스 메모리 캐시는 유효)', exc_info=True)
 
-    def get_approval_key(self) -> str:
+    async def get_approval_key(self) -> str:
         """실시간 접속용 approval_key. 접근 토큰과 따로 발급되는 세션 키이고 24시간쯤 유효하다."""
         cached = self.cached_approval_key
         if cached is not None and cached['expiresAt'] > _now_ms():
             return cached['key']
-        with self._approval_lock:
+        async with self._approval_lock:
             cached = self.cached_approval_key
             if cached is not None and cached['expiresAt'] > _now_ms():
                 return cached['key']
             store = self.store_of()
             if store is not None:
                 try:
-                    raw = maybe_await(store.get(self.approval_store_key))
+                    raw = await maybe_await(store.get(self.approval_store_key))
                     if raw:
                         parsed = json.loads(raw)
                         if parsed['expiresAt'] > _now_ms():
@@ -738,30 +737,30 @@ class KISAuth:
                             return parsed['key']
                 except Exception:
                     logger.warning('[KISAuth] approval_key 저장소 조회 실패, 새로 발급한다', exc_info=True)
-            key = self.request_approval_key()
+            key = await self.request_approval_key()
             self.cached_approval_key = {'key': key, 'expiresAt': _now_ms() + KIS_TOKEN_EXPIRY_MS}
             if store is not None:
                 try:
-                    maybe_await(store.set(self.approval_store_key, fn.json_stringify(self.cached_approval_key), KIS_TOKEN_EXPIRY_MS - STORE_TTL_MARGIN_MS))
+                    await maybe_await(store.set(self.approval_store_key, fn.json_stringify(self.cached_approval_key), KIS_TOKEN_EXPIRY_MS - STORE_TTL_MARGIN_MS))
                 except Exception:
                     logger.warning('[KISAuth] approval_key 저장소 저장 실패(프로세스 메모리 캐시는 유효)', exc_info=True)
             return key
 
-    def invalidate(self) -> None:
+    async def invalidate(self) -> None:
         """토큰 캐시를 프로세스 메모리와 저장소에서 모두 지운다. 다음 호출이 새 토큰을 발급받는다."""
         self.forget_local_token()
-        self.delete_stored_token()
+        await self.delete_stored_token()
 
     def forget_local_token(self) -> None:
         """프로세스 메모리의 토큰 캐시만 비운다."""
         self.cached_token = None
 
-    def delete_stored_token(self) -> None:
+    async def delete_stored_token(self) -> None:
         """토큰 저장소의 토큰을 지운다. 실패해도 던지지 않는다."""
         store = self.store_of()
         if store is not None:
             try:
-                maybe_await(store.delete(self.store_key))
+                await maybe_await(store.delete(self.store_key))
             except Exception:
                 logger.debug('[KISAuth] 토큰 저장소 삭제 실패(프로세스 메모리 무효화는 완료)', exc_info=True)
 
@@ -887,15 +886,15 @@ class kis(Exchange, ImplicitAPI):
 
     # ============ 요청 ============
 
-    def throttle(self, cost: Num = None, bucket: Str = None) -> None:
+    async def throttle(self, cost: Num = None, bucket: Str = None) -> None:
         """앱키 단위 예약 스케줄러로 기다린다. 같은 프로세스의 같은 앱키는 인스턴스가 달라도 하나의 스케줄을 쓴다."""
-        acquire_kis_slot(self.apiKey or '', self.rateLimit * (1 if cost is None else cost))
+        await acquire_kis_slot(self.apiKey or '', self.rateLimit * (1 if cost is None else cost))
 
-    def fetch(self, url: str, method: str = 'GET', headers: Optional[Dict[str, str]] = None, body: Str = None,
+    async def fetch(self, url: str, method: str = 'GET', headers: Optional[Dict[str, str]] = None, body: Str = None,
               timeout_ms: Optional[float] = None) -> Any:
         """시간 초과는 조회에서도 다시 보내지 않는다. 응답이 없던 요청을 되풀이하면 최악의 대기가 몇 배로 늘어난다."""
         try:
-            return super().fetch(url, method, headers, body, timeout_ms)
+            return await super().fetch(url, method, headers, body, timeout_ms)
         except RequestTimeout as e:
             if e.retryable is None:
                 e.retryable = False
@@ -943,42 +942,42 @@ class kis(Exchange, ImplicitAPI):
             self._auth_app_key = app_key
         return self._auth
 
-    def authenticate(self, path: str = '', api: ApiName = 'private', method: str = 'GET', params: Optional[Dict[str, Any]] = None,
+    async def authenticate(self, path: str = '', api: ApiName = 'private', method: str = 'GET', params: Optional[Dict[str, Any]] = None,
                      headers: Optional[Dict[str, str]] = None, body: Str = None) -> None:
         """비공개 호출 앞에서 접근 토큰을 준비한다. 캐시(프로세스 → 토큰 저장소)에 있으면 발급하지 않는다."""
-        self.token = self.auth_manager().get_access_token()
+        self.token = await self.auth_manager().get_access_token()
 
-    def _request_access_token(self) -> Dict[str, Any]:
+    async def _request_access_token(self) -> Dict[str, Any]:
         request = self.sign('oauth2/tokenP', 'public', 'POST', {
             'grant_type': 'client_credentials', 'appkey': self.apiKey, 'appsecret': self.secret,
         })
-        response = self.fetch(request['url'], request['method'], request['headers'], request['body'], AUTH_TIMEOUT_MS)
+        response = await self.fetch(request['url'], request['method'], request['headers'], request['body'], AUTH_TIMEOUT_MS)
         access_token = self.safe_string(response, 'access_token')
         if access_token is None:
             raise AuthenticationError(f'{self.id} 토큰 발급 응답에 access_token 이 없다')
         return {'accessToken': access_token, 'expiresInSec': self.safe_number(response, 'expires_in')}
 
-    def _request_approval_key(self) -> str:
+    async def _request_approval_key(self) -> str:
         """접속키 발급 본문은 `appsecret` 이 아니라 `secretkey` 를 쓴다."""
         request = self.sign('oauth2/Approval', 'public', 'POST', {
             'grant_type': 'client_credentials', 'appkey': self.apiKey, 'secretkey': self.secret,
         })
-        response = self.fetch(request['url'], request['method'], request['headers'], request['body'], AUTH_TIMEOUT_MS)
+        response = await self.fetch(request['url'], request['method'], request['headers'], request['body'], AUTH_TIMEOUT_MS)
         approval_key = self.safe_string(response, 'approval_key')
         if approval_key is None:
             raise AuthenticationError(f'{self.id} approval_key 응답에 approval_key 가 없다')
         return approval_key
 
-    def invalidate_token(self) -> None:
+    async def invalidate_token(self) -> None:
         """토큰 캐시를 프로세스와 토큰 저장소에서 모두 지운다(재인증 강제)."""
         self.token = None
         if self._auth is not None:
-            self._auth.invalidate()
+            await self._auth.invalidate()
 
-    def get_approval_key(self) -> str:
+    async def get_approval_key(self) -> str:
         """실시간 시세 WebSocket 에 접속할 때 쓰는 접속키."""
         self.check_required_credentials()
-        return self.auth_manager().get_approval_key()
+        return await self.auth_manager().get_approval_key()
 
     # ============ 오류 ============
 
@@ -1020,7 +1019,7 @@ class kis(Exchange, ImplicitAPI):
 
     # ============ 종목 ============
 
-    def fetch_markets(self, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    async def fetch_markets(self, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """종목 마스터 데이터(`options['masterData']`)로 종목 목록을 만든다. 국내(코스피·코스닥)와 미국(나스닥·뉴욕·아멕스)이 들어 있다.
         `params['market']` 으로 `'domestic'` 이나 `'overseas'` 만 받을 수 있다."""
         which = self.safe_string(params, 'market', 'all')
@@ -1132,7 +1131,7 @@ class kis(Exchange, ImplicitAPI):
 
     # ============ 시세 ============
 
-    def fetch_ticker(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def fetch_ticker(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """현재가. 호가(`bid`·`ask`)는 채우지 않는다. 현재가가 0 이거나 비어 있으면 `NullResponse` 를 던진다. 장 마감·지연시세·휴장에
         빈 값이 오는데, 0 을 현재가로 넘기면 호출하는 쪽의 손익이 -100% 로 보인다."""
         instrument = self._instrument_of(symbol)
@@ -1140,14 +1139,14 @@ class kis(Exchange, ImplicitAPI):
         if instrument.overseas:
             if instrument.quote_exchange is None:
                 raise BadSymbol(f'해외 마스터에 없는 ticker: {symbol}')
-            response = self.private_get_uapi_overseas_price_v1_quotations_price(self.extend({
+            response = await self.private_get_uapi_overseas_price_v1_quotations_price(self.extend({
                 'AUTH': '',
                 'EXCD': instrument.quote_exchange,
                 'SYMB': instrument.code,
                 'tr_id': 'HHDFS00000300',
             }, params))
         else:
-            response = self.private_get_uapi_domestic_stock_v1_quotations_inquire_price(self.extend({
+            response = await self.private_get_uapi_domestic_stock_v1_quotations_inquire_price(self.extend({
                 'FID_COND_MRKT_DIV_CODE': self._quote_market_division(),
                 'FID_INPUT_ISCD': instrument.code,
                 'tr_id': 'FHKST01010100',
@@ -1201,7 +1200,7 @@ class kis(Exchange, ImplicitAPI):
             'info': ticker,
         }, market)
 
-    def fetch_tickers(self, symbols: Strings = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def fetch_tickers(self, symbols: Strings = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """여러 종목의 현재가를 한 번에 받는다(`intstock-multprice`, 한 번에 30종목까지). 국내만 받는다. 이 API 는 NXT 통합(`UN`)을
         문서에 적어 두지 않아 `fetch_ticker` 와 달리 항상 KRX(`J`)로 묻는다."""
         if symbols is None or len(symbols) == 0:
@@ -1219,7 +1218,7 @@ class kis(Exchange, ImplicitAPI):
         for i, instrument in enumerate(instruments):
             request[f'FID_COND_MRKT_DIV_CODE_{i + 1}'] = 'J'
             request[f'FID_INPUT_ISCD_{i + 1}'] = instrument.code
-        response = self.private_get_uapi_domestic_stock_v1_quotations_intstock_multprice(self.extend(request, params))
+        response = await self.private_get_uapi_domestic_stock_v1_quotations_intstock_multprice(self.extend(request, params))
         result: Dict[str, Any] = {}
         for row in rows_of(self.safe_value(response, 'output')):
             instrument = by_code.get(self.safe_string(row, 'inter_shrn_iscd', ''))
@@ -1239,12 +1238,12 @@ class kis(Exchange, ImplicitAPI):
             }, market)
         return result
 
-    def fetch_order_book(self, symbol: str, limit: Int = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def fetch_order_book(self, symbol: str, limit: Int = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """국내 호가 10단계(잔량 포함). 매수는 높은 가격부터, 매도는 낮은 가격부터다. 미국 종목은 받지 않는다. 호가가 없으면 `NullResponse`."""
         instrument = self._instrument_of(symbol)
         if instrument.overseas:
             raise NotSupported(f'{self.id} fetchOrderBook() 은 국내 종목만 지원한다: {symbol}')
-        response = self.private_get_uapi_domestic_stock_v1_quotations_inquire_asking_price_exp_ccn(self.extend({
+        response = await self.private_get_uapi_domestic_stock_v1_quotations_inquire_asking_price_exp_ccn(self.extend({
             'FID_COND_MRKT_DIV_CODE': self._quote_market_division(),
             'FID_INPUT_ISCD': instrument.code,
             'tr_id': 'FHKST01010200',
@@ -1267,7 +1266,7 @@ class kis(Exchange, ImplicitAPI):
             book['asks'] = book['asks'][:limit]
         return book
 
-    def fetch_ohlcv(self, symbol: str, timeframe: str = '1d', since: Int = None, limit: Int = 100,
+    async def fetch_ohlcv(self, symbol: str, timeframe: str = '1d', since: Int = None, limit: Int = 100,
                     params: Optional[Dict[str, Any]] = None) -> List[List[Any]]:
         """봉. 국내는 항상 야후 파이낸스로 받는다(KIS 는 분봉이 당일뿐이고 일봉도 100행이다). 미국 일·주·월봉은 야후를 먼저 부르고,
         야후가 비면 KIS 로 다시 받는다. `params['until']`(ms)로 끝 시각을 정한다."""
@@ -1277,7 +1276,7 @@ class kis(Exchange, ImplicitAPI):
         until = self.safe_integer(params, 'until')
         # 코스피·코스닥 구분으로 야후 티커의 접미사(.KS·.KQ)를 맞게 붙인다.
         kr_market = resolve_kr_market(symbol, self.options.get('stockDirectory'), self._master())
-        yahoo = fetch_yahoo_candles(symbol, timeframe, limit, since, until, kr_market, exchange=self)
+        yahoo = await fetch_yahoo_candles(symbol, timeframe, limit, since, until, kr_market, exchange=self)
         daily_like = timeframe in ('1d', '1w', '1W', '1M')
         if len(yahoo) > 0 or not instrument.overseas or not daily_like:
             return yahoo
@@ -1285,7 +1284,7 @@ class kis(Exchange, ImplicitAPI):
         if instrument.quote_exchange is None or not self.check_required_credentials(False):
             return yahoo
         logger.info('[kis] 야후가 비어 KIS 해외 일봉으로 폴백한다 (symbol=%s, timeframe=%s)', symbol, timeframe)
-        native = self.candles().fetch_overseas_daily_ohlcv(instrument.code, instrument.quote_exchange, timeframe, limit)
+        native = await self.candles().fetch_overseas_daily_ohlcv(instrument.code, instrument.quote_exchange, timeframe, limit)
         return native if len(native) > 0 else yahoo
 
     def candles(self) -> KISCandleService:
@@ -1296,7 +1295,7 @@ class kis(Exchange, ImplicitAPI):
 
     # ============ 수수료 ============
 
-    def fetch_trading_fee(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def fetch_trading_fee(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """수수료율. 국내 위탁수수료 0.015%(뱅키스 기준, 계좌 유형과 이벤트에 따라 다르다), 미국 0.25%다. 요율을 알려 주는 API 가 없어 표를 쓴다.
         국내 매도에는 증권거래세가 더해진다. 세율은 시행일 표(`krx_sell_tax`)를 따르며 `info['sellTaxRate']` 에 있다."""
         instrument = self._instrument_of(symbol)
@@ -1312,13 +1311,13 @@ class kis(Exchange, ImplicitAPI):
 
     # ============ 고유 조회 ============
 
-    def fetch_stock_warnings(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    async def fetch_stock_warnings(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """변동성완화장치(VI) 발동 현황(`inquire-vi-status`). 지정한 영업일(기본은 오늘 한국 날짜)에 이 종목의 VI 가 발동한 기록이다.
         발동한 적이 없으면 빈 목록이다. 국내만 받는다."""
         instrument = self._instrument_of(symbol)
         if instrument.overseas:
             raise BadSymbol(f'{self.id} fetchStockWarnings() 은 국내 종목만 지원한다: {symbol}')
-        response = self.private_get_uapi_domestic_stock_v1_quotations_inquire_vi_status(self.extend({
+        response = await self.private_get_uapi_domestic_stock_v1_quotations_inquire_vi_status(self.extend({
             'FID_DIV_CLS_CODE': '0',
             'FID_COND_SCR_DIV_CODE': VI_STATUS_SCREEN_CODE,
             'FID_MRKT_CLS_CODE': '0',
@@ -1340,13 +1339,13 @@ class kis(Exchange, ImplicitAPI):
             'info': row,
         }) for row in multi_rows_of(self.safe_value(response, 'output'))]
 
-    def fetch_investor_trading(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    async def fetch_investor_trading(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """종목의 투자자별(개인·외국인·기관계) 매매동향(`inquire-investor`)을 최근 영업일 순으로 돌려준다. 국내만 받는다.
         당일 값은 장 종료 뒤에 채워진다. 토스증권의 같은 이름 메서드는 시장 단위라서 범위가 다르다."""
         instrument = self._instrument_of(symbol)
         if instrument.overseas:
             raise BadSymbol(f'{self.id} fetchInvestorTrading() 은 국내 종목만 지원한다: {symbol}')
-        response = self.private_get_uapi_domestic_stock_v1_quotations_inquire_investor(self.extend({
+        response = await self.private_get_uapi_domestic_stock_v1_quotations_inquire_investor(self.extend({
             'FID_COND_MRKT_DIV_CODE': 'J',
             'FID_INPUT_ISCD': instrument.code,
             'tr_id': 'FHKST01010900',
@@ -1373,27 +1372,27 @@ class kis(Exchange, ImplicitAPI):
             'info': row,
         }) for row in multi_rows_of(self.safe_value(response, 'output'))]
 
-    def fetch_rankings(self, type: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    async def fetch_rankings(self, type: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """종목 순위. 국내 순위, 해외 순위(`OVERSEAS_*`, `params['exchange']` 로 거래소를 반드시 고른다), ELW 순위(`ELW_*`)를 받는다.
         공통 필드(순위, 심볼, 이름, 현재가, 전일대비, 등락률, 누적거래량)로 정리하고 종류별 지표는 `info` 에 원문으로 둔다.
         응답에 순위 필드가 없는 종류는 `rank` 를 비운다. KIS 는 순위에도 연속조회를 쓰지만 첫 페이지만 돌려준다."""
         params = {} if params is None else params
         if type == 'FLUCTUATION':
-            return self._fetch_fluctuation_ranking(params)
+            return await self._fetch_fluctuation_ranking(params)
         if type == 'VOLUME':
-            return self._fetch_volume_ranking(params)
+            return await self._fetch_volume_ranking(params)
         spec = KIS_RANKING_SPECS.get(type) if isinstance(type, str) else None
         if spec is None:
             raise NotSupported(f'{self.id} fetchRankings() 는 {_tpl(type)} 랭킹을 지원하지 않는다')
-        return self._fetch_spec_ranking(spec, params)
+        return await self._fetch_spec_ranking(spec, params)
 
-    def _fetch_spec_ranking(self, spec: Dict[str, Any], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    async def _fetch_spec_ranking(self, spec: Dict[str, Any], params: Dict[str, Any]) -> List[Dict[str, Any]]:
         """표(`KIS_RANKING_SPECS`)로 정의한 순위 하나를 부른다."""
         prepare = spec.get('prepare')
         prepared = prepare(params) if prepare is not None else params
         call = getattr(self, _implicit_get(spec['path']))
         request = self.extend(spec['params'](self.milliseconds()), {'tr_id': spec['trId']})
-        response = call(self.extend(request, prepared))
+        response = await call(self.extend(request, prepared))
         f = spec.get('fields') or {}
         overseas = bool(spec.get('overseas'))
         currency = _tpl(KIS_OVERSEAS_RANKING_EXCHANGES.get(fn.js_string(prepared.get('EXCD')))) if overseas else 'KRW'
@@ -1426,9 +1425,9 @@ class kis(Exchange, ImplicitAPI):
             'info': row,
         } for row in rows_of(self.safe_value(response, 'output'))]
 
-    def _fetch_fluctuation_ranking(self, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    async def _fetch_fluctuation_ranking(self, params: Dict[str, Any]) -> List[Dict[str, Any]]:
         """등락률 순위(`ranking/fluctuation`). 정렬 방향 코드는 공식 문서에 뚜렷하지 않아 예제가 쓴 값(`'0'`)만 기본으로 쓴다."""
-        response = self.private_get_uapi_domestic_stock_v1_ranking_fluctuation(self.extend({
+        response = await self.private_get_uapi_domestic_stock_v1_ranking_fluctuation(self.extend({
             'fid_rsfl_rate2': '',
             'fid_cond_mrkt_div_code': 'J',
             'fid_cond_scr_div_code': '20170',
@@ -1447,9 +1446,9 @@ class kis(Exchange, ImplicitAPI):
         }, params))
         return self._ranking_rows(response, 'stck_shrn_iscd')
 
-    def _fetch_volume_ranking(self, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    async def _fetch_volume_ranking(self, params: Dict[str, Any]) -> List[Dict[str, Any]]:
         """거래량 순위(`quotations/volume-rank`)."""
-        response = self.private_get_uapi_domestic_stock_v1_quotations_volume_rank(self.extend({
+        response = await self.private_get_uapi_domestic_stock_v1_quotations_volume_rank(self.extend({
             'FID_COND_MRKT_DIV_CODE': 'J',
             'FID_COND_SCR_DIV_CODE': '20171',
             'FID_INPUT_ISCD': '0000',
@@ -1467,7 +1466,7 @@ class kis(Exchange, ImplicitAPI):
 
     # ============ 휴장일 ============
 
-    def fetch_market_calendar(self, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    async def fetch_market_calendar(self, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """국내 휴장일 캘린더(`chk-holiday`). 기준일부터 이후 날짜의 개장·영업·거래·결제 여부를 준다. 실전 계좌에서만 쓸 수 있다.
         지난 영업일을 세는 코드가 지난 연휴를 알도록 30일 전 기준일과 오늘 기준일을 함께 조회한다. KIS 는 하루 한 번 호출을 권한다."""
         if self.isSandboxModeEnabled:
@@ -1475,7 +1474,7 @@ class kis(Exchange, ImplicitAPI):
         now = self.milliseconds()
         days: Dict[str, Dict[str, Any]] = {}
         for base in (kst_ymd(now - HOLIDAY_LOOKBACK_MS), kst_ymd(now)):
-            response = self.private_get_uapi_domestic_stock_v1_quotations_chk_holiday(self.extend({
+            response = await self.private_get_uapi_domestic_stock_v1_quotations_chk_holiday(self.extend({
                 'BASS_DT': base,
                 'CTX_AREA_FK': '',
                 'CTX_AREA_NK': '',
@@ -1497,7 +1496,7 @@ class kis(Exchange, ImplicitAPI):
                 })
         return list(days.values())
 
-    def refresh_market_calendar(self) -> bool:
+    async def refresh_market_calendar(self) -> bool:
         """휴장일 캘린더를 공용 캘린더(`market_calendar`)에 넣는다. 장 시간 판정이 이 값을 읽는다. 12시간 안에 성공한 호출은 다시 하지 않는다.
         국내 실주문 직전에 저절로 부른다. 장 시간 판정을 주문 밖에서 쓰면 시작할 때 한 번 직접 부른다.
 
@@ -1506,10 +1505,10 @@ class kis(Exchange, ImplicitAPI):
         if self.isSandboxModeEnabled or not self.check_required_credentials(False):
             return False
 
-        def fetch_days() -> List[Dict[str, Any]]:
-            return [{'date': day['date'], 'open': day['open']} for day in self.fetch_market_calendar()]
+        async def fetch_days() -> List[Dict[str, Any]]:
+            return [{'date': day['date'], 'open': day['open']} for day in await self.fetch_market_calendar()]
 
-        return refresh_shared_market_calendar('KR', fetch_days, CALENDAR_TTL_MS)
+        return await refresh_shared_market_calendar('KR', fetch_days, CALENDAR_TTL_MS)
 
     # ============ 잔고 ============
 
@@ -1518,7 +1517,7 @@ class kis(Exchange, ImplicitAPI):
         suffix = parts[1] if len(parts) > 1 else None
         return {'CANO': parts[0], 'ACNT_PRDT_CD': suffix if suffix else KIS_DEFAULT_ACCOUNT_SUFFIX}
 
-    def fetch_balance(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def fetch_balance(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """잔고. 현금은 통화 키(`KRW`, `USD`), 보유 종목은 종목코드(국내 `005930`, 미국 `AAPL`) 키이고 종목의 `total` 이 보유 수량이다.
         평가금액·평균단가 같은 KIS 고유 값은 각 항목의 `info` 에 있다. 조회가 하나라도 실패하면 던진다(빈 잔고와 구분한다).
 
@@ -1535,15 +1534,15 @@ class kis(Exchange, ImplicitAPI):
         orderable = self.safe_bool(params, 'orderable', True)
         raw: Dict[str, Any] = {}
         if wants('kr'):
-            raw['domestic'] = self._fetch_domestic_balance_raw(orderable)
+            raw['domestic'] = await self._fetch_domestic_balance_raw(orderable)
         if wants('us'):
-            raw['overseas'] = self._fetch_overseas_holdings_raw()
+            raw['overseas'] = await self._fetch_overseas_holdings_raw()
         if wants('usd'):
-            raw['usd'] = self._fetch_present_balance_raw()
+            raw['usd'] = await self._fetch_present_balance_raw()
         return self.parse_balance(raw)
 
-    def _fetch_domestic_balance_raw(self, orderable: bool) -> Dict[str, Any]:
-        response = self.private_get_uapi_domestic_stock_v1_trading_inquire_balance(self.extend(self._account_params(), {
+    async def _fetch_domestic_balance_raw(self, orderable: bool) -> Dict[str, Any]:
+        response = await self.private_get_uapi_domestic_stock_v1_trading_inquire_balance(self.extend(self._account_params(), {
             'AFHR_FLPR_YN': 'N',
             'OFL_YN': '',
             'INQR_DVSN': '02',
@@ -1558,7 +1557,7 @@ class kis(Exchange, ImplicitAPI):
         raw: Dict[str, Any] = {'holdings': rows_of(_field(response, 'output1')), 'summary': first_row(_field(response, 'output2'))}
         if orderable:
             # 주문가능금액은 잔고 응답이 아니라 매수가능조회의 `ord_psbl_cash` 를 쓴다. 시장가(`01`)로 물으면 종목 증거금율이 반영된다.
-            psbl = self.private_get_uapi_domestic_stock_v1_trading_inquire_psbl_order(self.extend(self._account_params(), {
+            psbl = await self.private_get_uapi_domestic_stock_v1_trading_inquire_psbl_order(self.extend(self._account_params(), {
                 'PDNO': self.safe_string(self.options, 'orderableProbeCode', '005930'),
                 'ORD_UNPR': '0',
                 'ORD_DVSN': KIS_ORDER_TYPE['MARKET'],
@@ -1569,12 +1568,12 @@ class kis(Exchange, ImplicitAPI):
             raw['orderable'] = first_row(_field(psbl, 'output'))
         return raw
 
-    def _fetch_overseas_holdings_raw(self) -> Dict[str, Any]:
+    async def _fetch_overseas_holdings_raw(self) -> Dict[str, Any]:
         """미국 보유 종목. 실전은 `NASD` 가 미국 전체라 한 번만 부르고, 모의는 `NASD`·`NYSE`·`AMEX` 를 차례로 부른다."""
         exchanges = ['NASD', 'NYSE', 'AMEX'] if self.isSandboxModeEnabled else ['NASD']
         holdings: List[Dict[str, Any]] = []
         for exchange in exchanges:
-            response = self.private_get_uapi_overseas_stock_v1_trading_inquire_balance(self.extend(self._account_params(), {
+            response = await self.private_get_uapi_overseas_stock_v1_trading_inquire_balance(self.extend(self._account_params(), {
                 'OVRS_EXCG_CD': exchange,
                 'TR_CRCY_CD': 'USD',
                 'CTX_AREA_FK200': '',
@@ -1584,8 +1583,8 @@ class kis(Exchange, ImplicitAPI):
             holdings.extend(rows_of(_field(response, 'output1')))
         return {'holdings': holdings}
 
-    def _fetch_present_balance_raw(self) -> Dict[str, Any]:
-        response = self.private_get_uapi_overseas_stock_v1_trading_inquire_present_balance(self.extend(self._account_params(), {
+    async def _fetch_present_balance_raw(self) -> Dict[str, Any]:
+        response = await self.private_get_uapi_overseas_stock_v1_trading_inquire_present_balance(self.extend(self._account_params(), {
             'WCRC_FRCR_DVSN_CD': KIS_PRESENT_BALANCE_PARAMS['WCRC_FRCR_DVSN_FOREIGN'],
             'NATN_CD': KIS_PRESENT_BALANCE_PARAMS['NATN_US'],
             'TR_MKET_CD': KIS_PRESENT_BALANCE_PARAMS['TR_MKET_ALL'],
@@ -1647,7 +1646,7 @@ class kis(Exchange, ImplicitAPI):
 
     # ============ 주문 ============
 
-    def create_order(self, symbol: str, type: str, side: str, amount: float, price: Num = None,
+    async def create_order(self, symbol: str, type: str, side: str, amount: float, price: Num = None,
                      params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """주문. 수량은 정수 주로 내린다(소수점 매수는 받지 않는다). 거래시간 밖은 주문을 보내지 않고 `MarketClosed` 를 던진다.
 
@@ -1664,9 +1663,9 @@ class kis(Exchange, ImplicitAPI):
             if price is None or not price > 0:
                 raise ArgumentsRequired('해외 지정가/LOC 주문은 price 필수 (시장가 의도면 현재가 기반 지정가 필요)')
             self.check_order_arguments(None, type, side, quantity, price, params)
-            return self._create_overseas_order(instrument, type, side, quantity, price, params)
+            return await self._create_overseas_order(instrument, type, side, quantity, price, params)
         self.check_order_arguments(None, type, side, quantity, price, params)
-        return self._create_domestic_order(instrument, type, side, quantity, price, params)
+        return await self._create_domestic_order(instrument, type, side, quantity, price, params)
 
     def _normalize_quantity(self, instrument: KisInstrument, side: str, requested: Any) -> int:
         """주문 수량을 정수 주로 맞춘다. 0 이하나 비정상은 던지고 소수는 내린다(내려서 0 이 되면 던진다). 소수 주문이 몰래 잘리면
@@ -1681,19 +1680,19 @@ class kis(Exchange, ImplicitAPI):
                            instrument.symbol, side)
         return floored
 
-    def _create_domestic_order(self, instrument: KisInstrument, type: str, side: str, quantity: int, price: Num,
+    async def _create_domestic_order(self, instrument: KisInstrument, type: str, side: str, quantity: int, price: Num,
                                params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         session = self.safe_string(params, 'session')
         params = self.omit(params, 'session')
         # 확장세션(NXT 프리 08:00~08:50, 애프터 15:30~20:00)은 정규장 게이트를 건너뛰고 SOR 로 낸다. `nxtRouting` 이 꺼져 있으면 정규장 규칙이다.
         extended = session == 'nxt' or (session is None and self.is_option_enabled('nxtRouting') and is_nxt_extended_tradable())
         if extended:
-            self._assert_nxt_tradable(instrument)
+            await self._assert_nxt_tradable(instrument)
         limit_price = price if type == 'limit' else None
         if not extended:
-            self._assert_domestic_session_open(side)
+            await self._assert_domestic_session_open(side)
         elif limit_price is None:
-            limit_price = self._extended_session_limit_price(instrument.symbol, side)
+            limit_price = await self._extended_session_limit_price(instrument.symbol, side)
         buy = side == 'buy'
         real_tr, demo_tr = DOMESTIC_ORDER_TR['extended' if extended else 'regular']['buy' if buy else 'sell']
         request = self.extend(self._account_params(), {
@@ -1707,11 +1706,11 @@ class kis(Exchange, ImplicitAPI):
             request['EXCG_ID_DVSN_CD'] = 'SOR'  # KIS 최선집행 라우팅. NXT 에서 체결될 수 있다
             request['SLL_TYPE'] = '' if buy else '01'  # 매도유형: 01 일반매도(매수는 공란)
             request['CNDT_PRIC'] = ''  # 조건가격(스톱지정가)은 쓰지 않는다
-        response = self.private_post_uapi_domestic_stock_v1_trading_order_cash(self.extend(request, params))
+        response = await self.private_post_uapi_domestic_stock_v1_trading_order_cash(self.extend(request, params))
         return self._accepted_order(response, self._market_of(instrument), 'limit' if limit_price is not None else 'market', side, quantity,
                                     limit_price)
 
-    def create_trigger_order(self, symbol: str, type: str, side: str, amount: float, price: Num = None, trigger_price: Num = None,
+    async def create_trigger_order(self, symbol: str, type: str, side: str, amount: float, price: Num = None, trigger_price: Num = None,
                              params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """스탑지정가(국내만). 같은 주문 엔드포인트(`order-cash`)에 조건가격(`CNDT_PRIC`)을 실어 보내면 KIS 가 스탑지정가로 처리한다.
         지정가만 받고 정규장 시간에만 낼 수 있다. 해외는 대응하는 API 를 찾지 못해 `NotSupported` 다."""
@@ -1724,7 +1723,7 @@ class kis(Exchange, ImplicitAPI):
             raise NotSupported(f'{self.id} createTriggerOrder() 은 국내 종목만 지원한다: {symbol}')
         quantity = self._normalize_quantity(instrument, side, amount)
         self.check_order_arguments(None, type, side, quantity, price, params)
-        self._assert_domestic_session_open(side)
+        await self._assert_domestic_session_open(side)
         buy = side == 'buy'
         real_tr, demo_tr = DOMESTIC_ORDER_TR['extended']['buy' if buy else 'sell']
         request = self.extend(self._account_params(), {
@@ -1737,10 +1736,10 @@ class kis(Exchange, ImplicitAPI):
             'CNDT_PRIC': fn.js_string(trigger_price),
             'tr_id': self.tr(real_tr, demo_tr),
         })
-        response = self.private_post_uapi_domestic_stock_v1_trading_order_cash(self.extend(request, params))
+        response = await self.private_post_uapi_domestic_stock_v1_trading_order_cash(self.extend(request, params))
         return self._accepted_order(response, self._market_of(instrument), 'limit', side, quantity, price)
 
-    def _assert_nxt_tradable(self, instrument: KisInstrument) -> None:
+    async def _assert_nxt_tradable(self, instrument: KisInstrument) -> None:
         """확장세션(NXT) 주문 전에 종목정보(`search-stock-info`)로 이 종목이 NXT 에서 거래되는지 본다. NXT 거래 대상이 아니거나 NXT 에서
         거래정지면 KIS 가 거절하므로 보내지 않고 `MarketClosed` 를 던진다. 조회에 실패하거나 두 필드가 모두 없으면 막지 않는다(주문 응답이
         최종 판단이다). 종목정보 조회는 모의투자를 지원하지 않아 모의에서는 보지 않는다. 결과는 종목별로 캐시하고 실패는 캐시하지 않는다."""
@@ -1750,7 +1749,7 @@ class kis(Exchange, ImplicitAPI):
         entry = self._nxt_eligibility.get(instrument.code)
         if entry is None or now - entry['at'] >= NXT_ELIGIBILITY_TTL_MS:
             try:
-                response = self.private_get_uapi_domestic_stock_v1_quotations_search_stock_info({
+                response = await self.private_get_uapi_domestic_stock_v1_quotations_search_stock_info({
                     'PRDT_TYPE_CD': STOCK_INFO_PRODUCT_TYPE,
                     'PDNO': instrument.code,
                     'tr_id': 'CTPF1002R',
@@ -1774,9 +1773,9 @@ class kis(Exchange, ImplicitAPI):
         if entry['blockedReason'] is not None:
             raise MarketClosed(f"NXT 확장시간 주문 불가: {entry['blockedReason']} ({instrument.symbol})")
 
-    def _assert_domestic_session_open(self, side: str) -> None:
+    async def _assert_domestic_session_open(self, side: str) -> None:
         """국내 정규장 게이트. 휴장일은 KIS 캘린더로 알아야 해서 먼저 받는다. 종가 동시호가(15:20~15:30)의 신규 매수는 막는다."""
-        self.refresh_market_calendar()
+        await self.refresh_market_calendar()
         hours = check_krx_trading_hours()
         if not hours['tradable']:
             raise MarketClosed(f"거래시간 외: {_tpl(hours.get('reason'))}")
@@ -1784,10 +1783,10 @@ class kis(Exchange, ImplicitAPI):
         if get_krx_market_phase() == 'closing-auction' and side == 'buy':
             raise MarketClosed('종가 동시호가 (15:20-15:30) — 신규 매수 진입 금지')
 
-    def _extended_session_limit_price(self, symbol: str, side: str) -> float:
+    async def _extended_session_limit_price(self, symbol: str, side: str) -> float:
         """확장세션 시장가를 지정가로 바꾸는 가격. 확장세션은 지정가만 받는다. 같은 방향 미체결이 있거나 기준가를 못 구하면 던진다.
         지정가를 지어내거나 호가를 겹쳐 쌓지 않기 위해서다."""
-        conversion = build_extended_session_limit(
+        conversion = await build_extended_session_limit(
             self, {'symbol': symbol, 'side': side}, '[kis]',
             lambda err, message: logger.warning('%s (symbol=%s)', message, symbol, exc_info=err))
         error = conversion.get('error')
@@ -1796,7 +1795,7 @@ class kis(Exchange, ImplicitAPI):
         logger.info('[kis] NXT 확장시간 — 시장가를 지정가로 전환 (symbol=%s, side=%s, price=%s)', symbol, side, conversion['price'])
         return conversion['price']
 
-    def _create_overseas_order(self, instrument: KisInstrument, type: str, side: str, quantity: int, price: float,
+    async def _create_overseas_order(self, instrument: KisInstrument, type: str, side: str, quantity: int, price: float,
                                params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         exchange = instrument.order_exchange
         if exchange is None:
@@ -1827,7 +1826,7 @@ class kis(Exchange, ImplicitAPI):
             'ORD_DVSN': ord_dvsn,
             'tr_id': self.tr('T' + (slot['buy'] if buy else slot['sell'])),
         })
-        response = self.private_post_uapi_overseas_stock_v1_trading_order(self.extend(request, params))
+        response = await self.private_post_uapi_overseas_stock_v1_trading_order(self.extend(request, params))
         order_type = 'limit' if ord_dvsn == KIS_OVERSEAS_ORD_DVSN['LIMIT'] else 'market'
         return self._accepted_order(response, self._market_of(instrument), order_type, side, quantity, price)
 
@@ -1847,13 +1846,13 @@ class kis(Exchange, ImplicitAPI):
             'info': response,
         }), market)
 
-    def cancel_order(self, id: str, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def cancel_order(self, id: str, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """주문 취소. 국내는 남은 수량 전체를 취소한다. 미국은 취소 수량이 필요해 미체결 조회에서 찾고, 모의투자처럼 조회할 수 없으면
         `params['amount']` 로 넘긴다. 이미 체결되거나 취소된 주문은 KIS 가 오류로 거절한다."""
         instrument = None if symbol is None else self._instrument_of(symbol)
         if instrument is not None and instrument.overseas:
-            return self._cancel_overseas_order(id, instrument, params)
-        response = self.private_post_uapi_domestic_stock_v1_trading_order_rvsecncl(self.extend(self.extend(self._account_params(), {
+            return await self._cancel_overseas_order(id, instrument, params)
+        response = await self.private_post_uapi_domestic_stock_v1_trading_order_rvsecncl(self.extend(self.extend(self._account_params(), {
             'KRX_FWDG_ORD_ORGNO': self.safe_string(params, 'orderOrgNo', ''),
             'ORGN_ODNO': id,
             'ORD_DVSN': KIS_ORDER_TYPE['LIMIT'],
@@ -1867,9 +1866,9 @@ class kis(Exchange, ImplicitAPI):
         return self.safe_order({'id': id, 'symbol': None if instrument is None else instrument.symbol, 'status': 'canceled', 'info': response},
                                None if instrument is None else self._market_of(instrument))
 
-    def _open_quantity(self, id: str, instrument: KisInstrument) -> str:
+    async def _open_quantity(self, id: str, instrument: KisInstrument) -> str:
         """미체결 조회에서 찾은 주문의 남은 수량."""
-        open_orders = self.fetch_open_orders(instrument.symbol)
+        open_orders = await self.fetch_open_orders(instrument.symbol)
         open_order = next((order for order in open_orders if order.get('id') == id), None)
         if open_order is None:
             raise OrderNotFound(f'{self.id} 미체결 해외 주문을 찾지 못했다: {id}')
@@ -1878,7 +1877,7 @@ class kis(Exchange, ImplicitAPI):
             quantity = open_order.get('amount')
         return self.number_to_string(0 if quantity is None else quantity)
 
-    def _cancel_overseas_order(self, id: str, instrument: KisInstrument, params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    async def _cancel_overseas_order(self, id: str, instrument: KisInstrument, params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         exchange = instrument.order_exchange
         if exchange is None:
             raise BadSymbol(f'해외 마스터에 없는 ticker: {instrument.symbol}')
@@ -1886,8 +1885,8 @@ class kis(Exchange, ImplicitAPI):
         if remaining is None:
             if self.isSandboxModeEnabled:
                 raise ArgumentsRequired(f'{self.id} 모의투자의 해외 주문 취소에는 params.amount(취소 수량)가 필요하다')
-            remaining = self._open_quantity(id, instrument)
-        response = self.private_post_uapi_overseas_stock_v1_trading_order_rvsecncl(self.extend(self.extend(self._account_params(), {
+            remaining = await self._open_quantity(id, instrument)
+        response = await self.private_post_uapi_overseas_stock_v1_trading_order_rvsecncl(self.extend(self.extend(self._account_params(), {
             'OVRS_EXCG_CD': exchange,
             'PDNO': instrument.code,
             'ORGN_ODNO': id,
@@ -1901,7 +1900,7 @@ class kis(Exchange, ImplicitAPI):
         logger.info('[kis] 해외 주문 취소 성공 (orderId=%s, symbol=%s)', id, instrument.symbol)
         return self.safe_order({'id': id, 'symbol': instrument.symbol, 'status': 'canceled', 'info': response}, self._market_of(instrument))
 
-    def edit_order(self, id: str, symbol: str, type: str, side: str, amount: Num = None, price: Num = None,
+    async def edit_order(self, id: str, symbol: str, type: str, side: str, amount: Num = None, price: Num = None,
                    params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """정정. 취소와 같은 엔드포인트(`order-rvsecncl`)를 `RVSE_CNCL_DVSN_CD` 로 나눈다(`01` 정정, `02` 취소). `price` 가 필요하다.
         `amount` 를 주면 그 수량으로 일부 정정(`QTY_ALL_ORD_YN: 'N'`)하고, 주지 않으면 국내는 전량(`'Y'`)을 정정한다."""
@@ -1909,8 +1908,8 @@ class kis(Exchange, ImplicitAPI):
             raise ArgumentsRequired(f'{self.id} editOrder() requires a price argument')
         instrument = self._instrument_of(symbol)
         if instrument.overseas:
-            return self._edit_overseas_order(id, instrument, price, amount, params)
-        response = self.private_post_uapi_domestic_stock_v1_trading_order_rvsecncl(self.extend(self.extend(self._account_params(), {
+            return await self._edit_overseas_order(id, instrument, price, amount, params)
+        response = await self.private_post_uapi_domestic_stock_v1_trading_order_rvsecncl(self.extend(self.extend(self._account_params(), {
             'KRX_FWDG_ORD_ORGNO': self.safe_string(params, 'orderOrgNo', ''),
             'ORGN_ODNO': id,
             'ORD_DVSN': KIS_ORDER_TYPE['LIMIT'],
@@ -1926,7 +1925,7 @@ class kis(Exchange, ImplicitAPI):
             'id': new_id, 'symbol': instrument.symbol, 'type': 'limit', 'price': price, 'amount': amount, 'status': 'open', 'info': response,
         }, self._market_of(instrument))
 
-    def _edit_overseas_order(self, id: str, instrument: KisInstrument, price: float, amount: Num,
+    async def _edit_overseas_order(self, id: str, instrument: KisInstrument, price: float, amount: Num,
                              params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         """해외 정정. 수량(`amount` 나 `params['amount']`)이 없으면 미체결 조회에서 잔량을 찾는다. 모의투자는 미체결 조회가 없어 반드시 넘긴다.
         공식 예제처럼 정정 요청에 실제 수량과 단가를 싣는다."""
@@ -1939,8 +1938,8 @@ class kis(Exchange, ImplicitAPI):
         if quantity is None:
             if self.isSandboxModeEnabled:
                 raise ArgumentsRequired(f'{self.id} 모의투자의 해외 주문 정정에는 amount나 params.amount(정정 수량)가 필요하다')
-            quantity = self._open_quantity(id, instrument)
-        response = self.private_post_uapi_overseas_stock_v1_trading_order_rvsecncl(self.extend(self.extend(self._account_params(), {
+            quantity = await self._open_quantity(id, instrument)
+        response = await self.private_post_uapi_overseas_stock_v1_trading_order_rvsecncl(self.extend(self.extend(self._account_params(), {
             'OVRS_EXCG_CD': exchange,
             'PDNO': instrument.code,
             'ORGN_ODNO': id,
@@ -1959,16 +1958,16 @@ class kis(Exchange, ImplicitAPI):
             'info': response,
         }, self._market_of(instrument))
 
-    def cancel_all_orders(self, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    async def cancel_all_orders(self, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """미체결 주문을 모두 취소한다. 종목을 주면 그 종목만이다. 하나라도 취소하지 못하면 나머지를 다 시도한 뒤 첫 실패를 던진다.
         살아 있을 수 있는 주문을 성공으로 돌려주지 않기 위해서다. TypeScript 판은 동시에 보내고 이 판은 같은 순서로 차례로 보낸다.
         국내 취소에는 공식 예제처럼 미체결 행의 주문채번지점번호(`ord_gno_brno`)를 원주문 조직번호로 싣는다."""
-        open_orders = self.fetch_open_orders(symbol, None, None, params)
+        open_orders = await self.fetch_open_orders(symbol, None, None, params)
         results: List[Dict[str, Any]] = []
         first_error: Optional[BaseException] = None
         for order in open_orders:
             try:
-                results.append(self.cancel_order(order['id'], order.get('symbol'), self._cancel_params_of(order)))
+                results.append(await self.cancel_order(order['id'], order.get('symbol'), self._cancel_params_of(order)))
             except Exception as error:
                 if first_error is None:
                     first_error = error
@@ -1985,7 +1984,7 @@ class kis(Exchange, ImplicitAPI):
 
     # ============ 주문·체결 조회 ============
 
-    def fetch_open_orders(self, symbol: Str = None, since: Int = None, limit: Int = None,
+    async def fetch_open_orders(self, symbol: Str = None, since: Int = None, limit: Int = None,
                           params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """미체결 주문. 국내는 정정취소가능 주문 조회(`inquire-psbl-rvsecncl`), 미국은 미체결 내역(`inquire-nccs`)이다. 종목을 주면 그 시장만,
         주지 않으면 국내와 미국을 모두 본다(`params['market']` 이 `'domestic'` 이면 국내만). 모의투자는 미국 미체결 조회가 없어 국내만 본다."""
@@ -1996,7 +1995,7 @@ class kis(Exchange, ImplicitAPI):
         want_overseas = which != 'domestic' and not self.isSandboxModeEnabled if instrument is None else instrument.overseas
         orders: List[Dict[str, Any]] = []
         if want_domestic:
-            response = self.private_get_uapi_domestic_stock_v1_trading_inquire_psbl_rvsecncl(self.extend(self._account_params(), {
+            response = await self.private_get_uapi_domestic_stock_v1_trading_inquire_psbl_rvsecncl(self.extend(self._account_params(), {
                 'CTX_AREA_FK100': '',
                 'CTX_AREA_NK100': '',
                 'INQR_DVSN_1': '0',
@@ -2007,7 +2006,7 @@ class kis(Exchange, ImplicitAPI):
             market = None if instrument is None else self._market_of(instrument)
             orders.extend(self._mark_open(order) for order in self.parse_orders(rows_of(_field(response, 'output')), market))
         if want_overseas:
-            response = self.private_get_uapi_overseas_stock_v1_trading_inquire_nccs(self.extend(self._account_params(), {
+            response = await self.private_get_uapi_overseas_stock_v1_trading_inquire_nccs(self.extend(self._account_params(), {
                 'OVRS_EXCG_CD': 'NASD',
                 'SORT_SQN': 'DS',
                 'CTX_AREA_FK200': '',
@@ -2022,7 +2021,7 @@ class kis(Exchange, ImplicitAPI):
         """미체결 조회의 행은 모두 살아 있는 주문이다. 응답에 취소 여부가 없어 상태를 정하지 못했으면 `open` 으로 둔다."""
         return self.extend(order, {'status': 'open'}) if order.get('status') is None else order
 
-    def fetch_orders(self, symbol: Str = None, since: Int = None, limit: Int = None,
+    async def fetch_orders(self, symbol: Str = None, since: Int = None, limit: Int = None,
                      params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """당일(또는 `since` 일부터)의 주문 전체(체결·미체결·취소). 국내는 일별주문체결조회(`inquire-daily-ccld`), 미국은 주문체결내역(`inquire-ccnl`)이다.
         종목을 주면 그 시장만, 주지 않으면 국내와 미국을 모두 조회한다(`params['market']` 으로 좁힌다)."""
@@ -2031,21 +2030,21 @@ class kis(Exchange, ImplicitAPI):
         orders: List[Dict[str, Any]] = []
         if (which != 'overseas') if instrument is None else not instrument.overseas:
             code = None if instrument is None else instrument.code
-            orders.extend(self.parse_orders(self._fetch_domestic_ccld_rows(code, since, '00', self.safe_string(params, 'orderId'))))
+            orders.extend(self.parse_orders(await self._fetch_domestic_ccld_rows(code, since, '00', self.safe_string(params, 'orderId'))))
         if (which != 'domestic') if instrument is None else instrument.overseas:
-            orders.extend(self.parse_orders(self._fetch_overseas_ccld_rows(since, '00')))
+            orders.extend(self.parse_orders(await self._fetch_overseas_ccld_rows(since, '00')))
         filtered = orders if instrument is None else [order for order in orders if order.get('symbol') == instrument.symbol]
         return self.filter_by_since_limit(filtered, since, limit)
 
-    def fetch_order(self, id: str, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def fetch_order(self, id: str, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """주문 하나. 오늘(또는 `params['since']` 일부터)의 주문 목록에서 찾고 없으면 `OrderNotFound` 다. 국내는 주문번호로 좁혀 조회한다."""
-        orders = self.fetch_orders(symbol, self.safe_integer(params, 'since'), None, self.extend(params, {'orderId': id}))
+        orders = await self.fetch_orders(symbol, self.safe_integer(params, 'since'), None, self.extend(params, {'orderId': id}))
         order = next((candidate for candidate in orders if candidate.get('id') == id), None)
         if order is None:
             raise OrderNotFound(f'{self.id} 주문을 찾지 못했다: {id}')
         return order
 
-    def fetch_my_trades(self, symbol: Str = None, since: Int = None, limit: Int = None,
+    async def fetch_my_trades(self, symbol: Str = None, since: Int = None, limit: Int = None,
                         params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """내 체결 내역. 종목을 주면 그 시장만, 주지 않으면 국내와 미국을 모두 조회한다(`params['market']` 으로 좁힌다). 체결별 수수료는
         응답에 없어 비어 있다. 일자는 국내가 한국 날짜, 미국이 현지(ET) 날짜다. `since` 를 주지 않으면 오늘이다."""
@@ -2054,17 +2053,17 @@ class kis(Exchange, ImplicitAPI):
         trades: List[Dict[str, Any]] = []
         if (which != 'overseas') if instrument is None else not instrument.overseas:
             code = None if instrument is None else instrument.code
-            trades.extend(self.parse_trades(self._fetch_domestic_ccld_rows(code, since, '01'), None, since, limit))
+            trades.extend(self.parse_trades(await self._fetch_domestic_ccld_rows(code, since, '01'), None, since, limit))
         if (which != 'domestic') if instrument is None else instrument.overseas:
-            trades.extend(self.parse_trades(self._fetch_overseas_ccld_rows(since, '01'), None, since, limit))
+            trades.extend(self.parse_trades(await self._fetch_overseas_ccld_rows(since, '01'), None, since, limit))
         filtered = trades if instrument is None else [trade for trade in trades if trade.get('symbol') == instrument.symbol]
         return self.filter_by_since_limit(filtered, since, limit)
 
-    def _fetch_domestic_ccld_rows(self, code: Str, since: Int, ccld: str, order_id: Str = None) -> List[Dict[str, Any]]:
+    async def _fetch_domestic_ccld_rows(self, code: Str, since: Int, ccld: str, order_id: Str = None) -> List[Dict[str, Any]]:
         """국내 일별주문체결 행. `ccld` 는 `'00'` 전체, `'01'` 체결, `'02'` 미체결이다. 조회일은 한국 달력 날짜다(UTC 로 잡으면 한국 0~9시에
         전날을 조회한다). 거래소 구분은 `ALL` 로 KRX·NXT·SOR 체결을 모두 본다."""
         now = self.milliseconds()
-        response = self.private_get_uapi_domestic_stock_v1_trading_inquire_daily_ccld(self.extend(self._account_params(), {
+        response = await self.private_get_uapi_domestic_stock_v1_trading_inquire_daily_ccld(self.extend(self._account_params(), {
             'INQR_STRT_DT': kst_ymd(since if since is not None else now),
             'INQR_END_DT': kst_ymd(now),
             'SLL_BUY_DVSN_CD': '00',
@@ -2085,12 +2084,12 @@ class kis(Exchange, ImplicitAPI):
             return rows
         return [row for row in rows if to_number(row.get('tot_ccld_qty') if row.get('tot_ccld_qty') is not None else row.get('cntg_qty')) > 0]
 
-    def _fetch_overseas_ccld_rows(self, since: Int, ccld: str) -> List[Dict[str, Any]]:
+    async def _fetch_overseas_ccld_rows(self, since: Int, ccld: str) -> List[Dict[str, Any]]:
         """미국 주문체결내역 행(`TTTS3035R`, 모의 `VTTS3035R`). 실전은 `NASD` 한 번이 미국 전체다. 모의투자는 종목·구분·거래소를 비워
         전체 조회만 되므로 체결 여부는 응답의 체결수량으로 거른다. 일자는 현지(ET) 날짜다. 주문번호로는 찾을 수 없어 호출하는 쪽이 거른다."""
         now = self.milliseconds()
         sandbox = self.isSandboxModeEnabled
-        response = self.private_get_uapi_overseas_stock_v1_trading_inquire_ccnl(self.extend(self._account_params(), {
+        response = await self.private_get_uapi_overseas_stock_v1_trading_inquire_ccnl(self.extend(self._account_params(), {
             'PDNO': '' if sandbox else '%',
             'ORD_STRT_DT': et_ymd(since if since is not None else now),
             'ORD_END_DT': et_ymd(now),
