@@ -275,29 +275,29 @@ export interface Status {
 /** `new 증권사(config)` 가 받는 설정. 여기 없는 키도 그대로 인스턴스에 얹는다(`describe()` 를 덮어쓰는 값이다). */
 export interface ConstructorArgs {
     /** 앱 키·클라이언트 ID */
-    apiKey?: string;
+    apiKey?: string | undefined;
     /** 앱 시크릿·클라이언트 시크릿 */
-    secret?: string;
+    secret?: string | undefined;
     /** 계좌번호 */
-    uid?: string;
-    login?: string;
-    password?: string;
-    twofa?: string;
-    token?: string;
-    accountId?: string;
-    privateKey?: string;
-    walletAddress?: string;
-    verbose?: boolean;
+    uid?: string | undefined;
+    login?: string | undefined;
+    password?: string | undefined;
+    twofa?: string | undefined;
+    token?: string | undefined;
+    accountId?: string | undefined;
+    privateKey?: string | undefined;
+    walletAddress?: string | undefined;
+    verbose?: boolean | undefined;
     /** `true` 면 생성 직후 `setSandboxMode(true)` 를 부른다. */
-    sandbox?: boolean;
-    options?: Dict;
-    enableRateLimit?: boolean;
-    rateLimit?: number;
-    timeout?: number;
-    userAgent?: string;
-    markets?: Dictionary<MarketInterface>;
-    headers?: Dictionary<string>;
-    urls?: Dict;
+    sandbox?: boolean | undefined;
+    options?: Dict | undefined;
+    enableRateLimit?: boolean | undefined;
+    rateLimit?: number | undefined;
+    timeout?: number | undefined;
+    userAgent?: string | undefined;
+    markets?: Dictionary<MarketInterface> | undefined;
+    headers?: Dictionary<string> | undefined;
+    urls?: Dict | undefined;
     [key: string]: any;
 }
 

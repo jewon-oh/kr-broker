@@ -16,15 +16,15 @@ import {
 export interface KrOrderInput {
     base: string;
     /** 수량. 취소는 전부 취소라 0 이어도 된다. */
-    amount?: number;
-    price?: number;
-    isLimit?: boolean;
+    amount?: number | undefined;
+    price?: number | undefined;
+    isLimit?: boolean | undefined;
     /** 주문업무구분 — `KBSEC_ORDER_SIDE_KR`. */
     jbClsf: string;
     /** 대체거래소 라우팅. 생략하면 KRX. */
-    sor?: string;
+    sor?: string | undefined;
     /** 시장시간구분. 생략하면 정규장. */
-    session?: string;
+    session?: string | undefined;
 }
 
 export function buildKrOrderBody(

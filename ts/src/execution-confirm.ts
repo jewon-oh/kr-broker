@@ -13,13 +13,13 @@ export interface ExecutionSnapshot {
     /** 체결 수량 */
     filled: number;
     /** 평균 체결가 */
-    average?: number;
+    average?: number | undefined;
     /** 체결 금액(네이티브 통화) — 있으면 `filled × average` 보다 우선한다 */
-    amount?: number;
+    amount?: number | undefined;
     /** 실수수료(수수료+세금, 네이티브 통화) */
-    fee?: number;
+    fee?: number | undefined;
     /** `fee` 의 통화 */
-    feeCurrency?: string;
+    feeCurrency?: string | undefined;
 }
 
 /** 1회 조회 결과 — 증권사 클래스가 자기 응답을 이 형태로 옮긴다. */

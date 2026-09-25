@@ -1672,9 +1672,9 @@ interface HoldingRow {
     code: string;
     quantity: number;
     quoteCurrency: 'KRW' | 'USD';
-    averagePrice?: number;
+    averagePrice?: number | undefined;
     marketValue: number;
-    name?: string;
+    name?: string | undefined;
 }
 
 const NO_ORDER_ID = '';

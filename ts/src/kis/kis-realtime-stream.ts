@@ -33,10 +33,10 @@ export interface KisRealtimeStreamOptions {
     getApprovalKey: () => Promise<string>;
     isVirtual: boolean;
     /** 접속 주소. 없으면 `isVirtual` 에 따라 KIS 기본 주소다. */
-    url?: string;
+    url?: string | undefined;
     onRecord: (record: KisRealtimeRecord) => void;
     /** 구독 응답이 실패(`rt_cd`가 `0`이 아님)면 부른다 */
-    onSubscribeError?: (trId: string, trKey: string, message: string) => void;
+    onSubscribeError?: ((trId: string, trKey: string, message: string) => void) | undefined;
 }
 
 /**

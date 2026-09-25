@@ -105,11 +105,11 @@ export interface KisPriceWsOptions {
     getApprovalKey: () => Promise<string>;
     isVirtual: boolean;
     /** 접속 주소. 없으면 `isVirtual` 에 따라 KIS 기본 주소다. */
-    url?: string;
-    onTrade?: (streamSymbol: string, last: number, changePct: number) => void;
-    onOrderbook?: (streamSymbol: string, bids: [number, number][], asks: [number, number][]) => void;
+    url?: string | undefined;
+    onTrade?: ((streamSymbol: string, last: number, changePct: number) => void) | undefined;
+    onOrderbook?: ((streamSymbol: string, bids: [number, number][], asks: [number, number][]) => void) | undefined;
     /** 구독 응답이 실패(`rt_cd`가 `0`이 아님)면 부른다. 없으면 로그만 남긴다 */
-    onSubscribeError?: (trId: string, trKey: string, message: string) => void;
+    onSubscribeError?: ((trId: string, trKey: string, message: string) => void) | undefined;
 }
 
 const RECONNECT_BASE_MS = 2_000;

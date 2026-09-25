@@ -4164,7 +4164,7 @@ export class kis extends Exchange {
         this.token = await this.authManager().getAccessToken();
     }
 
-    private async requestAccessToken(): Promise<{ accessToken: string; expiresInSec?: number }> {
+    private async requestAccessToken(): Promise<{ accessToken: string; expiresInSec?: number | undefined }> {
         const request = this.sign('oauth2/tokenP', 'public', 'POST', {
             grant_type: 'client_credentials',
             appkey: this.apiKey,

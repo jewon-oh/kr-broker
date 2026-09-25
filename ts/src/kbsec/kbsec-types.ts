@@ -58,7 +58,7 @@ export interface KBSecCredentials {
      * 사람이 계좌를 구분하려는 메모(`uid`)다. **KB 는 계좌번호를 받지 않아**(계좌가 appKey 에 묶인다)
      * 어떤 요청에도 보내지 않는다.
      */
-    accountNo?: string;
+    accountNo?: string | undefined;
 }
 
 // ============ 봉투(envelope) ============

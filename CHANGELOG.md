@@ -59,6 +59,7 @@
 
 ### 바뀜
 
+- 공개 타입의 선택 속성(`ConstructorArgs`, `BaseErrorOptions`, `KisPriceWsOptions`, `KisRealtimeStreamOptions`, `KBSecCredentials` 등)이 `undefined`를 명시적으로 받습니다. 사용하는 쪽이 `exactOptionalPropertyTypes`를 켜도 `{ uid: process.env.X }`처럼 값이 없을 수 있는 인자를 그대로 넘길 수 있습니다. 이 저장소도 이 검사를 켰습니다.
 - 토스증권과 KB증권이 캐시 시각과 세션 판정, 날짜 기본값을 인스턴스 시계(`milliseconds()`)에서 읽습니다. 예전에는 `Date.now()`와 `new Date()`를 섞어 써서, `milliseconds`를 바꿔 끼우면 일부 경로만 시각이 바뀌었습니다. 한국투자증권은 이미 인스턴스 시계만 씁니다.
 - 토스증권이 확장세션 국내 주문을 막을 때 내는 오류 문구가 옵션 이름 `nxtRouting`을 가리킵니다. 예전 문구는 `nxt-routing`이었습니다.
 - `build`가 `tsc` 뒤에 `tsc-alias -f`를 돌려 `dist/`의 상대 경로에 확장자를 채웁니다. GitHub 주소로 설치하면 `prepare`가 같은 빌드를 돌립니다.

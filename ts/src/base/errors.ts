@@ -39,15 +39,15 @@
 
 export interface BaseErrorOptions extends ErrorOptions {
     /** 증권사가 알려 준 세부 원인 코드. 어댑터가 종류보다 구체적인 원인을 알 때만 채운다. */
-    detail?: string;
+    detail?: string | undefined;
     /** 같은 요청을 다시 보내도 되는가. `undefined` 는 이 클래스만으로는 판정하지 않는다는 뜻이다. */
-    retryable?: boolean;
+    retryable?: boolean | undefined;
 }
 
 export class BaseError extends Error {
     override name = 'BaseError';
-    detail?: string;
-    retryable?: boolean;
+    detail?: string | undefined;
+    retryable?: boolean | undefined;
 
     constructor(message: string, options: BaseErrorOptions = {}) {
         super(message, options.cause === undefined ? undefined : { cause: options.cause });
