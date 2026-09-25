@@ -147,14 +147,14 @@
 |---|---|---|---|---|---|---|---|---|
 | 주문 생성 | `POST /api/v1/orders` | 국내, 미국 | 통합 | `createOrder` | `spec-only` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1orders/post) | 금액 주문(소수점 매수)은 미국 시장가 전용이며 `createMarketBuyOrderWithCost`가 부릅니다. 국내는 정수 주만 됩니다. `params`에서 읽지 않은 키는 본문 끝에 합칩니다. 라이브러리가 채우는 본문 필드를 `params`로 주면 요청 없이 `BadRequest`입니다. |
 | 주문 정정 | `POST /api/v1/orders/{orderId}/modify` | 국내, 미국 | 통합 | `editOrder` | `spec-only` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1orders~1{orderId}~1modify/post) | 잔량 전부를 새 가격으로 정정합니다. 정정 전에 주문 상세로 체결 수량과 잔량을 읽어, 국내는 잔량을 수량으로 싣고 미국은 가격만 보냅니다. `amount`는 정정 뒤 총수량이고 다르면 `NotSupported`입니다. 명세의 `quantity`가 총수량인지 옮길 수량인지 정해지지 않아 일부 체결된 국내 주문은 정정하지 않습니다. 정정하면 새 `orderId`가 발급됩니다. 조건주문 정정(`params.trigger`)은 아직 안 씁니다. |
-| 주문 취소 | `POST /api/v1/orders/{orderId}/cancel` | 국내, 미국 | 통합 | `cancelOrder` | `spec-only` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1orders~1{orderId}~1cancel/post) | `cancelAllOrders`는 미체결을 조회해 하나씩 취소하는 emulated 다. 토스는 취소마다 새 주문번호를 발급합니다. |
+| 주문 취소 | `POST /api/v1/orders/{orderId}/cancel` | 국내, 미국 | 통합 | `cancelOrder` | `spec-only` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1orders~1{orderId}~1cancel/post) | `cancelAllOrders`는 미체결을 조회해 하나씩 취소하는 emulated 다. 토스는 취소마다 새 주문번호를 발급합니다. 취소를 접수한 뒤 원주문 상세를 조회해, 원주문이 `CANCELED`면 `canceled`, `FILLED`면 `closed`, `REJECTED`면 `rejected`를 돌려줍니다. 확정하지 못하면 `status`를 비웁니다. 취소가 거절되면 원주문이 이전 상태로 돌아가 아직 반영되지 않은 것과 구별할 수 없어서, 이때도 비웁니다. 새 주문번호는 `info.orderId`에, 조회한 원주문은 `info.order`에 있습니다. |
 
 ### Conditional Order
 
 | API 이름 | 엔드포인트 | 시장 | 상태 | 메서드 | 검증 | 제안 | 명세 | 비고 |
 |---|---|---|---|---|---|---|---|---|
 | 조건주문 생성(SINGLE, OCO, OTO) | `POST /api/v1/conditional-orders` | 국내, 미국 | 통합 | `createTriggerOrder` | `spec-only` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1conditional-orders/post) | `createTriggerOrder`나 `createOrder`의 `triggerPrice`로 부릅니다. `triggerPrice`가 없으면 요청 전에 `ArgumentsRequired`를 던집니다. 국내는 KRX 정규장에서만, 해외는 모든 세션에서 발동합니다. 테스트는 국내 종목뿐입니다. |
-| 조건주문 취소 | `DELETE /api/v1/conditional-orders/{conditionalOrderId}` | 국내, 미국 | 통합 | `cancelOrder` | `spec-only` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1conditional-orders~1{conditionalOrderId}/delete) | `params.trigger:true`로 부릅니다. |
+| 조건주문 취소 | `DELETE /api/v1/conditional-orders/{conditionalOrderId}` | 국내, 미국 | 통합 | `cancelOrder` | `spec-only` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1conditional-orders~1{conditionalOrderId}/delete) | `params.trigger:true`로 부릅니다. 명세상 취소 응답(204)이 곧 취소 완료라서, 조회하지 않고 `canceled`를 돌려줍니다. |
 | 조건주문 수정 | `POST /api/v1/conditional-orders/{conditionalOrderId}/modify` | 국내, 미국 | 통합 | `editOrder` | `spec-only` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1conditional-orders~1{conditionalOrderId}~1modify/post) | `editOrder(id, symbol, type, side, amount, price, { trigger: true, ... })`로 부른다. 등록(`createTriggerOrder`)과 같은 planConditionalOrder를 재사용해 조건 전체(타입·만료일·감시조건)를 다시 보낸다 — 부분 필드만 정정할 수 없다. 수정하면 새 conditionalOrderId가 발급되고 옛 ID는 무효화된다. |
 
 ### Conditional Order History
@@ -169,7 +169,7 @@
 | API 이름 | 엔드포인트 | 시장 | 상태 | 메서드 | 검증 | 제안 | 명세 | 비고 |
 |---|---|---|---|---|---|---|---|---|
 | 주문 목록 | `GET /api/v1/orders` | 국내, 미국 | 통합 | `fetchOpenOrders` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1orders/get) | `fetchClosedOrders`(전량 체결만), `fetchCanceledOrders`, `fetchMyTrades`(일부 체결된 미체결 포함)도 같은 API 다. OPEN은 서버가 전량을 주고 CLOSED는 100건씩 최대 10쪽을 받습니다. |
-| 주문 상세 | `GET /api/v1/orders/{orderId}` | 국내, 미국 | 통합 | `fetchOrder` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1orders~1{orderId}/get) | 주문 접수 뒤 체결 확인 폴링도 이 API를 씁니다. `editOrder`도 정정 전에 이 API로 체결 수량과 잔량을 읽습니다. 상태 `CANCEL_REJECTED`와 `REPLACE_REJECTED`는 `rejected`로 옮깁니다. 명세는 두 상태를 거절된 취소나 정정 요청을 기록한 별도 레코드로 정의하고, 원주문은 이전 상태로 돌아간다고 적습니다. |
+| 주문 상세 | `GET /api/v1/orders/{orderId}` | 국내, 미국 | 통합 | `fetchOrder` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1orders~1{orderId}/get) | 주문 접수 뒤 체결 확인 폴링과 취소 접수 뒤 확정 조회도 이 API를 씁니다. `editOrder`도 정정 전에 이 API로 체결 수량과 잔량을 읽습니다. 상태 `CANCEL_REJECTED`와 `REPLACE_REJECTED`는 `rejected`로 옮깁니다. 명세는 두 상태를 거절된 취소나 정정 요청을 기록한 별도 레코드로 정의하고, 원주문은 이전 상태로 돌아간다고 적습니다. |
 
 ### Order Info
 

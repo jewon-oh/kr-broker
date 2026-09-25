@@ -44,7 +44,7 @@
  * 전역 설정은 없고 인스턴스가 `options` 로 받는다. `tokenStore`(토큰 저장소), `nxtRouting`(국내 확장세션 주문), `usExtendedLimit`(미국 확장세션 시장가를 지정가로),
  * `blockAuctionBuys`(정규장 종가 동시호가의 신규 매수를 막는다),
  * `krwIntegratedMargin`(켜면 `fetchBalance({ currency: 'USD' })` 의 USD 에 원화 매수 여력의 달러 환산액을 늘 더한다. 환율은 토스 조회, 실패하면 `usdKrwRate`),
- * `confirmBudget`(체결 확정 조회 예산), `confirmExecution`(접수 뒤 체결 확정 조회)이다.
+ * `confirmBudget`(체결 확정 조회 예산), `confirmExecution`(접수 뒤 체결 확정 조회. 일반 주문 취소 뒤의 확정 조회도 따른다)이다.
  * `nxtRouting`·`usExtendedLimit`·`blockAuctionBuys`·`krwIntegratedMargin` 은 불리언이거나 불리언을 돌려주는 함수이고 기본은 꺼짐이다. `confirmExecution` 은 기본이 켜짐이고
  * `false` 일 때만 꺼지므로 함수를 넘기면 늘 켜진다.
  *
@@ -261,6 +261,9 @@ const TAX_EXEMPT_SECURITY_TYPES: ReadonlySet<string> = new Set(['ETF', 'ETN']);
 const TERMINAL_ORDER_STATUSES: ReadonlySet<TossOrderStatus> = new Set<TossOrderStatus>([
     'FILLED', 'CANCELED', 'REJECTED', 'CANCEL_REJECTED', 'REPLACE_REJECTED', 'REPLACED',
 ]);
+
+/** 취소를 접수한 원주문이 끝났다고 확정하는 상태. 나머지 종료 상태(`REPLACED` 등)는 원주문의 끝을 알려 주지 않는다. */
+const CANCEL_SETTLED_STATUSES: ReadonlySet<TossOrderStatus> = new Set<TossOrderStatus>(['CANCELED', 'FILLED', 'REJECTED']);
 
 /** ccxt 조건 인자. 조건주문은 `triggerPrice` 로만 내므로, 이 키를 버리고 일반 주문을 내지 않게 요청 전에 막는다. */
 const UNSUPPORTED_CONDITIONAL_PARAMS = ['stopPrice', 'stopLossPrice', 'takeProfitPrice', 'stopLoss', 'takeProfit'] as const;
@@ -583,9 +586,9 @@ export class toss extends Exchange {
                 tokenStore: undefined,
                 /** 토스의 환율 조회가 실패했을 때 쓰는 환율 조회 함수. 1달러당 원화를 돌려주는 `() => Promise<number>` 다. */
                 usdKrwRate: undefined,
-                /** 접수 뒤 체결 확정 조회의 예산 `{ attempts, intervalMs }`. 객체이거나 객체를 돌려주는 함수다. */
+                /** 접수 뒤 체결 확정 조회와 취소 뒤 확정 조회의 예산 `{ attempts, intervalMs }`. 객체이거나 객체를 돌려주는 함수다. */
                 confirmBudget: undefined,
-                /** 접수 뒤 체결이 확정될 때까지 주문 상세를 짧게 조회한다. 기본은 켜짐이고 `false` 일 때만 끈다(함수를 넘기면 켜진 것으로 본다). */
+                /** 접수 뒤 체결이, 취소 뒤 원주문의 끝이 확정될 때까지 주문 상세를 짧게 조회한다. 기본은 켜짐이고 `false` 일 때만 끈다(함수를 넘기면 켜진 것으로 본다). */
                 confirmExecution: true,
                 authTimeout: AUTH_TIMEOUT_MS,
                 calendarTtl: CALENDAR_TTL_MS,
@@ -2420,28 +2423,58 @@ export class toss extends Exchange {
     /**
      * 주문을 취소한다. `params.trigger: true` 는 조건주문 취소다. 이미 체결·취소된 주문이면 `OrderNotFound` 를 던진다.
      * 토스의 취소는 새 주문번호를 발급하며, 응답 원본은 `order.info` 에 있다. 취소 응답 본문이 비어 있어도 성공이다.
+     *
+     * 일반 주문은 취소를 접수한 뒤 원주문의 상세를 `createOrder` 의 체결 확인과 같은 옵션(`confirmExecution`·`confirmBudget`)으로 조회한다.
+     * 원주문이 `CANCELED`·`FILLED`·`REJECTED` 로 끝나면 그 상태(`canceled`·`closed`·`rejected`)를 돌려주고, 확정하지 못하면 `status` 를 비운다.
+     * 취소가 거절되면 원주문이 이전 상태로 돌아가 아직 반영되지 않은 것과 구별할 수 없으므로 이때도 비운다. 조회한 원본은 `info.order` 에 있다.
+     * 조건주문은 명세상 취소 응답(204)이 곧 취소 완료라 조회하지 않고 `canceled` 다.
      */
     override async cancelOrder(id: string, symbol: Str = undefined, params: Dict = {}): Promise<Order> {
         const trigger = this.safeBool2(params, 'trigger', 'stop', false) === true;
         const market = symbol !== undefined ? this.market(symbol) : undefined;
-        const response = trigger
-            ? await this.privateAccountDeleteConditionalOrdersConditionalOrderId({ conditionalOrderId: id })
-            : await this.privateAccountPostOrdersOrderIdCancel({ orderId: id });
-        logger.info({ id, symbol, trigger }, trigger ? '[toss] 조건주문을 취소했다' : '[toss] 주문을 취소했다');
+        if (trigger) {
+            const response = await this.privateAccountDeleteConditionalOrdersConditionalOrderId({ conditionalOrderId: id });
+            logger.info({ id, symbol }, '[toss] 조건주문을 취소했다');
+            return this.safeOrder({ info: this.unwrap(response) ?? {}, id, symbol: market?.symbol, status: 'canceled', trades: [] }, market);
+        }
+        const response = this.unwrap<Dict | undefined>(await this.privateAccountPostOrdersOrderIdCancel({ orderId: id })) ?? {};
+        logger.info({ id, symbol, cancelOrderId: response.orderId }, '[toss] 주문 취소를 접수했다');
+        const confirm = this.safeBool(params, 'confirmExecution', this.options.confirmExecution !== false) !== false;
+        const order = confirm ? await this.confirmCancel(id) : undefined;
+        const status = order?.status !== undefined && CANCEL_SETTLED_STATUSES.has(order.status) ? this.parseOrderStatus(order.status) : undefined;
+        if (confirm && status === undefined) logger.warn({ id, status: order?.status }, '[toss] 취소가 확정되지 않아 status 를 비운다');
         return this.safeOrder({
-            info: this.unwrap(response) ?? {},
+            info: { ...response, order },
             id,
             symbol: market?.symbol,
-            status: 'canceled',
+            status,
             trades: [],
         }, market);
+    }
+
+    /** 취소를 접수한 원주문을 예산 안에서 조회해 마지막으로 읽은 원본을 돌려준다. 종료 상태면 멈추고, 조회가 실패하면 다음 시도로 넘어간다. */
+    private async confirmCancel(orderId: string): Promise<TossOrder | undefined> {
+        const { attempts, intervalMs } = this.getConfirmBudget();
+        let last: TossOrder | undefined;
+        for (let attempt = 1; attempt <= attempts; attempt++) {
+            if (attempt > 1 && intervalMs > 0) await this.sleep(intervalMs);
+            try {
+                last = this.unwrap<TossOrder | null>(await this.privateAccountGetOrdersOrderId({ orderId })) ?? undefined;
+            } catch (err) {
+                logger.warn({ err, orderId, attempt, attempts }, '[toss] 취소 확인 조회에 실패해 다시 조회한다');
+                continue;
+            }
+            if (last?.status !== undefined && TERMINAL_ORDER_STATUSES.has(last.status)) break;
+        }
+        return last;
     }
 
     /**
      * 미체결 주문을 모두 취소한다(토스에는 전체 취소가 없어 조회한 주문을 하나씩 취소한다). `symbol` 을 주면 그 종목만 취소한다.
      * 일반 주문만 대상이며, `params.includeTrigger: true` 면 조건주문도 취소한다.
      *
-     * 돌려주는 목록은 대상이 된 주문 전부이고, 항목은 미체결 조회로 받은 주문이다. 취소된 것은 `status: 'canceled'` 이고 취소 응답 원문이 `info.cancelResponse` 에 있다.
+     * 돌려주는 목록은 대상이 된 주문 전부이고, 항목은 미체결 조회로 받은 주문이다. 취소를 접수한 것은 `cancelOrder` 가 돌려준 상태이고(확정하지 못하면 비어 있다)
+     * 그 `info`(취소 응답 원문과 조회한 원주문 `order`)가 `info.cancelResponse` 에 있다. 확정 조회를 주문마다 하므로 미확정 주문이 많으면 조회가 는다.
      * 취소하지 못한 것은 원래 상태(`open`)에 `info.cancelError`(메시지)와 `info.cancelErrorDetail`(오류의 `detail`)이 실린다. 일부가 실패해도 던지지 않는다.
      * 취소하려는 사이에 끝난 주문은 브로커 원인 코드(`info.cancelErrorDetail`)대로 옮긴다. `already-filled` 는 `closed`, `already-canceled` 는 `canceled`,
      * `already-rejected` 는 `rejected` 다. 정정으로 대체된 주문(`already-modified`)과 원인을 모르는 경우는 새 주문이 살아 있을 수 있어 원래 상태로 둔다.
@@ -2455,7 +2488,7 @@ export class toss extends Exchange {
         }));
         const results = settled.map((outcome, index): Order => {
             const order = orders[index]!;
-            if (outcome.status === 'fulfilled') return { ...order, status: 'canceled', info: { ...order.info, cancelResponse: outcome.value.info } };
+            if (outcome.status === 'fulfilled') return { ...order, status: outcome.value.status, info: { ...order.info, cancelResponse: outcome.value.info } };
             const message = outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason);
             if (!(outcome.reason instanceof OrderNotFound)) {
                 const detail = outcome.reason instanceof BaseError ? outcome.reason.detail : undefined;

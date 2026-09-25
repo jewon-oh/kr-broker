@@ -29,7 +29,7 @@ ccxt 와 같은 모양으로 다룬다. 실시간(`watch_*`)은 이 클래스를
 옵션
     `tokenStore`(토큰 저장소), `nxtRouting`(국내 확장세션 주문), `usExtendedLimit`(미국 확장세션 시장가를 지정가로),
     `blockAuctionBuys`(정규장 종가 동시호가의 신규 매수를 막는다), `krwIntegratedMargin`(켜면 `fetch_balance({'currency': 'USD'})` 의 USD 에 원화 매수 여력의 달러 환산액을 늘 더한다. 환율은 토스 조회,
-    실패하면 `usdKrwRate`), `confirmBudget`(체결 확정 조회 예산), `confirmExecution`(접수 뒤 체결 확정 조회).
+    실패하면 `usdKrwRate`), `confirmBudget`(체결 확정 조회 예산), `confirmExecution`(접수 뒤 체결 확정 조회. 일반 주문 취소 뒤의 확정 조회도 따른다).
     `nxtRouting`·`usExtendedLimit`·`blockAuctionBuys`·`krwIntegratedMargin` 은 불리언이거나 불리언을 돌려주는 함수이고 기본은 꺼짐이다. `confirmExecution` 은 기본이
     켜짐이고 `False` 일 때만 꺼지므로 함수를 넘기면 늘 켜진다.
 
@@ -102,6 +102,8 @@ LISTED_MARKETS = ['KOSPI', 'KOSDAQ', 'KR_ETC', 'NYSE', 'NASDAQ', 'AMEX', 'US_ETC
 KR_LISTED_MARKETS = frozenset(['KOSPI', 'KOSDAQ', 'KR_ETC'])
 # 더 이상 체결이 늘지 않는 주문 상태. `REPLACED` 는 체결 정보가 대체 주문으로 옮겨 간다.
 TERMINAL_ORDER_STATUSES = frozenset(['FILLED', 'CANCELED', 'REJECTED', 'CANCEL_REJECTED', 'REPLACE_REJECTED', 'REPLACED'])
+# 취소를 접수한 원주문이 끝났다고 확정하는 상태. 나머지 종료 상태(`REPLACED` 등)는 원주문의 끝을 알려 주지 않는다.
+CANCEL_SETTLED_STATUSES = frozenset(['CANCELED', 'FILLED', 'REJECTED'])
 # ccxt 조건 인자. 조건주문은 `triggerPrice` 로만 내므로, 이 키를 버리고 일반 주문을 내지 않게 요청 전에 막는다.
 UNSUPPORTED_CONDITIONAL_PARAMS = ('stopPrice', 'stopLossPrice', 'takeProfitPrice', 'stopLoss', 'takeProfit')
 # 일반 주문 경로가 `params` 에서 읽는 키. 본문에 합치지 않는다.
@@ -525,9 +527,9 @@ class toss(Exchange, ImplicitAPI):
                 'tokenStore': None,
                 # 토스의 환율 조회가 실패했을 때 쓰는 환율 함수. 1달러당 원화를 돌려준다.
                 'usdKrwRate': None,
-                # 접수 뒤 체결 확정 조회의 예산 `{'attempts', 'intervalMs'}`. 사전이거나 사전을 돌려주는 함수다.
+                # 접수 뒤 체결 확정 조회와 취소 뒤 확정 조회의 예산 `{'attempts', 'intervalMs'}`. 사전이거나 사전을 돌려주는 함수다.
                 'confirmBudget': None,
-                # 접수 뒤 체결이 확정될 때까지 주문 상세를 짧게 조회한다. 기본은 켜짐이고 `False` 일 때만 끈다(함수를 넘기면 켜진 것으로 본다).
+                # 접수 뒤 체결이, 취소 뒤 원주문의 끝이 확정될 때까지 주문 상세를 짧게 조회한다. 기본은 켜짐이고 `False` 일 때만 끈다(함수를 넘기면 켜진 것으로 본다).
                 'confirmExecution': True,
                 'authTimeout': AUTH_TIMEOUT_MS,
                 'calendarTtl': CALENDAR_TTL_MS,
@@ -2014,27 +2016,59 @@ class toss(Exchange, ImplicitAPI):
 
     def cancel_order(self, id: str, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """주문을 취소한다. `params['trigger']` 가 `True` 면 조건주문 취소다. 이미 체결·취소된 주문이면 `OrderNotFound` 다.
-        응답 원본은 `info` 에 있고, 취소 응답 본문이 비어 있어도 성공이다."""
+        응답 원본은 `info` 에 있고, 취소 응답 본문이 비어 있어도 성공이다.
+
+        일반 주문은 취소를 접수한 뒤 원주문의 상세를 `create_order` 의 체결 확인과 같은 옵션(`confirmExecution`·`confirmBudget`)으로 조회한다.
+        원주문이 `CANCELED`·`FILLED`·`REJECTED` 로 끝나면 그 상태(`canceled`·`closed`·`rejected`)를 돌려주고, 확정하지 못하면 `status` 를 비운다.
+        취소가 거절되면 원주문이 이전 상태로 돌아가 아직 반영되지 않은 것과 구별할 수 없으므로 이때도 비운다. 조회한 원본은 `info['order']` 에 있다.
+        조건주문은 명세상 취소 응답(204)이 곧 취소 완료라 조회하지 않고 `canceled` 다."""
         trigger = self.safe_bool_2(params, 'trigger', 'stop', False) is True
         market = self.market(symbol) if symbol is not None else None
         if trigger:
             response = self.private_account_delete_conditional_orders_conditionalorderid({'conditionalOrderId': id})
-        else:
-            response = self.private_account_post_orders_orderid_cancel({'orderId': id})
-        logger.info('[toss] %s을 취소했다(%s %s)', '조건주문' if trigger else '주문', id, symbol)
-        info = self.unwrap(response)
+            logger.info('[toss] 조건주문을 취소했다(%s %s)', id, symbol)
+            info = self.unwrap(response)
+            return self.safe_order({'info': info if info is not None else {}, 'id': id, 'symbol': market['symbol'] if market is not None else None,
+                                    'status': 'canceled', 'trades': []}, market)
+        response = self.unwrap(self.private_account_post_orders_orderid_cancel({'orderId': id}))
+        response = response if isinstance(response, dict) else {}
+        logger.info('[toss] 주문 취소를 접수했다(%s %s, 취소 주문번호 %s)', id, symbol, response.get('orderId'))
+        confirm = self.safe_bool(params, 'confirmExecution', self.options.get('confirmExecution') is not False) is not False
+        order = self._confirm_cancel(id) if confirm else None
+        raw_status = self.safe_string(order, 'status')
+        status = self.parse_order_status(raw_status) if raw_status in CANCEL_SETTLED_STATUSES else None
+        if confirm and status is None:
+            logger.warning('[toss] 취소가 확정되지 않아 status 를 비운다(%s, 원주문 상태 %s)', id, raw_status)
         return self.safe_order({
-            'info': info if info is not None else {},
+            'info': self.extend(response, {'order': order}),
             'id': id,
             'symbol': market['symbol'] if market is not None else None,
-            'status': 'canceled',
+            'status': status,
             'trades': [],
         }, market)
 
+    def _confirm_cancel(self, order_id: str) -> Any:
+        """취소를 접수한 원주문을 예산 안에서 조회해 마지막으로 읽은 원본을 돌려준다. 종료 상태면 멈추고, 조회가 실패하면 다음 시도로 넘어간다."""
+        budget = self.get_confirm_budget()
+        attempts, interval_ms = budget['attempts'], budget['intervalMs']
+        last: Any = None
+        for attempt in range(1, attempts + 1):
+            if attempt > 1 and interval_ms > 0:
+                self.sleep(interval_ms)
+            try:
+                last = self.unwrap(self.private_account_get_orders_orderid({'orderId': order_id}))
+            except Exception:
+                logger.warning('[toss] 취소 확인 조회에 실패해 다시 조회한다(주문 %s, %d/%d)', order_id, attempt, attempts, exc_info=True)
+                continue
+            if self.safe_string(last, 'status') in TERMINAL_ORDER_STATUSES:
+                break
+        return last
+
     def cancel_all_orders(self, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """미체결 주문을 모두 취소한다(토스에는 전체 취소가 없어 조회한 주문을 하나씩 취소한다). `params['includeTrigger']` 면 조건주문도 취소한다.
-        돌려주는 목록은 대상 주문 전부이고, 항목은 미체결 조회로 받은 주문이다. 취소된 것은 `status: 'canceled'` 이고 취소 응답 원문이
-        `info['cancelResponse']` 에 있다. 취소하지 못한 것은 원래 상태에 `info['cancelError']`(메시지)와 `info['cancelErrorDetail']`(오류의 `detail`)이
+        돌려주는 목록은 대상 주문 전부이고, 항목은 미체결 조회로 받은 주문이다. 취소를 접수한 것은 `cancel_order` 가 돌려준 상태이고(확정하지 못하면
+        비어 있다) 그 `info`(취소 응답 원문과 조회한 원주문 `order`)가 `info['cancelResponse']` 에 있다. 확정 조회를 주문마다 하므로 미확정 주문이 많으면
+        조회가 는다. 취소하지 못한 것은 원래 상태에 `info['cancelError']`(메시지)와 `info['cancelErrorDetail']`(오류의 `detail`)이
         실린다. 일부가 실패해도 던지지 않는다. 취소하려는 사이에 끝난 주문은 원인 코드(`info['cancelErrorDetail']`)대로 옮긴다(`already-filled` 는 `closed`, `already-canceled` 는
         `canceled`, `already-rejected` 는 `rejected`). 정정으로 대체된 주문과 원인을 모르는 경우는 새 주문이 살아 있을 수 있어 원래 상태로 둔다."""
         include_trigger = self.safe_bool(params, 'includeTrigger', False) is True
@@ -2044,7 +2078,7 @@ class toss(Exchange, ImplicitAPI):
             trigger = self.safe_string(order.get('info'), 'conditionalOrderId') is not None
             try:
                 canceled = self.cancel_order(order['id'], order.get('symbol'), {'trigger': trigger})
-                results.append(self.extend(order, {'status': 'canceled', 'info': self.extend(order.get('info'), {'cancelResponse': canceled.get('info')})}))
+                results.append(self.extend(order, {'status': canceled.get('status'), 'info': self.extend(order.get('info'), {'cancelResponse': canceled.get('info')})}))
             except OrderNotFound as error:
                 detail = getattr(error, 'detail', None)
                 info = self.extend(order.get('info'), {'alreadyGone': True, 'cancelError': str(error), 'cancelErrorDetail': detail})

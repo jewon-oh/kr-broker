@@ -390,12 +390,26 @@ describe('단건 조회', () => {
 });
 
 describe('취소', () => {
-    it('일반 주문은 POST cancel 이고 토스가 발급한 새 주문번호는 info 에 있다', async () => {
-        const fake = installFakeToss({ 'POST /api/v1/orders/O1/cancel': jsonOk({ orderId: 'NEW-OID' }) });
+    it('일반 주문은 POST cancel 이고 원주문 상세로 취소를 확정한다. 토스가 발급한 새 주문번호와 조회한 원주문은 info 에 있다', async () => {
+        const canceled = order('O1', '005930', { status: 'CANCELED' });
+        const fake = installFakeToss({
+            'POST /api/v1/orders/O1/cancel': jsonOk({ orderId: 'NEW-OID' }),
+            'GET /api/v1/orders/O1': jsonOk(canceled),
+        });
         const result = await makeToss().cancelOrder('O1', '005930/KRW');
         expect(result).toMatchObject({ id: 'O1', status: 'canceled', symbol: '005930/KRW' });
-        expect(result.info).toEqual({ orderId: 'NEW-OID' });
+        expect(result.info).toEqual({ orderId: 'NEW-OID', order: canceled });
         expect(fake.requestsTo('POST /api/v1/orders/O1/cancel')).toHaveLength(1);
+    });
+
+    it.each(['REPLACED', 'CANCEL_REJECTED'])('원주문이 %s 면 원주문의 끝을 알 수 없어 더 조회하지 않고 status 를 비운다', async (status) => {
+        const fake = installFakeToss({
+            'POST /api/v1/orders/O1/cancel': jsonOk({ orderId: 'NEW-OID' }),
+            'GET /api/v1/orders/O1': jsonOk(order('O1', '005930', { status })),
+        });
+        const result = await makeToss().cancelOrder('O1', '005930/KRW');
+        expect(result.status).toBeUndefined();
+        expect(fake.requestsTo('GET /api/v1/orders/O1')).toHaveLength(1);
     });
 
     it('조건주문은 DELETE 이고 본문이 비어 있어도 성공이다', async () => {
@@ -456,6 +470,7 @@ describe('전체 취소', () => {
         installFakeToss({
             'GET /api/v1/orders': jsonOk({ orders: [order('O1', '005930'), order('O2', '005930'), order('O3', '005930'), order('O4', '005930'), order('O5', '005930')] }),
             'POST /api/v1/orders/O1/cancel': jsonOk({ orderId: 'N1' }),
+            'GET /api/v1/orders/O1': jsonOk(order('O1', '005930', { status: 'CANCELED' })),
             'POST /api/v1/orders/O2/cancel': errorReply(409, 'already-filled'),
             'POST /api/v1/orders/O3/cancel': () => new NetworkError('끊김'),
             'POST /api/v1/orders/O4/cancel': errorReply(409, 'already-canceled'),
