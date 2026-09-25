@@ -1524,7 +1524,7 @@
       "status": "extended",
       "method": "fetchMarketCalendar",
       "evidence": [
-        "ts/src/kis.ts:10508"
+        "ts/src/kis.ts:10511"
       ],
       "suggested": null,
       "proposal": null,
@@ -2381,7 +2381,7 @@
       "status": "integrated",
       "method": "fetchOrders",
       "evidence": [
-        "ts/src/kis.ts:10319"
+        "ts/src/kis.ts:10322"
       ],
       "suggested": null,
       "proposal": null,
@@ -6078,7 +6078,7 @@
       "status": "integrated",
       "method": "fetchOrders",
       "evidence": [
-        "ts/src/kis.ts:10348"
+        "ts/src/kis.ts:10351"
       ],
       "suggested": null,
       "proposal": null,

@@ -10294,20 +10294,23 @@ export class kis extends Exchange {
 
     /**
      * 내 체결 내역. 종목을 주면 그 시장만, 주지 않으면 국내와 미국 모두 조회한다(`params.market` 으로 좁힌다). 체결별 수수료는 응답에 없어 비어 있다.
-     * 일자는 국내가 KST, 미국이 현지(ET) 기준이다. `since` 를 주지 않으면 오늘이다.
+     *
+     * 일별주문체결 조회라 주문 하나가 거래 하나다. 수량과 가격은 그 주문의 누적 체결 수량과 평균가이고, 시각은 주문 시각이다(응답에 체결 시각이 없다).
+     * 체결이 늘면 같은 id 의 거래가 더 큰 수량으로 다시 나오므로 거래를 쌓는 쪽은 id 로 덮어써야 한다. `since` 는 조회 시작일로만 쓰고 시각으로 거르지
+     * 않는다. 주문 시각으로 거르면 `since` 앞에 낸 주문이 그 뒤에 체결된 것이 빠진다. 일자는 국내가 KST, 미국이 현지(ET) 기준이다. `since` 가 없으면 오늘이다.
      */
     override async fetchMyTrades(symbol: Str = undefined, since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<Trade[]> {
         const instrument = symbol === undefined ? undefined : this.instrumentOf(symbol);
         const which = this.safeString(params, 'market', 'all');
         const trades: Trade[] = [];
         if (instrument === undefined ? which !== 'overseas' : !instrument.overseas) {
-            trades.push(...this.parseTrades(await this.fetchDomesticCcldRows(instrument?.code, since, '01'), undefined, since, limit));
+            trades.push(...this.parseTrades(await this.fetchDomesticCcldRows(instrument?.code, since, '01')));
         }
         if (instrument === undefined ? which !== 'domestic' : instrument.overseas) {
-            trades.push(...this.parseTrades(await this.fetchOverseasCcldRows(since, '01'), undefined, since, limit));
+            trades.push(...this.parseTrades(await this.fetchOverseasCcldRows(since, '01')));
         }
         const filtered = instrument === undefined ? trades : trades.filter((trade) => trade.symbol === instrument.symbol);
-        return this.filterBySinceLimit(filtered, since, limit) as Trade[];
+        return this.filterBySinceLimit(filtered, undefined, limit) as Trade[];
     }
 
     /**

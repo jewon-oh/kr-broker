@@ -28,6 +28,9 @@
 - 한국투자증권 `createOrder`의 `params.session`에 `'regular'`나 `'nxt'`가 아닌 값을 주면 `BadRequest`를 던집니다. 예전에는 정규장 주문으로 처리했습니다.
 - 한국투자증권 확장세션 주문(`session: 'nxt'`, `nxtRouting` 자동 판정)은 NXT 프리마켓, 메인마켓, 애프터마켓에만 나갑니다. 새벽과 휴장일, NXT 가 멈추는 시간(08:50~09:00, 15:20~15:30)에는 요청 없이 `MarketClosed`입니다. 예전에는 `session: 'nxt'`를 주면 시각을 보지 않고 보냈습니다.
 - 한국투자증권 `createCreditOrder`가 `createOrder`와 같은 정규장 게이트를 거칩니다. `editOrder`는 국내에서 KRX 정규장과 NXT 가 모두 닫혀 있으면, 미국에서 완전 마감이면 요청 없이 `MarketClosed`입니다. 경로별 게이트는 [안전 수칙](docs/SAFETY.md)에 표로 적었습니다.
+- 토스증권 `fetchClosedOrders`는 전량 체결된 주문만 돌려줍니다. 예전에는 토스의 종료된 주문(`CLOSED`) 전체라 취소, 거부, 정정으로 대체된 주문이 섞여 있었습니다. 취소된 주문은 새로 넣은 `fetchCanceledOrders`로 받습니다.
+- 토스증권 `fetchMyTrades`는 일부 체결된 채 걸려 있는 미체결 주문의 누적 체결도 돌려줍니다. 한국투자증권 `fetchMyTrades`는 `since`를 조회 시작일로만 쓰고 주문 시각으로 거르지 않습니다. 예전에는 `since` 앞에 낸 주문이 그 뒤에 체결된 것이 빠졌습니다. 두 증권사 모두 주문 하나가 거래 하나라, 같은 id 의 거래는 덮어써야 합니다.
+- 토스증권 `cancelAllOrders`는 취소하려던 사이에 끝난 주문을 원인 코드대로 옮깁니다(`already-filled`는 `closed`, `already-canceled`는 `canceled`, `already-rejected`는 `rejected`). 정정으로 대체됐거나 원인을 모르면 원래 상태로 둡니다. 원인 코드와 원문은 `info.cancelErrorDetail`, `info.cancelError`에 싣습니다. 예전에는 넷을 모두 `canceled`로 돌려줬습니다.
 - KB증권 국내 `editOrder`는 `params.partial` 없이 준 `amount`를 반환값에 싣지 않습니다. 이때는 수량을 보내지 않고 잔량 전체의 가격만 바꾸므로 정정 뒤 수량을 응답으로 알 수 없습니다. `editOrder`의 `amount` 뜻이 증권사마다 다른 점은 [ccxt와 다른 점](docs/ccxt-differences.md)에 적었습니다.
 
 ### 추가

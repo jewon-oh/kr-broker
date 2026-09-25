@@ -2099,17 +2099,21 @@ class kis(Exchange, ImplicitAPI):
     async def fetch_my_trades(self, symbol: Str = None, since: Int = None, limit: Int = None,
                         params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """내 체결 내역. 종목을 주면 그 시장만, 주지 않으면 국내와 미국을 모두 조회한다(`params['market']` 으로 좁힌다). 체결별 수수료는
-        응답에 없어 비어 있다. 일자는 국내가 한국 날짜, 미국이 현지(ET) 날짜다. `since` 를 주지 않으면 오늘이다."""
+        응답에 없어 비어 있다.
+
+        일별주문체결 조회라 주문 하나가 거래 하나다. 수량과 가격은 누적 체결 수량과 평균가이고, 시각은 주문 시각이다(응답에 체결 시각이 없다).
+        체결이 늘면 같은 id 의 거래가 더 큰 수량으로 다시 나오므로 거래를 쌓는 쪽은 id 로 덮어써야 한다. `since` 는 조회 시작일로만 쓰고 시각으로
+        거르지 않는다(주문 시각으로 거르면 `since` 앞에 낸 주문이 그 뒤에 체결된 것이 빠진다). 일자는 국내가 한국 날짜, 미국이 현지(ET) 날짜다."""
         instrument = None if symbol is None else self._instrument_of(symbol)
         which = self.safe_string(params, 'market', 'all')
         trades: List[Dict[str, Any]] = []
         if (which != 'overseas') if instrument is None else not instrument.overseas:
             code = None if instrument is None else instrument.code
-            trades.extend(self.parse_trades(await self._fetch_domestic_ccld_rows(code, since, '01'), None, since, limit))
+            trades.extend(self.parse_trades(await self._fetch_domestic_ccld_rows(code, since, '01')))
         if (which != 'domestic') if instrument is None else instrument.overseas:
-            trades.extend(self.parse_trades(await self._fetch_overseas_ccld_rows(since, '01'), None, since, limit))
+            trades.extend(self.parse_trades(await self._fetch_overseas_ccld_rows(since, '01')))
         filtered = trades if instrument is None else [trade for trade in trades if trade.get('symbol') == instrument.symbol]
-        return self.filter_by_since_limit(filtered, since, limit)
+        return self.filter_by_since_limit(filtered, None, limit)
 
     async def _fetch_domestic_ccld_rows(self, code: Str, since: Int, ccld: str, order_id: Str = None) -> List[Dict[str, Any]]:
         """국내 일별주문체결 행. `ccld` 는 `'00'` 전체, `'01'` 체결, `'02'` 미체결이다. 조회일은 한국 달력 날짜다(UTC 로 잡으면 한국 0~9시에
