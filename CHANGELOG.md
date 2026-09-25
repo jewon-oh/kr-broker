@@ -64,6 +64,7 @@
 
 ### 고침
 
+- KB증권 응답의 숫자 필드가 공백으로만 채워져 오면 0으로 읽고 다음 후보 필드를 보지 않던 것을 고쳤습니다. 이제 공백만 있는 값은 빈 값으로 보고 다음 후보를 읽습니다. 체결 행과 보유, 잔고를 읽는 `pickNum` 계열이 정산 행 파서와 같은 규칙을 씁니다.
 - Python 판이 응답의 숫자 문자열을 TypeScript 판(JavaScript `Number`)과 같게 읽습니다. 예전에는 `'1_000'`을 1000으로, `'inf'`를 무한대로 읽고 `'0x10'`은 읽지 못했습니다. 이제 앞의 둘은 `NaN`이고 `'0x10'`은 16입니다.
 - Python 판 주문 메서드가 숫자 인자(`amount`, `price`, `trigger_price`)와 `params`의 숫자 값에 `Decimal`을 받습니다(ccxt와 같습니다). 예전에는 `Decimal`을 숫자로 읽지 못해, 한국투자증권은 `Decimal` 수량을 `InvalidOrder`로 거절했고 토스는 조건주문 가격과 `params['cost']`를 빠진 값으로 읽었습니다.
 - Python 비동기 판의 콜백 타입 힌트(`confirm_execution`의 `probe`, 토큰 발급 함수, `stockDirectory.find_kr_market`)를 코루틴을 돌려주는 모양으로 고쳤습니다. 동기 판 생성기가 `Awaitable[X]`를 `X`로 바꿉니다.

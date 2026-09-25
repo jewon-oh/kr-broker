@@ -63,6 +63,7 @@
  * **유령청산 → 재매수** 로 이어진다.
  */
 
+import { kbsecNumber as numOf, kbsecString as strOf } from './kbsec-number';
 import { KBSEC_TRD_SELL, kbsecNormalizeCode } from './kbsec-types';
 
 export type KbsecFillSide = 'buy' | 'sell' | null;
@@ -129,24 +130,6 @@ export interface KbsecFill {
     price: number;
     /** `qty × price` (단가 0 이면 0) */
     cost: number;
-}
-
-function strOf(row: Record<string, unknown>, ...keys: string[]): string {
-    for (const k of keys) {
-        const v = row[k];
-        if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
-    }
-    return '';
-}
-
-function numOf(row: Record<string, unknown>, ...keys: string[]): number {
-    for (const k of keys) {
-        const v = row[k];
-        if (v === undefined || v === null || v === '') continue;
-        const n = Number(String(v).replace(/,/g, ''));
-        if (Number.isFinite(n)) return n;
-    }
-    return 0;
 }
 
 /**

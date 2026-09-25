@@ -6,9 +6,10 @@
  */
 
 import { logger } from '../logger';
+import { kbsecNumberOf, kbsecString } from './kbsec-number';
 
 /**
- * 응답에서 숫자를 뽑는다. 후보 필드 이름을 순서대로 시도하고, **값이 있으면 0 이어도 그 키에서 멈춘다.**
+ * 응답에서 숫자를 뽑는다. 후보 필드 이름을 순서대로 시도하고, **값이 있으면 0 이어도 그 키에서 멈춘다.** 공백만 있는 값은 빈 값이다.
  *
  * 이 방어형 리더는 필드 이름이 틀려도 예외 없이 0 을 돌려준다. 오타나 명세 변경이 "값이 0" 으로 조용히 넘어가지 않도록, 후보를 하나도
  * 못 찾았고 응답에 다른 키가 있으면 DEBUG 로 흔적을 남긴다(정상적으로 빈 응답도 흔해서 WARN 은 소음이 된다).
@@ -17,10 +18,8 @@ import { logger } from '../logger';
 export function pickNum(row: Record<string, unknown> | undefined, ...keys: string[]): number {
     if (!row) return 0;
     for (const k of keys) {
-        const v = row[k];
-        if (v === undefined || v === null || v === '') continue;
-        const n = Number(String(v).replace(/,/g, ''));
-        if (Number.isFinite(n)) return n;
+        const n = kbsecNumberOf(row[k]);
+        if (n !== undefined) return n;
     }
     if (Object.keys(row).length > 0 && !keys.some(k => k in row)) {
         logger.debug({ tried: keys, available: Object.keys(row).slice(0, 12) },
@@ -40,22 +39,15 @@ export function pickNum(row: Record<string, unknown> | undefined, ...keys: strin
 export function pickPositiveNum(row: Record<string, unknown> | undefined, ...keys: string[]): number {
     if (!row) return 0;
     for (const k of keys) {
-        const v = row[k];
-        if (v === undefined || v === null || v === '') continue;
-        const n = Number(String(v).replace(/,/g, ''));
-        if (Number.isFinite(n) && n > 0) return n;
+        const n = kbsecNumberOf(row[k]);
+        if (n !== undefined && n > 0) return n;
     }
     return 0;
 }
 
 /** 공백이 아닌 첫 후보 문자열. 없으면 `''`. */
 export function pickStr(row: Record<string, unknown> | undefined, ...keys: string[]): string {
-    if (!row) return '';
-    for (const k of keys) {
-        const v = row[k];
-        if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
-    }
-    return '';
+    return kbsecString(row, ...keys);
 }
 
 /**
