@@ -4088,6 +4088,172 @@
             ]
         },
         {
+            "description": "fetchOpenOrders 에 trigger 를 주면 다음 커서가 이미 요청한 커서일 때 멈추고, 되풀이된 조건주문은 한 번만 담는다",
+            "method": "fetchOpenOrders",
+            "args": [
+                "005930/KRW",
+                null,
+                null,
+                {
+                    "trigger": true
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/conditional-orders?status=OPEN&limit=100&symbol=005930",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "conditionalOrders": [
+                                    {
+                                        "conditionalOrderId": "COND-0010",
+                                        "symbol": "005930",
+                                        "type": "OCO",
+                                        "status": "WAITING",
+                                        "quantity": "2",
+                                        "orderType": "LIMIT",
+                                        "createdAt": "2026-03-25T00:10:00Z",
+                                        "first": {
+                                            "triggerPrice": "80000",
+                                            "orderPrice": "79900"
+                                        },
+                                        "second": {
+                                            "triggerPrice": "65000",
+                                            "orderPrice": "64900"
+                                        }
+                                    }
+                                ],
+                                "hasNext": true,
+                                "nextCursor": "cur-2"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/conditional-orders?status=OPEN&limit=100&symbol=005930&cursor=cur-2",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "conditionalOrders": [
+                                    {
+                                        "conditionalOrderId": "COND-0010",
+                                        "symbol": "005930",
+                                        "type": "OCO",
+                                        "status": "WAITING",
+                                        "quantity": "2",
+                                        "orderType": "LIMIT",
+                                        "createdAt": "2026-03-25T00:10:00Z",
+                                        "first": {
+                                            "triggerPrice": "80000",
+                                            "orderPrice": "79900"
+                                        },
+                                        "second": {
+                                            "triggerPrice": "65000",
+                                            "orderPrice": "64900"
+                                        }
+                                    },
+                                    {
+                                        "conditionalOrderId": "COND-0011",
+                                        "symbol": "005930",
+                                        "type": "SINGLE",
+                                        "status": "WAITING",
+                                        "quantity": "1",
+                                        "orderType": "MARKET",
+                                        "createdAt": "2026-03-25T00:20:00Z",
+                                        "first": {
+                                            "orderSide": "buy",
+                                            "triggerPrice": "60000"
+                                        }
+                                    }
+                                ],
+                                "hasNext": true,
+                                "nextCursor": "cur-2"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "info": {
+                        "conditionalOrderId": "COND-0010",
+                        "symbol": "005930",
+                        "type": "OCO",
+                        "status": "WAITING",
+                        "quantity": "2",
+                        "orderType": "LIMIT",
+                        "createdAt": "2026-03-25T00:10:00Z",
+                        "first": {
+                            "triggerPrice": "80000",
+                            "orderPrice": "79900"
+                        },
+                        "second": {
+                            "triggerPrice": "65000",
+                            "orderPrice": "64900"
+                        }
+                    },
+                    "id": "COND-0010",
+                    "timestamp": 1774397400000,
+                    "datetime": "2026-03-25T00:10:00.000Z",
+                    "symbol": "005930/KRW",
+                    "type": "limit",
+                    "side": "sell",
+                    "price": 79900,
+                    "amount": 2,
+                    "filled": 0,
+                    "remaining": 2,
+                    "cost": 0,
+                    "triggerPrice": 80000,
+                    "status": "open",
+                    "trades": [],
+                    "fees": [],
+                    "stopPrice": 80000
+                },
+                {
+                    "info": {
+                        "conditionalOrderId": "COND-0011",
+                        "symbol": "005930",
+                        "type": "SINGLE",
+                        "status": "WAITING",
+                        "quantity": "1",
+                        "orderType": "MARKET",
+                        "createdAt": "2026-03-25T00:20:00Z",
+                        "first": {
+                            "orderSide": "buy",
+                            "triggerPrice": "60000"
+                        }
+                    },
+                    "id": "COND-0011",
+                    "timestamp": 1774398000000,
+                    "datetime": "2026-03-25T00:20:00.000Z",
+                    "symbol": "005930/KRW",
+                    "type": "market",
+                    "side": "buy",
+                    "amount": 1,
+                    "filled": 0,
+                    "remaining": 1,
+                    "cost": 0,
+                    "triggerPrice": 60000,
+                    "status": "open",
+                    "trades": [],
+                    "fees": [],
+                    "stopPrice": 60000
+                }
+            ]
+        },
+        {
             "description": "fetchClosedOrders 는 날짜 범위를 한국 날짜로 보내고 커서로 이어 받은 뒤 since 로 거른다",
             "method": "fetchClosedOrders",
             "args": ["005930/KRW", 1774400400000, null, { "until": 1774486800000 }],
@@ -4201,6 +4367,161 @@
                     "fee": { "currency": "KRW", "cost": 52 },
                     "trades": [],
                     "fees": [{ "currency": "KRW", "cost": 52 }],
+                    "remaining": 0,
+                    "postOnly": false
+                }
+            ]
+        },
+        {
+            "description": "fetchClosedOrders 는 다음 커서가 이미 요청한 커서면 같은 쪽을 되풀이하지 않고 멈추며, 되풀이된 주문은 한 번만 담는다",
+            "method": "fetchClosedOrders",
+            "args": [
+                "005930/KRW",
+                1774400400000,
+                null,
+                {
+                    "until": 1774486800000
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders?status=CLOSED&limit=100&symbol=005930&from=2026-03-24&to=2026-03-26",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "orders": [
+                                    {
+                                        "orderId": "ORD-0022",
+                                        "symbol": "005930",
+                                        "side": "BUY",
+                                        "orderType": "LIMIT",
+                                        "timeInForce": "DAY",
+                                        "status": "FILLED",
+                                        "price": "70000",
+                                        "quantity": "5",
+                                        "currency": "KRW",
+                                        "orderedAt": "2026-03-25T02:00:00Z",
+                                        "execution": {
+                                            "filledQuantity": "5",
+                                            "averageFilledPrice": "70000",
+                                            "filledAmount": "350000",
+                                            "commission": "52",
+                                            "filledAt": "2026-03-25T02:00:01Z"
+                                        }
+                                    }
+                                ],
+                                "hasNext": true,
+                                "nextCursor": "cur-1"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders?status=CLOSED&limit=100&symbol=005930&from=2026-03-24&to=2026-03-26&cursor=cur-1",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "orders": [
+                                    {
+                                        "orderId": "ORD-0022",
+                                        "symbol": "005930",
+                                        "side": "BUY",
+                                        "orderType": "LIMIT",
+                                        "timeInForce": "DAY",
+                                        "status": "FILLED",
+                                        "price": "70000",
+                                        "quantity": "5",
+                                        "currency": "KRW",
+                                        "orderedAt": "2026-03-25T02:00:00Z",
+                                        "execution": {
+                                            "filledQuantity": "5",
+                                            "averageFilledPrice": "70000",
+                                            "filledAmount": "350000",
+                                            "commission": "52",
+                                            "filledAt": "2026-03-25T02:00:01Z"
+                                        }
+                                    },
+                                    {
+                                        "orderId": "ORD-0023",
+                                        "symbol": "005930",
+                                        "side": "BUY",
+                                        "orderType": "LIMIT",
+                                        "timeInForce": "DAY",
+                                        "status": "CANCELED",
+                                        "price": "70000",
+                                        "quantity": "5",
+                                        "currency": "KRW",
+                                        "orderedAt": "2026-03-24T02:00:00Z",
+                                        "execution": {
+                                            "filledQuantity": "0"
+                                        }
+                                    }
+                                ],
+                                "hasNext": true,
+                                "nextCursor": "cur-1"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "info": {
+                        "orderId": "ORD-0022",
+                        "symbol": "005930",
+                        "side": "BUY",
+                        "orderType": "LIMIT",
+                        "timeInForce": "DAY",
+                        "status": "FILLED",
+                        "price": "70000",
+                        "quantity": "5",
+                        "currency": "KRW",
+                        "orderedAt": "2026-03-25T02:00:00Z",
+                        "execution": {
+                            "filledQuantity": "5",
+                            "averageFilledPrice": "70000",
+                            "filledAmount": "350000",
+                            "commission": "52",
+                            "filledAt": "2026-03-25T02:00:01Z"
+                        }
+                    },
+                    "id": "ORD-0022",
+                    "timestamp": 1774404000000,
+                    "datetime": "2026-03-25T02:00:00.000Z",
+                    "lastTradeTimestamp": 1774404001000,
+                    "symbol": "005930/KRW",
+                    "type": "limit",
+                    "timeInForce": "DAY",
+                    "side": "buy",
+                    "price": 70000,
+                    "amount": 5,
+                    "filled": 5,
+                    "average": 70000,
+                    "cost": 350000,
+                    "status": "closed",
+                    "fee": {
+                        "currency": "KRW",
+                        "cost": 52
+                    },
+                    "trades": [],
+                    "fees": [
+                        {
+                            "currency": "KRW",
+                            "cost": 52
+                        }
+                    ],
                     "remaining": 0,
                     "postOnly": false
                 }

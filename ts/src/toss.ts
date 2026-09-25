@@ -278,6 +278,20 @@ function kstDate(ms: number): string {
     return new Date(ms + KST_OFFSET_MS).toISOString().slice(0, 10);
 }
 
+/**
+ * 커서로 받은 쪽에서 아직 담지 않은 행만 고른다. 서버가 커서를 무시하고 같은 쪽을 다시 주면 같은 주문이 두 번 담긴다.
+ * 식별자가 없는 행은 가를 수 없으므로 담는다.
+ */
+function unseenRows<T>(rows: T[], idOf: (row: T) => string | undefined, seen: Set<string>): T[] {
+    return rows.filter((row) => {
+        const id = idOf(row);
+        if (id === undefined || id === null) return true;
+        if (seen.has(id)) return false;
+        seen.add(id);
+        return true;
+    });
+}
+
 /** 지금이 개장 직후 09:00~09:10(한국 시각)인가. */
 function isOrderInfoPeakWindow(now: Date): boolean {
     const kstMinutes = (now.getUTCHours() * 60 + now.getUTCMinutes() + 9 * 60) % (24 * 60);
@@ -2229,12 +2243,19 @@ export class toss extends Exchange {
         if (market !== undefined) request.symbol = market.id;
         const maxPages = this.safeInteger(this.options, 'conditionalOrdersMaxPages', MAX_CONDITIONAL_ORDER_PAGES) as number;
         const collected: TossConditionalOrder[] = [];
+        const seen = new Set<string>();
+        const requested = new Set<string>();
         let cursor: string | undefined;
         for (let page = 0; page < maxPages; page++) {
             const response = this.unwrap<TossPaginatedConditionalOrders>(await this.privateAccountGetConditionalOrders(this.extend(request, { cursor })));
-            collected.push(...(response?.conditionalOrders ?? []));
+            collected.push(...unseenRows(response?.conditionalOrders ?? [], (row) => row.conditionalOrderId, seen));
             if (!response?.hasNext || !response?.nextCursor) return collected;
+            if (requested.has(response.nextCursor)) {
+                logger.warn({ collected: collected.length, cursor: response.nextCursor }, '[toss] 미체결 조건주문의 다음 커서가 이미 요청한 커서다. 같은 쪽을 되풀이하지 않고 멈춘다');
+                return collected;
+            }
             cursor = response.nextCursor;
+            requested.add(cursor);
         }
         logger.warn({ collected: collected.length, maxPages }, '[toss] 미체결 조건주문이 페이지 상한을 넘어 나머지는 자른다');
         return collected;
@@ -2278,14 +2299,21 @@ export class toss extends Exchange {
         const query = this.omit(params, 'until');
         const maxPages = this.safeInteger(this.options, 'closedOrdersMaxPages', MAX_CLOSED_ORDER_PAGES) as number;
         const collected: TossOrder[] = [];
+        const seen = new Set<string>();
+        const requested = new Set<string>();
         let cursor: string | undefined;
         for (let page = 0; page < maxPages; page++) {
             const response = this.unwrap<TossPaginatedOrders>(await this.privateAccountGetOrders(this.extend(request, { cursor }, query)));
-            collected.push(...(response?.orders ?? []).filter(keep));
+            collected.push(...unseenRows(response?.orders ?? [], (row) => row.orderId, seen).filter(keep));
             if (!response?.hasNext || !response?.nextCursor) return collected;
             // 시각 조건이 없고 개수만 정했다면(가장 최근 `limit` 건) 그만큼 모았을 때 멈춘다.
             if (since === undefined && limit !== undefined && collected.length >= limit) return collected;
+            if (requested.has(response.nextCursor)) {
+                logger.warn({ collected: collected.length, cursor: response.nextCursor }, '[toss] 종료된 주문의 다음 커서가 이미 요청한 커서다. 같은 쪽을 되풀이하지 않고 멈춘다');
+                return collected;
+            }
             cursor = response.nextCursor;
+            requested.add(cursor);
         }
         logger.warn({ collected: collected.length }, '[toss] 체결 완료 주문이 페이지 상한을 넘어 오래된 주문은 자른다');
         return collected;
