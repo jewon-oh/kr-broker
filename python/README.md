@@ -101,7 +101,9 @@ except kr_broker.InsufficientFunds as e:
     print(e.detail)
 ```
 
-주문 요청은 재시도하지 않습니다. 시간 초과나 연결 끊김으로 끝나면 `OrderOutcomeUnknown`입니다.
+주문 요청은 재시도하지 않습니다. 시간 초과나 연결 끊김, 증권사 오류 코드 없는 5xx, 해석할 수 없는 응답으로 끝나면 `OrderOutcomeUnknown`입니다.
+
+비동기 판에서 주문 호출을 `asyncio.wait_for`로 끊으면 `OrderOutcomeUnknown`이 아니라 `TimeoutError`가 나옵니다. 요청이 이미 나갔을 수 있으므로 이때도 다시 보내지 마십시오. 주문의 시간 상한은 `orderTimeout`으로 정합니다.
 
 ### 토큰 저장소
 

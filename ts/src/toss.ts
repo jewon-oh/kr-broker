@@ -832,9 +832,9 @@ export class toss extends Exchange {
         }
         const exact = this.exceptions?.exact as Dictionary<new (message: string, options?: { detail?: string }) => Error> | undefined;
         this.throwExactlyMatchedException(exact, code, feedback, options);
-        const byStatus = this.httpExceptions[String(statusCode)];
-        if (byStatus !== undefined) throw new byStatus(feedback, options);
-        if (statusCode >= 500) throw new ExchangeNotAvailable(feedback, options);
+        // 코드 표에 없는 응답은 상태로만 분류한다. 주문 요청의 5xx 는 접수 미상이 된다(`isOutcomeUnknown`).
+        const byStatus = this.httpExceptions[String(statusCode)] ?? (statusCode >= 500 ? ExchangeNotAvailable : undefined);
+        if (byStatus !== undefined) throw this.httpStatusError(statusCode, byStatus, feedback, options);
         throw new ExchangeError(feedback, options);
     }
 

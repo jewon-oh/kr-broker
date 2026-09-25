@@ -21,8 +21,9 @@
  *
  * ## 주문 요청
  *
- * `api` 엔드포인트를 `{ cost, order: true }` 로 적으면 주문 요청으로 다룬다. 주문 요청은 재시도하지 않고, 시간 초과나 연결 끊김이면
- * 접수 여부를 모르므로 `OrderOutcomeUnknown` 으로 바꿔 던진다. 조회는 `OperationFailed` 계열만 `maxRetriesOnFailure` 번까지 다시 보낸다.
+ * `api` 엔드포인트를 `{ cost, order: true }` 로 적으면 주문 요청으로 다룬다. 주문 요청은 재시도하지 않고, 시간 초과나 연결 끊김, 증권사 오류 코드가
+ * 없는 5xx, 해석할 수 없는 응답이면 접수 여부를 모르므로 `OrderOutcomeUnknown` 으로 바꿔 던진다. 조회는 `OperationFailed` 계열만
+ * `maxRetriesOnFailure` 번까지 다시 보낸다.
  */
 
 import { logger } from '../logger';
@@ -32,6 +33,7 @@ import {
     ArgumentsRequired,
     AuthenticationError,
     BadRequest,
+    BadResponse,
     BadSymbol,
     DDoSProtection,
     ExchangeError,
@@ -67,6 +69,9 @@ import type {
     Balances, ConstructorArgs, Currencies, Currency, CurrencyInterface, Dict, Dictionary, IndexType, Int, KrTimestamped, List, Market,
     FetchSignal, MarketInterface, Num, OHLCV, Order, OrderBook, OrderSide, OrderType, Status, Str, Strings, Ticker, Tickers, Trade, TradingFeeInterface,
 } from './types';
+
+/** HTTP 상태만 보고 만든 오류와 그 상태 코드. 증권사 오류 코드로 분류하지 못한 5xx 인지 가리는 데 쓴다. */
+const httpStatusErrors = new WeakMap<object, number>();
 
 // ============ 인스턴스에 얹는 함수 ============
 
@@ -435,9 +440,13 @@ export class Exchange {
                 this.last_request_method = request.method;
                 this.last_request_headers = request.headers;
                 this.last_request_body = request.body;
-                return await this.fetch(request.url, request.method, request.headers, request.body, timeout);
+                const response = await this.fetch(request.url, request.method, request.headers, request.body, timeout);
+                if (isOrder && typeof response === 'string' && response.trim() !== '') {
+                    throw new BadResponse(`${this.id} ${method} ${path} 주문 응답이 JSON 이 아니다: ${response.slice(0, 200)}`);
+                }
+                return response;
             } catch (e) {
-                const error = isOrder && this.isOutcomeUnknown(e)
+                const error = isOrder && !(e instanceof OrderOutcomeUnknown) && this.isOutcomeUnknown(e)
                     ? new OrderOutcomeUnknown(`${this.id} ${method} ${path} 주문 요청이 접수됐는지 알 수 없다: ${errorMessage(e)}`, { cause: e })
                     : e;
                 const retryable = error instanceof OperationFailed && error.retryable !== false;
@@ -449,11 +458,22 @@ export class Exchange {
     }
 
     /**
-     * 주문 요청이 이 오류로 끝났을 때 접수 여부를 알 수 없는가. 시간 초과(`RequestTimeout` 계열)와, 응답을 받기 전에 연결이 끊긴 전송 오류(`NetworkError` 그 자체)가 해당한다.
-     * 증권사 응답을 읽고 나서 던진 오류(`RateLimitExceeded`·`MarketClosed` 등)는 거절이 확정된 것이므로 아니다.
+     * 주문 요청이 이 오류로 끝났을 때 접수 여부를 알 수 없는가. 시간 초과(`RequestTimeout` 계열), 응답을 받기 전에 연결이 끊긴 전송 오류
+     * (`NetworkError` 그 자체), 증권사 오류 코드 없이 HTTP 상태만으로 만든 5xx 오류(`httpStatusError`), 해석할 수 없는 응답(`BadResponse`)이 해당한다.
+     * 증권사 오류 코드로 분류한 오류(`RateLimitExceeded`·`MarketClosed` 등)는 거절이 확정된 것이므로 아니다.
      */
     isOutcomeUnknown(error: unknown): boolean {
-        return error instanceof RequestTimeout || (error instanceof NetworkError && Object.getPrototypeOf(error) === NetworkError.prototype);
+        return error instanceof RequestTimeout
+            || (error instanceof NetworkError && Object.getPrototypeOf(error) === NetworkError.prototype)
+            || error instanceof BadResponse
+            || (isObject(error) && (httpStatusErrors.get(error) ?? 0) >= 500);
+    }
+
+    /** HTTP 상태만 보고 오류를 만든다. 증권사 오류 코드로 분류하지 못한 응답에 쓰고, 주문 요청의 5xx 는 `isOutcomeUnknown` 이 접수 미상으로 본다. */
+    httpStatusError(code: number, ErrorClassForStatus: ErrorClass, message: string, options?: BaseErrorOptions): Error {
+        const error = new ErrorClassForStatus(message, options);
+        httpStatusErrors.set(error, code);
+        return error;
     }
 
     /**
@@ -584,10 +604,11 @@ export class Exchange {
         return undefined;
     }
 
+    /** 상태 표(`httpExceptions`)의 오류를 던진다. 표에 없는 5xx 는 `ExchangeNotAvailable` 이다. */
     handleHttpStatusCode(code: number, reason: string, url: string, method: string, body: string): void {
-        const ErrorClassForStatus = this.httpExceptions[String(code)];
+        const ErrorClassForStatus = this.httpExceptions[String(code)] ?? (code >= 500 ? ExchangeNotAvailable : undefined);
         if (ErrorClassForStatus !== undefined) {
-            throw new ErrorClassForStatus(`${this.id} ${method} ${url} ${code} ${reason} ${body}`);
+            throw this.httpStatusError(code, ErrorClassForStatus, `${this.id} ${method} ${url} ${code} ${reason} ${body}`);
         }
     }
 
@@ -735,8 +756,16 @@ export class Exchange {
      * 이긴다. 범위를 벗어난 값은 무시하고 아래 층의 값을 쓴다.
      */
     getConfirmBudget(defaults?: Partial<ConfirmBudget>): ConfirmBudget {
-        const option = this.options.confirmBudget;
-        return resolveConfirmBudget(defaults, typeof option === 'function' ? option() : option);
+        // 주문을 보낸 뒤에 부르므로 던지지 않는다. 던지면 접수된 주문이 실패처럼 보인다.
+        let overrides: unknown;
+        try {
+            const option = this.options.confirmBudget;
+            overrides = typeof option === 'function' ? option() : option;
+        } catch (e) {
+            logger.warn({ error: errorMessage(e) }, `[${this.id}] options.confirmBudget 이 던져 기본 예산을 쓴다`);
+        }
+        if (overrides instanceof Promise) overrides.catch(() => undefined);
+        return resolveConfirmBudget(defaults, isDict(overrides) ? overrides as Partial<ConfirmBudget> : undefined);
     }
 
     // ============ 종목 ============

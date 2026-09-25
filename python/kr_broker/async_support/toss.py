@@ -560,7 +560,7 @@ class toss(Exchange, ImplicitAPI):
         if self.needs_account(api):
             if self.uid is None:
                 raise AuthenticationError(f'{self.id} 계좌 순번(uid)이 없다')
-            request_headers['X-Tossinvest-Account'] = self.uid
+            request_headers['X-Tossinvest-Account'] = str(self.uid)
         if method in ('GET', 'DELETE'):
             if query:
                 url += '?' + self.urlencode(query)
@@ -643,11 +643,10 @@ class toss(Exchange, ImplicitAPI):
         if error_code == 'invalid-request' and self.safe_value(self.safe_dict(error_value, 'data'), 'tickSize') is not None:
             raise InvalidOrder(feedback, detail='price-tick-invalid')
         self.throw_exactly_matched_exception(self.exceptions.get('exact'), error_code, feedback, detail=error_code)
-        by_status = self.httpExceptions.get(str(code))
+        # 코드 표에 없는 응답은 상태로만 분류한다. 주문 요청의 5xx 는 접수 미상이 된다(`is_outcome_unknown`).
+        by_status = self.httpExceptions.get(str(code)) or (ExchangeNotAvailable if code >= 500 else None)
         if by_status is not None:
-            raise by_status(feedback, detail=error_code)
-        if code >= 500:
-            raise ExchangeNotAvailable(feedback, detail=error_code)
+            raise self.http_status_error(code, by_status, feedback, detail=error_code)
         raise ExchangeError(feedback, detail=error_code)
 
     def unwrap(self, response: Any) -> Any:

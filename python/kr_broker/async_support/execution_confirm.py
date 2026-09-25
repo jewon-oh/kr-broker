@@ -8,6 +8,7 @@
 
 import logging
 import math
+from collections.abc import Mapping
 from typing import Any, Callable, Dict, List, Optional
 
 from kr_broker.async_support.base.runtime import sleep_seconds
@@ -45,7 +46,7 @@ def resolve_confirm_budget(defaults: Optional[Dict[str, Any]] = None, overrides:
     """예산 `{'attempts', 'intervalMs'}`. 공용 기본값 < `defaults`(증권사 클래스) < `overrides`(사용자 옵션) 순으로 뒤가 이긴다."""
     def pick(name: str, low: int, high: int, fallback: int) -> int:
         for layer in (overrides, defaults):
-            value = _valid_budget_value(name, (layer or {}).get(name), low, high)
+            value = _valid_budget_value(name, layer.get(name), low, high) if isinstance(layer, Mapping) else None
             if value is not None:
                 return value
         return fallback

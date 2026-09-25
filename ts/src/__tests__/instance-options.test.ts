@@ -131,6 +131,14 @@ describe('getConfirmBudget — options.confirmBudget', () => {
 
         expect(broker.getConfirmBudget({ attempts: 5, intervalMs: 1000 })).toEqual({ attempts: 5, intervalMs: 1000 });
     });
+
+    it('★주문을 보낸 뒤에 부르므로 옵션 함수가 던지거나 객체가 아닌 값을 줘도 던지지 않고 아래 층의 값을 쓴다', () => {
+        const defaults = { attempts: 5, intervalMs: 1000 };
+        const throwing = kisWith({ confirmBudget: () => { throw new Error('boom'); } });
+        expect(throwing.getConfirmBudget(defaults)).toEqual(defaults);
+        expect(kisWith({ confirmBudget: () => Promise.resolve({ attempts: 2 }) }).getConfirmBudget(defaults)).toEqual(defaults);
+        expect(kisWith({ confirmBudget: [3, 100] }).getConfirmBudget(defaults)).toEqual(defaults);
+    });
 });
 
 describe('masterData — 인스턴스마다 자기 종목 데이터를 갖는다', () => {

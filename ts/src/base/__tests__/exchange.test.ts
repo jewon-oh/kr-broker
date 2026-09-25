@@ -395,6 +395,11 @@ describe('오류 매핑', () => {
             expect(message).toContain('server says no');
         });
 
+        it('표에 없는 5xx(524)는 ExchangeNotAvailable 로 던진다', async () => {
+            stubFetch(text('timeout', 524));
+            expect(await new FakeExchange().publicGetMarketAll().catch((e: unknown) => e)).toBeInstanceOf(ExchangeNotAvailable);
+        });
+
         it('표에 없는 상태(200·202·302)는 던지지 않는다', async () => {
             for (const status of [200, 202, 302]) {
                 stubFetch(new Response('ok', { status }));
@@ -524,19 +529,47 @@ describe('재시도', () => {
     });
 
     describe('주문 요청', () => {
-        it('재시도하지 않는다: 확정된 거절(503)은 그대로 던진다', async () => {
-            const { calls } = stubFetch(text('down', 503));
-            const ex = new FakeExchange({ ...CREDENTIALS, options: { maxRetriesOnFailure: 3 } });
+        it('증권사가 오류 코드로 거절한 5xx 는 확정된 거절이라 그대로 던지고 다시 보내지 않는다', async () => {
+            const { calls } = stubFetch(json({ code: 'SVC_DOWN', message: 'x' }, 503));
+            const ex = new FakeExchange({ ...CREDENTIALS, exceptions: { exact: { SVC_DOWN: ExchangeNotAvailable } }, options: { maxRetriesOnFailure: 3 } });
             const error = await ex.privatePostOrders({ code: '005930' }).catch((e: unknown) => e);
             expect(error).toBeInstanceOf(ExchangeNotAvailable);
             expect(error).not.toBeInstanceOf(OrderOutcomeUnknown);
             expect(calls).toHaveLength(1);
         });
 
+        it('오류 코드 없이 상태만 5xx 면 앞단 뒤에서 접수됐을 수 있어 OrderOutcomeUnknown 이다', async () => {
+            for (const status of [500, 502, 503, 524]) {
+                const { calls } = stubFetch(text('<html>bad gateway</html>', status));
+                const ex = new FakeExchange({ ...CREDENTIALS, options: { maxRetriesOnFailure: 3 } });
+                const error = (await ex.privatePostOrders({ code: '005930' }).catch((e: unknown) => e)) as OrderOutcomeUnknown;
+                expect(error).toBeInstanceOf(OrderOutcomeUnknown);
+                expect(error.retryable).toBe(false);
+                expect(error.cause).toBeInstanceOf(ExchangeNotAvailable);
+                expect(calls).toHaveLength(1);
+            }
+        });
+
+        it('오류 코드 없는 4xx 는 처리 전 거절이라 OrderOutcomeUnknown 이 아니다', async () => {
+            stubFetch(text('bad', 400));
+            const error = await new FakeExchange(CREDENTIALS).privatePostOrders({}).catch((e: unknown) => e);
+            expect(error).toBeInstanceOf(ExchangeNotAvailable);
+            expect(error).not.toBeInstanceOf(OrderOutcomeUnknown);
+        });
+
+        it('주문 응답이 2xx 인데 JSON 이 아니면 OrderOutcomeUnknown 이고, 빈 본문은 그대로 돌려준다', async () => {
+            stubFetch(text('<html>점검 중</html>', 200));
+            const error = (await new FakeExchange(CREDENTIALS).privatePostOrders({}).catch((e: unknown) => e)) as OrderOutcomeUnknown;
+            expect(error).toBeInstanceOf(OrderOutcomeUnknown);
+            expect(error.message).toContain('JSON 이 아니다');
+            stubFetch(text('', 200));
+            expect(await new FakeExchange(CREDENTIALS).privateDeleteOrdersId({ id: '1' })).toBe('');
+        });
+
         it('params 로 재시도를 켜도 주문은 한 번만 보낸다', async () => {
             const { calls } = stubFetch(text('down', 503));
             const ex = new FakeExchange(CREDENTIALS);
-            await expect(ex.privateDeleteOrdersId({ id: '1', maxRetriesOnFailure: 5 })).rejects.toBeInstanceOf(ExchangeNotAvailable);
+            await expect(ex.privateDeleteOrdersId({ id: '1', maxRetriesOnFailure: 5 })).rejects.toBeInstanceOf(OrderOutcomeUnknown);
             expect(calls).toHaveLength(1);
         });
 

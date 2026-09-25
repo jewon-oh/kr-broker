@@ -51,7 +51,7 @@ const broker = new kis({ apiKey, secret, uid, sandbox: true });
 
 ## OrderOutcomeUnknown이 나오면 재주문하지 않습니다
 
-`OrderOutcomeUnknown`은 주문 요청이 시간 초과나 연결 끊김으로 끝났다는 뜻입니다. 증권사가 주문을 접수했는지 알 수 없습니다.
+`OrderOutcomeUnknown`은 주문 요청이 시간 초과나 연결 끊김으로 끝났거나, 증권사 오류 코드 없는 5xx 나 해석할 수 없는 응답을 받았다는 뜻입니다. 증권사가 주문을 접수했는지 알 수 없습니다.
 
 `OrderOutcomeUnknown`의 `retryable`은 `false`이고 라이브러리는 주문 요청을 다시 보내지 않습니다. 호출하는 코드도 같은 주문을 다시 내지 마십시오. 접수됐다면 같은 주문이 두 번 들어갑니다.
 
@@ -84,7 +84,7 @@ KB증권의 미국 주문은 `fetchOpenOrders`가 조회하지 않으므로 `fet
 
 - `OrderOutcomeUnknown`을 잡으면 주문한 종목의 주문을 멈추고 접수 여부 확인을 마친 뒤에 다시 시작합니다.
 - 오류를 잡지 않고 루프가 같은 주문을 다시 내는 구조를 피합니다.
-- 조회는 `maxRetriesOnFailure` 횟수만큼 다시 보냅니다. 주문은 시간 초과나 연결 끊김 뒤에 다시 보내지 않고 `OrderOutcomeUnknown`으로 바꿉니다.
+- 조회는 `maxRetriesOnFailure` 횟수만큼 다시 보냅니다. 주문은 다시 보내지 않고, 접수 여부를 모르는 실패를 `OrderOutcomeUnknown`으로 바꿉니다.
 
 ## 앱키가 남을 수 있는 곳
 

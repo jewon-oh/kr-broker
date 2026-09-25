@@ -303,7 +303,7 @@ await broker.close();
 | `enableRateLimit` | `true` | 요청 사이에 대기해 호출 한도를 지킵니다 |
 | `rateLimit` | 증권사별 | 요청 간격(ms). 엔드포인트마다 `cost`를 곱합니다 |
 | `timeout` | 조회 상한 | 조회 요청 시간 상한(ms) |
-| `options.maxRetriesOnFailure` | `0` | 조회 재시도 횟수입니다. 한국투자증권은 기본 `3`입니다. 주문 요청은 시간 초과나 연결 끊김 뒤에 재시도하지 않습니다 |
+| `options.maxRetriesOnFailure` | `0` | 조회 재시도 횟수입니다. 한국투자증권은 기본 `3`입니다. 주문 요청은 재시도하지 않습니다 |
 | `orderTimeout` | 주문 상한 | 주문 요청 시간 상한(ms). 넘으면 `OrderOutcomeUnknown` |
 | `options.tokenStore` | 없음 | 접근 토큰과 발급 잠금을 여러 프로세스가 나눠 쓰는 저장소(`BrokerTokenStore`)입니다. 없으면 프로세스 메모리 캐시만 사용합니다. 함수를 전달하면 사용할 때마다 호출합니다 |
 | `options.nxtRouting` | `false` | 정규장 밖(넥스트레이드 프리마켓과 애프터마켓) 국내 주문을 허용합니다(한국투자증권과 토스증권). KB증권에서는 정규장 안에서 주문을 SOR로 보내는 데만 사용하고 정규장 밖은 허용하지 않습니다. 불리언이거나 불리언을 반환하는 함수입니다 |
