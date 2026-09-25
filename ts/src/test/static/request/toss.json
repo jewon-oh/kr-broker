@@ -1233,6 +1233,78 @@
             "output": { "info": { "US": 0.001 }, "symbol": "005930/KRW", "maker": 0.00015, "taker": 0.00015, "percentage": true, "tierBased": false }
         },
         {
+            "description": "fetchCommissions 는 수수료율 조회 원본(result 배열)을 그대로 돌려준다",
+            "method": "fetchCommissions",
+            "args": [],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/commissions",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": [
+                                {
+                                    "marketCountry": "KR",
+                                    "commissionRate": "0.00015",
+                                    "startDate": null,
+                                    "endDate": null
+                                },
+                                {
+                                    "marketCountry": "KR",
+                                    "commissionRate": "0",
+                                    "startDate": "2026-03-01",
+                                    "endDate": "2026-03-31"
+                                },
+                                {
+                                    "marketCountry": "KR",
+                                    "commissionRate": "0.0001",
+                                    "startDate": "2026-04-01",
+                                    "endDate": null
+                                },
+                                {
+                                    "marketCountry": "US",
+                                    "commissionRate": "0.1",
+                                    "startDate": "2026-01-01",
+                                    "endDate": null
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "marketCountry": "KR",
+                    "commissionRate": "0.00015",
+                    "startDate": null,
+                    "endDate": null
+                },
+                {
+                    "marketCountry": "KR",
+                    "commissionRate": "0",
+                    "startDate": "2026-03-01",
+                    "endDate": "2026-03-31"
+                },
+                {
+                    "marketCountry": "KR",
+                    "commissionRate": "0.0001",
+                    "startDate": "2026-04-01",
+                    "endDate": null
+                },
+                {
+                    "marketCountry": "US",
+                    "commissionRate": "0.1",
+                    "startDate": "2026-01-01",
+                    "endDate": null
+                }
+            ]
+        },
+        {
             "description": "createOrder 국내 지정가는 캘린더로 정규장을 확인해 내고, 주문 상세로 체결을 확정한다",
             "now": 1774400400000,
             "method": "createOrder",
@@ -4996,6 +5068,194 @@
                     }
                 }
             }
+        },
+        {
+            "description": "currentUsSession 은 미국 장 운영 캘린더로 지금의 세션을 고른다(23:30 KST 는 정규장)",
+            "method": "currentUsSession",
+            "now": 1774449000000,
+            "args": [],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/market-calendar/US",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "previousBusinessDay": {
+                                    "date": "2026-03-24",
+                                    "dayMarket": {
+                                        "startTime": "2026-03-24T09:00:00+09:00",
+                                        "endTime": "2026-03-24T16:50:00+09:00"
+                                    },
+                                    "preMarket": {
+                                        "startTime": "2026-03-24T17:00:00+09:00",
+                                        "endTime": "2026-03-24T22:30:00+09:00"
+                                    },
+                                    "regularMarket": {
+                                        "startTime": "2026-03-24T22:30:00+09:00",
+                                        "endTime": "2026-03-25T05:00:00+09:00"
+                                    },
+                                    "afterMarket": {
+                                        "startTime": "2026-03-25T05:00:00+09:00",
+                                        "endTime": "2026-03-25T07:00:00+09:00"
+                                    }
+                                },
+                                "today": {
+                                    "date": "2026-03-25",
+                                    "dayMarket": {
+                                        "startTime": "2026-03-25T09:00:00+09:00",
+                                        "endTime": "2026-03-25T16:50:00+09:00"
+                                    },
+                                    "preMarket": {
+                                        "startTime": "2026-03-25T17:00:00+09:00",
+                                        "endTime": "2026-03-25T22:30:00+09:00"
+                                    },
+                                    "regularMarket": {
+                                        "startTime": "2026-03-25T22:30:00+09:00",
+                                        "endTime": "2026-03-26T05:00:00+09:00"
+                                    },
+                                    "afterMarket": {
+                                        "startTime": "2026-03-26T05:00:00+09:00",
+                                        "endTime": "2026-03-26T07:00:00+09:00"
+                                    }
+                                },
+                                "nextBusinessDay": {
+                                    "date": "2026-03-26",
+                                    "dayMarket": {
+                                        "startTime": "2026-03-26T09:00:00+09:00",
+                                        "endTime": "2026-03-26T16:50:00+09:00"
+                                    },
+                                    "preMarket": {
+                                        "startTime": "2026-03-26T17:00:00+09:00",
+                                        "endTime": "2026-03-26T22:30:00+09:00"
+                                    },
+                                    "regularMarket": {
+                                        "startTime": "2026-03-26T22:30:00+09:00",
+                                        "endTime": "2026-03-27T05:00:00+09:00"
+                                    },
+                                    "afterMarket": {
+                                        "startTime": "2026-03-27T05:00:00+09:00",
+                                        "endTime": "2026-03-27T07:00:00+09:00"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": "regularMarket"
+        },
+        {
+            "description": "currentUsSession 은 캘린더상 열린 세션이 없으면 closed 다(08:00 KST)",
+            "method": "currentUsSession",
+            "now": 1774393200000,
+            "args": [],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/market-calendar/US",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "previousBusinessDay": {
+                                    "date": "2026-03-24",
+                                    "dayMarket": {
+                                        "startTime": "2026-03-24T09:00:00+09:00",
+                                        "endTime": "2026-03-24T16:50:00+09:00"
+                                    },
+                                    "preMarket": {
+                                        "startTime": "2026-03-24T17:00:00+09:00",
+                                        "endTime": "2026-03-24T22:30:00+09:00"
+                                    },
+                                    "regularMarket": {
+                                        "startTime": "2026-03-24T22:30:00+09:00",
+                                        "endTime": "2026-03-25T05:00:00+09:00"
+                                    },
+                                    "afterMarket": {
+                                        "startTime": "2026-03-25T05:00:00+09:00",
+                                        "endTime": "2026-03-25T07:00:00+09:00"
+                                    }
+                                },
+                                "today": {
+                                    "date": "2026-03-25",
+                                    "dayMarket": {
+                                        "startTime": "2026-03-25T09:00:00+09:00",
+                                        "endTime": "2026-03-25T16:50:00+09:00"
+                                    },
+                                    "preMarket": {
+                                        "startTime": "2026-03-25T17:00:00+09:00",
+                                        "endTime": "2026-03-25T22:30:00+09:00"
+                                    },
+                                    "regularMarket": {
+                                        "startTime": "2026-03-25T22:30:00+09:00",
+                                        "endTime": "2026-03-26T05:00:00+09:00"
+                                    },
+                                    "afterMarket": {
+                                        "startTime": "2026-03-26T05:00:00+09:00",
+                                        "endTime": "2026-03-26T07:00:00+09:00"
+                                    }
+                                },
+                                "nextBusinessDay": {
+                                    "date": "2026-03-26",
+                                    "dayMarket": {
+                                        "startTime": "2026-03-26T09:00:00+09:00",
+                                        "endTime": "2026-03-26T16:50:00+09:00"
+                                    },
+                                    "preMarket": {
+                                        "startTime": "2026-03-26T17:00:00+09:00",
+                                        "endTime": "2026-03-26T22:30:00+09:00"
+                                    },
+                                    "regularMarket": {
+                                        "startTime": "2026-03-26T22:30:00+09:00",
+                                        "endTime": "2026-03-27T05:00:00+09:00"
+                                    },
+                                    "afterMarket": {
+                                        "startTime": "2026-03-27T05:00:00+09:00",
+                                        "endTime": "2026-03-27T07:00:00+09:00"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": "closed"
+        },
+        {
+            "description": "currentUsSession 은 캘린더를 받지 못하면 던지지 않고 null 이다(호출하는 쪽이 정적 시간표로 판정한다)",
+            "method": "currentUsSession",
+            "now": 1774449000000,
+            "args": [],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/market-calendar/US",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 500,
+                        "body": {
+                            "error": {
+                                "code": "internal-error",
+                                "message": "내부 오류"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": null
         },
         {
             "description": "fetchMarketCalendar 는 KR·US 밖의 시장을 요청 없이 BadRequest 로 막는다",

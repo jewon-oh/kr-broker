@@ -280,6 +280,8 @@ const ORDER_CASES: OrderCase[] = [
         } },
     { name: 'createDaytimeOrder', path: '/overseas-stock/v1/trading/daytime-order', tr: 'TTTS6037U', call: (k) => k.createDaytimeOrder('V/USD', 'sell', 2, 330.5),
         body: { ...ACCOUNT, OVRS_EXCG_CD: 'NYSE', PDNO: 'V', ORD_QTY: '2', OVRS_ORD_UNPR: '330.5', CTAC_TLNO: '', MGCO_APTM_ODNO: '', ORD_SVR_DVSN_CD: '0', ORD_DVSN: '00' } },
+    { name: 'editDaytimeOrder', path: '/overseas-stock/v1/trading/daytime-order-rvsecncl', tr: 'TTTS6038U', call: (k) => k.editDaytimeOrder('1234567890', 'AAPL/USD', 5, 190.25),
+        body: { ...ACCOUNT, OVRS_EXCG_CD: 'NASD', PDNO: 'AAPL', ORGN_ODNO: '1234567890', RVSE_CNCL_DVSN_CD: '01', ORD_QTY: '5', OVRS_ORD_UNPR: '190.25', CTAC_TLNO: '', MGCO_APTM_ODNO: '', ORD_SVR_DVSN_CD: '0' } },
     { name: 'cancelDaytimeOrder', path: '/overseas-stock/v1/trading/daytime-order-rvsecncl', tr: 'TTTS6038U', call: (k) => k.cancelDaytimeOrder('1234567890', 'AAPL/USD', 10),
         body: { ...ACCOUNT, OVRS_EXCG_CD: 'NASD', PDNO: 'AAPL', ORGN_ODNO: '1234567890', RVSE_CNCL_DVSN_CD: '02', ORD_QTY: '10', OVRS_ORD_UNPR: '0', CTAC_TLNO: '', MGCO_APTM_ODNO: '', ORD_SVR_DVSN_CD: '0' } },
     { name: 'createOverseasReservedOrder(us buy)', path: '/overseas-stock/v1/trading/order-resv', tr: 'TTTT3014U', call: (k) => k.createOverseasReservedOrder('TSLA/USD', 'buy', 1, 900),
