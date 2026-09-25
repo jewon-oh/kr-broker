@@ -14,14 +14,12 @@ const TIMEFRAME_UNIT_MS: Record<string, number> = {
     'w': MS_PER_WEEK,
 };
 
-const DEFAULT_TIMEFRAME_MS = 5 * MS_PER_MINUTE;
-
 /**
- * 타임프레임 문자열(`5m`, `1h`, `1d`, `1w`)을 밀리초로 바꾼다. 파싱에 실패하면 5분을 돌려준다.
+ * 타임프레임 문자열(`5m`, `1h`, `1d`, `1w`)을 밀리초로 바꾼다. 읽지 못하면 `NaN` 이다. 월봉 `1M` 과 대문자 주봉 `1W` 도 `NaN` 이다.
  */
 export function timeframeToMs(timeframe: string): number {
     const match = timeframe.match(/^(\d+)([mhdw])$/);
-    if (!match) return DEFAULT_TIMEFRAME_MS;
+    if (!match) return Number.NaN;
 
     const value = parseInt(match[1]);
     const unit = match[2];

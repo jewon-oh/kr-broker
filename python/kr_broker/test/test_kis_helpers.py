@@ -3,6 +3,7 @@
 import calendar
 import datetime
 import json
+import math
 import threading
 import time
 from typing import Any, Dict, Iterator, List, Optional
@@ -12,8 +13,9 @@ import pytest
 import kr_broker
 from kr_broker import kis_yahoo_candles
 from kr_broker.base import functions as fn
-from kr_broker.base.errors import BadSymbol
-from kr_broker.kis import kst_timestamp, kst_ymd, et_ymd
+from kr_broker.base.errors import BadSymbol, NotSupported
+from kr_broker.broker_time import timeframe_to_ms
+from kr_broker.kis import et_timestamp, kst_timestamp, kst_ymd, et_ymd
 from kr_broker.kis_candle_pagination import (
     KIS_DAILY_MAX_PAGES, KIS_DAILY_PAGE_DAYS, KIS_DAILY_PAGE_ROWS, merge_candles, plan_windows, to_kis_date, window_before,
 )
@@ -24,7 +26,7 @@ from kr_broker.kis_overseas_master import search_overseas_stocks, to_order_marke
 from kr_broker.kis_stock_master import get_krx_stock_by_code, search_krx_stocks
 from kr_broker.kis_types import get_tick_size
 from kr_broker.kis_yahoo_candles import (
-    UnsupportedTimeframeError, align_tail_to_series_grid, dedupe_by_timestamp_keep_last, fetch_yahoo_candles, to_yahoo_range,
+    align_tail_to_series_grid, dedupe_by_timestamp_keep_last, fetch_yahoo_candles, to_yahoo_range, to_yahoo_ticker,
 )
 from kr_broker.market_calendar import reset_market_calendar
 from kr_broker.trading_hours import market_session_block_reason
@@ -140,6 +142,22 @@ def test_align_tail_leaves_daily_and_single_bar() -> None:
     assert single[0][0] == utc('2026-08-06T02:30:18')
 
 
+def test_align_tail_leaves_monthly_and_uppercase_weekly() -> None:
+    # 예전에는 표에 없는 타임프레임이 5분이 되어 월봉과 대문자 주봉의 진행 중 봉이 5분 격자로 내려갔다.
+    for tf in ('1M', '1W'):
+        candles = [bar(utc('2026-07-31T15:00:00')), bar(utc('2026-09-24T06:20:17'))]
+        before = json.loads(json.dumps(candles))
+        align_tail_to_series_grid(candles, tf)
+        assert candles == before, tf
+
+
+def test_timeframe_to_ms() -> None:
+    assert [timeframe_to_ms(tf) for tf in ('1m', '5m', '1h', '4h', '1d', '1w')] == [
+        60_000, 300_000, 3_600_000, 14_400_000, 86_400_000, 604_800_000]
+    for tf in ('1M', '1W', '30s', '1y', '', 'abc'):
+        assert math.isnan(timeframe_to_ms(tf)), tf
+
+
 def test_dedupe_keeps_last() -> None:
     rows = [[1000, 1, 1, 1, 10, 5], [1000, 1, 2, 1, 20, 9], [2000, 2, 2, 2, 30, 1]]
     dedupe_by_timestamp_keep_last(rows)
@@ -204,8 +222,10 @@ def no_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.parametrize('timeframe', ['3m', '8h', '2d'])
 def test_yahoo_rejects_unsupported_timeframe(timeframe: str) -> None:
-    with pytest.raises(UnsupportedTimeframeError, match='미지원 타임프레임'):
-        fetch_yahoo_candles('005930', timeframe, session=FakeSession([YAHOO_EMPTY]))
+    session = FakeSession([YAHOO_EMPTY])
+    with pytest.raises(NotSupported, match=f"미지원 타임프레임 '{timeframe}'"):
+        fetch_yahoo_candles('005930', timeframe, session=session)
+    assert session.urls == []
 
 
 def test_yahoo_retries_empty_then_succeeds(no_backoff: None) -> None:
@@ -248,6 +268,13 @@ def test_yahoo_ticker_suffix(no_backoff: None) -> None:
     assert '/247540.KQ?' in session.urls[0] and '/AAPL?' in session.urls[1]
 
 
+def test_yahoo_ticker_uses_hyphen_for_us_class_shares() -> None:
+    assert to_yahoo_ticker('BRK.B/USD') == 'BRK-B'
+    assert to_yahoo_ticker('BRK.B') == 'BRK-B'
+    assert to_yahoo_ticker('005930.KS') == '005930.KS'
+    assert to_yahoo_ticker('247540', 'KOSDAQ') == '247540.KQ'
+
+
 def test_yahoo_concurrency_is_capped() -> None:
     session = FakeSession([yahoo_ok(ONE)], delay=0.03)
     threads = [threading.Thread(target=fetch_yahoo_candles, args=('005930', '1d', 10), kwargs={'session': session}) for _ in range(20)]
@@ -274,13 +301,9 @@ class FakeKis:
         return self.pages.pop(0)
 
 
-def local_ymd(ms: int) -> str:
-    d = datetime.datetime.fromtimestamp(ms / 1000)
-    return f'{d.year}{d.month:02d}{d.day:02d}'
-
-
 def test_overseas_daily_pages_back_from_last_day(monkeypatch: pytest.MonkeyPatch) -> None:
-    now = utc('2026-03-25T12:00:00')
+    # 동부 3/24 22:00(EDT). UTC·한국 날짜로는 3/25 다. 기준일은 실행 환경의 시간대와 상관없이 동부 날짜다.
+    now = utc('2026-03-25T02:00:00')
     monkeypatch.setattr(fn, 'milliseconds', lambda: now)
     days = [datetime.date(2026, 3, 24) - datetime.timedelta(days=i) for i in range(101)]
 
@@ -289,9 +312,8 @@ def test_overseas_daily_pages_back_from_last_day(monkeypatch: pytest.MonkeyPatch
 
     fake = FakeKis([{'output2': [row(d) for d in days[:100]]}, {'output2': [row(days[100])]}])
     out = KISCandleService(fake).fetch_overseas_daily_ohlcv('aapl', 'NAS', '1d', 150)
-    # 다음 페이지의 기준일은 앞 페이지 마지막 날의 하루 전(UTC)을 지역 시간대 날짜로 적은 것이다.
-    last_utc = calendar.timegm(days[99].timetuple()) * 1000
-    assert [call['BYMD'] for call in fake.calls] == [local_ymd(now), local_ymd(last_utc - 86_400_000)]
+    # 다음 페이지의 기준일은 앞 페이지 마지막 날(2025-12-15)의 하루 전 달력 날짜다.
+    assert [call['BYMD'] for call in fake.calls] == ['20260324', '20251214']
     assert fake.calls[0]['SYMB'] == 'AAPL' and fake.calls[0]['GUBN'] == '0'
     assert len(out) == 101 and out[0][0] == calendar.timegm(days[100].timetuple()) * 1000 and out[-1][0] == utc('2026-03-24T00:00:00')
 
@@ -343,6 +365,14 @@ def test_kst_and_et_dates() -> None:
     assert et_ymd(at) == '20260324'
 
 
+def test_et_timestamp_follows_daylight_saving() -> None:
+    assert et_timestamp('20260324', '110000') == utc('2026-03-24T15:00:00')  # EDT(UTC-4)
+    assert et_timestamp('20260115', '103015') == utc('2026-01-15T15:30:15')  # EST(UTC-5)
+    assert et_timestamp('20260115', None) == utc('2026-01-15T05:00:00')
+    assert et_timestamp('', '110000') is None
+    assert et_timestamp(None, '110000') is None
+
+
 # ============ 종목 마스터 ============
 
 def test_rank_master_matches_puts_exact_code_first() -> None:
@@ -356,6 +386,11 @@ def test_krx_master_adds_curated_etf_once() -> None:
     assert [row['code'] for row in search_krx_stocks(MASTER, '삼성')] == ['005930', '0193L0']
     patched = dict(MASTER, kospi=MASTER['kospi'] + [{'code': '0193L0', 'name': '마스터판', 'market': 'KOSPI'}])
     assert get_krx_stock_by_code(patched, '0193L0')['name'] == '마스터판'
+
+
+def test_krx_search_ignores_code_case() -> None:
+    for query in ('0193L0', '0193l0', '193l'):
+        assert [row['code'] for row in search_krx_stocks(MASTER, query)] == ['0193L0'], query
 
 
 def test_order_market_code() -> None:

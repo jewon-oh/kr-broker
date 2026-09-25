@@ -80,8 +80,9 @@ export function searchKRXStocks(data: KisMasterData, query?: string, limit: numb
 
     const q = query.trim().toLowerCase();
 
+    // 코드도 소문자로 맞춰 비교한다(신형 영숫자 코드 `0193L0`).
     const results = krxStockMaster(data).filter(stock =>
-        stock.code.includes(q)
+        stock.code.toLowerCase().includes(q)
         || stock.name.toLowerCase().includes(q)
         || (stock.nameEn?.toLowerCase().includes(q) ?? false),
     );

@@ -1234,7 +1234,7 @@
             "output": [[1774224000000, 177000, 181000, 176500, 180500, 456789]]
         },
         {
-            "description": "fetchOHLCV 4h 는 야후 1h 봉을 4시간으로 합친다. 마지막 1h 봉 시각을 4h 격자로 내려 바로 앞 1h 봉을 덮어쓴다",
+            "description": "fetchOHLCV 4h 는 야후 1h 봉을 1h 격자로 맞춘 뒤 4시간으로 합친다. 마지막 1h 봉이 바로 앞 1h 봉을 덮어쓰지 않는다",
             "now": 1774440000000,
             "method": "fetchOHLCV",
             "args": ["005930/KRW", "4h"],
@@ -1273,7 +1273,7 @@
                     }
                 }
             ],
-            "output": [[1774396800000, 70000, 71100, 69900, 71000, 1000], [1774411200000, 71200, 71500, 71000, 71400, 600]]
+            "output": [[1774396800000, 70000, 71100, 69900, 71000, 1000], [1774411200000, 71000, 71500, 70800, 71400, 1100]]
         },
         {
             "description": "fetchOHLCV 분봉의 진행 중인 마지막 봉 시각은 직전 봉 격자로 내린다",
@@ -1320,6 +1320,94 @@
                 [1774400400000, 70500, 70900, 70100, 70800, 200],
                 [1774404000000, 70800, 71000, 70700, 70900, 50]
             ]
+        },
+        {
+            "description": "fetchOHLCV 월봉(1M)은 진행 중인 마지막 봉 시각을 격자로 내리지 않는다",
+            "now": 1790232000000,
+            "method": "fetchOHLCV",
+            "args": ["005930/KRW", "1M"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://query1.finance.yahoo.com/v8/finance/chart/005930.KS?interval=1mo&range=max",
+                        "headers": { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "chart": {
+                                "result": [
+                                    {
+                                        "meta": { "symbol": "005930.KS", "currency": "KRW", "exchangeTimezoneName": "Asia/Seoul", "regularMarketPrice": 74000 },
+                                        "timestamp": [1782831600, 1785510000, 1790230817],
+                                        "indicators": {
+                                            "quote": [
+                                                {
+                                                    "open": [70000, 71000, 72500],
+                                                    "high": [72000, 73000, 74500],
+                                                    "low": [69000, 70500, 72000],
+                                                    "close": [71000, 72500, 74000],
+                                                    "volume": [10000000, 12000000, 9000000]
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ],
+                                "error": null
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                [1782831600000, 70000, 72000, 69000, 71000, 10000000],
+                [1785510000000, 71000, 73000, 70500, 72500, 12000000],
+                [1790230817000, 72500, 74500, 72000, 74000, 9000000]
+            ]
+        },
+        {
+            "description": "fetchOHLCV 미국 클래스 주식(BRK.B)은 야후 표기(BRK-B)로 조회한다",
+            "now": 1774440000000,
+            "method": "fetchOHLCV",
+            "args": ["BRK.B/USD", "1d", null, 2],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://query1.finance.yahoo.com/v8/finance/chart/BRK-B?interval=1d&range=5y",
+                        "headers": { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "chart": {
+                                "result": [
+                                    {
+                                        "meta": { "symbol": "BRK-B", "currency": "USD", "exchangeTimezoneName": "America/New_York", "regularMarketPrice": 410.25 },
+                                        "timestamp": [1774272600, 1774359000],
+                                        "indicators": {
+                                            "quote": [
+                                                {
+                                                    "open": [408.5, 409.1],
+                                                    "high": [410.2, 411],
+                                                    "low": [407.8, 408.6],
+                                                    "close": [409.3, 410.25],
+                                                    "volume": [3100000, 2800000]
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ],
+                                "error": null
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [[1774272600000, 408.5, 410.2, 407.8, 409.3, 3100000], [1774359000000, 409.1, 411, 408.6, 410.25, 2800000]]
         },
         {
             "description": "fetchOHLCV 미국 일봉은 야후가 없는 심볼로 답하면 KIS 해외 기간별 시세로 다시 받는다",
@@ -1394,6 +1482,77 @@
             "output": [[1774224000000, 171, 171.5, 169, 170, 38000000], [1774310400000, 170.5, 173.1, 169.9, 172.5, 41234567]]
         },
         {
+            "description": "fetchOHLCV 미국 일봉 폴백의 기준일(BYMD)은 실행 환경의 시간대가 아니라 미국 동부 날짜다",
+            "now": 1774404000000,
+            "method": "fetchOHLCV",
+            "args": ["AAPL/USD", "1d", null, 2],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=1d&range=5y",
+                        "headers": { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": { "chart": { "result": null, "error": { "code": "Not Found", "description": "No data found, symbol may be delisted" } } }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-price/v1/quotations/dailyprice?AUTH=&EXCD=NAS&SYMB=AAPL&GUBN=0&BYMD=20260324&MODP=1",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "HHDFS76240000",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output1": { "rsym": "DNASAAPL", "zdiv": "4", "nrec": "2" },
+                            "output2": [
+                                {
+                                    "xymd": "20260324",
+                                    "clos": "172.5000",
+                                    "sign": "2",
+                                    "diff": "2.5000",
+                                    "rate": "1.47",
+                                    "open": "170.5000",
+                                    "high": "173.1000",
+                                    "low": "169.9000",
+                                    "tvol": "41234567",
+                                    "tamt": "7100000000"
+                                },
+                                {
+                                    "xymd": "20260323",
+                                    "clos": "170.0000",
+                                    "sign": "5",
+                                    "diff": "1.0000",
+                                    "rate": "-0.58",
+                                    "open": "171.0000",
+                                    "high": "171.5000",
+                                    "low": "169.0000",
+                                    "tvol": "38000000",
+                                    "tamt": "6500000000"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": [[1774224000000, 171, 171.5, 169, 170, 38000000], [1774310400000, 170.5, 173.1, 169.9, 172.5, 41234567]]
+        },
+        {
             "description": "fetchOHLCV 미국 분봉은 야후가 비어도 KIS 로 다시 받지 않는다",
             "now": 1774440000000,
             "method": "fetchOHLCV",
@@ -1412,11 +1571,11 @@
             "output": []
         },
         {
-            "description": "fetchOHLCV 는 야후가 주지 않는 타임프레임이면 요청 없이 UnsupportedTimeframeError 다",
+            "description": "fetchOHLCV 는 야후가 주지 않는 타임프레임이면 요청 없이 NotSupported 다",
             "method": "fetchOHLCV",
             "args": ["005930/KRW", "2h"],
             "http": [],
-            "error": { "class": "UnsupportedTimeframeError" }
+            "error": { "class": "NotSupported" }
         },
         {
             "description": "fetchTradingFee 국내는 위탁수수료 0.015% 와 그해의 증권거래세율이다",
@@ -2398,7 +2557,7 @@
             ]
         },
         {
-            "description": "fetchRankings OVERSEAS_NEW_HIGH 는 period 를 NDAY 로 옮긴다",
+            "description": "fetchRankings OVERSEAS_NEW_HIGH 는 period 를 NDAY 로 옮기고 슬래시 티커(BRK/B)를 점 심볼(BRK.B/USD)로 준다",
             "now": 1774450800000,
             "method": "fetchRankings",
             "args": ["OVERSEAS_NEW_HIGH", { "exchange": "NYS", "period": "52w" }],
@@ -2439,7 +2598,7 @@
             ],
             "output": [
                 {
-                    "symbol": "BRK/B/USD",
+                    "symbol": "BRK.B/USD",
                     "name": "BERKSHIRE HATHAWAY INC-CL B",
                     "last": 410.25,
                     "change": 1.2,
@@ -5428,7 +5587,7 @@
             "error": { "class": "ExchangeError", "detail": "APBK1683" }
         },
         {
-            "description": "cancelAllOrders 는 종목의 미체결을 모두 차례로 취소한다",
+            "description": "cancelAllOrders 는 종목의 미체결을 모두 차례로 취소하고 행의 주문채번지점번호(ord_gno_brno)를 원주문 조직번호로 싣는다",
             "now": 1774400400000,
             "method": "cancelAllOrders",
             "args": ["005930/KRW"],
@@ -5475,7 +5634,7 @@
                                     "excg_id_dvsn_cd": "KRX"
                                 },
                                 {
-                                    "ord_gno_brno": "91252",
+                                    "ord_gno_brno": "01790",
                                     "odno": "ORD-0022",
                                     "orgn_odno": "",
                                     "ord_dvsn_name": "시장가",
@@ -5507,7 +5666,7 @@
                             "tr_id": "TTTC0803U",
                             "custtype": "P"
                         },
-                        "body": "{\"CANO\":\"12345678\",\"ACNT_PRDT_CD\":\"01\",\"KRX_FWDG_ORD_ORGNO\":\"\",\"ORGN_ODNO\":\"ORD-0021\",\"ORD_DVSN\":\"00\",\"RVSE_CNCL_DVSN_CD\":\"02\",\"ORD_QTY\":\"0\",\"ORD_UNPR\":\"0\",\"QTY_ALL_ORD_YN\":\"Y\"}"
+                        "body": "{\"CANO\":\"12345678\",\"ACNT_PRDT_CD\":\"01\",\"KRX_FWDG_ORD_ORGNO\":\"91252\",\"ORGN_ODNO\":\"ORD-0021\",\"ORD_DVSN\":\"00\",\"RVSE_CNCL_DVSN_CD\":\"02\",\"ORD_QTY\":\"0\",\"ORD_UNPR\":\"0\",\"QTY_ALL_ORD_YN\":\"Y\"}"
                     },
                     "response": {
                         "status": 200,
@@ -5531,7 +5690,7 @@
                             "tr_id": "TTTC0803U",
                             "custtype": "P"
                         },
-                        "body": "{\"CANO\":\"12345678\",\"ACNT_PRDT_CD\":\"01\",\"KRX_FWDG_ORD_ORGNO\":\"\",\"ORGN_ODNO\":\"ORD-0022\",\"ORD_DVSN\":\"00\",\"RVSE_CNCL_DVSN_CD\":\"02\",\"ORD_QTY\":\"0\",\"ORD_UNPR\":\"0\",\"QTY_ALL_ORD_YN\":\"Y\"}"
+                        "body": "{\"CANO\":\"12345678\",\"ACNT_PRDT_CD\":\"01\",\"KRX_FWDG_ORD_ORGNO\":\"01790\",\"ORGN_ODNO\":\"ORD-0022\",\"ORD_DVSN\":\"00\",\"RVSE_CNCL_DVSN_CD\":\"02\",\"ORD_QTY\":\"0\",\"ORD_UNPR\":\"0\",\"QTY_ALL_ORD_YN\":\"Y\"}"
                     },
                     "response": {
                         "status": 200,
@@ -5653,7 +5812,7 @@
                             "tr_id": "TTTC0803U",
                             "custtype": "P"
                         },
-                        "body": "{\"CANO\":\"12345678\",\"ACNT_PRDT_CD\":\"01\",\"KRX_FWDG_ORD_ORGNO\":\"\",\"ORGN_ODNO\":\"ORD-0021\",\"ORD_DVSN\":\"00\",\"RVSE_CNCL_DVSN_CD\":\"02\",\"ORD_QTY\":\"0\",\"ORD_UNPR\":\"0\",\"QTY_ALL_ORD_YN\":\"Y\"}"
+                        "body": "{\"CANO\":\"12345678\",\"ACNT_PRDT_CD\":\"01\",\"KRX_FWDG_ORD_ORGNO\":\"91252\",\"ORGN_ODNO\":\"ORD-0021\",\"ORD_DVSN\":\"00\",\"RVSE_CNCL_DVSN_CD\":\"02\",\"ORD_QTY\":\"0\",\"ORD_UNPR\":\"0\",\"QTY_ALL_ORD_YN\":\"Y\"}"
                     },
                     "response": { "status": 200, "body": { "rt_cd": "1", "msg_cd": "APBK1683", "msg1": "정정/취소할 수량이 없습니다." } }
                 },
@@ -5669,7 +5828,7 @@
                             "tr_id": "TTTC0803U",
                             "custtype": "P"
                         },
-                        "body": "{\"CANO\":\"12345678\",\"ACNT_PRDT_CD\":\"01\",\"KRX_FWDG_ORD_ORGNO\":\"\",\"ORGN_ODNO\":\"ORD-0022\",\"ORD_DVSN\":\"00\",\"RVSE_CNCL_DVSN_CD\":\"02\",\"ORD_QTY\":\"0\",\"ORD_UNPR\":\"0\",\"QTY_ALL_ORD_YN\":\"Y\"}"
+                        "body": "{\"CANO\":\"12345678\",\"ACNT_PRDT_CD\":\"01\",\"KRX_FWDG_ORD_ORGNO\":\"91252\",\"ORGN_ODNO\":\"ORD-0022\",\"ORD_DVSN\":\"00\",\"RVSE_CNCL_DVSN_CD\":\"02\",\"ORD_QTY\":\"0\",\"ORD_UNPR\":\"0\",\"QTY_ALL_ORD_YN\":\"Y\"}"
                     },
                     "response": {
                         "status": 200,
@@ -5708,6 +5867,227 @@
                 }
             ],
             "output": []
+        },
+        {
+            "description": "cancelAllOrders 는 미체결 행에 주문채번지점번호가 없으면 원주문 조직번호를 비워 보낸다",
+            "now": 1774400400000,
+            "method": "cancelAllOrders",
+            "args": ["005930/KRW"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/trading/inquire-psbl-rvsecncl?CANO=12345678&ACNT_PRDT_CD=01&CTX_AREA_FK100=&CTX_AREA_NK100=&INQR_DVSN_1=0&INQR_DVSN_2=0",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTC0084R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [
+                                {
+                                    "odno": "ORD-0021",
+                                    "orgn_odno": "",
+                                    "pdno": "005930",
+                                    "prdt_name": "삼성전자",
+                                    "ord_qty": "10",
+                                    "ord_unpr": "70000",
+                                    "ord_tmd": "093000",
+                                    "tot_ccld_qty": "0",
+                                    "tot_ccld_amt": "0",
+                                    "psbl_qty": "10",
+                                    "sll_buy_dvsn_cd": "02",
+                                    "ord_dvsn_cd": "00"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/trading/order-rvsecncl",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTC0803U",
+                            "custtype": "P"
+                        },
+                        "body": "{\"CANO\":\"12345678\",\"ACNT_PRDT_CD\":\"01\",\"KRX_FWDG_ORD_ORGNO\":\"\",\"ORGN_ODNO\":\"ORD-0021\",\"ORD_DVSN\":\"00\",\"RVSE_CNCL_DVSN_CD\":\"02\",\"ORD_QTY\":\"0\",\"ORD_UNPR\":\"0\",\"QTY_ALL_ORD_YN\":\"Y\"}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "APBK0013",
+                            "msg1": "취소 주문 전송 완료",
+                            "output": { "KRX_FWDG_ORD_ORGNO": "91252", "ODNO": "ORD-0012", "ORD_TMD": "102000" }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "id": "ORD-0021",
+                    "symbol": "005930/KRW",
+                    "status": "canceled",
+                    "info": {
+                        "rt_cd": "0",
+                        "msg_cd": "APBK0013",
+                        "msg1": "취소 주문 전송 완료",
+                        "output": { "KRX_FWDG_ORD_ORGNO": "91252", "ODNO": "ORD-0012", "ORD_TMD": "102000" }
+                    },
+                    "fees": [],
+                    "trades": []
+                }
+            ]
+        },
+        {
+            "description": "cancelAllOrders 미국 취소 요청에는 미체결 행의 주문채번지점번호를 싣지 않는다",
+            "now": 1774450800000,
+            "method": "cancelAllOrders",
+            "args": ["AAPL/USD"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/trading/inquire-nccs?CANO=12345678&ACNT_PRDT_CD=01&OVRS_EXCG_CD=NASD&SORT_SQN=DS&CTX_AREA_FK200=&CTX_AREA_NK200=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTS3018R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [
+                                {
+                                    "ord_dt": "20260325",
+                                    "ord_gno_brno": "01790",
+                                    "odno": "ORD-0101",
+                                    "orgn_odno": "",
+                                    "pdno": "AAPL",
+                                    "prdt_name": "APPLE INC",
+                                    "sll_buy_dvsn_cd": "02",
+                                    "ft_ord_qty": "5",
+                                    "ft_ord_unpr3": "170.50000000",
+                                    "ord_tmd": "103000",
+                                    "ft_ccld_qty": "1",
+                                    "ft_ccld_unpr3": "170.50000000",
+                                    "ft_ccld_amt3": "170.50000",
+                                    "nccs_qty": "4",
+                                    "ovrs_excg_cd": "NASD",
+                                    "dmst_ord_dt": "20260325",
+                                    "thco_ord_tmd": "233000"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/trading/inquire-nccs?CANO=12345678&ACNT_PRDT_CD=01&OVRS_EXCG_CD=NASD&SORT_SQN=DS&CTX_AREA_FK200=&CTX_AREA_NK200=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTS3018R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [
+                                {
+                                    "ord_dt": "20260325",
+                                    "ord_gno_brno": "01790",
+                                    "odno": "ORD-0101",
+                                    "orgn_odno": "",
+                                    "pdno": "AAPL",
+                                    "prdt_name": "APPLE INC",
+                                    "sll_buy_dvsn_cd": "02",
+                                    "ft_ord_qty": "5",
+                                    "ft_ord_unpr3": "170.50000000",
+                                    "ord_tmd": "103000",
+                                    "ft_ccld_qty": "1",
+                                    "ft_ccld_unpr3": "170.50000000",
+                                    "ft_ccld_amt3": "170.50000",
+                                    "nccs_qty": "4",
+                                    "ovrs_excg_cd": "NASD",
+                                    "dmst_ord_dt": "20260325",
+                                    "thco_ord_tmd": "233000"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/trading/order-rvsecncl",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTT1004U",
+                            "custtype": "P"
+                        },
+                        "body": "{\"CANO\":\"12345678\",\"ACNT_PRDT_CD\":\"01\",\"OVRS_EXCG_CD\":\"NASD\",\"PDNO\":\"AAPL\",\"ORGN_ODNO\":\"ORD-0101\",\"RVSE_CNCL_DVSN_CD\":\"02\",\"ORD_QTY\":\"4\",\"OVRS_ORD_UNPR\":\"0\",\"MGCO_APTM_ODNO\":\"\",\"ORD_SVR_DVSN_CD\":\"0\"}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "APBK0013",
+                            "msg1": "정정 주문 전송 완료",
+                            "output": { "KRX_FWDG_ORD_ORGNO": "01790", "ODNO": "ORD-0102", "ORD_TMD": "003000" }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "id": "ORD-0101",
+                    "symbol": "AAPL/USD",
+                    "status": "canceled",
+                    "info": {
+                        "rt_cd": "0",
+                        "msg_cd": "APBK0013",
+                        "msg1": "정정 주문 전송 완료",
+                        "output": { "KRX_FWDG_ORD_ORGNO": "01790", "ODNO": "ORD-0102", "ORD_TMD": "003000" }
+                    },
+                    "fees": [],
+                    "trades": []
+                }
+            ]
         },
         {
             "description": "fetchOpenOrders 는 국내 정정취소가능 주문과 미국 미체결을 모두 모은다",
@@ -6187,7 +6567,7 @@
             ]
         },
         {
-            "description": "fetchOrders 는 국내 일별주문체결(한국 날짜)과 미국 주문체결내역(동부 날짜)을 모두 모은다",
+            "description": "fetchOrders 는 국내 일별주문체결(한국 날짜)과 미국 주문체결내역(동부 날짜)을 모두 모은다. 국내 주문일시가 빈 미국 행은 현지 주문일시를 동부 시각(EDT)으로 읽는다",
             "now": 1774400400000,
             "method": "fetchOrders",
             "args": [null],
@@ -6463,40 +6843,6 @@
                     "info": {
                         "ord_dt": "20260324",
                         "ord_gno_brno": "01790",
-                        "odno": "ORD-0102",
-                        "orgn_odno": "",
-                        "sll_buy_dvsn_cd": "01",
-                        "pdno": "BRK/B",
-                        "prdt_name": "BERKSHIRE HATHAWAY INC-CL B",
-                        "ft_ord_qty": "1",
-                        "ft_ord_unpr3": "410.00000000",
-                        "ft_ccld_qty": "0",
-                        "ft_ccld_unpr3": "0",
-                        "ft_ccld_amt3": "0",
-                        "nccs_qty": "1",
-                        "ord_tmd": "110000",
-                        "ovrs_excg_cd": "NYSE",
-                        "dmst_ord_dt": "",
-                        "thco_ord_tmd": ""
-                    },
-                    "id": "ORD-0102",
-                    "timestamp": 1774317600000,
-                    "datetime": "2026-03-24T02:00:00.000Z",
-                    "symbol": "BRK.B/USD",
-                    "side": "sell",
-                    "price": 410,
-                    "amount": 1,
-                    "filled": 0,
-                    "remaining": 1,
-                    "cost": 0,
-                    "status": "open",
-                    "trades": [],
-                    "fees": []
-                },
-                {
-                    "info": {
-                        "ord_dt": "20260324",
-                        "ord_gno_brno": "01790",
                         "odno": "ORD-0101",
                         "orgn_odno": "",
                         "sll_buy_dvsn_cd": "02",
@@ -6529,6 +6875,40 @@
                     "remaining": 0,
                     "cost": 852,
                     "status": "closed",
+                    "trades": [],
+                    "fees": []
+                },
+                {
+                    "info": {
+                        "ord_dt": "20260324",
+                        "ord_gno_brno": "01790",
+                        "odno": "ORD-0102",
+                        "orgn_odno": "",
+                        "sll_buy_dvsn_cd": "01",
+                        "pdno": "BRK/B",
+                        "prdt_name": "BERKSHIRE HATHAWAY INC-CL B",
+                        "ft_ord_qty": "1",
+                        "ft_ord_unpr3": "410.00000000",
+                        "ft_ccld_qty": "0",
+                        "ft_ccld_unpr3": "0",
+                        "ft_ccld_amt3": "0",
+                        "nccs_qty": "1",
+                        "ord_tmd": "110000",
+                        "ovrs_excg_cd": "NYSE",
+                        "dmst_ord_dt": "",
+                        "thco_ord_tmd": ""
+                    },
+                    "id": "ORD-0102",
+                    "timestamp": 1774364400000,
+                    "datetime": "2026-03-24T15:00:00.000Z",
+                    "symbol": "BRK.B/USD",
+                    "side": "sell",
+                    "price": 410,
+                    "amount": 1,
+                    "filled": 0,
+                    "remaining": 1,
+                    "cost": 0,
+                    "status": "open",
                     "trades": [],
                     "fees": []
                 }
@@ -7645,6 +8025,92 @@
                     "price": 170.4,
                     "amount": 5,
                     "cost": 852,
+                    "fee": {},
+                    "fees": []
+                }
+            ]
+        },
+        {
+            "description": "fetchMyTrades 해외 행에 국내 주문일시가 없으면 현지 주문일시를 동부 시각(겨울 EST)으로 읽는다",
+            "now": 1768510800000,
+            "method": "fetchMyTrades",
+            "args": ["AAPL/USD"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/trading/inquire-ccnl?CANO=12345678&ACNT_PRDT_CD=01&PDNO=%25&ORD_STRT_DT=20260115&ORD_END_DT=20260115&SLL_BUY_DVSN=00&CCLD_NCCS_DVSN=01&OVRS_EXCG_CD=NASD&SORT_SQN=DS&ORD_DT=&ORD_GNO_BRNO=&ODNO=&CTX_AREA_NK200=&CTX_AREA_FK200=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTS3035R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [
+                                {
+                                    "ord_dt": "20260115",
+                                    "ord_gno_brno": "01790",
+                                    "odno": "ORD-0103",
+                                    "orgn_odno": "",
+                                    "sll_buy_dvsn_cd": "02",
+                                    "pdno": "AAPL",
+                                    "prdt_name": "APPLE INC",
+                                    "ft_ord_qty": "2",
+                                    "ft_ord_unpr3": "171.00000000",
+                                    "ft_ccld_qty": "2",
+                                    "ft_ccld_unpr3": "170.90000000",
+                                    "ft_ccld_amt3": "341.80000",
+                                    "nccs_qty": "0",
+                                    "ord_tmd": "103000",
+                                    "ovrs_excg_cd": "NASD",
+                                    "dmst_ord_dt": "",
+                                    "thco_ord_tmd": ""
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "info": {
+                        "ord_dt": "20260115",
+                        "ord_gno_brno": "01790",
+                        "odno": "ORD-0103",
+                        "orgn_odno": "",
+                        "sll_buy_dvsn_cd": "02",
+                        "pdno": "AAPL",
+                        "prdt_name": "APPLE INC",
+                        "ft_ord_qty": "2",
+                        "ft_ord_unpr3": "171.00000000",
+                        "ft_ccld_qty": "2",
+                        "ft_ccld_unpr3": "170.90000000",
+                        "ft_ccld_amt3": "341.80000",
+                        "nccs_qty": "0",
+                        "ord_tmd": "103000",
+                        "ovrs_excg_cd": "NASD",
+                        "dmst_ord_dt": "",
+                        "thco_ord_tmd": ""
+                    },
+                    "id": "20260115:ORD-0103:AAPL:NASD",
+                    "order": "ORD-0103",
+                    "timestamp": 1768491000000,
+                    "datetime": "2026-01-15T15:30:00.000Z",
+                    "symbol": "AAPL/USD",
+                    "side": "buy",
+                    "price": 170.9,
+                    "amount": 2,
+                    "cost": 341.8,
                     "fee": {},
                     "fees": []
                 }

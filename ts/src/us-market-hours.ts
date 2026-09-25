@@ -183,6 +183,12 @@ export function etWallClockToUtcMs(
     return asIfUtc - offsetMs;
 }
 
+/** UTC epoch ms 의 미국 동부(ET) 달력 날짜 `YYYYMMDD`. 미국 거래일을 요청에 적을 때 쓴다. */
+export function etYmd(ms: number): string {
+    const et = toEtWallClock(new Date(ms));
+    return `${et.year}${String(et.month).padStart(2, '0')}${String(et.day).padStart(2, '0')}`;
+}
+
 /**
  * 디버깅 / 로그 용 — 현재 ET wall-clock 문자열.
  * Test 의 phase 가드 메시지 등에 사용.
