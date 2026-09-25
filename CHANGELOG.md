@@ -13,6 +13,11 @@
 - `kr-broker/kbsec/kbsec-types`에서 내보내던 `KBSEC_KRW_INTEGRATED_MARGIN_FLAG`를 지웠습니다. 패키지 안에서 쓰지 않던 예전 기능 플래그 이름입니다. 원마켓 계좌는 `options.krwIntegratedMargin`으로 켭니다.
 - 한국투자증권 `fetchOHLCV`에 지원하지 않는 타임프레임을 주면 ccxt 오류 클래스 `NotSupported`를 던집니다. 토스증권과 같습니다. 예전에는 `name`만 `UnsupportedTimeframeError`인 일반 `Error`였습니다. Python 판도 `UnsupportedTimeframeError`를 없애고 `NotSupported`를 던집니다. `name`이 `UnsupportedTimeframeError`인지 보던 코드는 `NotSupported`로 가리도록 바꿉니다.
 - `kr-broker/broker-time`의 `timeframeToMs`는 읽지 못한 타임프레임에 5분 대신 `NaN`을 돌려줍니다. 월봉 `1M`과 대문자 주봉 `1W`도 `NaN`입니다. 5분을 받아 쓰던 코드는 `NaN`인지 확인한 뒤 기본값을 직접 정합니다.
+- 주문 요청이 증권사 오류 코드 없이 HTTP 5xx 로 끝나거나 해석할 수 없는 응답(비어 있지 않은 비JSON)을 받으면 `OrderOutcomeUnknown`을 던집니다. 예전에는 다시 보내도 될 것처럼 보이는 `ExchangeNotAvailable`이었습니다. 증권사 오류 코드로 분류한 5xx 는 그대로입니다. 상태 표에 없는 5xx(524 등)는 조회에서도 `ExchangeNotAvailable`입니다.
+- 캔들 조회가 실패하면 빈 배열이 아니라 오류를 던집니다. 야후에 없는 심볼은 `BadSymbol`, 재시도를 다 쓴 실패는 `ExchangeNotAvailable`, `RateLimitExceeded`, `NetworkError`입니다. 한국투자증권 `candles()`의 기간별 조회와 해외 기간별 조회도 던집니다. 조회에 성공했는데 봉이 없을 때만 빈 배열입니다.
+- 한국투자증권 `fetchBalance`는 `params.scope`에 모르는 값을 주면 `BadRequest`를 던집니다. 예전에는 요청 없이 빈 잔고를 돌려줬습니다.
+- 토스증권 `fetchBalance`는 보유 응답에 `items`가 없거나 매수 가능 금액 응답에 `cashBuyingPower`가 없으면 `BadResponse`를 던집니다. KB증권 `fetchBalance`는 예수금 응답에 주문가능현금 필드가 없으면 `BadResponse`를 던집니다.
+- 국내 종목코드 판정(`isKrxDomesticCode`)은 목록이 아니라 모양(숫자로 시작하는 6자리 영숫자)으로 합니다. 세 증권사와 Python 판이 같은 판정을 씁니다. `KNOWN_ALNUM_KRX_CODES`는 예시로만 남았습니다.
 
 ### 추가
 
@@ -34,6 +39,10 @@
 
 ### 고침
 
+- KB증권이 `A` 접두를 붙여 준 신형 영숫자 국내 코드(`A0193L0`)를 해외 종목으로 분류해 계좌자산평가 경로에서 보유가 빠지던 것을 고쳤습니다.
+- KB증권의 해외 체결 조회와 원마켓 증거금 조회가 연결 끊김이나 5xx 한 번에 인스턴스 수명 내내 꺼지던 것을 고쳤습니다. KB 가 응답으로 거절한 업무 오류만 영구 실패로 봅니다.
+- `options.confirmBudget` 함수가 던지면 주문을 보낸 뒤에 예외가 나가던 것을 고쳤습니다. 기본 예산을 씁니다.
+- Python 판: 토스 계좌 순번(`uid`)을 정수로 주면 비동기 판이 요청 전에 `TypeError`를 던지던 것을 고쳤습니다. 동기 판은 보내기 전에 실패한 요청을 `OrderOutcomeUnknown`이 아니라 `BadRequest`로 던집니다.
 - KB증권 `fetchBalance`가 국내 보유를 다 읽지 못했는데도 `info.readStatus`를 `COMPLETE`로 내던 것을 고쳤습니다. 계좌자산평가(`SSQM2952`)가 실패해 보유주식(`SSQM1801`)으로 내려갔는데 그 행이 전부 걸러졌거나, 종목코드를 못 읽어 버린 행이 있거나, 연속조회가 상한에서 잘렸거나, 결과가 비었으면 `PARTIAL`이고 `info.unreadMarkets`에 `KR`이 들어갑니다. 예전에는 해외 조회만 보고 판정해서 `unreadMarkets`에는 `US`만 나왔습니다.
 - 빌드한 `dist/`를 Node.js ESM에서 불러오지 못하던 것을 고쳤습니다(확장자 없는 상대 경로 `./base` 때문에 `ERR_UNSUPPORTED_DIR_IMPORT`). CI가 `exports`의 모든 경로를 Node.js로 불러와 확인합니다(`scripts/check-dist-imports.mjs`).
 - KB증권의 `fetchTicker`, `fetchOrderBook`, `fetchBalance`, `cancelOrder`, `fetchOpenOrders` 등이 `params`를 요청에 싣지 않던 것을 고쳤습니다.
