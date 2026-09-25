@@ -1,9 +1,10 @@
 /**
- * @fileoverview `toss.fetchSellableQuantity` — `GET /sellable-quantity`. `fetchBalance` 의 `free`(보유 수량 전체)와
- * 다르다 — 미체결 매도 주문·미결제분 등 지금 못 파는 수량은 뺀다.
+ * @fileoverview `toss.fetchSellableQuantity` — `GET /sellable-quantity`. 보유 수량에서 미체결 매도 주문·미결제분 등 지금 못 파는 수량을 뺀 값이다.
+ * `fetchBalance({ symbol })` 가 이 값을 그 종목의 `free` 로 쓴다.
  */
 import { describe, it, expect } from 'vitest';
 
+import { BadResponse } from '../../base';
 import { installFakeToss, jsonOk, makeToss, type FakeToss } from './support/toss-fake';
 
 const requestedQuery = (fake: FakeToss): URLSearchParams => fake.requestsTo('GET /api/v1/sellable-quantity')[0]!.query;
@@ -27,9 +28,9 @@ describe('fetchSellableQuantity', () => {
         expect(requestedQuery(fake).get('symbol')).toBe('AAPL');
     });
 
-    it('응답을 숫자로 못 읽으면 0이다', async () => {
+    it('응답을 숫자로 못 읽으면 0 이 아니라 모르는 것이라 BadResponse 로 던진다', async () => {
         installFakeToss({ 'GET /api/v1/sellable-quantity': jsonOk({}) });
 
-        expect(await makeToss().fetchSellableQuantity('005930/KRW')).toBe(0);
+        await expect(makeToss().fetchSellableQuantity('005930/KRW')).rejects.toBeInstanceOf(BadResponse);
     });
 });

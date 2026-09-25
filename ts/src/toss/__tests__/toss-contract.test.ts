@@ -13,14 +13,15 @@ vi.mock('../toss-trading-hours', async (importOriginal) => ({
     isTossOrderable: () => orderable.value,
 }));
 
-import { InsufficientFunds, InvalidOrder, RateLimitExceeded } from '../../base';
+import { InsufficientFunds, InvalidOrder, RateLimitExceeded, type Dict } from '../../base';
 import { defineBrokerContractSuite, type BrokerContractHarness } from '../../__tests__/support/broker-contract-suite';
 import { errorReply, installFakeToss, jsonOk, makeToss, networkFailure, type FakeToss, type Route } from './support/toss-fake';
 
 /** 경로마다 다음 요청에 줄 응답. `wire*` 가 바꾼다. */
-const state: { order: Route; balance: Route; ticker: Route; server: FakeToss | undefined } = {
+const state: { order: Route; balance: Route; buyingPower: Route; ticker: Route; server: FakeToss | undefined } = {
     order: jsonOk({ orderId: 'OID-1' }),
     balance: jsonOk({ items: [] }),
+    buyingPower: jsonOk({ cashBuyingPower: '0' }),
     ticker: jsonOk([{ symbol: '005930', lastPrice: '70000' }]),
     server: undefined,
 };
@@ -30,16 +31,24 @@ function reset(): void {
     orderable.value = true;
     state.order = jsonOk({ orderId: 'OID-1' });
     state.balance = jsonOk({ items: [] });
+    state.buyingPower = jsonOk({ cashBuyingPower: '0' });
     state.ticker = jsonOk([{ symbol: '005930', lastPrice: '70000' }]);
     state.server = installFakeToss({
         'POST /api/v1/orders': (request) => (typeof state.order === 'function' ? state.order(request) : state.order),
         'GET /api/v1/holdings': (request) => (typeof state.balance === 'function' ? state.balance(request) : state.balance),
-        'GET /api/v1/buying-power': jsonOk({ cashBuyingPower: '0' }),
+        'GET /api/v1/buying-power': (request) => (typeof state.buyingPower === 'function' ? state.buyingPower(request) : state.buyingPower),
         'GET /api/v1/prices': (request) => (typeof state.ticker === 'function' ? state.ticker(request) : state.ticker),
     });
 }
 
 const businessOrder = (status: number, code: string, message?: string) => () => { state.order = errorReply(status, code, message); };
+
+/** 이 보유 종목과 통화별 현금 매수 가능 금액이 있는 전체 잔고를 조회한다. */
+function fetchBalanceWith(items: Dict[]) {
+    state.balance = jsonOk({ items });
+    state.buyingPower = (request) => jsonOk({ currency: request.query.get('currency'), cashBuyingPower: request.query.get('currency') === 'KRW' ? '300000' : '2609.73' });
+    return makeToss().fetchBalance();
+}
 
 const harness: BrokerContractHarness = {
     name: '토스증권',
@@ -73,6 +82,13 @@ const harness: BrokerContractHarness = {
         });
         return makeToss().cancelAllOrders();
     },
+    fetchBalanceWithHoldings: () => fetchBalanceWith([
+        { symbol: '005930', quantity: '4' },
+        { symbol: 'AAPL', quantity: '0.5' },
+        { symbol: 'BRK.B', quantity: '1' },
+    ]),
+    fetchBalanceWithCollidingKey: () => fetchBalanceWith([{ symbol: 'USD', quantity: '2' }]),
+    market: (symbol) => makeToss().market(symbol),
 };
 
 defineBrokerContractSuite(harness);

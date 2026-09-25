@@ -1294,11 +1294,15 @@ export class toss extends Exchange {
     // ============ 잔고 ============
 
     /**
-     * 잔고. 현금은 통화 키(`KRW`·`USD`)이고 값은 현금 매수 가능 금액이며, 보유 종목은 종목코드 키(`005930`)이고 `total` 이 보유 수량이다.
-     * 종목의 평균단가·평가금액·종목명은 `balances[code].info` 에 있다. 조회에 실패하면 던진다.
+     * 잔고. 현금은 통화 키(`KRW`·`USD`)이고 값은 현금 매수 가능 금액이며, 보유 종목은 `market.base` 키(`005930`, `AAPL`)이고 `total` 이 보유 수량이다.
+     * 종목의 평균단가·평가금액·종목명은 `balances[code].info` 에 있다. 조회에 실패하면 던진다. 보유 종목 키가 같은 잔고의 현금 키와 겹치면
+     * (미국 티커 `USD` 와 달러 현금) 한쪽을 덮어쓰지 않고 `NotSupported` 를 던진다. 아래 `symbol` 과 `currency` 로 나눠 받는다.
+     *
+     * `free` 는 지금 주문에 쓸 수 있는 양이다(ccxt 정의). 현금은 매수 가능 금액만 있고 예수금을 주는 API 가 없어 `total` 과 `used` 가 비어 있다.
+     * 보유 종목의 `free` 는 `symbol` 로 한 종목만 받을 때 매도 가능 수량으로 채우고, 전체 잔고에서는 비어 있다(종목마다 요청을 더하지 않는다).
      *
      * `params` 로 범위를 좁힐 수 있다.
-     * - `symbol`: 그 종목의 보유만 받는다(`currency` 가 없으면 현금은 받지 않는다).
+     * - `symbol`: 그 종목의 보유만 받는다(`currency` 가 없으면 현금은 받지 않는다). 보유가 있으면 매도 가능 수량(`fetchSellableQuantity`)을 받아 `free` 로 쓴다.
      * - `currency`: `'KRW'` 또는 `'USD'` 현금만 받는다(`symbol` 이 없으면 보유 종목은 받지 않는다).
      * - 둘 다 주면 그 종목의 보유와 그 통화의 현금을 함께 받는다.
      *
@@ -1312,12 +1316,16 @@ export class toss extends Exchange {
             throw new ArgumentsRequired(`${this.id} fetchBalance() currency must be 'KRW' or 'USD'`);
         }
         let holdings: TossHoldingsOverview | undefined;
+        let sellable: Dictionary<number> | undefined;
         if (currency === undefined || symbol !== undefined) {
-            const query = symbol !== undefined ? { symbol: this.market(symbol).id } : {};
-            holdings = this.unwrap<TossHoldingsOverview>(await this.privateAccountGetHoldings(query));
+            const id = symbol !== undefined ? this.market(symbol).id as string : undefined;
+            holdings = this.unwrap<TossHoldingsOverview>(await this.privateAccountGetHoldings(id !== undefined ? { symbol: id } : {}));
             // 보유 목록이 없으면 "보유 없음"이 아니라 모르는 것이다.
             if (!Array.isArray(holdings?.items)) {
                 throw new BadResponse(`${this.id} 보유 조회 응답에 items 목록이 없다: ${String(JSON.stringify(holdings)).slice(0, 200)}`);
+            }
+            if (id !== undefined && holdings.items.some((item) => item.symbol === id && (this.safeNumber(item, 'quantity') ?? 0) > 0)) {
+                sellable = { [id]: await this.fetchSellableQuantity(id) };
             }
         }
         const buyingPower: Dictionary<TossBuyingPower> = {};
@@ -1330,7 +1338,7 @@ export class toss extends Exchange {
         if (currency === 'USD' && await this.isOptionEnabled('krwIntegratedMargin')) {
             integrated = await this.krwAsUsd();
         }
-        return this.parseBalance({ holdings, buyingPower, integrated });
+        return this.parseBalance({ holdings, sellable, buyingPower, integrated });
     }
 
     /** 원화 매수 여력을 참고 환율로 달러로 환산한다. 원화가 없거나 환율을 모르면 `undefined`. */
@@ -1350,18 +1358,23 @@ export class toss extends Exchange {
         return cash > 0 ? cash : 0;
     }
 
-    /** `fetchBalance` 가 모은 응답(`{ holdings, buyingPower, integrated }`)을 `Balances` 로 옮긴다. */
+    /**
+     * `fetchBalance` 가 모은 응답(`{ holdings, sellable, buyingPower, integrated }`)을 `Balances` 로 옮긴다. `sellable` 은 종목 id 별 매도 가능 수량이다.
+     * 보유 종목의 `free` 는 그 값이고 없으면 비운다. `used` 는 `safeBalance` 가 `total − free` 로 채운다.
+     */
     override parseBalance(response: unknown): Balances {
-        const { holdings, buyingPower, integrated } = response as {
+        const { holdings, sellable, buyingPower, integrated } = response as {
             holdings?: TossHoldingsOverview;
+            sellable?: Dictionary<number>;
             buyingPower?: Dictionary<TossBuyingPower>;
             integrated?: { krw: number; usdKrw: number; krwAsUsd: number };
         };
         const result: Dict = { info: response, timestamp: undefined, datetime: undefined };
+        const held: Dict = {};
         for (const item of holdings?.items ?? []) {
             const quantity = this.safeNumber(item, 'quantity');
             if (quantity === undefined || !(quantity > 0)) continue;
-            result[item.symbol] = { free: quantity, used: 0, total: quantity, info: item };
+            held[item.symbol] = { free: sellable?.[item.symbol], used: undefined, total: quantity, info: item };
         }
         for (const [code, power] of Object.entries(buyingPower ?? {})) {
             let cash = this.parseCash(power);
@@ -1371,7 +1384,16 @@ export class toss extends Exchange {
                 cash += integrated.krwAsUsd;
                 info.integratedMargin = integrated;
             }
-            result[code] = { free: cash, used: 0, total: cash, info };
+            // 매수 가능 금액은 정산 뒤 계좌 현금이 아니다. `total` 과 `used` 는 모른다.
+            result[code] = { free: cash, used: undefined, total: undefined, info };
+        }
+        for (const [code, holding] of Object.entries(held)) {
+            // 겹친 키에 대입하면 보유나 현금 한쪽이 알림 없이 사라진다.
+            if (result[code] !== undefined) {
+                throw new NotSupported(`${this.id} fetchBalance() 보유 종목 ${code} 가 현금 ${code} 와 키가 같아 한 잔고에 담을 수 없다. `
+                    + 'params.symbol 로 그 종목의 보유를, params.currency 로 현금을 따로 받는다');
+            }
+            result[code] = holding;
         }
         return this.safeBalance(result);
     }
@@ -1390,15 +1412,19 @@ export class toss extends Exchange {
     }
 
     /**
-     * 매도 주문에 즉시 쓸 수 있는 수량(`GET /sellable-quantity`). `fetchBalance` 의 `free` 는 보유 수량 전체라 다르다
-     * — 미체결 매도 주문에 잡힌 수량, 결제 전(T+1/T+2) 미결제분 등은 보유량에는 있어도 지금 팔 수는 없다.
+     * 매도 주문에 즉시 쓸 수 있는 수량(`GET /sellable-quantity`). 미체결 매도 주문에 잡힌 수량, 결제 전(T+1/T+2) 미결제분 등은 보유량에는 있어도
+     * 지금 팔 수 없어 빠진다. `fetchBalance({ symbol })` 는 이 값을 그 종목의 `free` 로 쓴다. 값이 없거나 숫자가 아니면 0 이 아니라 모르는 것이므로 던진다.
      */
     async fetchSellableQuantity(symbol: string, params: Dict = {}): Promise<number> {
         const market = this.market(symbol);
         const response = this.unwrap<{ sellableQuantity: string }>(
             await this.privateAccountGetSellableQuantity(this.extend({ symbol: market.id }, params)),
         );
-        return this.safeNumber(response, 'sellableQuantity') ?? 0;
+        const quantity = this.safeNumber(response, 'sellableQuantity');
+        if (quantity === undefined) {
+            throw new BadResponse(`${this.id} 매도 가능 수량 응답에 sellableQuantity 가 없거나 숫자가 아니다: ${JSON.stringify(response)}`);
+        }
+        return quantity;
     }
 
     /**

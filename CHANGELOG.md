@@ -11,6 +11,12 @@
 - 한국투자증권 `cancelAllOrders`는 일부 주문을 취소하지 못해도 던지지 않습니다. 예외로 실패를 잡던 코드는 반환 항목의 `status`를 봅니다. 세 증권사 모두 항목은 미체결 조회로 받은 주문입니다. 취소 응답 원문은 `info.cancelResponse`에, 실패 사유는 `info.cancelError`와 `info.cancelErrorDetail`에 있습니다.
 - 토스증권과 KB증권의 `priceToPrecision`이 국내 주식 가격을 KRX 호가 단위 표로 반올림합니다(70030 → 70000). 세 증권사 모두 종목이 일반 주식인 것을 알면, 호가 단위에 맞지 않는 국내 지정가를 요청 전에 `InvalidOrder`(`detail: 'price-tick-invalid'`)로 막습니다. 주문 가격은 바꾸지 않습니다. KB증권이 서버에서 받은 거절은 예전처럼 `detail`이 `PRICE_INVALID`입니다.
 - 토스증권 `createOrder`와 `editOrder`는 `params`에서 읽지 않은 키를 요청 본문에 합칩니다. 라이브러리가 인자로 채우는 필드(`symbol`, `side`, `orderType`, `quantity`, `orderAmount`, `price`, `confirmHighValueOrder`, 정정의 `orderId`)를 `params`로 주면 요청 없이 `BadRequest`를 던집니다. `editOrder`에 ccxt 조건 인자(`stopPrice` 등)를 주면 요청 없이 `NotSupported`를 던집니다.
+- 잔고의 보유 종목 키를 `market.base`로 맞춥니다. 한국투자증권 해외 슬래시 티커의 키가 `BRK/B`에서 `BRK.B`로 바뀝니다. 예전에는 `balance[market.base]`로 찾으면 보유가 없다고 읽혔습니다. Python 판도 같습니다.
+- 세 증권사 `fetchBalance`는 같은 잔고 안에서 보유 종목 키가 현금 키(`KRW`, `USD`)와 겹치면 `NotSupported`를 던집니다. 예전에는 미국 티커 `USD`를 가진 계좌에서 한쪽이 사라졌습니다. 한국투자증권과 토스증권은 달러 현금이 보유를 덮었고, KB증권은 보유 수량이 `balance.USD`에 들어갔습니다. 한국투자증권은 미국 보유(`'us'`)와 달러 현금(`'usd'`)을 `params.scope`로 나눠 받습니다. 토스증권은 `params.symbol`과 `params.currency`로 나눠 받습니다. KB증권에는 나눠 받는 인자가 없어서 그 종목을 가진 계좌는 잔고를 조회할 수 없습니다.
+- 잔고의 `free`, `used`, `total`을 ccxt의 뜻으로 맞춥니다. `free`는 지금 주문에 쓸 수 있는 양, `total`은 정산이 끝난 뒤 계좌에 남을 양, `used`는 `total − free`입니다. 모르는 값은 0이나 다른 값으로 채우지 않고 비웁니다. 현금을 `total`로 읽던 코드는 `free`나 `info`의 예수금(KB증권은 `balances.info.deposit`)을 읽도록 바꿉니다. 한국투자증권과 토스증권은 Python 판도 같습니다.
+- 한국투자증권 `fetchBalance`는 원화 주문가능현금이 예수금총금액보다 큰 날 `KRW`의 `total`과 `used`를 비웁니다. 예전에는 `total`이 `free`보다 작고 `used`가 0이었습니다. 달러 예수금 행이 없으면 `USD` 항목을 싣지 않습니다. 예전에는 0을 실었습니다.
+- 토스증권 `fetchBalance`는 현금의 `total`과 `used`를 비웁니다. 예전에는 `total`에 매수 가능 금액을, `used`에 0을 실었습니다. 전체 잔고의 보유 종목도 `free`와 `used`를 비웁니다. `params.symbol`로 한 종목만 받으면 매도 가능 수량(`GET /sellable-quantity`)을 한 번 더 조회해 `free`로 씁니다. `fetchSellableQuantity`는 응답에 값이 없으면 0 대신 `BadResponse`를 던집니다.
+- KB증권 `fetchBalance`는 `KRW`의 `total`과 `used`를 비웁니다. 국내 보유 종목의 `free`는 주문가능수량(`ordr_psbl_q`)이고, 해외 보유 종목의 `free`는 비웁니다. 예전에는 둘 다 보유 수량이었습니다. `USD`는 주문가능금액이 예수금보다 크면 `total`과 `used`를 비웁니다. `krwIntegratedMargin`으로 환산한 `USD`에는 `free`만 싣습니다.
 
 ### 추가
 

@@ -22,8 +22,15 @@ type OrderMode =
     | { type: 'business'; msgCd: string; msg1: string }
     | { type: 'network'; code: string };
 
-const state: { order: OrderMode; balanceFails: boolean; readFailure: string | undefined; orderRequests: number } = {
-    order: { type: 'accepted' }, balanceFails: false, readFailure: undefined, orderRequests: 0,
+const state: {
+    order: OrderMode;
+    balanceFails: boolean;
+    readFailure: string | undefined;
+    orderRequests: number;
+    /** 미국 보유 행. 있으면 잔고 조회가 보유 종목과 현금을 함께 준다. */
+    overseasHoldings: Record<string, string>[] | undefined;
+} = {
+    order: { type: 'accepted' }, balanceFails: false, readFailure: undefined, orderRequests: 0, overseasHoldings: undefined,
 };
 
 const connectionError = (code: string) => Object.assign(new TypeError('fetch failed'), { cause: { code } });
@@ -40,8 +47,25 @@ function route(): void {
         }
         if (u.includes(BALANCE_PATH) && state.balanceFails) throw connectionError('UND_ERR_CONNECT_TIMEOUT');
         if (u.includes(PRICE_PATH) && state.readFailure !== undefined) throw connectionError(state.readFailure);
+        if (state.overseasHoldings !== undefined) {
+            // 주문가능현금이 예수금보다 큰 날(매도 대금이 아직 결제되지 않은 날)이다.
+            if (u.includes('/domestic-stock/v1/trading/inquire-balance')) {
+                return dataOk({ output1: [{ pdno: '005930', hldg_qty: '10', ord_psbl_qty: '8' }], output2: [{ dnca_tot_amt: '500000' }] });
+            }
+            if (u.includes('/trading/inquire-psbl-order')) return dataOk({ output: { ord_psbl_cash: '600000' } });
+            if (u.includes('/overseas-stock/v1/trading/inquire-balance')) return dataOk({ output1: state.overseasHoldings });
+            if (u.includes('/trading/inquire-present-balance')) {
+                return dataOk({ output1: [], output2: [{ crcy_cd: 'USD', frcr_dncl_amt_2: '1000.50', frcr_buy_mgn_amt: '200.25' }] });
+            }
+        }
         return dataOk({ output: {}, output1: [], output2: [{}] });
     });
+}
+
+/** 보유 종목과 현금이 함께 있는 잔고를 실전 도메인으로 조회한다(미국 보유는 `NASD` 한 번). */
+function fetchBalanceWith(overseasHoldings: Record<string, string>[]) {
+    state.overseasHoldings = overseasHoldings;
+    return newKis({ sandbox: false }).fetchBalance();
 }
 
 const businessOrder = (msgCd: string, msg1: string) => () => { state.order = { type: 'business', msgCd, msg1 }; };
@@ -54,6 +78,7 @@ const harness: BrokerContractHarness = {
         state.readFailure = undefined;
         state.orderRequests = 0;
         vi.setSystemTime(MARKET_TIMES.krxRegular);
+        state.overseasHoldings = undefined;
         mockFetch.mockReset();
         route();
     },
@@ -89,6 +114,13 @@ const harness: BrokerContractHarness = {
         });
         return newKis().cancelAllOrders('005930/KRW');
     },
+    // 슬래시 티커(`BRK/B`)의 `market.base` 는 `BRK.B` 다.
+    fetchBalanceWithHoldings: () => fetchBalanceWith([
+        { ovrs_pdno: 'AAPL', ovrs_cblc_qty: '3', ord_psbl_qty: '3' },
+        { ovrs_pdno: 'BRK/B', ovrs_cblc_qty: '1', ord_psbl_qty: '1' },
+    ]),
+    fetchBalanceWithCollidingKey: () => fetchBalanceWith([{ ovrs_pdno: 'USD', ovrs_cblc_qty: '2', ord_psbl_qty: '2' }]),
+    market: (symbol) => newKis().market(symbol),
 };
 
 // 장 시간 게이트는 인스턴스 시계를 읽으므로 시각을 고정한다(`reset` 과 `setMarketOpen` 이 정한다).

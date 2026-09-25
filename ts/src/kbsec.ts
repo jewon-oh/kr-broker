@@ -92,6 +92,7 @@ import {
 import {
     warnFillWithoutPrice, warnIfFillSideUnreadable, warnIfFillTotalsInconsistent,
 } from './kbsec/kbsec-fill-warnings';
+import { kbsecNumberOf } from './kbsec/kbsec-number';
 import { buildKrOrderBody } from './kbsec/kbsec-order-body';
 import {
     kbsecHoldingQuantity, OVERSEAS_QTY_CANDIDATES, pickArray, pickCashGrid, pickGrid, pickHoldingGrid, pickNum,
@@ -1646,6 +1647,8 @@ interface OverseasHoldings {
 interface HoldingRow {
     code: string;
     quantity: number;
+    /** 주문가능수량(`ordr_psbl_q`). 해외 보유이거나 행에 필드가 없으면 모른다 */
+    orderableQuantity?: number | undefined;
     quoteCurrency: 'KRW' | 'USD';
     averagePrice?: number | undefined;
     marketValue: number;
@@ -2860,8 +2863,9 @@ export class kbsec extends Exchange {
     // ============ 잔고 ============
 
     /**
-     * 통화와 보유 종목의 잔고. 현금은 통화 키(`KRW`, `USD`), 보유 종목은 종목 코드 키이며 `total` 이 **수량**이다. 평균 단가·평가금액·종목명은
-     * 각 항목의 `info` 에 있다(`averagePrice`, `marketValue`, `name`, `quoteCurrency`).
+     * 통화와 보유 종목의 잔고. 현금은 통화 키(`KRW`, `USD`), 보유 종목은 `market.base` 키(종목 코드)이며 `total` 이 **수량**이다. 평균 단가·평가금액·종목명은
+     * 각 항목의 `info` 에 있다(`averagePrice`, `marketValue`, `name`, `quoteCurrency`). 보유 종목 키가 현금 키와 겹치면(미국 티커 `USD` 와 달러 현금)
+     * 한쪽을 덮어쓰지 않고 `NotSupported` 를 던진다. KB증권은 보유와 현금을 나눠 받는 인자가 없어 그런 계좌는 잔고를 조회할 수 없다.
      *
      * 예수금을 읽지 못하면 던진다. 보유를 일부만 읽었으면 던지지 않고 `info.readStatus` 가 `PARTIAL`, 못 읽은 시장(`KR`, `US`)이
      * `info.unreadMarkets` 다. **이때 그 시장에서 목록에 없는 종목은 미보유가 아니라 미확인이다.**
@@ -2873,6 +2877,12 @@ export class kbsec extends Exchange {
      *
      * `USD` 항목은 해외 잔고평가(`SPQM2226`)의 통화별 예수금 그리드에서 온다(예수금·주문가능금액). 그 그리드를 못 읽었으면 `USD` 항목이 없다.
      * **없다는 것은 0 이 아니라 모른다는 뜻이다.** `options.krwIntegratedMargin` 이 켜져 있고 원화환산 외화예수금이 있으면 그것을 환율로 환산한 USD 가 우선한다.
+     *
+     * `free` 는 지금 주문에 쓸 수 있는 양, `total` 은 정산 뒤 계좌에 남을 양, `used` 는 `total − free` 다(ccxt 정의). 모르는 값은 비운다.
+     * - 국내 보유: `free` 는 주문가능수량(`ordr_psbl_q`)이다. 해외 보유는 매도 가능 수량을 읽지 않아 `free` 가 비어 있다.
+     * - `KRW`: `free` 는 주문가능현금이다. 예수금 TR 의 어느 필드가 계좌 현금인지 확인하지 못해 `total` 과 `used` 는 비어 있다. 예수금 원문은 `balances.info.deposit` 에 있다.
+     * - `USD`: `free` 는 주문가능금액(`ordr_psbl_amt_p2`), `total` 은 예수금(`tfnd`)이다. 주문가능금액이 예수금보다 크면 `total` 과 `used` 를 비운다.
+     *   원화를 환산한 USD(`krwIntegratedMargin`)는 달러 예수금이 아니라서 `free` 만 있다.
      */
     override async fetchBalance(params: Dict = {}): Promise<Balances> {
         // 여러 TR 을 부르지만 `params` 는 기준이 되는 예수금 조회에만 합친다.
@@ -2934,21 +2944,22 @@ export class kbsec extends Exchange {
             timestamp: undefined,
             datetime: undefined,
         };
-        result['KRW'] = { free: response.krw, used: 0, total: response.krw };
+        result['KRW'] = { free: response.krw, used: undefined, total: undefined };
         const usdCash = overseas.usdCash;
         const oneMarketUsd = response.oneMarketUsd as Dict | undefined;
         if (oneMarketUsd !== undefined) {
-            result['USD'] = { free: oneMarketUsd.amount, used: 0, total: oneMarketUsd.amount, info: oneMarketUsd };
+            result['USD'] = { free: oneMarketUsd.amount, used: undefined, total: undefined, info: oneMarketUsd };
         } else if (usdCash !== undefined) {
             // 첫 그리드: `tfnd`(예수금), `ordr_psbl_amt_p2`(주문가능금액). 예수금에서 주문가능금액을 뺀 만큼을 묶인 금액으로 본다.
-            const total = pickNum(usdCash, 'tfnd');
-            const free = pickNum(usdCash, 'ordr_psbl_amt_p2');
-            result['USD'] = { free, used: Math.max(0, total - free), total, info: usdCash };
+            const deposit = numberToString(pickNum(usdCash, 'tfnd'));
+            const free = numberToString(pickNum(usdCash, 'ordr_psbl_amt_p2'));
+            result['USD'] = { free, used: undefined, total: Precise.stringGt(free, deposit) ? undefined : deposit, info: usdCash };
         }
+        const held: Dict = {};
         for (const holding of response.holdings as HoldingRow[]) {
-            result[holding.code] = {
-                free: holding.quantity,
-                used: 0,
+            held[holding.code] = {
+                free: holding.orderableQuantity,
+                used: undefined,
                 total: holding.quantity,
                 info: {
                     quoteCurrency: holding.quoteCurrency,
@@ -2957,6 +2968,14 @@ export class kbsec extends Exchange {
                     name: holding.name,
                 },
             };
+        }
+        for (const [code, holding] of Object.entries(held)) {
+            // 겹친 키에 대입하면 현금이 알림 없이 보유 수량으로 바뀐다.
+            if (result[code] !== undefined) {
+                throw new NotSupported(`${this.id} fetchBalance() 보유 종목 ${code} 가 현금 ${code} 와 키가 같아 한 잔고에 담을 수 없다. `
+                    + 'KB증권은 보유 종목과 현금을 나눠 받는 인자가 없다');
+            }
+            result[code] = holding;
         }
         return this.safeBalance(result);
     }
@@ -3000,6 +3019,7 @@ export class kbsec extends Exchange {
             out.push({
                 code,
                 quantity,
+                orderableQuantity: kbsecNumberOf(row.ordr_psbl_q),
                 quoteCurrency: 'KRW',
                 averagePrice: pickPositiveNum(row, 'byng_avr_prc') || undefined,
                 // 평가금액은 KB 가 준 것을 그대로 쓴다. 종목마다 현재가를 다시 묻지 않는다.
@@ -3044,6 +3064,7 @@ export class kbsec extends Exchange {
             out.push({
                 code,
                 quantity,
+                orderableQuantity: kbsecNumberOf(row.ordr_psbl_q),
                 quoteCurrency: kbsecMarketOf(code) === 'KR' ? 'KRW' : 'USD',
                 averagePrice,
                 // 수량을 평가금액 자리에 넣으면 보유가 통째로 사라진다. 평가금액은 수량 × 현재가다.
