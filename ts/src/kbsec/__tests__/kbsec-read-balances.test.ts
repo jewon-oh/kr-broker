@@ -156,6 +156,8 @@ describe('KB fetchBalance — 완전성 상태', () => {
         expect(codesOf(b)).not.toContain('JNJ');
     });
 
+    // 해외 보유 조회(SPQM2226)는 그리드를 알아보지 못하면 조용히 빈 배열을 준다. 이것을 보유 0 으로 읽어 살아 있는 포지션을
+    // 외부 청산으로 처리한 사고가 있었다.
     it('해외 조회가 성공했어도 그리드를 한 번도 본 적이 없으면 PARTIAL 이다 — 빈 응답이 "없음" 인지 알 수 없다', async () => {
         usMode = 'empty';
 

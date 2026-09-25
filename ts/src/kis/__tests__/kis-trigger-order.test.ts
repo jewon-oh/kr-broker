@@ -3,11 +3,12 @@
  * KIS 공식 예제 `order_cash.py`의 인자 설명("조건가격 — 스탑지정가호가 주문 시 사용")으로 확인했다.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { KrxMarketPhase } from '../../krx-trading-hours';
 
 const { mockFetch, mockTradable, mockPhase } = vi.hoisted(() => ({
     mockFetch: vi.fn(),
     mockTradable: vi.fn(() => ({ tradable: true, reason: '' })),
-    mockPhase: vi.fn(() => 'regular'),
+    mockPhase: vi.fn((): KrxMarketPhase => 'open'),
 }));
 
 vi.mock('../kis-trading-hours', () => ({
@@ -15,8 +16,8 @@ vi.mock('../kis-trading-hours', () => ({
     getKrxMarketPhase: () => mockPhase(),
     isNxtExtendedTradable: () => false,
     getNxtSession: () => 'closed',
-}));
-vi.mock('../us-market-hours', () => ({ getUsMarketPhase: () => 'regular', formatEtWallClock: () => '10:00 ET' }));
+}) satisfies Partial<typeof import('../kis-trading-hours')>);
+vi.mock('../us-market-hours', () => ({ getUsMarketPhase: () => 'open', formatEtWallClock: () => '10:00 ET' }) satisfies Partial<typeof import('../us-market-hours')>);
 global.fetch = mockFetch as unknown as typeof fetch;
 
 import { ArgumentsRequired, NotSupported } from '../../base/errors';
@@ -30,7 +31,7 @@ const ORDER_PATH = '/trading/order-cash';
 beforeEach(() => {
     mockFetch.mockReset();
     mockTradable.mockReturnValue({ tradable: true, reason: '' });
-    mockPhase.mockReturnValue('regular');
+    mockPhase.mockReturnValue('open');
 });
 
 describe('createTriggerOrder', () => {

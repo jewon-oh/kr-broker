@@ -50,6 +50,7 @@ pnpm typecheck   # 소스, 테스트, examples/ 까지 타입 검사
 pnpm test
 pnpm build
 pnpm hygiene:check   # 비밀이나 사설 식별자로 보이는 값 검사
+pnpm verify          # CI 가 돌리는 검사를 한 번에(Python 단계 포함)
 ```
 
 - `pnpm typecheck`는 `examples/ts/`도 검사합니다. README의 예제 코드가 실제 API와 어긋나면 `pnpm typecheck`가 실패합니다.
@@ -57,9 +58,10 @@ pnpm hygiene:check   # 비밀이나 사설 식별자로 보이는 값 검사
 - 테스트는 `ts/src/**/__tests__/` 아래에 둡니다.
 - 테스트는 `fetch`를 가짜 함수로 대체합니다. 증권사 서버를 호출하지 않습니다.
 - `docs/coverage/`의 자료를 고쳤다면 `pnpm docs:gen`으로 `docs/brokers/`와 README의 기능 표를 다시 만듭니다. README는 `<!-- coverage:start -->`와 `<!-- coverage:end -->` 사이만 바뀝니다. `pnpm docs:check`는 둘이 자료와 다르면 실패합니다.
-- CI는 `pnpm typecheck`, `pnpm hygiene:check`, `pnpm test`, `pnpm docs:check`, `pnpm build`, `pnpm audit --prod`를 실행합니다. 테스트는 Linux의 Node.js 22와 24, Windows의 Node.js 22에서 실행합니다.
+- CI는 `pnpm typecheck`, `pnpm hygiene:check`, `pnpm test`, `pnpm docs:check`, `pnpm build`, `node scripts/check-dist-imports.mjs`, `pnpm audit --prod`와 Python 단계(아래)를 실행합니다. 테스트는 Linux의 Node.js 22와 24, Windows의 Node.js 22에서 실행합니다.
+- `pnpm verify`는 네트워크가 필요한 `pnpm audit --prod`를 빼고 CI와 같은 순서로 검사를 돌립니다. 하나라도 실패하면 거기서 멈춥니다. Python 단계는 `KR_BROKER_PYTHON`, `python/.venv`의 Python, PATH의 `python3`와 `python` 순서로 `pytest`를 불러올 수 있는 Python을 찾아 씁니다. Python 환경이 없으면 `pnpm verify --no-python`으로 Python 단계를 건너뜁니다.
 
-PR을 올리기 전에 `pnpm typecheck`, `pnpm test`, `pnpm build`가 통과해야 합니다. 빌드한 `dist/`는 `node scripts/check-dist-imports.mjs`로 Node.js에서 불러와지는지 확인합니다.
+PR을 올리기 전에 `pnpm verify`가 통과해야 합니다.
 
 ### Python
 

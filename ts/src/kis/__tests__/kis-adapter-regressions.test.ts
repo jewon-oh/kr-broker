@@ -12,9 +12,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 
 vi.mock('../us-market-hours', () => ({
-    getUsMarketPhase: () => 'regular',
+    getUsMarketPhase: () => 'open',
     formatEtWallClock: () => '10:00 ET',
-}));
+}) satisfies Partial<typeof import('../us-market-hours')>);
 global.fetch = mockFetch as unknown as typeof fetch;
 
 import { ArgumentsRequired, BadRequest } from '../../base/errors';

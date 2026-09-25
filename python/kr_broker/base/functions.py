@@ -94,6 +94,25 @@ def js_string(x: Any) -> str:
     return str(x)
 
 
+# JavaScript `Number(string)` 이 받는 문법. Python `float` 는 `1_000`·`inf`·유니코드 숫자도 받으므로 먼저 이 문법으로 거른다.
+_JS_DECIMAL = re.compile(r'[+-]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][+-]?[0-9]+)?')
+_JS_RADIX = {'x': (16, re.compile(r'[0-9a-fA-F]+')), 'o': (8, re.compile(r'[0-7]+')), 'b': (2, re.compile(r'[01]+'))}
+
+
+def _js_number_of_text(raw: str) -> float:
+    text = raw.strip()
+    if text == '':
+        return 0.0
+    if text in ('Infinity', '+Infinity', '-Infinity'):
+        return -math.inf if text[0] == '-' else math.inf
+    if _JS_DECIMAL.fullmatch(text):
+        return float(text)
+    radix = _JS_RADIX.get(text[1:2].lower()) if text[:1] == '0' else None
+    if radix is not None and radix[1].fullmatch(text[2:]):
+        return float(int(text[2:], radix[0]))
+    return math.nan
+
+
 def js_number(raw: Any) -> float:
     """JavaScript `Number(raw)` 과 같은 변환. `None` 은 0, 읽지 못하면 NaN 이다."""
     if raw is None:
@@ -103,13 +122,7 @@ def js_number(raw: Any) -> float:
     if isinstance(raw, (int, float)):
         return float(raw)
     if isinstance(raw, str):
-        text = raw.strip()
-        if text == '':
-            return 0.0
-        try:
-            return float(text)
-        except ValueError:
-            return math.nan
+        return _js_number_of_text(raw)
     return math.nan
 
 
@@ -200,11 +213,8 @@ def as_float(x: Any) -> float:
 
 def as_integer(x: Any) -> float:
     """JavaScript `Math.trunc(Number(x))` 와 같다. 못 읽으면 NaN."""
-    if isinstance(x, str) and len(x) > 0:
-        try:
-            n = float(x.strip()) if x.strip() != '' else 0.0
-        except ValueError:
-            return math.nan
+    if isinstance(x, str):
+        n = _js_number_of_text(x)
         return float(math.trunc(n)) if math.isfinite(n) else n
     if is_number(x):
         return float(math.trunc(x))

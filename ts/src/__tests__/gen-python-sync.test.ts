@@ -52,6 +52,17 @@ describe('gen-python-sync', () => {
         ].join('\n'));
     });
 
+    it('문자열과 주석, 여러 줄 docstring 안의 await 는 지우지 않고 실패한다', () => {
+        expect(() => body("    logger.warning('await 없이 부른다: await self.f()')")).toThrow(/문자열이나 주석/);
+        expect(() => body('    x = 1  # await self.f() 는 쓰지 않는다')).toThrow(/문자열이나 주석/);
+        expect(() => body(['    """설명.', '', '    await broker.close() 로 닫는다."""', '    return 1'].join('\n'))).toThrow(/:3 /);
+    });
+
+    it('같은 줄의 문자열 뒤에 있는 코드의 await 는 지운다', () => {
+        expect(body("    logger.info('#1 \\'x\\'', await self.f(), \"a'b\")")).toBe("    logger.info('#1 \\'x\\'', self.f(), \"a'b\")");
+        expect(body(['    """여러 줄', '    설명."""', '    return await self.f()'].join('\n'))).toBe(['    """여러 줄', '    설명."""', '    return self.f()'].join('\n'));
+    });
+
     it('한 줄에서 닫히지 않은 Awaitable 힌트는 남은 비동기 구문으로 보고 실패한다', () => {
         expect(() => body('def f(probe: Callable[[int], Awaitable[\n        Dict[str, Any]]]):')).toThrow(/Awaitable/);
     });
