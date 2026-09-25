@@ -37,7 +37,7 @@
  *
  * ## 한계
  *
- * 잔고·체결 조회는 연속 조회(페이지네이션)를 하지 않는다. 실전 기준 잔고 종목 50건, 체결 100건을 넘으면 뒤가 잘린다.
+ * 잔고·미체결·주문체결 조회는 연속조회로 끝까지 받는다. 10쪽을 넘으면 일부만 돌려주지 않고 `BadResponse` 를 던진다.
  * 통합 `fetchOrderBook`은 미국 종목 호가를 조회하지 않고, 통합 `fetchOHLCV`는 미국 분봉을 야후 파이낸스로 받는다. KIS 원본 1호가와 분봉은
  * 확장 메서드(`fetchOverseasOrderBook`, `fetchOverseasMinuteOHLCV`)가 준다.
  */
@@ -47,6 +47,7 @@ import {
     ArgumentsRequired,
     AuthenticationError,
     BadRequest,
+    BadResponse,
     BadSymbol,
     ExchangeError,
     ExchangeClosedByUser,
@@ -151,6 +152,8 @@ const MULTI_TICKER_LIMIT = 30;
 /** 조회를 다시 보내는 횟수와 간격. 초당 거래건수 초과는 1초 안팎이면 풀린다. */
 const READ_RETRIES = 3;
 const READ_RETRY_DELAY_MS = 500;
+/** 연속조회로 받는 최대 쪽 수. 공식 예제의 재귀 상한(10)과 같다. */
+const MAX_CONTINUATION_PAGES = 10;
 
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -3666,6 +3669,8 @@ export class kis extends Exchange {
     private candleService: KISCandleService | undefined;
     /** 종목별 NXT 거래 가능 여부. `blockedReason` 이 없으면 거래할 수 있다. */
     private readonly nxtEligibility = new Map<string, { blockedReason: string | undefined; at: number }>();
+    /** 응답 객체별 응답 헤더 `tr_cont`. `last_response_headers` 는 동시 요청에 덮이므로 응답 객체에 묶는다. */
+    private readonly trContOf = new WeakMap<object, string>();
 
     override describe(): Dict {
         return this.deepExtend(super.describe(), {
@@ -4099,8 +4104,8 @@ export class kis extends Exchange {
     }
 
     /**
-     * 요청을 만든다. 비공개 호출은 `params.tr_id` 를 헤더로 옮기고 나머지는 GET 이면 쿼리로, POST 이면 JSON 본문으로 보낸다.
-     * 대문자 키(`CANO` 등)는 KIS 규격 그대로 둔다.
+     * 요청을 만든다. 비공개 호출은 `params.tr_id` 와 `params.tr_cont`(연속조회 다음 쪽)를 헤더로 옮기고 나머지는 GET 이면 쿼리로,
+     * POST 이면 JSON 본문으로 보낸다. `tr_cont` 가 없으면 그 헤더를 싣지 않는다. 대문자 키(`CANO` 등)는 KIS 규격 그대로 둔다.
      */
     override sign(
         path: string,
@@ -4119,7 +4124,8 @@ export class kis extends Exchange {
         if (this.isPrivateApi(api)) {
             const trId = this.safeString(params, 'tr_id');
             if (trId === undefined) throw new ArgumentsRequired(`${this.id} ${path} 호출에는 params.tr_id 가 필요하다`);
-            query = this.omit(params, 'tr_id');
+            const trCont = this.safeString(params, 'tr_cont');
+            query = this.omit(params, ['tr_id', 'tr_cont']);
             Object.assign(requestHeaders, {
                 authorization: `Bearer ${this.token}`,
                 appkey: this.apiKey as string,
@@ -4127,6 +4133,7 @@ export class kis extends Exchange {
                 tr_id: trId,
                 custtype: KIS_CUSTOMER_TYPE,
             });
+            if (trCont !== undefined) requestHeaders.tr_cont = trCont;
         }
         let body: string | undefined;
         if (method === 'GET') {
@@ -4472,13 +4479,15 @@ export class kis extends Exchange {
         _statusText: string,
         url: string,
         _method: string,
-        _responseHeaders: Dictionary<string>,
+        responseHeaders: Dictionary<string>,
         responseBody: string,
         response: unknown,
         _requestHeaders: Dictionary<string> | undefined,
         _requestBody: string | undefined,
     ): boolean | undefined {
         const isAuthRequest = url.includes('/oauth2/');
+        const trCont = Object.entries(responseHeaders).find(([key]) => key.toLowerCase() === 'tr_cont')?.[1];
+        if (trCont !== undefined && response !== null && typeof response === 'object') this.trContOf.set(response, trCont);
         const msgCd = this.safeString2(response, 'msg_cd', 'error_code');
         // 인증 실패가 확실할 때만 토큰 캐시를 버린다. 아무 500 에나 붙이면 발급이 남발되고, 토큰 발급은 분당 1회 제한이다.
         if (!isAuthRequest && (statusCode === 401 || statusCode === 403 || msgCd === 'EGW00123')) this.dropToken(statusCode, msgCd);
@@ -4632,6 +4641,29 @@ export class kis extends Exchange {
     private accountParams(): { CANO: string; ACNT_PRDT_CD: string } {
         const [prefix, suffix] = (this.uid ?? '').split('-');
         return { CANO: prefix ?? '', ACNT_PRDT_CD: suffix || KIS_DEFAULT_ACCOUNT_SUFFIX };
+    }
+
+    /**
+     * 연속조회로 모든 쪽의 응답을 받는다. 응답 헤더 `tr_cont` 가 `F`·`M` 이면 요청 헤더 `tr_cont: N` 과 응답의 연속조회 키(`keys` 의 소문자 필드)로
+     * 다음 쪽을 부른다(공식 예제 `examples_llm` 의 규칙이고 실전과 모의가 같다). `maxPages` 쪽을 넘으면 일부만 돌려주지 않고 `BadResponse` 를 던진다.
+     */
+    private async fetchAllPages(
+        method: (params: Dict) => Promise<any>,
+        request: Dict,
+        keys: readonly string[],
+        maxPages: number = MAX_CONTINUATION_PAGES,
+    ): Promise<Dict[]> {
+        const pages: Dict[] = [];
+        let params = request;
+        for (;;) {
+            const response = await method(params);
+            pages.push(response);
+            const trCont = this.trContOf.get(response);
+            if (trCont !== 'F' && trCont !== 'M') return pages;
+            if (pages.length >= maxPages) throw new BadResponse(`${this.id} 연속조회가 ${maxPages}쪽을 넘는다`);
+            params = { ...request, tr_cont: 'N' };
+            for (const key of keys) params[key] = this.safeString(response, key.toLowerCase(), '');
+        }
     }
 
     /** 이 인스턴스의 종목 마스터 데이터(`options.masterData`). 넘기지 않았으면 빈 데이터다. */
@@ -4862,7 +4894,7 @@ export class kis extends Exchange {
     }
 
     private async fetchDomesticBalanceRaw(orderable: boolean): Promise<Dict> {
-        const response = await this.privateGetUapiDomesticStockV1TradingInquireBalance({
+        const pages = await this.fetchAllPages(this.privateGetUapiDomesticStockV1TradingInquireBalance, {
             ...this.accountParams(),
             AFHR_FLPR_YN: 'N',
             OFL_YN: '',
@@ -4874,8 +4906,9 @@ export class kis extends Exchange {
             CTX_AREA_FK100: '',
             CTX_AREA_NK100: '',
             tr_id: this.tr('TTTC8434R'),
-        });
-        const raw: Dict = { holdings: rowsOf(response.output1), summary: firstRow(response.output2) };
+        }, ['CTX_AREA_FK100', 'CTX_AREA_NK100']);
+        // 합계(`output2`)는 계좌 전체 값이라 첫 쪽 것을 쓴다. 쪽마다 같은 값이 온다는 것은 추정이다.
+        const raw: Dict = { holdings: pages.flatMap((page) => rowsOf(page.output1)), summary: firstRow(pages[0].output2) };
         if (orderable) {
             // 주문가능금액은 잔고 응답의 `ord_psbl_amt` 가 아니라 매수가능조회의 `ord_psbl_cash` 를 쓴다(공식 응답 필드에 `ord_psbl_amt` 가 없다).
             // 시장가(`01`)로 물으면 종목 증거금율이 반영된다.
@@ -4893,18 +4926,25 @@ export class kis extends Exchange {
         return raw;
     }
 
-    /** 미국 보유 종목. 실전은 `NASD` 가 미국 전체이므로 한 번만 부른다. 모의는 `NASD`·`NYSE`·`AMEX` 를 따로 부른다. */
+    /**
+     * 미국 보유 종목. 실전은 `NASD` 가 미국 전체이므로 한 번만 부른다. 모의는 `NASD`·`NYSE`·`AMEX` 를 차례로 부른다.
+     * 거래소마다 연속조회를 끝낸 뒤 다음 거래소로 간다(Python 판과 요청 순서가 같다).
+     */
     private async fetchOverseasHoldingsRaw(): Promise<Dict> {
         const exchanges: OverseasOrderMarket[] = this.isSandboxModeEnabled ? ['NASD', 'NYSE', 'AMEX'] : ['NASD'];
-        const responses = await Promise.all(exchanges.map((exchange) => this.privateGetUapiOverseasStockV1TradingInquireBalance({
-            ...this.accountParams(),
-            OVRS_EXCG_CD: exchange,
-            TR_CRCY_CD: 'USD',
-            CTX_AREA_FK200: '',
-            CTX_AREA_NK200: '',
-            tr_id: this.tr('TTTS3012R'),
-        })));
-        return { holdings: responses.flatMap((response: Dict) => rowsOf(response.output1)) };
+        const holdings: Dict[] = [];
+        for (const exchange of exchanges) {
+            const pages = await this.fetchAllPages(this.privateGetUapiOverseasStockV1TradingInquireBalance, {
+                ...this.accountParams(),
+                OVRS_EXCG_CD: exchange,
+                TR_CRCY_CD: 'USD',
+                CTX_AREA_FK200: '',
+                CTX_AREA_NK200: '',
+                tr_id: this.tr('TTTS3012R'),
+            }, ['CTX_AREA_FK200', 'CTX_AREA_NK200']);
+            holdings.push(...pages.flatMap((page) => rowsOf(page.output1)));
+        }
+        return { holdings };
     }
 
     private async fetchPresentBalanceRaw(): Promise<Dict> {
@@ -10328,7 +10368,7 @@ export class kis extends Exchange {
         const wantOverseas = instrument === undefined ? which !== 'domestic' && !this.isSandboxModeEnabled : instrument.overseas;
         const orders: Order[] = [];
         if (wantDomestic) {
-            const response = await this.privateGetUapiDomesticStockV1TradingInquirePsblRvsecncl({
+            const pages = await this.fetchAllPages(this.privateGetUapiDomesticStockV1TradingInquirePsblRvsecncl, {
                 ...this.accountParams(),
                 CTX_AREA_FK100: '',
                 CTX_AREA_NK100: '',
@@ -10336,20 +10376,20 @@ export class kis extends Exchange {
                 INQR_DVSN_2: '0',
                 // 실전만 신형 TR 이 있다. 모의는 종전 TR 을 그대로 쓴다.
                 tr_id: this.tr('TTTC0084R', 'VTTC8036R'),
-            });
+            }, ['CTX_AREA_FK100', 'CTX_AREA_NK100']);
             const market = instrument === undefined ? undefined : this.marketOf(instrument);
-            orders.push(...this.parseOrders(rowsOf(response.output), market).map((order) => this.markOpen(order)));
+            orders.push(...this.parseOrders(pages.flatMap((page) => rowsOf(page.output)), market).map((order) => this.markOpen(order)));
         }
         if (wantOverseas) {
-            const response = await this.privateGetUapiOverseasStockV1TradingInquireNccs({
+            const pages = await this.fetchAllPages(this.privateGetUapiOverseasStockV1TradingInquireNccs, {
                 ...this.accountParams(),
                 OVRS_EXCG_CD: 'NASD',
                 SORT_SQN: 'DS',
                 CTX_AREA_FK200: '',
                 CTX_AREA_NK200: '',
                 tr_id: this.tr('TTTS3018R', null),
-            });
-            orders.push(...this.parseOrders(rowsOf(response.output)).map((order) => this.markOpen(order)));
+            }, ['CTX_AREA_FK200', 'CTX_AREA_NK200']);
+            orders.push(...this.parseOrders(pages.flatMap((page) => rowsOf(page.output))).map((order) => this.markOpen(order)));
         }
         const filtered = instrument === undefined ? orders : orders.filter((order) => order.symbol === instrument.symbol);
         return this.filterBySinceLimit(filtered, since, limit) as Order[];
@@ -10413,7 +10453,7 @@ export class kis extends Exchange {
      */
     private async fetchDomesticCcldRows(code: Str, since: Int, ccld: '00' | '01' | '02', orderId: Str = undefined): Promise<Dict[]> {
         const now = this.milliseconds();
-        const response = await this.privateGetUapiDomesticStockV1TradingInquireDailyCcld({
+        const pages = await this.fetchAllPages(this.privateGetUapiDomesticStockV1TradingInquireDailyCcld, {
             ...this.accountParams(),
             INQR_STRT_DT: kstYmd(since ?? now),
             INQR_END_DT: kstYmd(now),
@@ -10429,8 +10469,8 @@ export class kis extends Exchange {
             CTX_AREA_NK100: '',
             EXCG_ID_DVSN_CD: 'ALL',
             tr_id: this.tr('TTTC0081R'),
-        });
-        const rows = rowsOf(response.output1);
+        }, ['CTX_AREA_FK100', 'CTX_AREA_NK100']);
+        const rows = pages.flatMap((page) => rowsOf(page.output1));
         return ccld === '01' ? rows.filter((row) => toNumber(row.tot_ccld_qty ?? row.cntg_qty) > 0) : rows;
     }
 
@@ -10442,7 +10482,7 @@ export class kis extends Exchange {
     private async fetchOverseasCcldRows(since: Int, ccld: '00' | '01'): Promise<Dict[]> {
         const now = this.milliseconds();
         const sandbox = this.isSandboxModeEnabled;
-        const response = await this.privateGetUapiOverseasStockV1TradingInquireCcnl({
+        const pages = await this.fetchAllPages(this.privateGetUapiOverseasStockV1TradingInquireCcnl, {
             ...this.accountParams(),
             PDNO: sandbox ? '' : '%',
             ORD_STRT_DT: etYmd(since ?? now),
@@ -10457,8 +10497,8 @@ export class kis extends Exchange {
             CTX_AREA_NK200: '',
             CTX_AREA_FK200: '',
             tr_id: this.tr('TTTS3035R'),
-        });
-        const rows = rowsOf(response.output);
+        }, ['CTX_AREA_NK200', 'CTX_AREA_FK200']);
+        const rows = pages.flatMap((page) => rowsOf(page.output));
         return ccld === '01' ? rows.filter((row) => toNumber(row.ft_ccld_qty) > 0) : rows;
     }
 

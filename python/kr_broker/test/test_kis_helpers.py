@@ -278,6 +278,15 @@ def test_yahoo_raises_after_three_empty(no_backoff: None) -> None:
     assert len(session.urls) == 3
 
 
+def test_yahoo_other_4xx_is_bad_request_without_retry(no_backoff: None) -> None:
+    # 조회 폭 초과(422) 같은 4xx 는 일시 장애가 아니라 요청 문제다.
+    from kr_broker.base.errors import BadRequest
+    session = FakeSession([FakeResponse(422, {})])
+    with pytest.raises(BadRequest):
+        fetch_yahoo_candles('XOM', '15m', 10, exchange=Exchange({'session': session}))
+    assert len(session.urls) == 1
+
+
 def test_yahoo_retries_429(no_backoff: None) -> None:
     session = FakeSession([YAHOO_429, yahoo_ok(ONE)])
     assert len(fetch_yahoo_candles('NVDA', '1d', 10, exchange=Exchange({'session': session}))) == 1

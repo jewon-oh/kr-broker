@@ -4,7 +4,7 @@
  * 버스트 스로틀(빈 응답) 재시도 회복.
  */
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { BadSymbol, ExchangeNotAvailable, NetworkError, NotSupported } from '../../base/errors';
+import { BadRequest, BadSymbol, ExchangeNotAvailable, NetworkError, NotSupported } from '../../base/errors';
 import { fetchYahooCandles } from '../yahoo-finance-candles';
 import { logger } from '../../logger';
 
@@ -104,6 +104,11 @@ describe('fetchYahooCandles — 재시도 (버스트 스로틀 회복)', () => {
         await expect(fetchYahooCandles('005930', '1d', 10)).rejects.toBeInstanceOf(BadSymbol);
         vi.spyOn(globalThis, 'fetch').mockResolvedValue(status(503));
         await expect(fetchYahooCandles('005930', '1d', 10)).rejects.toBeInstanceOf(ExchangeNotAvailable);
+        // ★조회 폭 초과(422) 같은 그 밖의 4xx 는 일시 장애가 아니라 요청 문제라 BadRequest 이고, 다시 보내지 않는다.
+        const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(status(422));
+        spy.mockClear();
+        await expect(fetchYahooCandles('005930', '1d', 10)).rejects.toBeInstanceOf(BadRequest);
+        expect(spy).toHaveBeenCalledTimes(1);
         vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('fetch failed'));
         await expect(fetchYahooCandles('005930', '1d', 10)).rejects.toBeInstanceOf(NetworkError);
     });

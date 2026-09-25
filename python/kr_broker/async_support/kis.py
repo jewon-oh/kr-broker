@@ -37,7 +37,7 @@
     `stockDirectory`(코스피·코스닥 구분을 알려 주는 `find_kr_market(code)` 객체), `orderableProbeCode`(주문가능현금 조회에 쓰는 종목)다.
 
 한계
-    잔고와 체결 조회는 연속 조회를 하지 않아 실전 기준 잔고 종목 50건, 체결 100건을 넘으면 뒤가 잘린다. `fetch_ohlcv` 는 야후 파이낸스에서
+    잔고와 미체결, 주문체결 조회는 연속조회로 끝까지 받는다. 10쪽을 넘으면 일부만 돌려주지 않고 `BadResponse` 를 던진다. `fetch_ohlcv` 는 야후 파이낸스에서
     받는다(국내는 항상, 미국 일·주·월봉은 야후가 비면 KIS 로 다시 받는다). `fetch_order_book` 은 국내만, `fetch_tickers` 는 국내 30종목까지다.
 """
 
@@ -59,8 +59,8 @@ from kr_broker.async_support.market_calendar import refresh_market_calendar as r
 from kr_broker.base import functions as fn
 from kr_broker.base.decimal_to_precision import NO_PADDING, ROUND, TICK_SIZE, decimal_to_precision
 from kr_broker.base.errors import (
-    ArgumentsRequired, AuthenticationError, BadRequest, BadSymbol, ExchangeError, InvalidOrder, MarketClosed, NotSupported, NullResponse,
-    OrderNotFound, RateLimitExceeded, RequestTimeout,
+    ArgumentsRequired, AuthenticationError, BadRequest, BadResponse, BadSymbol, ExchangeError, InvalidOrder, MarketClosed, NotSupported,
+    NullResponse, OrderNotFound, RateLimitExceeded, RequestTimeout,
 )
 from kr_broker.base.precise import Precise
 from kr_broker.base.token_store import BrokerTokenStore, legacy_token_store_key, token_store_key
@@ -91,6 +91,10 @@ ORDER_TIMEOUT_MS = 25_000
 AUTH_TIMEOUT_MS = 10_000
 READ_RETRIES = 3
 READ_RETRY_DELAY_MS = 500
+# 연속조회로 받는 최대 쪽 수. 공식 예제의 재귀 상한(10)과 같다.
+MAX_CONTINUATION_PAGES = 10
+# 연속조회 도우미가 꺼내 가지 않은 `tr_cont` 기록(분봉 같은 다른 조회의 것)을 남겨 두는 최대 개수.
+TR_CONT_RECORD_LIMIT = 64
 # 관심종목(멀티종목) 시세 한 번에 담을 수 있는 종목 수.
 MULTI_TICKER_LIMIT = 30
 # 종목의 NXT 거래 가능 여부를 캐시하는 시간. NXT 거래 대상은 자주 바뀌지 않는다.
@@ -792,6 +796,8 @@ class kis(Exchange, ImplicitAPI):
         self._candle_service: Optional[KISCandleService] = None
         # 종목별 NXT 거래 가능 여부. `blockedReason` 이 None 이면 거래할 수 있다.
         self._nxt_eligibility: Dict[str, Dict[str, Any]] = {}
+        # 응답 객체의 id → 다음 쪽이 있다는 응답 헤더 `tr_cont`(`F`·`M`). 사전은 약한 참조를 걸 수 없어 id 로 묶고, 도우미가 받자마자 꺼내 지운다.
+        self._tr_cont_of: Dict[int, str] = {}
         super().__init__(config)
 
     def describe(self) -> Dict[str, Any]:
@@ -921,8 +927,8 @@ class kis(Exchange, ImplicitAPI):
 
     def sign(self, path: str, api: ApiName = 'public', method: str = 'GET', params: Optional[Dict[str, Any]] = None,
              headers: Optional[Dict[str, str]] = None, body: Str = None) -> Dict[str, Any]:
-        """비공개 호출은 `params['tr_id']` 를 헤더로 옮기고 나머지는 GET 이면 쿼리로, POST 이면 JSON 본문으로 보낸다.
-        대문자 키(`CANO` 등)는 KIS 규격 그대로 둔다."""
+        """비공개 호출은 `params['tr_id']` 와 `params['tr_cont']`(연속조회 다음 쪽)를 헤더로 옮기고 나머지는 GET 이면 쿼리로, POST 이면
+        JSON 본문으로 보낸다. `tr_cont` 가 없으면 그 헤더를 싣지 않는다. 대문자 키(`CANO` 등)는 KIS 규격 그대로 둔다."""
         params = {} if params is None else params
         api_name = api[0] if isinstance(api, (list, tuple)) else api
         base = self.safe_string(self.urls['api'], api_name)
@@ -935,7 +941,8 @@ class kis(Exchange, ImplicitAPI):
             tr_id = self.safe_string(params, 'tr_id')
             if tr_id is None:
                 raise ArgumentsRequired(f'{self.id} {path} 호출에는 params["tr_id"] 가 필요하다')
-            query = self.omit(params, 'tr_id')
+            tr_cont = self.safe_string(params, 'tr_cont')
+            query = self.omit(params, ['tr_id', 'tr_cont'])
             request_headers.update({
                 'authorization': f'Bearer {self.token}',
                 'appkey': self.apiKey or '',
@@ -943,6 +950,8 @@ class kis(Exchange, ImplicitAPI):
                 'tr_id': tr_id,
                 'custtype': KIS_CUSTOMER_TYPE,
             })
+            if tr_cont is not None:
+                request_headers['tr_cont'] = tr_cont
         request_body = None
         if method == 'GET':
             encoded = self.urlencode(query)
@@ -1003,6 +1012,7 @@ class kis(Exchange, ImplicitAPI):
     def handle_errors(self, code: int, reason: str, url: str, method: str, headers: Dict[str, str], body: str, response: Any,
                       request_headers: Optional[Dict[str, str]], request_body: Str) -> Optional[bool]:
         """KIS 는 업무 오류를 HTTP 200 과 `rt_cd != '0'` 로 주고, 초당 거래건수 초과는 HTTP 500 에 실어 온다. 상태 코드보다 봉투를 먼저 읽는다."""
+        self._record_tr_cont(headers, response)
         is_auth_request = '/oauth2/' in url
         msg_cd = self.safe_string_2(response, 'msg_cd', 'error_code')
         # 인증 실패가 확실할 때만 토큰 캐시를 버린다. 아무 500 에나 붙이면 발급이 남발되고, 토큰 발급은 분당 1회 제한이다.
@@ -1027,6 +1037,36 @@ class kis(Exchange, ImplicitAPI):
         self.throw_exactly_matched_exception(self.exceptions.get('exact'), detail, feedback, detail=detail)
         self.throw_broadly_matched_exception(self.exceptions.get('broad'), msg, feedback, detail=detail)
         raise ExchangeError(feedback, detail=detail)
+
+    def _record_tr_cont(self, headers: Optional[Dict[str, str]], response: Any) -> None:
+        """다음 쪽이 있다는 응답 헤더 `tr_cont` 를 응답 객체의 id 에 적는다. 없으면 같은 id 의 옛 기록(해제된 객체의 id 재사용)을 지운다."""
+        if not isinstance(response, (dict, list)):
+            return
+        tr_cont = next((value for key, value in (headers or {}).items() if key.lower() == 'tr_cont'), None)
+        if tr_cont not in ('F', 'M'):
+            self._tr_cont_of.pop(id(response), None)
+            return
+        self._tr_cont_of[id(response)] = tr_cont
+        for stale in list(self._tr_cont_of)[:-TR_CONT_RECORD_LIMIT]:
+            self._tr_cont_of.pop(stale, None)
+
+    async def _fetch_all_pages(self, method: Callable[[Dict[str, Any]], Any], request: Dict[str, Any], keys: List[str],
+                               max_pages: int = MAX_CONTINUATION_PAGES) -> List[Any]:
+        """연속조회로 모든 쪽의 응답을 받는다. 응답 헤더 `tr_cont` 가 `F`·`M` 이면 요청 헤더 `tr_cont: N` 과 응답의 연속조회 키(`keys` 의
+        소문자 필드)로 다음 쪽을 부른다(공식 예제 `examples_llm` 의 규칙이고 실전과 모의가 같다). `max_pages` 쪽을 넘으면 일부만 돌려주지 않고
+        `BadResponse` 를 던진다."""
+        pages: List[Any] = []
+        params = request
+        while True:
+            response = await method(params)
+            pages.append(response)
+            if self._tr_cont_of.pop(id(response), None) is None:
+                return pages
+            if len(pages) >= max_pages:
+                raise BadResponse(f'{self.id} 연속조회가 {max_pages}쪽을 넘는다')
+            params = self.extend(request, {'tr_cont': 'N'})
+            for key in keys:
+                params[key] = self.safe_string(response, key.lower(), '')
 
     def _drop_token(self, code: int, msg_cd: Str) -> None:
         logger.warning('[kis] 인증 실패(%s %s). 토큰 캐시를 무효화하고 다음 호출에서 재발급한다', code, msg_cd)
@@ -1594,7 +1634,7 @@ class kis(Exchange, ImplicitAPI):
         return self.parse_balance(raw)
 
     async def _fetch_domestic_balance_raw(self, orderable: bool) -> Dict[str, Any]:
-        response = await self.private_get_uapi_domestic_stock_v1_trading_inquire_balance(self.extend(self._account_params(), {
+        pages = await self._fetch_all_pages(self.private_get_uapi_domestic_stock_v1_trading_inquire_balance, self.extend(self._account_params(), {
             'AFHR_FLPR_YN': 'N',
             'OFL_YN': '',
             'INQR_DVSN': '02',
@@ -1605,8 +1645,12 @@ class kis(Exchange, ImplicitAPI):
             'CTX_AREA_FK100': '',
             'CTX_AREA_NK100': '',
             'tr_id': self.tr('TTTC8434R'),
-        }))
-        raw: Dict[str, Any] = {'holdings': rows_of(_field(response, 'output1')), 'summary': first_row(_field(response, 'output2'))}
+        }), ['CTX_AREA_FK100', 'CTX_AREA_NK100'])
+        # 합계(`output2`)는 계좌 전체 값이라 첫 쪽 것을 쓴다. 쪽마다 같은 값이 온다는 것은 추정이다.
+        raw: Dict[str, Any] = {
+            'holdings': [row for page in pages for row in rows_of(_field(page, 'output1'))],
+            'summary': first_row(_field(pages[0], 'output2')),
+        }
         if orderable:
             # 주문가능금액은 잔고 응답이 아니라 매수가능조회의 `ord_psbl_cash` 를 쓴다. 시장가(`01`)로 물으면 종목 증거금율이 반영된다.
             psbl = await self.private_get_uapi_domestic_stock_v1_trading_inquire_psbl_order(self.extend(self._account_params(), {
@@ -1625,14 +1669,14 @@ class kis(Exchange, ImplicitAPI):
         exchanges = ['NASD', 'NYSE', 'AMEX'] if self.isSandboxModeEnabled else ['NASD']
         holdings: List[Dict[str, Any]] = []
         for exchange in exchanges:
-            response = await self.private_get_uapi_overseas_stock_v1_trading_inquire_balance(self.extend(self._account_params(), {
+            pages = await self._fetch_all_pages(self.private_get_uapi_overseas_stock_v1_trading_inquire_balance, self.extend(self._account_params(), {
                 'OVRS_EXCG_CD': exchange,
                 'TR_CRCY_CD': 'USD',
                 'CTX_AREA_FK200': '',
                 'CTX_AREA_NK200': '',
                 'tr_id': self.tr('TTTS3012R'),
-            }))
-            holdings.extend(rows_of(_field(response, 'output1')))
+            }), ['CTX_AREA_FK200', 'CTX_AREA_NK200'])
+            holdings.extend(row for page in pages for row in rows_of(_field(page, 'output1')))
         return {'holdings': holdings}
 
     async def _fetch_present_balance_raw(self) -> Dict[str, Any]:
@@ -2086,25 +2130,27 @@ class kis(Exchange, ImplicitAPI):
         want_overseas = which != 'domestic' and not self.isSandboxModeEnabled if instrument is None else instrument.overseas
         orders: List[Dict[str, Any]] = []
         if want_domestic:
-            response = await self.private_get_uapi_domestic_stock_v1_trading_inquire_psbl_rvsecncl(self.extend(self._account_params(), {
+            pages = await self._fetch_all_pages(self.private_get_uapi_domestic_stock_v1_trading_inquire_psbl_rvsecncl, self.extend(self._account_params(), {
                 'CTX_AREA_FK100': '',
                 'CTX_AREA_NK100': '',
                 'INQR_DVSN_1': '0',
                 'INQR_DVSN_2': '0',
                 # 실전만 신형 TR 이 있다. 모의는 종전 TR 을 그대로 쓴다.
                 'tr_id': self.tr('TTTC0084R', 'VTTC8036R'),
-            }))
+            }), ['CTX_AREA_FK100', 'CTX_AREA_NK100'])
             market = None if instrument is None else self._market_of(instrument)
-            orders.extend(self._mark_open(order) for order in self.parse_orders(rows_of(_field(response, 'output')), market))
+            rows = [row for page in pages for row in rows_of(_field(page, 'output'))]
+            orders.extend(self._mark_open(order) for order in self.parse_orders(rows, market))
         if want_overseas:
-            response = await self.private_get_uapi_overseas_stock_v1_trading_inquire_nccs(self.extend(self._account_params(), {
+            pages = await self._fetch_all_pages(self.private_get_uapi_overseas_stock_v1_trading_inquire_nccs, self.extend(self._account_params(), {
                 'OVRS_EXCG_CD': 'NASD',
                 'SORT_SQN': 'DS',
                 'CTX_AREA_FK200': '',
                 'CTX_AREA_NK200': '',
                 'tr_id': self.tr('TTTS3018R', None),
-            }))
-            orders.extend(self._mark_open(order) for order in self.parse_orders(rows_of(_field(response, 'output'))))
+            }), ['CTX_AREA_FK200', 'CTX_AREA_NK200'])
+            rows = [row for page in pages for row in rows_of(_field(page, 'output'))]
+            orders.extend(self._mark_open(order) for order in self.parse_orders(rows))
         filtered = orders if instrument is None else [order for order in orders if order.get('symbol') == instrument.symbol]
         return self.filter_by_since_limit(filtered, since, limit)
 
@@ -2158,7 +2204,7 @@ class kis(Exchange, ImplicitAPI):
         """국내 일별주문체결 행. `ccld` 는 `'00'` 전체, `'01'` 체결, `'02'` 미체결이다. 조회일은 한국 달력 날짜다(UTC 로 잡으면 한국 0~9시에
         전날을 조회한다). 거래소 구분은 `ALL` 로 KRX·NXT·SOR 체결을 모두 본다."""
         now = self.milliseconds()
-        response = await self.private_get_uapi_domestic_stock_v1_trading_inquire_daily_ccld(self.extend(self._account_params(), {
+        pages = await self._fetch_all_pages(self.private_get_uapi_domestic_stock_v1_trading_inquire_daily_ccld, self.extend(self._account_params(), {
             'INQR_STRT_DT': kst_ymd(since if since is not None else now),
             'INQR_END_DT': kst_ymd(now),
             'SLL_BUY_DVSN_CD': '00',
@@ -2173,8 +2219,8 @@ class kis(Exchange, ImplicitAPI):
             'CTX_AREA_NK100': '',
             'EXCG_ID_DVSN_CD': 'ALL',
             'tr_id': self.tr('TTTC0081R'),
-        }))
-        rows = rows_of(_field(response, 'output1'))
+        }), ['CTX_AREA_FK100', 'CTX_AREA_NK100'])
+        rows = [row for page in pages for row in rows_of(_field(page, 'output1'))]
         if ccld != '01':
             return rows
         return [row for row in rows if to_number(row.get('tot_ccld_qty') if row.get('tot_ccld_qty') is not None else row.get('cntg_qty')) > 0]
@@ -2184,7 +2230,7 @@ class kis(Exchange, ImplicitAPI):
         전체 조회만 되므로 체결 여부는 응답의 체결수량으로 거른다. 일자는 현지(ET) 날짜다. 주문번호로는 찾을 수 없어 호출하는 쪽이 거른다."""
         now = self.milliseconds()
         sandbox = self.isSandboxModeEnabled
-        response = await self.private_get_uapi_overseas_stock_v1_trading_inquire_ccnl(self.extend(self._account_params(), {
+        pages = await self._fetch_all_pages(self.private_get_uapi_overseas_stock_v1_trading_inquire_ccnl, self.extend(self._account_params(), {
             'PDNO': '' if sandbox else '%',
             'ORD_STRT_DT': et_ymd(since if since is not None else now),
             'ORD_END_DT': et_ymd(now),
@@ -2198,8 +2244,8 @@ class kis(Exchange, ImplicitAPI):
             'CTX_AREA_NK200': '',
             'CTX_AREA_FK200': '',
             'tr_id': self.tr('TTTS3035R'),
-        }))
-        rows = rows_of(_field(response, 'output'))
+        }), ['CTX_AREA_NK200', 'CTX_AREA_FK200'])
+        rows = [row for page in pages for row in rows_of(_field(page, 'output'))]
         return [row for row in rows if to_number(row.get('ft_ccld_qty')) > 0] if ccld == '01' else rows
 
     def parse_order(self, order: Dict[str, Any], market: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
