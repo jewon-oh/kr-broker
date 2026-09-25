@@ -440,7 +440,7 @@ export class Exchange {
     }
 
     /**
-     * 요청 하나를 처리한다: (비공개면) 자격증명 확인 → `authenticate` → `throttle` → 재시도 루프 { `sign` → `fetch` }.
+     * 요청 하나를 처리한다: (비공개면) 자격증명 확인 → 재시도 루프 { `throttle` → (비공개면) `authenticate` → `sign` → `fetch` }.
      *
      * 주문 요청(`config.order`)은 재시도하지 않고, 접수 여부를 모르는 실패를 `OrderOutcomeUnknown` 으로 바꿔 던진다.
      * 조회는 `OperationFailed` 계열이면서 `retryable !== false` 인 오류만 `maxRetriesOnFailure`(옵션 또는 `params`, 기본 0)번까지 다시 보낸다.
@@ -455,13 +455,8 @@ export class Exchange {
         config: EndpointConfig = {},
     ): Promise<any> {
         const isOrder = safeBool(config, 'order', false);
-        if (this.isPrivateApi(api)) {
-            this.checkRequiredCredentials();
-            await this.authenticate(path, api, method, params, headers, body);
-        }
-        if (this.enableRateLimit) {
-            await this.throttle(this.calculateRateLimiterCost(api, method, path, params, config), safeString(config, 'bucket'));
-        }
+        const isPrivate = this.isPrivateApi(api);
+        if (isPrivate) this.checkRequiredCredentials();
         let retries = 0;
         [retries, params] = this.handleOptionAndParams(params, path, 'maxRetriesOnFailure', retries);
         let retryDelay = 0;
@@ -469,6 +464,12 @@ export class Exchange {
         if (isOrder) retries = 0;
         const timeout = isOrder && this.orderTimeout !== undefined ? this.orderTimeout : this.timeout;
         for (let attempt = 0; ; attempt++) {
+            // 재시도도 요청 간격 조절을 거친다. 인증은 간격 조절 뒤에 한다. 기다리는 사이 토큰이 무효화되면 새 토큰을 받는다.
+            // 둘은 재시도 대상 밖이다. 토큰 발급 실패를 다시 시도하면 발급 빈도 제한(KIS 분당 1회)에 더 걸린다.
+            if (this.enableRateLimit) {
+                await this.throttle(this.calculateRateLimiterCost(api, method, path, params, config), safeString(config, 'bucket'));
+            }
+            if (isPrivate) await this.authenticate(path, api, method, params, headers, body);
             try {
                 this.lastRestRequestTimestamp = now();
                 const request = this.sign(path, api, method, params, headers, body);
@@ -488,7 +489,11 @@ export class Exchange {
                 const retryable = error instanceof OperationFailed && error.retryable !== false;
                 if (!retryable || attempt >= retries) throw error;
                 this.log(`요청 실패, 다시 시도한다(${attempt + 1}/${retries}): ${errorMessage(error)}`);
-                if (retryDelay > 0) await sleep(retryDelay);
+                // 서버가 알려 준 대기 시간(429 `Retry-After`)이 있으면 그만큼 기다린다.
+                const retryAfter = (error as { retryAfterMs?: unknown }).retryAfterMs;
+                const retryAfterMs = typeof retryAfter === 'number' ? retryAfter : 0;
+                const waitMs = Math.max(retryDelay, retryAfterMs);
+                if (waitMs > 0) await sleep(waitMs);
             }
         }
     }

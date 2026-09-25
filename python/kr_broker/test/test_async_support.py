@@ -571,3 +571,11 @@ def test_async_modules_are_distinct_from_sync() -> None:
         text = (PACKAGE / f'{name}.py').read_text(encoding='utf-8')
         assert 'async_support' not in text.split('\n', 1)[1], name
     assert async_exchange_module.Exchange.synchronous is False and sync_exchange_module.Exchange.synchronous is True
+
+
+def test_async_throttle_rejects_unknown_bucket() -> None:
+    # 동기 판과 TS 판처럼 모르는 버킷을 기본 한도로 넘기지 않는다.
+    from kr_broker.base.errors import ExchangeError
+    ex = async_exchange_module.Exchange({'rateLimit': 10})
+    with pytest.raises(ExchangeError):
+        asyncio.run(ex.throttle(1, 'no-such-bucket'))

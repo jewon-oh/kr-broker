@@ -18,7 +18,7 @@ import aiohttp
 from kr_broker.async_support.base.throttler import Throttler
 from kr_broker.base import functions as fn
 from kr_broker.base.errors import (
-    BaseError, NetworkError, NotSupported, NullResponse, OperationFailed, OrderOutcomeUnknown, RequestTimeout,
+    BaseError, ExchangeError, NetworkError, NotSupported, NullResponse, OperationFailed, OrderOutcomeUnknown, RequestTimeout,
 )
 from kr_broker.base.exchange import Exchange as BaseExchange, redact_body_for_log, redact_headers_for_log
 from kr_broker.base.types import ApiName, Int, Num, Str, Strings
@@ -102,11 +102,9 @@ class Exchange(BaseExchange):
         params = {} if params is None else params
         config = {} if config is None else config
         is_order = fn.safe_bool(config, 'order', False) is True
-        if self.is_private_api(api):
+        is_private = self.is_private_api(api)
+        if is_private:
             self.check_required_credentials()
-            await self.authenticate(path, api, method, params, headers, body)
-        if self.enableRateLimit:
-            await self.throttle(self.calculate_rate_limiter_cost(api, method, path, params, config), fn.safe_string(config, 'bucket'))
         retries, params = self.handle_option_and_params(params, path, 'maxRetriesOnFailure', 0)
         retry_delay, params = self.handle_option_and_params(params, path, 'maxRetriesOnFailureDelay', 0)
         if is_order:
@@ -114,6 +112,11 @@ class Exchange(BaseExchange):
         timeout = self.orderTimeout if is_order and self.orderTimeout is not None else self.timeout
         attempt = 0
         while True:
+            # 재시도도 간격 조절을 거치고, 인증은 그 뒤에 한다(동기 판과 같다).
+            if self.enableRateLimit:
+                await self.throttle(self.calculate_rate_limiter_cost(api, method, path, params, config), fn.safe_string(config, 'bucket'))
+            if is_private:
+                await self.authenticate(path, api, method, params, headers, body)
             try:
                 self.lastRestRequestTimestamp = fn.milliseconds()
                 request = self.sign(path, api, method, params, headers, body)
@@ -136,8 +139,10 @@ class Exchange(BaseExchange):
                     raise error from e
                 attempt += 1
                 self.log(f'요청 실패, 다시 시도한다({attempt}/{retries}): {error}')
-                if retry_delay > 0:
-                    await self.sleep(retry_delay)
+                retry_after = getattr(error, 'retry_after_ms', None)
+                wait_ms = max(retry_delay, retry_after if isinstance(retry_after, (int, float)) else 0)
+                if wait_ms > 0:
+                    await self.sleep(wait_ms)
 
     async def authenticate(self, path: str, api: ApiName, method: str, params: Dict[str, Any],  # type: ignore[override]
                            headers: Optional[Dict[str, str]], body: Str) -> None:
@@ -177,8 +182,9 @@ class Exchange(BaseExchange):
         return Throttler(refill_rate=1 / rate_limit, capacity=1, cost=1) if rate_limit > 0 else None
 
     async def throttle(self, cost: Num = None, bucket: Str = None) -> None:  # type: ignore[override]
+        # 모르는 버킷을 기본 한도로 넘기면 그룹 한도를 넘겨 429 를 받는다(동기 판, TS 판과 같다).
         if bucket is not None and bucket not in self._bucket_throttlers:
-            bucket = None
+            raise ExchangeError(f'{self.id} 에 없는 rateLimitBuckets 이름이다: {bucket}')
         throttler = self._throttler if bucket is None else self._bucket_throttlers[bucket]
         if throttler is not None:
             await throttler.throttle(cost)

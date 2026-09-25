@@ -359,15 +359,13 @@ class Exchange:
 
     def fetch2(self, path: str, api: ApiName = 'public', method: str = 'GET', params: Optional[Dict[str, Any]] = None,
                headers: Optional[Dict[str, str]] = None, body: Str = None, config: Optional[Dict[str, Any]] = None) -> Any:
-        """요청 하나를 처리한다: (비공개면) 자격증명 확인 → `authenticate` → `throttle` → 재시도 루프 { `sign` → `fetch` }."""
+        """요청 하나를 처리한다: (비공개면) 자격증명 확인 → 재시도 루프 { `throttle` → (비공개면) `authenticate` → `sign` → `fetch` }."""
         params = {} if params is None else params
         config = {} if config is None else config
         is_order = fn.safe_bool(config, 'order', False) is True
-        if self.is_private_api(api):
+        is_private = self.is_private_api(api)
+        if is_private:
             self.check_required_credentials()
-            self.authenticate(path, api, method, params, headers, body)
-        if self.enableRateLimit:
-            self.throttle(self.calculate_rate_limiter_cost(api, method, path, params, config), fn.safe_string(config, 'bucket'))
         retries, params = self.handle_option_and_params(params, path, 'maxRetriesOnFailure', 0)
         retry_delay, params = self.handle_option_and_params(params, path, 'maxRetriesOnFailureDelay', 0)
         if is_order:
@@ -375,6 +373,11 @@ class Exchange:
         timeout = self.orderTimeout if is_order and self.orderTimeout is not None else self.timeout
         attempt = 0
         while True:
+            # 재시도도 간격 조절을 거치고, 인증은 그 뒤에 한다. 둘은 재시도 대상 밖이다(토큰 발급 실패를 다시 시도하지 않는다).
+            if self.enableRateLimit:
+                self.throttle(self.calculate_rate_limiter_cost(api, method, path, params, config), fn.safe_string(config, 'bucket'))
+            if is_private:
+                self.authenticate(path, api, method, params, headers, body)
             try:
                 self.lastRestRequestTimestamp = fn.milliseconds()
                 request = self.sign(path, api, method, params, headers, body)
@@ -397,8 +400,11 @@ class Exchange:
                     raise error from e
                 attempt += 1
                 self.log(f'요청 실패, 다시 시도한다({attempt}/{retries}): {error}')
-                if retry_delay > 0:
-                    self.sleep(retry_delay)
+                # 서버가 알려 준 대기 시간(429 `Retry-After`)이 있으면 그만큼 기다린다.
+                retry_after = getattr(error, 'retry_after_ms', None)
+                wait_ms = max(retry_delay, retry_after if isinstance(retry_after, (int, float)) else 0)
+                if wait_ms > 0:
+                    self.sleep(wait_ms)
 
     def is_outcome_unknown(self, error: BaseException) -> bool:
         """주문 요청이 이 오류로 끝났을 때 접수 여부를 알 수 없는가. 시간 초과, 응답 전에 연결이 끊긴 전송 오류(`NetworkError` 그 자체),

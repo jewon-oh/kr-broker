@@ -186,11 +186,11 @@ describe('fetch2 파이프라인', () => {
         expect(ex.calls).toEqual(['throttle', 'sign', 'fetch', 'handleErrors']);
     });
 
-    it('비공개 호출은 자격증명을 확인하고 authenticate 를 먼저 부른다', async () => {
+    it('비공개 호출은 자격증명을 확인하고, 간격 조절 뒤에 authenticate 를 부른다(기다리는 사이 무효화된 토큰으로 나가지 않는다)', async () => {
         const { calls } = stubFetch(json({}));
         const ex = new FakeExchange(CREDENTIALS);
         await ex.privateGetAccounts();
-        expect(ex.calls).toEqual(['authenticate', 'throttle', 'sign', 'handleErrors']);
+        expect(ex.calls).toEqual(['throttle', 'authenticate', 'sign', 'handleErrors']);
         expect((calls[0].init.headers as Dict).Authorization).toBe('Bearer issued-token');
     });
 
@@ -1124,5 +1124,27 @@ describe('verbose 로그의 비밀 가리기', () => {
             .toEqual({ appSecret: '***', nested: { approval_key: '***' }, rows: [{ access_token: '***' }] });
         expect(redactBodyForLog('grant_type=client_credentials&client_id=id&client_secret=s')).toBe('grant_type=client_credentials&client_id=id&client_secret=***');
         expect(redactBodyForLog('<html>maintenance</html>')).toBe('<html>maintenance</html>');
+    });
+});
+
+
+describe('조회 재시도의 간격', () => {
+    it('★재시도마다 간격 조절과 인증을 다시 거치고, 오류의 retryAfterMs 만큼 기다린다', async () => {
+        vi.useFakeTimers();
+        class Limited extends FakeExchange {
+            override handleErrors(...args: Parameters<FakeExchange['handleErrors']>): boolean | undefined {
+                if (args[0] === 429) throw Object.assign(new RateLimitExceeded('slow down'), { retryAfterMs: 2000 });
+                return super.handleErrors(...args);
+            }
+        }
+        const { calls } = stubFetch([text('busy', 429), json(MARKET_ROWS)]);
+        const ex = new Limited({ ...CREDENTIALS, options: { maxRetriesOnFailure: 1 } });
+        const pending = ex.privateGetAccounts();
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(calls).toHaveLength(1);   // Retry-After 전에는 다시 보내지 않는다
+        await vi.advanceTimersByTimeAsync(1500);
+        expect(await pending).toEqual(MARKET_ROWS);
+        expect(ex.calls.filter((c) => c === 'throttle')).toHaveLength(2);
+        expect(ex.calls.filter((c) => c === 'authenticate')).toHaveLength(2);
     });
 });
