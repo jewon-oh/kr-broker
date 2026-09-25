@@ -34,6 +34,7 @@
 
 ### 고침
 
+- KB증권 `fetchBalance`가 국내 보유를 다 읽지 못했는데도 `info.readStatus`를 `COMPLETE`로 내던 것을 고쳤습니다. 계좌자산평가(`SSQM2952`)가 실패해 보유주식(`SSQM1801`)으로 내려갔는데 그 행이 전부 걸러졌거나, 종목코드를 못 읽어 버린 행이 있거나, 연속조회가 상한에서 잘렸거나, 결과가 비었으면 `PARTIAL`이고 `info.unreadMarkets`에 `KR`이 들어갑니다. 예전에는 해외 조회만 보고 판정해서 `unreadMarkets`에는 `US`만 나왔습니다.
 - 빌드한 `dist/`를 Node.js ESM에서 불러오지 못하던 것을 고쳤습니다(확장자 없는 상대 경로 `./base` 때문에 `ERR_UNSUPPORTED_DIR_IMPORT`). CI가 `exports`의 모든 경로를 Node.js로 불러와 확인합니다(`scripts/check-dist-imports.mjs`).
 - KB증권의 `fetchTicker`, `fetchOrderBook`, `fetchBalance`, `cancelOrder`, `fetchOpenOrders` 등이 `params`를 요청에 싣지 않던 것을 고쳤습니다.
 - 한국투자증권 해외 실시간 체결과 호가(`HDFSCNT0`, `HDFSASP0`, `HDFSASP1`)의 필드 이름이 한 칸씩 밀려 있던 것을 고쳤습니다.
