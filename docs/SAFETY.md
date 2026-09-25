@@ -49,6 +49,21 @@ const broker = new kis({ apiKey, secret, uid, sandbox: true });
 
 장 시간 밖에서 주문하면 라이브러리가 `MarketClosed`를 던지고 주문 요청을 보내지 않습니다. 시험은 장 시간 안에서 하십시오.
 
+### 한국투자증권의 경로별 장 시간 게이트
+
+한국투자증권은 주문 경로마다 게이트가 다릅니다. 아래 표에서 "없음"인 경로는 라이브러리가 시각을 보지 않고 요청을 보냅니다. 장 시간 판단은 증권사 응답에 맡깁니다.
+
+| 경로 | 막는 시각 |
+|---|---|
+| `createOrder` 국내 정규장, `createTriggerOrder`, `createCreditOrder` | KRX 정규장(09:00~15:30) 밖과 휴장일. 15:20~15:30 에는 신규 매수만 막습니다 |
+| `createOrder` 국내 확장세션(`session: 'nxt'` 또는 `nxtRouting` 자동 판정) | NXT 프리마켓(08:00~08:50), 메인마켓(09:00~15:20), 애프터마켓(15:30~20:00) 밖과 휴장일 |
+| `createOrder` 미국 | 완전 마감. 15:50~16:00(ET)에는 신규 매수만 막습니다 |
+| `editOrder` 국내 | KRX 정규장과 NXT 확장세션이 모두 닫힌 시각과 휴장일 |
+| `editOrder` 미국 | 완전 마감 |
+| `cancelOrder`, `cancelAllOrders` | 없음 |
+| `createDaytimeOrder`, `createDerivativeOrder`, `createBondOrder`, `createOverseasDerivativeOrder` | 없음. 이 시장들의 시간표는 라이브러리에 없습니다 |
+| 예약주문(`createReservedOrder`, `createOverseasReservedOrder`) | 없음. 장 밖에 내는 주문입니다 |
+
 ## OrderOutcomeUnknown이 나오면 재주문하지 않습니다
 
 `OrderOutcomeUnknown`은 주문 요청이 시간 초과나 연결 끊김으로 끝났거나, 증권사 오류 코드 없는 5xx 나 해석할 수 없는 응답을 받았다는 뜻입니다. 증권사가 주문을 접수했는지 알 수 없습니다.

@@ -4679,13 +4679,17 @@ export class kbsec extends Exchange {
         }
         const sor = await this.resolveOrderSor(id, symbol);
         const isPartial = params.partial === true && amount !== undefined;
+        if (!isPartial && amount !== undefined) {
+            logger.warn({ orderId: id, symbol, amount }, '[kbsec] params.partial 이 없어 전부정정한다 — 수량은 바꾸지 않고 잔량 전체의 가격만 바꾼다');
+        }
         const response = await this.callTr(KBSEC_TR.AMEND_KR, buildKrOrderBody(
             { base, amount: isPartial ? amount : 0, price, sor, jbClsf: KBSEC_ORDER_SIDE_KR.AMEND },
             { crct_clsf: isPartial ? '1' : '2', orgn_ordr_no: id },
         ));
         const newId = pickStr(response, 'ordr_no', 'odno');
         logger.info({ orderId: id, newOrderId: newId, symbol, price, sor, isPartial }, '[kbsec] ✅ 정정주문 — 주문번호가 바뀌었다');
-        return this.editedOrder(response, market, price, amount);
+        // 전부정정은 수량을 보내지 않으므로 반환값에도 싣지 않는다(정정 뒤 수량은 잔량이고 이 응답으로는 알 수 없다).
+        return this.editedOrder(response, market, price, isPartial ? amount : undefined);
     }
 
     private editedOrder(response: Dict, market: MarketInterface, price: Num, amount: Num): Order {

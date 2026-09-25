@@ -12,6 +12,7 @@ vi.mock('../kis-trading-hours', () => ({
     checkKRXTradingHours: () => ({ tradable: false, reason: '장 마감' }), // 정규장은 닫혀 있다
     getKrxMarketPhase: () => 'closed',
     isNxtExtendedTradable: () => mockExtended(),
+    getNxtSession: () => (mockExtended() ? 'after-market' : 'closed'),
 }));
 vi.mock('../us-market-hours', () => ({ getUsMarketPhase: () => 'regular', formatEtWallClock: () => '10:00 ET' }));
 global.fetch = mockFetch as unknown as typeof fetch;

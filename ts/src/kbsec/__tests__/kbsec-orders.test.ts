@@ -417,14 +417,17 @@ describe('editOrder', () => {
             ordr_jb_clsf: '3', crct_clsf: '1', orgn_ordr_no: 'O9', ordr_uprc: '71000', ordr_q: '2',
         });
         expect(order.id).toBe('AM1');
+        expect(order.amount).toBe(2);
     });
 
     it('국내 전부정정은 수량을 0 으로 보낸다 — 수량을 실으면 거부된다(2329)', async () => {
         routeTr(mockFetch, { [KBSEC_TR.AMEND_KR]: { ordr_no: 'AM2' } });
 
-        await newExchange().editOrder('O9', '005930/KRW', 'limit', 'buy', 5, 71000);
+        const order = await newExchange().editOrder('O9', '005930/KRW', 'limit', 'buy', 5, 71000);
 
         expect(trBody(mockFetch, KBSEC_TR.AMEND_KR).dataBody).toMatchObject({ crct_clsf: '2', ordr_q: '0' });
+        // ★보내지 않은 수량 5 를 반환값에 싣지 않는다. 호출자의 장부가 실제 주문과 어긋나지 않게 한다.
+        expect(order.amount).toBeUndefined();
     });
 
     it('정정은 원주문과 같은 라우팅으로 나간다 — 미체결 목록의 sor_ordr_ccd 가 정본이다', async () => {

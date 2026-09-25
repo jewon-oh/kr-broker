@@ -366,7 +366,7 @@ class toss(Exchange, ImplicitAPI):
                 'fetchOrders': False,
                 'fetchOpenOrders': True,
                 'fetchClosedOrders': True,
-                'fetchCanceledOrders': False,
+                'fetchCanceledOrders': True,
                 'fetchMyTrades': 'emulated',
                 'fetchMarketCalendar': True,
                 'fetchStockWarnings': True,
@@ -1417,7 +1417,7 @@ class toss(Exchange, ImplicitAPI):
         expire_date = self.safe_string(params, 'expireDate')
         if expire_date is None:
             raise ArgumentsRequired(f'{self.id} 조건주문에는 expireDate(YYYY-MM-DD)가 필요하다')
-        first = {'side': side, 'triggerPrice': self.safe_number(params, 'triggerPrice'), 'orderPrice': price}
+        first = {'side': side, 'triggerPrice': self._conditional_trigger_price(params, 'triggerPrice'), 'orderPrice': price}
         second_params = self.safe_dict(params, 'second')
         second = None
         if second_params is not None:
@@ -1426,7 +1426,7 @@ class toss(Exchange, ImplicitAPI):
                 second_side = ('sell' if side == 'buy' else 'buy') if conditional_type == 'OTO' else side
             second = {
                 'side': second_side,
-                'triggerPrice': self.safe_number(second_params, 'triggerPrice'),
+                'triggerPrice': self._conditional_trigger_price(second_params, 'second.triggerPrice'),
                 'orderPrice': self.safe_number(second_params, 'price'),
             }
         if conditional_type in ('OCO', 'OTO') and second is None:
@@ -1442,6 +1442,15 @@ class toss(Exchange, ImplicitAPI):
             'first': first, 'second': second, 'clientOrderId': self.safe_string(params, 'clientOrderId'),
         }
 
+    def _conditional_trigger_price(self, source: Dict[str, Any], label: str) -> float:
+        """조건의 트리거 가격. 없거나 숫자가 아니면 `ArgumentsRequired`, 0 이하면 `InvalidOrder` 다. 빠진 채로 보내면 트리거 없는 조건이 나간다."""
+        value = self.safe_number(source, 'triggerPrice')
+        if value is None:
+            raise ArgumentsRequired(f"{self.id} 조건주문의 {label} 가 없거나 숫자가 아니다: {self.safe_string(source, 'triggerPrice')}")
+        if not _is_finite_number(value) or not value > 0:
+            raise InvalidOrder(f'{self.id} 조건주문의 {label} 는 0 보다 커야 한다: {value}')
+        return value
+
     def _conditional_leg(self, leg: Dict[str, Any], order_type: str) -> Dict[str, Any]:
         """조건주문 요청의 leg. `orderPrice` 는 지정가일 때만 보낸다."""
         result = {'orderSide': 'SELL' if leg['side'] == 'sell' else 'BUY', 'triggerPrice': self.number_to_string(leg['triggerPrice'])}
@@ -1454,26 +1463,31 @@ class toss(Exchange, ImplicitAPI):
         unit = first['orderPrice'] if first['orderPrice'] is not None else first['triggerPrice']
         return amount * unit if _is_finite_number(amount) and _is_finite_number(unit) else math.nan
 
+    def _conditional_order_fields(self, market: Dict[str, Any], amount: float, plan: Dict[str, Any]) -> Dict[str, Any]:
+        """조건주문 등록과 정정이 같이 보내는 필드(수량, 호가유형, 만료일, 감시조건, 고액주문 확인)."""
+        order_type = plan['orderType']
+        fields: Dict[str, Any] = {
+            'type': plan['conditionalType'],
+            'quantity': self.number_to_string(amount),
+            'orderType': order_type,
+            'expireDate': plan['expireDate'],
+            'first': self._conditional_leg(plan['first'], order_type),
+        }
+        if plan['second'] is not None:
+            fields['second'] = self._conditional_leg(plan['second'], order_type)
+        if self._is_high_value(self._conditional_notional(amount, plan['first']), self._country_of(market)):
+            fields['confirmHighValueOrder'] = True
+        return fields
+
     def _create_conditional_order(self, market: Dict[str, Any], type: str, side: str, amount: float, price: Num,
                                   params: Dict[str, Any]) -> Dict[str, Any]:
         """조건주문을 등록한다(`create_order` 가 `params['triggerPrice']` 를 보고 부른다)."""
         plan = self._plan_conditional_order(type, side, price, params)
         order_type = plan['orderType']
         first = plan['first']
-        body: Dict[str, Any] = {
-            'symbol': market['id'],
-            'type': plan['conditionalType'],
-            'quantity': self.number_to_string(amount),
-            'orderType': order_type,
-            'expireDate': plan['expireDate'],
-            'first': self._conditional_leg(first, order_type),
-        }
-        if plan['second'] is not None:
-            body['second'] = self._conditional_leg(plan['second'], order_type)
+        body: Dict[str, Any] = self.extend({'symbol': market['id']}, self._conditional_order_fields(market, amount, plan))
         if plan['clientOrderId'] is not None:
             body['clientOrderId'] = plan['clientOrderId']
-        if self._is_high_value(self._conditional_notional(amount, first), self._country_of(market)):
-            body['confirmHighValueOrder'] = True
 
         response = self.unwrap(self.private_account_post_conditional_orders(body))
         conditional_order_id = self.safe_string(response, 'conditionalOrderId')
@@ -1505,18 +1519,7 @@ class toss(Exchange, ImplicitAPI):
         plan = self._plan_conditional_order(type, side, price, params)
         order_type = plan['orderType']
         first = plan['first']
-        body: Dict[str, Any] = {
-            'conditionalOrderId': id,
-            'type': plan['conditionalType'],
-            'quantity': self.number_to_string(amount),
-            'orderType': order_type,
-            'expireDate': plan['expireDate'],
-            'first': self._conditional_leg(first, order_type),
-        }
-        if plan['second'] is not None:
-            body['second'] = self._conditional_leg(plan['second'], order_type)
-        if self._is_high_value(self._conditional_notional(amount, first), self._country_of(market)):
-            body['confirmHighValueOrder'] = True
+        body: Dict[str, Any] = self.extend({'conditionalOrderId': id}, self._conditional_order_fields(market, amount, plan))
 
         response = self.unwrap(self.private_account_post_conditional_orders_conditionalorderid_modify(body))
         new_id = self.safe_string(response, 'conditionalOrderId')
@@ -1707,14 +1710,25 @@ class toss(Exchange, ImplicitAPI):
 
     def fetch_closed_orders(self, symbol: Str = None, since: Int = None, limit: Int = None,
                             params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        """체결 완료 주문(종료된 주문). `params['until']`(ms)은 그 시각까지의 주문만 받는다. 100건씩 최대 10쪽까지 받는다."""
+        """전량 체결된 주문(`status: 'closed'`). 토스의 종료된 주문(`CLOSED`)에 섞인 취소, 거부, 정정 대체 주문은 거른다. 취소된 주문은
+        `fetch_canceled_orders` 로 받는다. `params['until']`(ms)은 그 시각까지의 주문만 받는다. 100건씩 최대 10쪽까지 받는다."""
+        return self._fetch_ended_orders('closed', symbol, since, limit, params)
+
+    def fetch_canceled_orders(self, symbol: Str = None, since: Int = None, limit: Int = None,
+                              params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """취소된 주문(정정으로 대체된 원주문 포함). `fetch_closed_orders` 와 같은 조회에서 `status: 'canceled'` 만 거른다."""
+        return self._fetch_ended_orders('canceled', symbol, since, limit, params)
+
+    def _fetch_ended_orders(self, status: str, symbol: Str, since: Int, limit: Int,
+                            params: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
         market = self.market(symbol) if symbol is not None else None
-        rows = self._fetch_closed_order_rows(market, since, limit, {} if params is None else params)
+        rows = self._fetch_closed_order_rows(market, since, limit, {} if params is None else params,
+                                                   lambda row: self.parse_order_status(self.safe_string(row, 'status')) == status)
         return self.parse_orders(rows, market, since, limit)
 
     def _fetch_closed_order_rows(self, market: Optional[Dict[str, Any]], since: Int, limit: Int,
-                                 params: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """체결 완료 주문 원본을 커서로 이어 받는다."""
+                                 params: Dict[str, Any], keep: Callable[[Dict[str, Any]], bool]) -> List[Dict[str, Any]]:
+        """종료된 주문 원본을 커서로 이어 받고 `keep` 에 맞는 행만 남긴다. 개수만 정한 조회는 남긴 행이 `limit` 에 이르면 멈춘다."""
         request: Dict[str, Any] = {'status': 'CLOSED', 'limit': CLOSED_ORDER_PAGE_LIMIT}
         if market is not None:
             request['symbol'] = market['id']
@@ -1730,7 +1744,7 @@ class toss(Exchange, ImplicitAPI):
         cursor = None
         for _ in range(max_pages):
             response = self.unwrap(self.private_account_get_orders(self.extend(request, {'cursor': cursor}, query)))
-            collected.extend(self.safe_list(response, 'orders', []) or [])
+            collected.extend(row for row in (self.safe_list(response, 'orders', []) or []) if keep(row))
             if not self.safe_value(response, 'hasNext') or not self.safe_value(response, 'nextCursor'):
                 return collected
             # 시각 조건 없이 개수만 정했다면(가장 최근 `limit` 건) 그만큼 모았을 때 멈춘다.
@@ -1742,13 +1756,26 @@ class toss(Exchange, ImplicitAPI):
 
     def fetch_my_trades(self, symbol: Str = None, since: Int = None, limit: Int = None,
                         params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        """체결 내역. 토스에는 체결 단위 조회가 없어 체결 완료 주문 가운데 체결이 있는 것을 거래 하나로 본다.
-        가격은 평균 체결가, 수수료는 브로커가 확정한 `execution.commission` 과 `execution.tax` 의 합이다."""
+        """체결 내역. 토스에는 체결 단위 조회가 없어 체결이 있는 주문 하나를 거래 하나로 본다. 종료된 주문과 함께 일부 체결된 채 걸려 있는
+        미체결 주문도 넣는다. 거래 id 는 주문번호이고 수량은 누적 체결 수량이라, 체결이 늘면 같은 id 의 거래가 더 큰 수량으로 다시 나온다.
+        거래를 쌓는 쪽은 id 로 덮어써야 한다. 가격은 평균 체결가, 수수료는 브로커가 확정한 `execution.commission` 과 `execution.tax` 의 합이다."""
         market = self.market(symbol) if symbol is not None else None
-        rows = [row for row in self._fetch_closed_order_rows(market, since, None, {} if params is None else params)
-                if fn.js_number(self.safe_value(self.safe_value(row, 'execution'), 'filledQuantity')) > 0
-                and (market is None or row.get('symbol') == market['id'])]
-        return self.parse_trades(rows, market, since, limit)
+
+        def filled(row: Dict[str, Any]) -> bool:
+            return (fn.js_number(self.safe_value(self.safe_value(row, 'execution'), 'filledQuantity')) > 0
+                    and (market is None or row.get('symbol') == market['id']))
+
+        ended = self._fetch_closed_order_rows(market, since, None, {} if params is None else params, filled)
+        open_request: Dict[str, Any] = {'status': 'OPEN'}
+        if market is not None:
+            open_request['symbol'] = market['id']
+        open_rows = [row for row in (self.safe_list(self.unwrap(self.private_account_get_orders(open_request)), 'orders', []) or [])
+                     if filled(row)]
+        until = self.safe_integer(params, 'until')
+        trades = self.parse_trades(ended + open_rows, market, since)
+        if until is not None:
+            trades = [trade for trade in trades if trade['timestamp'] <= until]
+        return self.filter_by_since_limit(trades, since, limit)
 
     def parse_trade(self, trade: Dict[str, Any], market: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """체결된 주문 하나를 거래 하나로 옮긴다. 체결 시각은 최종 체결 시각(없으면 주문 시각)이다."""
@@ -1803,7 +1830,9 @@ class toss(Exchange, ImplicitAPI):
 
     def cancel_all_orders(self, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """미체결 주문을 모두 취소한다(토스에는 전체 취소가 없어 조회한 주문을 하나씩 취소한다). `params['includeTrigger']` 면 조건주문도 취소한다.
-        돌려주는 목록은 대상 주문 전부다. 취소된 것(이미 사라진 주문 포함)은 `status: 'canceled'`, 취소하지 못한 것은 `info['cancelError']` 가 실린다."""
+        돌려주는 목록은 대상 주문 전부다. 취소된 것은 `status: 'canceled'`, 취소하지 못한 것은 원래 상태에 `info['cancelError']` 가 실린다.
+        취소하려는 사이에 끝난 주문은 원인 코드(`info['cancelErrorDetail']`)대로 옮긴다(`already-filled` 는 `closed`, `already-canceled` 는
+        `canceled`, `already-rejected` 는 `rejected`). 정정으로 대체된 주문과 원인을 모르는 경우는 새 주문이 살아 있을 수 있어 원래 상태로 둔다."""
         include_trigger = self.safe_bool(params, 'includeTrigger', False) is True
         orders = self.fetch_open_orders(symbol, None, None, {'includeTrigger': True} if include_trigger else {})
         results = []
@@ -1812,8 +1841,18 @@ class toss(Exchange, ImplicitAPI):
             try:
                 self.cancel_order(order['id'], order.get('symbol'), {'trigger': trigger})
                 results.append(self.extend(order, {'status': 'canceled'}))
-            except OrderNotFound:
-                results.append(self.extend(order, {'status': 'canceled', 'info': self.extend(order.get('info'), {'alreadyGone': True})}))
+            except OrderNotFound as error:
+                detail = getattr(error, 'detail', None)
+                info = self.extend(order.get('info'), {'alreadyGone': True, 'cancelError': str(error), 'cancelErrorDetail': detail})
+                if detail == 'already-filled':
+                    results.append(self.extend(order, {'status': 'closed', 'filled': order.get('amount'), 'remaining': 0, 'cost': None,
+                                                       'average': None, 'info': info}))
+                elif detail == 'already-canceled':
+                    results.append(self.extend(order, {'status': 'canceled', 'info': info}))
+                elif detail == 'already-rejected':
+                    results.append(self.extend(order, {'status': 'rejected', 'info': info}))
+                else:
+                    results.append(self.extend(order, {'info': info}))
             except Exception as error:
                 results.append(self.extend(order, {'info': self.extend(order.get('info'), {'cancelError': str(error)})}))
         logger.info('[toss] 미체결 주문을 취소했다(%d건 중 %d건)', len(orders), sum(1 for order in results if order.get('status') == 'canceled'))

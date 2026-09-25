@@ -168,7 +168,7 @@
 
 | API 이름 | 엔드포인트 | 시장 | 상태 | 메서드 | 검증 | 제안 | 명세 | 비고 |
 |---|---|---|---|---|---|---|---|---|
-| 주문 목록 | `GET /api/v1/orders` | 국내, 미국 | 통합 | `fetchOpenOrders` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1orders/get) | `fetchClosedOrders`, `fetchMyTrades`도 같은 API 다. OPEN은 서버가 전량을 주고 CLOSED는 100건씩 최대 10쪽을 받습니다. |
+| 주문 목록 | `GET /api/v1/orders` | 국내, 미국 | 통합 | `fetchOpenOrders` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1orders/get) | `fetchClosedOrders`(전량 체결만), `fetchCanceledOrders`, `fetchMyTrades`(일부 체결된 미체결 포함)도 같은 API 다. OPEN은 서버가 전량을 주고 CLOSED는 100건씩 최대 10쪽을 받습니다. |
 | 주문 상세 | `GET /api/v1/orders/{orderId}` | 국내, 미국 | 통합 | `fetchOrder` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1orders~1{orderId}/get) | 주문 접수 뒤 체결 확인 폴링도 이 API를 씁니다. 미국 `editOrder`도 정정 전에 이 API로 남은 수량을 읽습니다. |
 
 ### Order Info

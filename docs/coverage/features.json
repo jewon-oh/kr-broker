@@ -799,7 +799,7 @@
         },
         "toss": {
           "status": "지원",
-          "constraint": "100건씩 최대 10쪽을 받습니다",
+          "constraint": "전량 체결만 돌려줍니다. 100건씩 최대 10쪽을 받습니다",
           "apis": [
             "GET /orders"
           ]
@@ -807,6 +807,41 @@
         "kbsec": {
           "status": "부분",
           "constraint": "국내만 지원합니다. `since`는 적용하지 않습니다. 체결 내역 상세는 `fetchMyTrades`로 봅니다",
+          "apis": [
+            "SSQM2341"
+          ]
+        }
+      }
+    },
+    {
+      "id": "fetchCanceledOrders",
+      "name": "취소 주문",
+      "group": "주문 조회",
+      "hasKeys": [
+        "fetchCanceledOrders"
+      ],
+      "methods": [
+        "fetchCanceledOrders"
+      ],
+      "cells": {
+        "kis": {
+          "status": "미구현",
+          "constraint": "`fetchOrders` 결과에서 `status: 'canceled'`만 고르면 됩니다",
+          "apis": [
+            "examples_llm/domestic_stock/inquire_daily_ccld",
+            "examples_llm/overseas_stock/inquire_ccnl"
+          ]
+        },
+        "toss": {
+          "status": "지원",
+          "constraint": "`fetchClosedOrders`와 같은 조회에서 취소 주문과 정정으로 대체된 주문을 고릅니다",
+          "apis": [
+            "GET /orders"
+          ]
+        },
+        "kbsec": {
+          "status": "미구현",
+          "constraint": "`fetchOrders` 결과에서 `status: 'canceled'`만 고르면 됩니다(국내만)",
           "apis": [
             "SSQM2341"
           ]
@@ -830,7 +865,7 @@
         },
         "toss": {
           "status": "대체",
-          "constraint": "주문 목록 API로 만듭니다",
+          "constraint": "주문 목록 API로 만듭니다. 주문 하나가 거래 하나이고 수량은 누적 체결 수량이라, 같은 id 는 덮어써야 합니다",
           "apis": [
             "GET /orders"
           ]

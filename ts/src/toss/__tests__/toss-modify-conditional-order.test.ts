@@ -56,6 +56,15 @@ describe('editOrder — 조건주문 정정', () => {
         expect(fake.requests()).toHaveLength(0);
     });
 
+    it('★둘째 조건의 triggerPrice 가 없으면 요청 전에 ArgumentsRequired', async () => {
+        const fake = installFakeToss({});
+
+        await expect(makeToss().editOrder('COND-1', '005930/KRW', 'limit', 'sell', 10, 79900, {
+            trigger: true, triggerPrice: 80000, conditionalType: 'OCO', expireDate, second: { side: 'sell', price: 64900 },
+        })).rejects.toBeInstanceOf(ArgumentsRequired);
+        expect(fake.requests()).toHaveLength(0);
+    });
+
     it('OCO 인데 second 가 없으면 OrderNotSent', async () => {
         const fake = installFakeToss({});
 

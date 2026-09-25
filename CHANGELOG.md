@@ -25,6 +25,13 @@
 - 토큰 저장소 키가 자격증명 앞 12자에서 자격증명 전체의 SHA-256 앞 32자로 바뀝니다(`kis:token:`, `kis:approval:`, `toss:token:`, `kbsec:token:` 접두는 그대로). 이번 판은 이행 단계라 옛 키도 읽고 쓰며, 발급 락은 옛 키로 잡습니다. 옛 판과 새 판이 함께 도는 동안에도 추가 발급이 일어나지 않습니다. 옛 키는 다음 판에서 걷어냅니다. 저장소 키를 직접 읽는 운영 도구는 새 키로 바꿉니다.
 - HTTP 리다이렉트를 따르지 않습니다. 3xx 응답은 `ExchangeNotAvailable`입니다.
 - 조회 재시도도 요청 간격 조절을 다시 거치고, 오류의 `retryAfterMs`(토스 429 의 `Retry-After`)만큼 기다립니다. 비공개 호출의 인증은 간격 조절 뒤에 합니다.
+- 한국투자증권 `createOrder`의 `params.session`에 `'regular'`나 `'nxt'`가 아닌 값을 주면 `BadRequest`를 던집니다. 예전에는 정규장 주문으로 처리했습니다.
+- 한국투자증권 확장세션 주문(`session: 'nxt'`, `nxtRouting` 자동 판정)은 NXT 프리마켓, 메인마켓, 애프터마켓에만 나갑니다. 새벽과 휴장일, NXT 가 멈추는 시간(08:50~09:00, 15:20~15:30)에는 요청 없이 `MarketClosed`입니다. 예전에는 `session: 'nxt'`를 주면 시각을 보지 않고 보냈습니다.
+- 한국투자증권 `createCreditOrder`가 `createOrder`와 같은 정규장 게이트를 거칩니다. `editOrder`는 국내에서 KRX 정규장과 NXT 가 모두 닫혀 있으면, 미국에서 완전 마감이면 요청 없이 `MarketClosed`입니다. 경로별 게이트는 [안전 수칙](docs/SAFETY.md)에 표로 적었습니다.
+- 토스증권 `fetchClosedOrders`는 전량 체결된 주문만 돌려줍니다. 예전에는 토스의 종료된 주문(`CLOSED`) 전체라 취소, 거부, 정정으로 대체된 주문이 섞여 있었습니다. 취소된 주문은 새로 넣은 `fetchCanceledOrders`로 받습니다.
+- 토스증권 `fetchMyTrades`는 일부 체결된 채 걸려 있는 미체결 주문의 누적 체결도 돌려줍니다. 한국투자증권 `fetchMyTrades`는 `since`를 조회 시작일로만 쓰고 주문 시각으로 거르지 않습니다. 예전에는 `since` 앞에 낸 주문이 그 뒤에 체결된 것이 빠졌습니다. 두 증권사 모두 주문 하나가 거래 하나라, 같은 id 의 거래는 덮어써야 합니다.
+- 토스증권 `cancelAllOrders`는 취소하려던 사이에 끝난 주문을 원인 코드대로 옮깁니다(`already-filled`는 `closed`, `already-canceled`는 `canceled`, `already-rejected`는 `rejected`). 정정으로 대체됐거나 원인을 모르면 원래 상태로 둡니다. 원인 코드와 원문은 `info.cancelErrorDetail`, `info.cancelError`에 싣습니다. 예전에는 넷을 모두 `canceled`로 돌려줬습니다.
+- KB증권 국내 `editOrder`는 `params.partial` 없이 준 `amount`를 반환값에 싣지 않습니다. 이때는 수량을 보내지 않고 잔량 전체의 가격만 바꾸므로 정정 뒤 수량을 응답으로 알 수 없습니다. `editOrder`의 `amount` 뜻이 증권사마다 다른 점은 [ccxt와 다른 점](docs/ccxt-differences.md)에 적었습니다.
 
 ### 추가
 
@@ -46,6 +53,7 @@
 
 ### 고침
 
+- 토스증권 조건주문의 `triggerPrice`(둘째 조건 포함)가 없거나 숫자가 아니면 `ArgumentsRequired`, 0 이하면 `InvalidOrder`를 요청 전에 던집니다. 예전에는 트리거 가격이 빠진 조건을 보냈고, 고액주문 확인 플래그도 붙지 않았습니다.
 - 보안: verbose 로그에서 비밀 헤더(`authorization`, `appkey`, `appsecret`)와 본문 필드(`appsecret`, `secretkey`, `client_secret`, `access_token`, `approval_key`, `refresh_token`)를 가립니다. 한국투자증권 체결통보 TR 은 암호화되지 않은 프레임을 버립니다. 실시간 주소는 `urls.ws`와 `urls.wsTest`를 따릅니다. 토스 `TossTokenRejected.failedToken`은 열거되지 않습니다.
 - KB증권 토큰 차단기가 프로세스 전체에 하나라 한 계정의 실패가 다른 계정의 주문까지 막던 것을 고쳤습니다. 앱키마다 따로 셉니다.
 - 토큰 발급 락을 잡은 뒤 저장소를 다시 읽지 않아 한국투자증권과 KB증권이 한 번 더 발급하던 것을 고쳤습니다. 락을 못 잡으면 발급 상한(12초)까지 저장소를 다시 읽습니다.

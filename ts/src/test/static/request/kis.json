@@ -3964,6 +3964,64 @@
                 {
                     "request": {
                         "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260223&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260223", "wday_dvsn_cd": "02", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260302", "wday_dvsn_cd": "02", "bzdy_yn": "N", "tr_day_yn": "Y", "opnd_yn": "N", "sttl_day_yn": "N" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260325&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260325", "wday_dvsn_cd": "04", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260326", "wday_dvsn_cd": "05", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
                         "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/search-stock-info?PRDT_TYPE_CD=300&PDNO=005930",
                         "headers": {
                             "Content-Type": "application/json; charset=UTF-8",
@@ -4044,6 +4102,64 @@
             "method": "createOrder",
             "args": ["005930/KRW", "market", "sell", 1],
             "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260223&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260223", "wday_dvsn_cd": "02", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260302", "wday_dvsn_cd": "02", "bzdy_yn": "N", "tr_day_yn": "Y", "opnd_yn": "N", "sttl_day_yn": "N" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260325&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260325", "wday_dvsn_cd": "04", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260326", "wday_dvsn_cd": "05", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" }
+                            ]
+                        }
+                    }
+                },
                 {
                     "request": {
                         "method": "GET",
@@ -4172,6 +4288,64 @@
                 {
                     "request": {
                         "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260223&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260223", "wday_dvsn_cd": "02", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260302", "wday_dvsn_cd": "02", "bzdy_yn": "N", "tr_day_yn": "Y", "opnd_yn": "N", "sttl_day_yn": "N" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260325&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260325", "wday_dvsn_cd": "04", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260326", "wday_dvsn_cd": "05", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
                         "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/search-stock-info?PRDT_TYPE_CD=300&PDNO=005930",
                         "headers": {
                             "Content-Type": "application/json; charset=UTF-8",
@@ -4295,6 +4469,64 @@
                 {
                     "request": {
                         "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260223&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260223", "wday_dvsn_cd": "02", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260302", "wday_dvsn_cd": "02", "bzdy_yn": "N", "tr_day_yn": "Y", "opnd_yn": "N", "sttl_day_yn": "N" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260325&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260325", "wday_dvsn_cd": "04", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260326", "wday_dvsn_cd": "05", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
                         "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/search-stock-info?PRDT_TYPE_CD=300&PDNO=005930",
                         "headers": {
                             "Content-Type": "application/json; charset=UTF-8",
@@ -4329,6 +4561,64 @@
                 {
                     "request": {
                         "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260223&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260223", "wday_dvsn_cd": "02", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260302", "wday_dvsn_cd": "02", "bzdy_yn": "N", "tr_day_yn": "Y", "opnd_yn": "N", "sttl_day_yn": "N" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260325&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260325", "wday_dvsn_cd": "04", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260326", "wday_dvsn_cd": "05", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
                         "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/search-stock-info?PRDT_TYPE_CD=300&PDNO=005930",
                         "headers": {
                             "Content-Type": "application/json; charset=UTF-8",
@@ -4355,6 +4645,64 @@
             "method": "createOrder",
             "args": ["005930/KRW", "limit", "buy", 1, 71200],
             "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260223&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260223", "wday_dvsn_cd": "02", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260302", "wday_dvsn_cd": "02", "bzdy_yn": "N", "tr_day_yn": "Y", "opnd_yn": "N", "sttl_day_yn": "N" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260325&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260325", "wday_dvsn_cd": "04", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260326", "wday_dvsn_cd": "05", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" }
+                            ]
+                        }
+                    }
+                },
                 {
                     "request": {
                         "method": "GET",
@@ -4426,6 +4774,64 @@
                 {
                     "request": {
                         "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260223&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260223", "wday_dvsn_cd": "02", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260302", "wday_dvsn_cd": "02", "bzdy_yn": "N", "tr_day_yn": "Y", "opnd_yn": "N", "sttl_day_yn": "N" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260325&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260325", "wday_dvsn_cd": "04", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260326", "wday_dvsn_cd": "05", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
                         "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/search-stock-info?PRDT_TYPE_CD=300&PDNO=005930",
                         "headers": {
                             "Content-Type": "application/json; charset=UTF-8",
@@ -4492,6 +4898,147 @@
                 }
             ],
             "error": { "class": "InvalidOrder" }
+        },
+        {
+            "description": "createOrder 의 session 이 regular 나 nxt 가 아니면 요청 없이 BadRequest 다",
+            "method": "createOrder",
+            "args": ["005930/KRW", "limit", "buy", 1, 70000, { "session": "NXT" }],
+            "http": [],
+            "error": { "class": "BadRequest" }
+        },
+        {
+            "description": "createOrder session 이 nxt 여도 NXT 가 닫힌 새벽에는 주문을 보내지 않고 MarketClosed 다",
+            "now": 1774375200000,
+            "method": "createOrder",
+            "args": ["005930/KRW", "limit", "buy", 1, 70000, { "session": "nxt" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260223&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260223", "wday_dvsn_cd": "02", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260302", "wday_dvsn_cd": "02", "bzdy_yn": "N", "tr_day_yn": "Y", "opnd_yn": "N", "sttl_day_yn": "N" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260325&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260325", "wday_dvsn_cd": "04", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260326", "wday_dvsn_cd": "05", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "error": { "class": "MarketClosed" }
+        },
+        {
+            "description": "createOrder session 이 nxt 여도 KRX 종가 동시호가(NXT 정지) 에는 MarketClosed 다",
+            "now": 1774419900000,
+            "method": "createOrder",
+            "args": ["005930/KRW", "limit", "buy", 1, 70000, { "session": "nxt" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260223&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260223", "wday_dvsn_cd": "02", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260302", "wday_dvsn_cd": "02", "bzdy_yn": "N", "tr_day_yn": "Y", "opnd_yn": "N", "sttl_day_yn": "N" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260325&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260325", "wday_dvsn_cd": "04", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260326", "wday_dvsn_cd": "05", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "error": { "class": "MarketClosed" }
         },
         {
             "description": "createOrder 국내 모의투자는 캘린더를 받지 않고 모의 TR 과 모의 도메인으로 낸다",
@@ -5135,6 +5682,64 @@
             "http": [
                 {
                     "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260223&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260223", "wday_dvsn_cd": "02", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260302", "wday_dvsn_cd": "02", "bzdy_yn": "N", "tr_day_yn": "Y", "opnd_yn": "N", "sttl_day_yn": "N" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260325&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260325", "wday_dvsn_cd": "04", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260326", "wday_dvsn_cd": "05", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
                         "method": "POST",
                         "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/trading/order-rvsecncl",
                         "headers": {
@@ -5182,6 +5787,64 @@
             "http": [
                 {
                     "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260223&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260223", "wday_dvsn_cd": "02", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260302", "wday_dvsn_cd": "02", "bzdy_yn": "N", "tr_day_yn": "Y", "opnd_yn": "N", "sttl_day_yn": "N" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260325&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260325", "wday_dvsn_cd": "04", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260326", "wday_dvsn_cd": "05", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
                         "method": "POST",
                         "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/trading/order-rvsecncl",
                         "headers": {
@@ -5221,6 +5884,178 @@
                 "fees": [],
                 "trades": []
             }
+        },
+{
+            "description": "editOrder 국내는 정규장이 끝나도 NXT 애프터마켓이면 정정을 보낸다",
+            "now": 1774425600000,
+            "method": "editOrder",
+            "args": ["ORD-0001", "005930/KRW", "limit", "buy", null, 70500],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260223&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260223", "wday_dvsn_cd": "02", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260302", "wday_dvsn_cd": "02", "bzdy_yn": "N", "tr_day_yn": "Y", "opnd_yn": "N", "sttl_day_yn": "N" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260325&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260325", "wday_dvsn_cd": "04", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260326", "wday_dvsn_cd": "05", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/trading/order-rvsecncl",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTC0803U",
+                            "custtype": "P"
+                        },
+                        "body": "{\"CANO\":\"12345678\",\"ACNT_PRDT_CD\":\"01\",\"KRX_FWDG_ORD_ORGNO\":\"\",\"ORGN_ODNO\":\"ORD-0001\",\"ORD_DVSN\":\"00\",\"RVSE_CNCL_DVSN_CD\":\"01\",\"ORD_QTY\":\"0\",\"ORD_UNPR\":\"70500\",\"QTY_ALL_ORD_YN\":\"Y\"}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "APBK0013",
+                            "msg1": "정정 주문 전송 완료",
+                            "output": { "KRX_FWDG_ORD_ORGNO": "91252", "ODNO": "ORD-0011", "ORD_TMD": "101500" }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "id": "ORD-0011",
+                "symbol": "005930/KRW",
+                "type": "limit",
+                "price": 70500,
+                "status": "open",
+                "info": {
+                    "rt_cd": "0",
+                    "msg_cd": "APBK0013",
+                    "msg1": "정정 주문 전송 완료",
+                    "output": { "KRX_FWDG_ORD_ORGNO": "91252", "ODNO": "ORD-0011", "ORD_TMD": "101500" }
+                },
+                "fees": [],
+                "trades": []
+            }
+        },
+        {
+            "description": "editOrder 국내는 KRX 정규장과 NXT 가 모두 닫혀 있으면 정정 요청 없이 MarketClosed 다",
+            "now": 1774375200000,
+            "method": "editOrder",
+            "args": ["ORD-0001", "005930/KRW", "limit", "buy", null, 70500],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260223&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260223", "wday_dvsn_cd": "02", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260302", "wday_dvsn_cd": "02", "bzdy_yn": "N", "tr_day_yn": "Y", "opnd_yn": "N", "sttl_day_yn": "N" }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/chk-holiday?BASS_DT=20260325&CTX_AREA_FK=&CTX_AREA_NK=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTCA0903R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_nk": "",
+                            "ctx_area_fk": "",
+                            "output": [
+                                { "bass_dt": "20260325", "wday_dvsn_cd": "04", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" },
+                                { "bass_dt": "20260326", "wday_dvsn_cd": "05", "bzdy_yn": "Y", "tr_day_yn": "Y", "opnd_yn": "Y", "sttl_day_yn": "Y" }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "error": { "class": "MarketClosed" }
         },
         {
             "description": "editOrder 는 price 가 없으면 ArgumentsRequired 다",
@@ -5371,6 +6206,14 @@
                 "fees": [],
                 "trades": []
             }
+        },
+        {
+            "description": "editOrder 미국은 완전 마감이면 정정 요청 없이 MarketClosed 다",
+            "now": 1774407600000,
+            "method": "editOrder",
+            "args": ["ORD-0101", "AAPL/USD", "limit", "buy", 2, 171],
+            "http": [],
+            "error": { "class": "MarketClosed" }
         },
         {
             "description": "editOrder 미국 모의투자는 수량이 없으면 ArgumentsRequired 다",
@@ -7770,6 +8613,253 @@
                             "tr_id": "TTTS3035R",
                             "custtype": "P"
                         },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_fk200": "",
+                            "ctx_area_nk200": "",
+                            "output": [
+                                {
+                                    "ord_dt": "20260324",
+                                    "ord_gno_brno": "01790",
+                                    "odno": "ORD-0101",
+                                    "orgn_odno": "",
+                                    "sll_buy_dvsn_cd": "02",
+                                    "sll_buy_dvsn_cd_name": "매수",
+                                    "rvse_cncl_dvsn": "00",
+                                    "pdno": "AAPL",
+                                    "prdt_name": "APPLE INC",
+                                    "ft_ord_qty": "5",
+                                    "ft_ord_unpr3": "170.50000000",
+                                    "ft_ccld_qty": "5",
+                                    "ft_ccld_unpr3": "170.40000000",
+                                    "ft_ccld_amt3": "852.00000",
+                                    "nccs_qty": "0",
+                                    "prcs_stat_name": "완료",
+                                    "ord_tmd": "103000",
+                                    "tr_mket_name": "나스닥",
+                                    "ovrs_excg_cd": "NASD",
+                                    "dmst_ord_dt": "20260324",
+                                    "thco_ord_tmd": "233000"
+                                },
+                                {
+                                    "ord_dt": "20260324",
+                                    "ord_gno_brno": "01790",
+                                    "odno": "ORD-0102",
+                                    "orgn_odno": "",
+                                    "sll_buy_dvsn_cd": "01",
+                                    "pdno": "BRK/B",
+                                    "prdt_name": "BERKSHIRE HATHAWAY INC-CL B",
+                                    "ft_ord_qty": "1",
+                                    "ft_ord_unpr3": "410.00000000",
+                                    "ft_ccld_qty": "0",
+                                    "ft_ccld_unpr3": "0",
+                                    "ft_ccld_amt3": "0",
+                                    "nccs_qty": "1",
+                                    "ord_tmd": "110000",
+                                    "ovrs_excg_cd": "NYSE",
+                                    "dmst_ord_dt": "",
+                                    "thco_ord_tmd": ""
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "info": {
+                        "ord_dt": "20260325",
+                        "ord_gno_brno": "91252",
+                        "odno": "ORD-0001",
+                        "orgn_odno": "",
+                        "ord_dvsn_name": "지정가",
+                        "sll_buy_dvsn_cd": "02",
+                        "sll_buy_dvsn_cd_name": "매수",
+                        "pdno": "005930",
+                        "prdt_name": "삼성전자",
+                        "ord_qty": "10",
+                        "ord_unpr": "70000",
+                        "ord_tmd": "090100",
+                        "tot_ccld_qty": "10",
+                        "avg_prvs": "69950",
+                        "cncl_yn": "N",
+                        "tot_ccld_amt": "699500",
+                        "rmn_qty": "0",
+                        "ord_dvsn_cd": "00",
+                        "excg_id_dvsn_cd": "KRX"
+                    },
+                    "id": "20260325:ORD-0001:005930",
+                    "order": "ORD-0001",
+                    "timestamp": 1774396860000,
+                    "datetime": "2026-03-25T00:01:00.000Z",
+                    "symbol": "005930/KRW",
+                    "side": "buy",
+                    "price": 69950,
+                    "amount": 10,
+                    "cost": 699500,
+                    "fee": {},
+                    "fees": []
+                },
+                {
+                    "info": {
+                        "ord_dt": "20260325",
+                        "ord_gno_brno": "91252",
+                        "odno": "ORD-0021",
+                        "orgn_odno": "",
+                        "ord_dvsn_name": "지정가",
+                        "sll_buy_dvsn_cd": "02",
+                        "pdno": "247540",
+                        "prdt_name": "에코프로비엠",
+                        "ord_qty": "10",
+                        "ord_unpr": "180000",
+                        "ord_tmd": "093000",
+                        "tot_ccld_qty": "3",
+                        "avg_prvs": "180000",
+                        "cncl_yn": "N",
+                        "tot_ccld_amt": "540000",
+                        "rmn_qty": "7",
+                        "ord_dvsn_cd": "00"
+                    },
+                    "id": "20260325:ORD-0021:247540",
+                    "order": "ORD-0021",
+                    "timestamp": 1774398600000,
+                    "datetime": "2026-03-25T00:30:00.000Z",
+                    "symbol": "247540/KRW",
+                    "side": "buy",
+                    "price": 180000,
+                    "amount": 3,
+                    "cost": 540000,
+                    "fee": {},
+                    "fees": []
+                },
+                {
+                    "info": {
+                        "ord_dt": "20260324",
+                        "ord_gno_brno": "01790",
+                        "odno": "ORD-0101",
+                        "orgn_odno": "",
+                        "sll_buy_dvsn_cd": "02",
+                        "sll_buy_dvsn_cd_name": "매수",
+                        "rvse_cncl_dvsn": "00",
+                        "pdno": "AAPL",
+                        "prdt_name": "APPLE INC",
+                        "ft_ord_qty": "5",
+                        "ft_ord_unpr3": "170.50000000",
+                        "ft_ccld_qty": "5",
+                        "ft_ccld_unpr3": "170.40000000",
+                        "ft_ccld_amt3": "852.00000",
+                        "nccs_qty": "0",
+                        "prcs_stat_name": "완료",
+                        "ord_tmd": "103000",
+                        "tr_mket_name": "나스닥",
+                        "ovrs_excg_cd": "NASD",
+                        "dmst_ord_dt": "20260324",
+                        "thco_ord_tmd": "233000"
+                    },
+                    "id": "20260324:ORD-0101:AAPL:NASD",
+                    "order": "ORD-0101",
+                    "timestamp": 1774362600000,
+                    "datetime": "2026-03-24T14:30:00.000Z",
+                    "symbol": "AAPL/USD",
+                    "side": "buy",
+                    "price": 170.4,
+                    "amount": 5,
+                    "cost": 852,
+                    "fee": {},
+                    "fees": []
+                }
+            ]
+        },
+        {
+            "description": "fetchMyTrades 는 since 를 조회 시작일로만 쓴다. since 앞에 낸 주문의 체결도 빠지지 않는다",
+            "now": 1774400400000,
+            "method": "fetchMyTrades",
+            "args": [
+                null,
+                1774400400000
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/trading/inquire-daily-ccld?CANO=12345678&ACNT_PRDT_CD=01&INQR_STRT_DT=20260325&INQR_END_DT=20260325&SLL_BUY_DVSN_CD=00&INQR_DVSN=00&PDNO=&CCLD_DVSN=01&ORD_GNO_BRNO=&ODNO=&INQR_DVSN_3=00&INQR_DVSN_1=&CTX_AREA_FK100=&CTX_AREA_NK100=&EXCG_ID_DVSN_CD=ALL",
+                        "headers": { "Content-Type": "application/json; charset=UTF-8", "authorization": "Bearer tok-stored", "appkey": "kis-app-key-abcdefgh", "appsecret": "kis-app-secret", "tr_id": "TTTC0081R", "custtype": "P" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_fk100": "",
+                            "ctx_area_nk100": "",
+                            "output1": [
+                                {
+                                    "ord_dt": "20260325",
+                                    "ord_gno_brno": "91252",
+                                    "odno": "ORD-0001",
+                                    "orgn_odno": "",
+                                    "ord_dvsn_name": "지정가",
+                                    "sll_buy_dvsn_cd": "02",
+                                    "sll_buy_dvsn_cd_name": "매수",
+                                    "pdno": "005930",
+                                    "prdt_name": "삼성전자",
+                                    "ord_qty": "10",
+                                    "ord_unpr": "70000",
+                                    "ord_tmd": "090100",
+                                    "tot_ccld_qty": "10",
+                                    "avg_prvs": "69950",
+                                    "cncl_yn": "N",
+                                    "tot_ccld_amt": "699500",
+                                    "rmn_qty": "0",
+                                    "ord_dvsn_cd": "00",
+                                    "excg_id_dvsn_cd": "KRX"
+                                },
+                                {
+                                    "ord_dt": "20260325",
+                                    "ord_gno_brno": "91252",
+                                    "odno": "ORD-0021",
+                                    "orgn_odno": "",
+                                    "ord_dvsn_name": "지정가",
+                                    "sll_buy_dvsn_cd": "02",
+                                    "pdno": "247540",
+                                    "prdt_name": "에코프로비엠",
+                                    "ord_qty": "10",
+                                    "ord_unpr": "180000",
+                                    "ord_tmd": "093000",
+                                    "tot_ccld_qty": "3",
+                                    "avg_prvs": "180000",
+                                    "cncl_yn": "N",
+                                    "tot_ccld_amt": "540000",
+                                    "rmn_qty": "7",
+                                    "ord_dvsn_cd": "00"
+                                },
+                                {
+                                    "ord_dt": "20260325",
+                                    "odno": "ORD-0030",
+                                    "pdno": "005930",
+                                    "sll_buy_dvsn_cd": "01",
+                                    "ord_qty": "1",
+                                    "tot_ccld_qty": "0",
+                                    "cntg_qty": "0",
+                                    "ord_tmd": "095000"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/trading/inquire-ccnl?CANO=12345678&ACNT_PRDT_CD=01&PDNO=%25&ORD_STRT_DT=20260324&ORD_END_DT=20260324&SLL_BUY_DVSN=00&CCLD_NCCS_DVSN=01&OVRS_EXCG_CD=NASD&SORT_SQN=DS&ORD_DT=&ORD_GNO_BRNO=&ODNO=&CTX_AREA_NK200=&CTX_AREA_FK200=",
+                        "headers": { "Content-Type": "application/json; charset=UTF-8", "authorization": "Bearer tok-stored", "appkey": "kis-app-key-abcdefgh", "appsecret": "kis-app-secret", "tr_id": "TTTS3035R", "custtype": "P" },
                         "body": null
                     },
                     "response": {

@@ -79,7 +79,7 @@ from kr_broker.kis_types import (
     KIS_OVERSEAS_ORD_DVSN, KIS_PRESENT_BALANCE_PARAMS, KIS_WS_DOMAINS, get_tick_size,
 )
 from kr_broker.krx_sell_tax import krx_sell_tax_rate
-from kr_broker.krx_trading_hours import check_krx_trading_hours, get_krx_market_phase, is_nxt_extended_tradable
+from kr_broker.krx_trading_hours import check_krx_trading_hours, get_krx_market_phase, get_nxt_session, is_nxt_extended_tradable
 from kr_broker.us_market_hours import et_wall_clock_to_utc_ms, et_ymd, format_et_wall_clock, get_us_market_phase
 
 logger = logging.getLogger('kr_broker')
@@ -1705,10 +1705,13 @@ class kis(Exchange, ImplicitAPI):
     def _create_domestic_order(self, instrument: KisInstrument, type: str, side: str, quantity: int, price: Num,
                                params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         session = self.safe_string(params, 'session')
+        if session is not None and session not in ('regular', 'nxt'):
+            raise BadRequest(f"{self.id} createOrder() 의 params.session 은 'regular' 이나 'nxt' 여야 한다: {session}")
         params = self.omit(params, 'session')
-        # 확장세션(NXT 프리 08:00~08:50, 애프터 15:30~20:00)은 정규장 게이트를 건너뛰고 SOR 로 낸다. `nxtRouting` 이 꺼져 있으면 정규장 규칙이다.
+        # 확장세션(NXT 프리 08:00~08:50, 애프터 15:30~20:00)은 정규장 게이트 대신 NXT 게이트를 거쳐 SOR 로 낸다. `nxtRouting` 이 꺼져 있으면 정규장 규칙이다.
         extended = session == 'nxt' or (session is None and self.is_option_enabled('nxtRouting') and is_nxt_extended_tradable())
         if extended:
+            self._assert_nxt_session_open()
             self._assert_nxt_tradable(instrument)
         limit_price = price if type == 'limit' else None
         if not extended:
@@ -1794,6 +1797,31 @@ class kis(Exchange, ImplicitAPI):
             self._nxt_eligibility[instrument.code] = entry
         if entry['blockedReason'] is not None:
             raise MarketClosed(f"NXT 확장시간 주문 불가: {entry['blockedReason']} ({instrument.symbol})")
+
+    def _assert_nxt_session_open(self) -> None:
+        """NXT 확장세션 게이트. 프리마켓, 메인마켓, 애프터마켓에만 낸다. 휴장일과 새벽, NXT 가 멈추는 시간(08:50~09:00, KRX 종가 동시호가
+        15:20~15:30)은 막는다. 휴장일은 KIS 캘린더로 알아야 해서 먼저 받는다."""
+        self.refresh_market_calendar()
+        phase = get_nxt_session()
+        if phase not in ('pre-market', 'main', 'after-market'):
+            raise MarketClosed(f'NXT 거래시간 외 (session={phase})')
+
+    def _assert_domestic_edit_open(self) -> None:
+        """국내 정정 게이트. KRX 정규장과 NXT 확장세션이 모두 닫혀 있으면 막는다. 정정은 신규 진입이 아니라서 동시호가의 매수 제한은 걸지 않는다.
+        원주문이 어느 시장에 걸려 있는지는 정정 요청에 없으므로 둘 중 하나라도 열려 있으면 보낸다."""
+        self.refresh_market_calendar()
+        hours = check_krx_trading_hours()
+        if hours['tradable']:
+            return
+        phase = get_nxt_session()
+        if phase in ('pre-market', 'main', 'after-market'):
+            return
+        raise MarketClosed(f"거래시간 외: {_tpl(hours.get('reason'))} (NXT session={phase})")
+
+    def _assert_us_edit_open(self, exchange: str) -> None:
+        """미국 정정 게이트. 주문과 같이 완전 마감(`closed`)만 막는다. 홍콩·일본·베트남은 대상이 아니다."""
+        if exchange in US_ORDER_EXCHANGES and get_us_market_phase() == 'closed':
+            raise MarketClosed(f'미국장 정규장 외 ({format_et_wall_clock()}, phase=closed)')
 
     def _assert_domestic_session_open(self, side: str) -> None:
         """국내 정규장 게이트. 휴장일은 KIS 캘린더로 알아야 해서 먼저 받는다. 종가 동시호가(15:20~15:30)의 신규 매수는 막는다."""
@@ -1925,12 +1953,14 @@ class kis(Exchange, ImplicitAPI):
     def edit_order(self, id: str, symbol: str, type: str, side: str, amount: Num = None, price: Num = None,
                    params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """정정. 취소와 같은 엔드포인트(`order-rvsecncl`)를 `RVSE_CNCL_DVSN_CD` 로 나눈다(`01` 정정, `02` 취소). `price` 가 필요하다.
-        `amount` 를 주면 그 수량으로 일부 정정(`QTY_ALL_ORD_YN: 'N'`)하고, 주지 않으면 국내는 전량(`'Y'`)을 정정한다."""
+        `amount` 를 주면 그 수량으로 일부 정정(`QTY_ALL_ORD_YN: 'N'`)하고, 주지 않으면 국내는 전량(`'Y'`)을 정정한다.
+        국내는 KRX 정규장과 NXT 확장세션이 모두 닫혀 있으면, 미국은 완전 마감이면 `MarketClosed` 다."""
         if price is None:
             raise ArgumentsRequired(f'{self.id} editOrder() requires a price argument')
         instrument = self._instrument_of(symbol)
         if instrument.overseas:
             return self._edit_overseas_order(id, instrument, price, amount, params)
+        self._assert_domestic_edit_open()
         response = self.private_post_uapi_domestic_stock_v1_trading_order_rvsecncl(self.extend(self.extend(self._account_params(), {
             'KRX_FWDG_ORD_ORGNO': self.safe_string(params, 'orderOrgNo', ''),
             'ORGN_ODNO': id,
@@ -1957,9 +1987,10 @@ class kis(Exchange, ImplicitAPI):
         quantity = self.safe_string(params, 'amount')
         if quantity is None and amount is not None:
             quantity = self.number_to_string(amount)
+        if quantity is None and self.isSandboxModeEnabled:
+            raise ArgumentsRequired(f'{self.id} 모의투자의 해외 주문 정정에는 amount나 params.amount(정정 수량)가 필요하다')
+        self._assert_us_edit_open(exchange)
         if quantity is None:
-            if self.isSandboxModeEnabled:
-                raise ArgumentsRequired(f'{self.id} 모의투자의 해외 주문 정정에는 amount나 params.amount(정정 수량)가 필요하다')
             quantity = self._open_quantity(id, instrument)
         response = self.private_post_uapi_overseas_stock_v1_trading_order_rvsecncl(self.extend(self.extend(self._account_params(), {
             'OVRS_EXCG_CD': exchange,
@@ -2069,17 +2100,21 @@ class kis(Exchange, ImplicitAPI):
     def fetch_my_trades(self, symbol: Str = None, since: Int = None, limit: Int = None,
                         params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """내 체결 내역. 종목을 주면 그 시장만, 주지 않으면 국내와 미국을 모두 조회한다(`params['market']` 으로 좁힌다). 체결별 수수료는
-        응답에 없어 비어 있다. 일자는 국내가 한국 날짜, 미국이 현지(ET) 날짜다. `since` 를 주지 않으면 오늘이다."""
+        응답에 없어 비어 있다.
+
+        일별주문체결 조회라 주문 하나가 거래 하나다. 수량과 가격은 누적 체결 수량과 평균가이고, 시각은 주문 시각이다(응답에 체결 시각이 없다).
+        체결이 늘면 같은 id 의 거래가 더 큰 수량으로 다시 나오므로 거래를 쌓는 쪽은 id 로 덮어써야 한다. `since` 는 조회 시작일로만 쓰고 시각으로
+        거르지 않는다(주문 시각으로 거르면 `since` 앞에 낸 주문이 그 뒤에 체결된 것이 빠진다). 일자는 국내가 한국 날짜, 미국이 현지(ET) 날짜다."""
         instrument = None if symbol is None else self._instrument_of(symbol)
         which = self.safe_string(params, 'market', 'all')
         trades: List[Dict[str, Any]] = []
         if (which != 'overseas') if instrument is None else not instrument.overseas:
             code = None if instrument is None else instrument.code
-            trades.extend(self.parse_trades(self._fetch_domestic_ccld_rows(code, since, '01'), None, since, limit))
+            trades.extend(self.parse_trades(self._fetch_domestic_ccld_rows(code, since, '01')))
         if (which != 'domestic') if instrument is None else instrument.overseas:
-            trades.extend(self.parse_trades(self._fetch_overseas_ccld_rows(since, '01'), None, since, limit))
+            trades.extend(self.parse_trades(self._fetch_overseas_ccld_rows(since, '01')))
         filtered = trades if instrument is None else [trade for trade in trades if trade.get('symbol') == instrument.symbol]
-        return self.filter_by_since_limit(filtered, since, limit)
+        return self.filter_by_since_limit(filtered, None, limit)
 
     def _fetch_domestic_ccld_rows(self, code: Str, since: Int, ccld: str, order_id: Str = None) -> List[Dict[str, Any]]:
         """국내 일별주문체결 행. `ccld` 는 `'00'` 전체, `'01'` 체결, `'02'` 미체결이다. 조회일은 한국 달력 날짜다(UTC 로 잡으면 한국 0~9시에

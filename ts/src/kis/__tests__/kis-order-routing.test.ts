@@ -13,6 +13,7 @@ vi.mock('../kis-trading-hours', () => ({
     checkKRXTradingHours: () => ({ tradable: true, reason: '' }),
     getKrxMarketPhase: () => 'regular',
     isNxtExtendedTradable: () => false, // 정규장 라우팅 회귀 테스트 — 확장시간 아님
+    getNxtSession: () => 'main',
 }));
 vi.mock('../us-market-hours', () => ({
     getUsMarketPhase: () => 'regular',

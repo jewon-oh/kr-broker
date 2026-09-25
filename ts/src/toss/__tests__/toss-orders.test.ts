@@ -552,6 +552,16 @@ describe('조건주문', () => {
         await expect(makeToss().createOrder('005930', 'market', 'sell', 10, undefined, { triggerPrice: 65000 })).rejects.toThrow(ArgumentsRequired);
     });
 
+    it.each([
+        ['둘째 조건의 triggerPrice 가 없음', { triggerPrice: 80000, conditionalType: 'OCO', expireDate, second: { side: 'sell', price: 64900 } }, ArgumentsRequired],
+        ['첫 조건의 triggerPrice 가 숫자가 아님', { triggerPrice: 'abc', expireDate }, ArgumentsRequired],
+        ['triggerPrice 가 0 이하', { triggerPrice: -1, expireDate }, InvalidOrder],
+    ])('★%s 이면 트리거 없는 조건을 보내지 않고 요청 전에 거절한다', async (_label, params, ErrorClass) => {
+        const fake = installFakeToss({});
+        await expect(makeToss().createOrder('005930', 'limit', 'sell', 10, 79900, params)).rejects.toBeInstanceOf(ErrorClass);
+        expect(fake.requests()).toHaveLength(0);
+    });
+
     it('조건주문 등록 응답에 id 가 없으면 접수 여부를 모르는 것으로 본다', async () => {
         installFakeToss({ 'POST /api/v1/conditional-orders': jsonOk({}) });
         await expect(makeToss().createOrder('005930', 'market', 'sell', 10, undefined, { triggerPrice: 65000, expireDate })).rejects.toBeInstanceOf(OrderOutcomeUnknown);
