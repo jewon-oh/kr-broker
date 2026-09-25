@@ -131,3 +131,23 @@ def test_confirm_budget_never_raises_after_order_is_sent() -> None:
     for option in (boom, coroutine_budget, [3, 100], 'x'):
         assert SyncExchange({'options': {'confirmBudget': option}}).get_confirm_budget(defaults) == defaults
     assert SyncExchange({'options': {'confirmBudget': {'attempts': 2}}}).get_confirm_budget(defaults) == {'attempts': 2, 'intervalMs': 1000}
+
+
+@pytest.mark.parametrize('cls', [SyncFake, AsyncFake])
+@pytest.mark.parametrize('status', [301, 302, 307, 308])
+def test_redirect_is_not_followed_but_raised(cls: Any, status: int) -> None:
+    # 리다이렉트를 따르면 앱키와 시크릿을 다른 호스트로 다시 보낸다. 3xx 는 오류로 던진다.
+    error = _order(cls([_Response(status, 'moved')]))
+    assert isinstance(error, ExchangeNotAvailable) and not isinstance(error, OrderOutcomeUnknown)
+
+
+def test_sync_http_request_disables_redirects() -> None:
+    seen: Dict[str, Any] = {}
+
+    class Session:
+        def request(self, method: str, url: str, **kwargs: Any) -> Any:
+            seen.update(kwargs)
+            return _Response(200, '{}')
+
+    SyncExchange({'session': Session()}).http_request('GET', 'https://example.invalid/x')
+    assert seen['allow_redirects'] is False

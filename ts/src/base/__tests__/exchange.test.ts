@@ -400,10 +400,18 @@ describe('오류 매핑', () => {
             expect(await new FakeExchange().publicGetMarketAll().catch((e: unknown) => e)).toBeInstanceOf(ExchangeNotAvailable);
         });
 
-        it('표에 없는 상태(200·202·302)는 던지지 않는다', async () => {
-            for (const status of [200, 202, 302]) {
+        it('표에 없는 2xx(200·202)는 던지지 않는다', async () => {
+            for (const status of [200, 202]) {
                 stubFetch(new Response('ok', { status }));
                 expect(await new FakeExchange().publicGetMarketAll()).toBe('ok');
+            }
+        });
+
+        it('★리다이렉트를 따르지 않는다 — fetch 에 redirect: manual 을 주고, 3xx 는 ExchangeNotAvailable 로 던진다', async () => {
+            for (const status of [301, 302, 307, 308]) {
+                const { calls } = stubFetch(new Response('moved', { status, headers: { Location: 'https://elsewhere.invalid/' } }));
+                expect(await new FakeExchange(CREDENTIALS).privateGetAccounts().catch((e: unknown) => e), String(status)).toBeInstanceOf(ExchangeNotAvailable);
+                expect(calls[0].init.redirect).toBe('manual');
             }
         });
 

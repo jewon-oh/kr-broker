@@ -83,6 +83,8 @@ async function postJson(op: string, url: string, body: unknown): Promise<{ res: 
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
+            // 리다이렉트를 따르면 앱키와 시크릿이 든 본문을 다른 호스트로 다시 보낸다. 3xx 는 `res.ok` 가 거짓이라 실패로 처리된다.
+            redirect: 'manual',
             signal: controller.signal as FetchSignal,
         });
         return { res, text: await res.text() };

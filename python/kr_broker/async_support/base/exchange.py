@@ -159,8 +159,9 @@ class Exchange(BaseExchange):
         timeout_ms = self.timeout if timeout_ms is None else timeout_ms
         self.open()
         try:
+            # 리다이렉트를 따르지 않는다(동기 판과 같다).
             async with self.session.request(method, url, headers=headers, data=None if body is None else body.encode('utf-8'),
-                                            timeout=aiohttp.ClientTimeout(total=timeout_ms / 1000)) as response:
+                                            timeout=aiohttp.ClientTimeout(total=timeout_ms / 1000), allow_redirects=False) as response:
                 content = await response.read()
                 return HttpResponse(response.status, response.reason or '', response.headers, response.charset, content)
         except asyncio.TimeoutError as e:

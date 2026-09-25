@@ -426,8 +426,9 @@ class Exchange:
         timeout_ms = self.timeout if timeout_ms is None else timeout_ms
         session = self.session if self.session is not None else requests.Session()
         try:
+            # 리다이렉트를 따르지 않는다. 따르면 앱키와 시크릿 헤더, 토큰 발급 본문을 다른 호스트로 다시 보낸다. 3xx 는 오류로 던진다.
             return session.request(method, url, headers=headers, data=None if body is None else body.encode('utf-8'),
-                                   timeout=timeout_ms / 1000)
+                                   timeout=timeout_ms / 1000, allow_redirects=False)
         except requests.exceptions.Timeout as e:
             raise RequestTimeout(f'{self.id} {method} {url} 요청이 {int(timeout_ms)}ms 안에 끝나지 않았다') from e
         except (requests.exceptions.InvalidHeader, requests.exceptions.InvalidURL, requests.exceptions.MissingSchema,
@@ -461,8 +462,8 @@ class Exchange:
         return None
 
     def handle_http_status_code(self, code: int, reason: str, url: str, method: str, body: str) -> None:
-        """상태 표(`httpExceptions`)의 오류를 던진다. 표에 없는 5xx 는 `ExchangeNotAvailable` 이다."""
-        error_class = self.httpExceptions.get(str(code)) or (ExchangeNotAvailable if code >= 500 else None)
+        """상태 표(`httpExceptions`)의 오류를 던진다. 표에 없는 3xx(따르지 않은 리다이렉트)와 5xx 는 `ExchangeNotAvailable` 이다."""
+        error_class = self.httpExceptions.get(str(code)) or (ExchangeNotAvailable if code >= 500 or 300 <= code < 400 else None)
         if error_class is not None:
             raise self.http_status_error(code, error_class, f'{self.id} {method} {url} {code} {reason} {body}')
 

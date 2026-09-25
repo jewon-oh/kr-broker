@@ -545,7 +545,8 @@ export class Exchange {
         let response: HttpResponseLike;
         try {
             const exchange = (async (): Promise<HttpResponseLike> => {
-                const res = await fetchImplementation(url, { method, headers: requestHeaders, body, signal: controller.signal as FetchSignal });
+                // 리다이렉트를 따르지 않는다. 따르면 앱키와 시크릿 헤더, 토큰 발급 본문을 다른 호스트로 다시 보낸다. 3xx 는 오류로 던진다.
+                const res = await fetchImplementation(url, { method, headers: requestHeaders, body, redirect: 'manual', signal: controller.signal as FetchSignal });
                 // 본문까지 읽어야 시간 상한이 끝난다. 이미 읽은 본문으로 다시 응답을 만들어 넘긴다.
                 const text = await res.text();
                 return { status: res.status, statusText: res.statusText, headers: res.headers, text: async () => text };
@@ -604,9 +605,9 @@ export class Exchange {
         return undefined;
     }
 
-    /** 상태 표(`httpExceptions`)의 오류를 던진다. 표에 없는 5xx 는 `ExchangeNotAvailable` 이다. */
+    /** 상태 표(`httpExceptions`)의 오류를 던진다. 표에 없는 3xx(따르지 않은 리다이렉트)와 5xx 는 `ExchangeNotAvailable` 이다. */
     handleHttpStatusCode(code: number, reason: string, url: string, method: string, body: string): void {
-        const ErrorClassForStatus = this.httpExceptions[String(code)] ?? (code >= 500 ? ExchangeNotAvailable : undefined);
+        const ErrorClassForStatus = this.httpExceptions[String(code)] ?? (code >= 500 || (code >= 300 && code < 400) ? ExchangeNotAvailable : undefined);
         if (ErrorClassForStatus !== undefined) {
             throw this.httpStatusError(code, ErrorClassForStatus, `${this.id} ${method} ${url} ${code} ${reason} ${body}`);
         }
