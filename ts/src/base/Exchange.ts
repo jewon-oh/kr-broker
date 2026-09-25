@@ -19,6 +19,9 @@
  * 생성자가 `describe()` 를 부른 뒤 그 값을 인스턴스에 얹는다. 서브클래스에 **필드 선언(초기값이 있든 없든)** 을 두면 그 뒤에 초기화되어
  * 얹어 둔 값을 덮어쓴다. 타입만 알리려면 `declare id: string;` 처럼 `declare` 를 붙인다.
  *
+ * 이 클래스에는 인덱스 시그니처가 없다. 암묵 메서드의 타입은 증권사마다 엔드포인트 표에서 만든 인터페이스(`abstract/<id>.ts`)를 클래스에 합쳐
+ * 알린다(`export interface kis extends KisImplicitApi {}`). 이름을 실행 중에 만드는 호출은 `implicitApiMethod(name)` 으로 찾는다.
+ *
  * ## 주문 요청
  *
  * `api` 엔드포인트를 `{ cost, order: true }` 로 적으면 주문 요청으로 다룬다. 주문 요청은 재시도하지 않고, 시간 초과나 연결 끊김, 증권사 오류 코드가
@@ -67,7 +70,8 @@ import {
 } from './functions/type';
 import type {
     Balances, ConstructorArgs, Currencies, Currency, CurrencyInterface, Dict, Dictionary, IndexType, Int, KrTimestamped, List, Market,
-    FetchSignal, MarketInterface, Num, OHLCV, Order, OrderBook, OrderSide, OrderType, Status, Str, Strings, Ticker, Tickers, Trade, TradingFeeInterface,
+    FetchSignal, ImplicitApiMethod, MarketInterface, Num, OHLCV, Order, OrderBook, OrderSide, OrderType, Status, Str, Strings, Ticker, Tickers, Trade,
+    TradingFeeInterface,
 } from './types';
 
 /** verbose 로그에서 값을 가리는 헤더와 본문 필드(소문자로 비교). */
@@ -213,6 +217,8 @@ export interface EndpointConfig {
 
 const HTTP_METHOD_KEY = /^(?:get|post|put|delete|head|patch)$/i;
 const CAPITALIZE = (s: string): string => (s.length ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+/** 암묵 메서드 이름을 만들 때 경로를 자르는 문자. */
+const PATH_DELIMITER = /[^a-zA-Z0-9]/;
 const DEFAULT_TIMEOUT_MS = 10_000;
 const DEFAULT_RATE_LIMIT_MS = 50;
 const DEFAULT_CURRENCY_TICK = '1e-8';
@@ -223,10 +229,27 @@ const LIMIT_LOOKS_LIKE_MS = 1_000_000_000;
 /** 한국 표준시(UTC+9). */
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
-export class Exchange {
-    // 암묵 API 메서드(`privateGetFoo`)가 실행 중에 만들어지므로 이름을 미리 알 수 없다. 증권사 클래스가 `declare` 로 좁힌다.
-    [key: string]: any;
+/**
+ * 엔드포인트의 암묵 메서드 이름. `api` 이름들(둘째부터 첫 글자를 대문자로) 뒤에 HTTP 메서드와, 영숫자가 아닌 문자로 자른 경로 조각을
+ * 첫 글자만 대문자로 붙인다(`['private']`·`GET`·`uapi/domestic-stock/v1/quotations/inquire-price` → `privateGetUapiDomesticStockV1QuotationsInquirePrice`).
+ * ccxt 의 `defineRestApiEndpoint` 와 같은 규칙이다. `spec/*.json` 의 키와 생성 선언(`abstract/<id>.ts`)도 이 이름을 쓴다.
+ * 생성기(`scripts/gen-python-abstract.mjs`)에 사본이 있고, 테스트가 둘을 대조한다.
+ */
+export function implicitMethodName(api: readonly string[], method: string, path: string): string {
+    const prefix = [api[0]].concat(api.slice(1).map(CAPITALIZE)).join('');
+    const suffix = path.split(PATH_DELIMITER).map(CAPITALIZE).join('');
+    return prefix + CAPITALIZE(method.toLowerCase()) + CAPITALIZE(suffix);
+}
 
+/**
+ * 인스턴스를 이름으로 읽고 쓰는 사전으로 본다. 설정을 얹는 생성자, 자격증명 확인, 암묵 메서드의 대입과 찾기처럼 속성 이름을 실행 중에
+ * 정하는 곳만 쓴다. 클래스에 인덱스 시그니처를 두면 속성 이름의 오타까지 컴파일되므로, 이름으로 여는 길을 여기 하나로 모았다.
+ */
+function membersOf(exchange: Exchange): Dict {
+    return exchange;
+}
+
+export class Exchange {
     // ---- 신원 ----
     id = 'Exchange';
     name: Str = undefined;
@@ -312,11 +335,12 @@ export class Exchange {
         this.options = this.getDefaultOptions();
         // 부모 기본값 → 증권사 선언 → 사용자 설정 순으로 얹는다. 일반 객체는 깊게 합치고 나머지는 덮어쓴다.
         const configEntries = Object.entries(this.describe()).concat(Object.entries(userConfig));
+        const members = membersOf(this);
         for (const [property, value] of configEntries) {
             if (value !== undefined && value !== null && Object.getPrototypeOf(value) === Object.prototype) {
-                this[property] = deepExtend(this[property], value);
+                members[property] = deepExtend(members[property], value);
             } else {
-                this[property] = value;
+                members[property] = value;
             }
         }
         if (this.api !== undefined) this.defineRestApi(this.api, 'request');
@@ -417,7 +441,7 @@ export class Exchange {
 
     // ============ 암묵 API ============
 
-    /** `api` 트리를 돌며 엔드포인트마다 메서드를 만든다. 이름은 `이름들 + 대문자 시작 HTTP 메서드 + 경로 조각(대문자 시작)` 이다. */
+    /** `api` 트리를 돌며 엔드포인트마다 메서드를 만든다. 이름은 `implicitMethodName` 이 정한다. */
     defineRestApi(api: Dict, methodName: string, paths: string[] = []): void {
         for (const key of Object.keys(api)) {
             const value = api[key];
@@ -453,11 +477,20 @@ export class Exchange {
         paths: string[],
         config: EndpointConfig = {},
     ): void {
-        const suffix = path.split(/[^a-zA-Z0-9]/).map(CAPITALIZE).join('');
-        const prefix = [paths[0]].concat(paths.slice(1).map(CAPITALIZE)).join('');
         const apiName: ApiName | undefined = paths.length > 1 ? paths : paths[0];
-        this[prefix + camelcaseMethod + CAPITALIZE(suffix)] = async (params: Dict = {}) =>
-            this[methodName](path, apiName, uppercaseMethod, params, undefined, undefined, config);
+        // 이름이 실행 중에 정해지므로 이름으로 대입한다. 타입은 생성 선언(`abstract/<id>.ts`)을 증권사 클래스에 합쳐 알린다.
+        const members = membersOf(this);
+        members[implicitMethodName(paths, camelcaseMethod, path)] = async (params: Dict = {}) =>
+            members[methodName](path, apiName, uppercaseMethod, params, undefined, undefined, config);
+    }
+
+    /**
+     * 이름으로 암묵 메서드를 찾는다. 없으면 `undefined` 다. TR 코드나 표에서 이름을 실행 중에 만드는 호출이 쓴다.
+     * 이름을 코드에 적을 수 있으면 `this.privateGetFoo(...)` 처럼 바로 부른다. 그래야 컴파일러가 이름의 오타를 잡는다.
+     */
+    implicitApiMethod(name: string): ImplicitApiMethod | undefined {
+        const method = membersOf(this)[name];
+        return typeof method === 'function' ? method : undefined;
     }
 
     // ============ 요청 ============
@@ -799,7 +832,7 @@ export class Exchange {
     /** 필수 자격증명이 비어 있으면 `AuthenticationError`(또는 `error = false` 면 `false`). */
     checkRequiredCredentials(error = true): boolean {
         for (const key of Object.keys(this.requiredCredentials)) {
-            const credentialValue = this[key];
+            const credentialValue: unknown = membersOf(this)[key];
             const missing = credentialValue === undefined || credentialValue === null || credentialValue === false || credentialValue === '';
             if (this.requiredCredentials[key] === true && missing) {
                 if (error) throw new AuthenticationError(`${this.id} requires "${key}" credential`);

@@ -9,10 +9,21 @@ import { ExchangeError, InsufficientFunds, MarketClosed, OrderNotFound, OrderOut
 import { deepExtend } from '../../functions/generic';
 import { safeString, safeValue } from '../../functions/type';
 import { TICK_SIZE } from '../../functions/number';
-import type { Dict, Dictionary, MarketInterface, Order, Ticker, Trade, Market } from '../../types';
+import type { Dict, Dictionary, ImplicitApiMethod, MarketInterface, Order, Ticker, Trade, Market } from '../../types';
 
 /** `Exchange` 를 상속해 `api` 트리·오류 표·파서를 갖춘 가짜 증권사. 호출 순서를 `calls` 에 남긴다. */
 export class FakeExchange extends Exchange {
+    // `api` 트리의 암묵 메서드.
+    declare publicGetMarketAll: ImplicitApiMethod;
+    declare publicGetTickerCode: ImplicitApiMethod;
+    declare publicGetCandlesUnitCode: ImplicitApiMethod;
+    declare publicGetSlowStatus: ImplicitApiMethod;
+    declare publicGetBadBucket: ImplicitApiMethod;
+    declare privateGetAccounts: ImplicitApiMethod;
+    declare privatePostOrders: ImplicitApiMethod;
+    declare privateDeleteOrdersId: ImplicitApiMethod;
+    declare traderPrivateGetV2Assets: ImplicitApiMethod;
+
     /** 실행 중인 단계 이름을 순서대로 남긴다. */
     calls: string[] = [];
 

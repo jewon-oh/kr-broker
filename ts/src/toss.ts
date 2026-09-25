@@ -83,7 +83,6 @@ import {
     type Dict,
     type Dictionary,
     type ErrorClass,
-    type ImplicitApiMethod,
     type Int,
     type Market,
     type MarketInterface,
@@ -101,6 +100,7 @@ import {
     type Trade,
     type TradingFeeInterface,
 } from './base';
+import { TOSS_API_TREE, type TossImplicitApi } from './abstract/toss';
 import { confirmExecution, type ExecutionSnapshot } from './execution-confirm';
 import { buildExtendedSessionLimit } from './extended-session-limit';
 import { symbolBaseCode, type StockMarketGroup } from './broker-market-group';
@@ -351,45 +351,11 @@ function conditionalSide(c: TossConditionalOrder): 'buy' | 'sell' {
     return 'buy';
 }
 
-export class toss extends Exchange {
-    // 암묵 API 메서드. `api` 트리의 경로마다 하나씩 생긴다.
-    declare publicPostOauth2Token: ImplicitApiMethod;
-    declare privateMarketGetAccounts: ImplicitApiMethod;
-    declare privateMarketGetExchangeRate: ImplicitApiMethod;
-    declare privateMarketGetMarketCalendarKR: ImplicitApiMethod;
-    declare privateMarketGetMarketCalendarUS: ImplicitApiMethod;
-    declare privateMarketGetPrices: ImplicitApiMethod;
-    declare privateMarketGetOrderbook: ImplicitApiMethod;
-    declare privateMarketGetCandles: ImplicitApiMethod;
-    declare privateMarketGetTrades: ImplicitApiMethod;
-    declare privateMarketGetPriceLimits: ImplicitApiMethod;
-    declare privateMarketGetStocks: ImplicitApiMethod;
-    declare privateMarketGetStocksAll: ImplicitApiMethod;
-    declare privateMarketGetStocksSymbolWarnings: ImplicitApiMethod;
-    declare privateMarketGetRankings: ImplicitApiMethod;
-    declare privateMarketGetMarketIndicatorsSymbolInvestorTrading: ImplicitApiMethod;
-    declare privateMarketGetMarketIndicatorsPrices: ImplicitApiMethod;
-    declare privateMarketGetMarketIndicatorsSymbolCandles: ImplicitApiMethod;
-    declare privateMarketGetStocksSymbolInvestorTrading: ImplicitApiMethod;
-    declare privateMarketGetStocksSymbolProgramTrades: ImplicitApiMethod;
-    declare privateMarketGetStocksSymbolShortSelling: ImplicitApiMethod;
-    declare privateMarketGetStocksSymbolCreditTrades: ImplicitApiMethod;
-    declare privateMarketGetStocksSymbolSecuritiesLending: ImplicitApiMethod;
-    declare privateAccountGetHoldings: ImplicitApiMethod;
-    declare privateAccountGetBuyingPower: ImplicitApiMethod;
-    declare privateAccountGetCommissions: ImplicitApiMethod;
-    declare privateAccountGetSellableQuantity: ImplicitApiMethod;
-    declare privateAccountGetOrders: ImplicitApiMethod;
-    declare privateAccountGetOrdersOrderId: ImplicitApiMethod;
-    declare privateAccountGetConditionalOrders: ImplicitApiMethod;
-    declare privateAccountGetConditionalOrdersConditionalOrderId: ImplicitApiMethod;
-    declare privateAccountPostOrders: ImplicitApiMethod;
-    declare privateAccountPostOrdersOrderIdCancel: ImplicitApiMethod;
-    declare privateAccountPostOrdersOrderIdModify: ImplicitApiMethod;
-    declare privateAccountPostConditionalOrders: ImplicitApiMethod;
-    declare privateAccountPostConditionalOrdersConditionalOrderIdModify: ImplicitApiMethod;
-    declare privateAccountDeleteConditionalOrdersConditionalOrderId: ImplicitApiMethod;
+// 암묵 API 메서드(`privateMarketGetPrices` 등)의 선언이다. `abstract/toss.ts` 가 엔드포인트 표(`spec/toss.json`)에서 만든다.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
+export interface toss extends TossImplicitApi {}
 
+export class toss extends Exchange {
     // 실행 중에 쌓이는 상태. 이름이 `describe()` 의 키와 겹치면 안 된다(생성자가 얹은 값을 덮어쓴다).
     private accessToken: string | undefined;
     private tokenAuth: TossAuth | undefined;
@@ -463,64 +429,10 @@ export class toss extends Exchange {
                     'https://openapi.tossinvest.com/openapi-docs/overview.md',
                 ],
             },
+            // 엔드포인트 표(`spec/toss.json`)에서 만든 트리다. 엔드포인트는 표에 더한다.
             // `market` 은 토큰만 있으면 되는 시세·종목 API, `account` 는 여기에 계좌 헤더(`X-Tossinvest-Account`)가 더 필요한 API 다.
             // 비용은 전부 1이고 그룹의 한도는 `rateLimitBuckets` 에 있다. `peak` 는 개장 직후에 한도가 줄어드는 그룹이다.
-            api: {
-                public: {
-                    post: {
-                        'oauth2/token': { cost: 1, bucket: 'auth' },
-                    },
-                },
-                private: {
-                    market: {
-                        get: {
-                            'accounts': { cost: 1, bucket: 'account' },
-                            'exchange-rate': { cost: 1, bucket: 'market_info' },
-                            'market-calendar/KR': { cost: 1, bucket: 'market_info' },
-                            'market-calendar/US': { cost: 1, bucket: 'market_info' },
-                            'prices': { cost: 1, bucket: 'market_data' },
-                            'orderbook': { cost: 1, bucket: 'market_data' },
-                            'candles': { cost: 1, bucket: 'market_data_chart' },
-                            'trades': { cost: 1, bucket: 'market_data' },
-                            'price-limits': { cost: 1, bucket: 'market_data' },
-                            'stocks': { cost: 1, bucket: 'stock' },
-                            'stocks/all': { cost: 1, bucket: 'stock_all' },
-                            'stocks/{symbol}/warnings': { cost: 1, bucket: 'stock' },
-                            'rankings': { cost: 1, bucket: 'ranking' },
-                            'market-indicators/{symbol}/investor-trading': { cost: 1, bucket: 'market_indicator' },
-                            'market-indicators/prices': { cost: 1, bucket: 'market_indicator' },
-                            'market-indicators/{symbol}/candles': { cost: 1, bucket: 'market_indicator_chart' },
-                            'stocks/{symbol}/investor-trading': { cost: 1, bucket: 'stock_trading_trend' },
-                            'stocks/{symbol}/program-trades': { cost: 1, bucket: 'stock_trading_trend' },
-                            'stocks/{symbol}/short-selling': { cost: 1, bucket: 'stock_trading_trend' },
-                            'stocks/{symbol}/credit-trades': { cost: 1, bucket: 'stock_trading_trend' },
-                            'stocks/{symbol}/securities-lending': { cost: 1, bucket: 'stock_trading_trend' },
-                        },
-                    },
-                    account: {
-                        get: {
-                            'holdings': { cost: 1, bucket: 'asset' },
-                            'buying-power': { cost: 1, bucket: 'order_info', peak: true },
-                            'commissions': { cost: 1, bucket: 'order_info', peak: true },
-                            'sellable-quantity': { cost: 1, bucket: 'order_info', peak: true },
-                            'orders': { cost: 1, bucket: 'order_history' },
-                            'orders/{orderId}': { cost: 1, bucket: 'order_history' },
-                            'conditional-orders': { cost: 1, bucket: 'conditional_order_history' },
-                            'conditional-orders/{conditionalOrderId}': { cost: 1, bucket: 'conditional_order_history' },
-                        },
-                        post: {
-                            'orders': { cost: 1, bucket: 'order', order: true },
-                            'orders/{orderId}/cancel': { cost: 1, bucket: 'order', order: true },
-                            'orders/{orderId}/modify': { cost: 1, bucket: 'order', order: true },
-                            'conditional-orders': { cost: 1, bucket: 'conditional_order', order: true },
-                            'conditional-orders/{conditionalOrderId}/modify': { cost: 1, bucket: 'conditional_order', order: true },
-                        },
-                        delete: {
-                            'conditional-orders/{conditionalOrderId}': { cost: 1, bucket: 'conditional_order', order: true },
-                        },
-                    },
-                },
-            },
+            api: TOSS_API_TREE,
             // 값은 그룹별 공식 한도(초당 호출 수)에서 여유를 두고 정했다. 조회 그룹(자산)은 문서값(5)보다 낮은 1건으로 둔다.
             rateLimitBuckets: {
                 auth: { rateLimit: 334 },

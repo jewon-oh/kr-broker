@@ -30,6 +30,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
+      - name: 암묵 API 선언(ts/src/abstract)이 엔드포인트 표(ts/src/spec)와 같은지
+        run: node scripts/gen-ts-abstract.mjs --check
       - name: 비밀이나 사설 식별자로 보이는 값이 없는지
         run: pnpm hygiene:check
 

@@ -1,7 +1,7 @@
 /**
  * @fileoverview `spec/*.json` 이 실제 `describe().api`(런타임에 요청을 만드는 표)와 같은지 양쪽으로 대조한다.
  * 어긋나면 스펙 표가 거짓말을 하는 것이다. 사람도, Python 판의 `abstract/*.py` 도 이 표를 믿는다.
- * `describe().api` 에 엔드포인트를 더하면 이 테스트가 실패하며 `spec/*.json` 에 넣을 줄을 알려 준다.
+ * `describe().api` 는 이 표에서 만든 상수(`abstract/<id>.ts`)라, 어긋나면 표를 고친 뒤 생성기를 다시 돌리지 않았거나 클래스가 트리를 덧붙인 것이다.
  */
 import { describe, expect, it } from 'vitest';
 
@@ -73,6 +73,6 @@ describe('implicitMethodNames', () => {
     it('이름은 실제 인스턴스의 암묵 메서드와 같다', () => {
         const ex = new kis();
         const name = implicitMethodNames({ api: ['private'], method: 'GET', path: 'uapi/domestic-stock/v1/quotations/inquire-price' }).camel;
-        expect(typeof ex[name]).toBe('function');
+        expect(ex.implicitApiMethod(name)).toBeTypeOf('function');
     });
 });

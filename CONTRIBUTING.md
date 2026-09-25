@@ -21,6 +21,7 @@
 ts/src/                  TypeScript 판
   base/                  공통 계층(Exchange, 오류, 공용 함수)
   kis.ts, kis/           증권사 클래스와 보조 모듈(toss, kbsec 도 같은 모양)
+  abstract/              엔드포인트 표에서 만든 API 트리와 암묵 메서드 선언
   spec/                  두 판이 함께 쓰는 엔드포인트 표
   test/static/request/   두 판이 함께 돌리는 요청 픽스처
 python/kr_broker/        Python 판
@@ -57,8 +58,9 @@ pnpm verify          # CI 가 돌리는 검사를 한 번에(Python 단계 포�
 - 테스트 하나만 실행하려면 `pnpm exec vitest run ts/src/kis/__tests__/kis-order.test.ts`처럼 경로를 지정합니다.
 - 테스트는 `ts/src/**/__tests__/` 아래에 둡니다.
 - 테스트는 `fetch`를 가짜 함수로 대체합니다. 증권사 서버를 호출하지 않습니다.
+- `ts/src/abstract/`는 `node scripts/gen-ts-abstract.mjs`가 `ts/src/spec/*.json`에서 만드는 파일입니다. 증권사 클래스의 `describe().api`와 암묵 메서드의 타입이 여기서 옵니다. 엔드포인트를 더하거나 고칠 때는 표를 고친 뒤 다시 만듭니다.
 - `docs/coverage/`의 자료를 고쳤다면 `pnpm docs:gen`으로 `docs/brokers/`와 README의 기능 표를 다시 만듭니다. README는 `<!-- coverage:start -->`와 `<!-- coverage:end -->` 사이만 바뀝니다. `pnpm docs:check`는 둘이 자료와 다르면 실패합니다.
-- CI는 `pnpm typecheck`, `pnpm hygiene:check`, `pnpm test`, `pnpm docs:check`, `pnpm build`, `node scripts/check-dist-imports.mjs`, `pnpm audit --prod`와 Python 단계(아래)를 실행합니다. 테스트는 Linux의 Node.js 22와 24, Windows의 Node.js 22에서 실행합니다.
+- CI는 `pnpm typecheck`, `node scripts/gen-ts-abstract.mjs --check`, `pnpm hygiene:check`, `pnpm test`, `pnpm docs:check`, `pnpm build`, `node scripts/check-dist-imports.mjs`, `pnpm audit --prod`와 Python 단계(아래)를 실행합니다. 테스트는 Linux의 Node.js 22와 24, Windows의 Node.js 22에서 실행합니다.
 - `pnpm verify`는 네트워크가 필요한 `pnpm audit --prod`를 빼고 CI와 같은 순서로 검사를 돌립니다. 하나라도 실패하면 거기서 멈춥니다. Python 단계는 `KR_BROKER_PYTHON`, `python/.venv`의 Python, PATH의 `python3`와 `python` 순서로 `pytest`를 불러올 수 있는 Python을 찾아 씁니다. Python 환경이 없으면 `pnpm verify --no-python`으로 Python 단계를 건너뜁니다.
 
 PR을 올리기 전에 `pnpm verify`가 통과해야 합니다.

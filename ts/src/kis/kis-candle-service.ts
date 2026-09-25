@@ -14,6 +14,7 @@ import { logger } from '../logger';
 import { etYmd } from '../us-market-hours';
 import { resampleCandles, type OhlcvRow } from './candle-resample';
 import type { Exchange } from '../base';
+import type { KisImplicitApi } from '../abstract/kis';
 import { planWindows, mergeCandles, sliceCandleWindow, toKisDate } from './kis-candle-pagination';
 import type { KisDailyCandle, KisOverseasDailyCandle } from './kis-types';
 import type { OverseasMarket } from './kis-overseas-master';
@@ -67,7 +68,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 export class KisCandleService {
     /** @param exchange 자격증명을 채운 `kis` 인스턴스. 암묵 API(`privateGet…`)를 부른다. */
-    constructor(private readonly exchange: Exchange) { }
+    constructor(private readonly exchange: Exchange & KisImplicitApi) { }
 
     /**
      * 기간별(일/주/월) 캔들 조회

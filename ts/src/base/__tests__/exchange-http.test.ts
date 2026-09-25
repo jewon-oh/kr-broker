@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, it, expect } from 'vitest';
 import { NetworkError, OrderOutcomeUnknown, RequestTimeout, ExchangeNotAvailable } from '../errors';
 import { deepExtend } from '../functions/generic';
 import { Exchange } from '../Exchange';
-import type { Dict } from '../types';
+import type { Dict, ImplicitApiMethod } from '../types';
 
 let server: http.Server;
 let baseUrl = '';
@@ -54,6 +54,14 @@ afterAll(async () => {
 });
 
 class Local extends Exchange {
+    declare publicGetOk: ImplicitApiMethod;
+    declare publicGetHang: ImplicitApiMethod;
+    declare publicGetStallBody: ImplicitApiMethod;
+    declare publicGetReset: ImplicitApiMethod;
+    declare publicGetDown: ImplicitApiMethod;
+    declare privatePostEcho: ImplicitApiMethod;
+    declare privatePostHang: ImplicitApiMethod;
+
     override describe(): Dict {
         return deepExtend(super.describe(), {
             id: 'local',

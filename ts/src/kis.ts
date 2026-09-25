@@ -85,7 +85,8 @@ import {
     type ApiName,
     type Market,
 } from './base';
-import { kstTimestampOf } from './base/Exchange';
+import { implicitMethodName, kstTimestampOf } from './base/Exchange';
+import { KIS_API_TREE, type KisImplicitApi } from './abstract/kis';
 import { logger } from './logger';
 import { buildExtendedSessionLimit } from './extended-session-limit';
 import { refreshMarketCalendar as refreshSharedMarketCalendar } from './market-calendar';
@@ -3476,11 +3477,6 @@ const KIS_CORPORATE_SCHEDULE_SPECS: Readonly<Record<KisCorporateScheduleType, { 
     SHAREHOLDER_MEETING: { path: 'uapi/domestic-stock/v1/ksdinfo/sharehld-meet', trId: 'HHKDB669111C0', params: {} },
 };
 
-/** API 트리 경로 → 암묵 메서드 이름(`uapi/domestic-stock/v1/ranking/fluctuation` → `privateGetUapiDomesticStockV1RankingFluctuation`). */
-function kisImplicitGet(path: string): string {
-    return `privateGet${path.split(/[/-]/).map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join('')}`;
-}
-
 /**
  * 순위 행 하나. 순위 API 들이 공통으로 주는 필드만 정리했다. 종류별 지표와 나머지 원문은 `info`에 있다.
  * 시간외 순위(`OVERTIME_*`)의 가격, 대비, 대비율, 거래량은 시간외 단일가 값이다(예상체결 순위는 예상 체결가와 예상 체결량).
@@ -3664,6 +3660,10 @@ const signedChange = (change: Str, percentage: Str, sign: Str): string => {
     return direction === 0 ? '0' : direction < 0 ? (Precise.stringNeg(magnitude) ?? '0') : magnitude;
 };
 
+// 암묵 API 메서드(`privateGetUapiDomesticStockV1QuotationsInquirePrice` 등)의 선언이다. `abstract/kis.ts` 가 엔드포인트 표(`spec/kis.json`)에서 만든다.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
+export interface kis extends KisImplicitApi {}
+
 export class kis extends Exchange {
     /** 접근 토큰·실시간 접속키 캐시. 앱키가 바뀌면 다시 만든다. */
     private authState: { appKey: string; auth: KisAuth } | undefined;
@@ -3738,295 +3738,8 @@ export class kis extends Exchange {
                 fees: 'https://securities.koreainvestment.com/main/customer/guide/_static/TF04ae010000.jsp',
             },
             requiredCredentials: { apiKey: true, secret: true, uid: true },
-            api: {
-                public: {
-                    post: {
-                        'oauth2/tokenP': { cost: 1 },
-                        'oauth2/Approval': { cost: 1 },
-                    },
-                },
-                private: {
-                    get: {
-                        // 국내 시세
-                        'uapi/domestic-stock/v1/quotations/inquire-price': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/intstock-multprice': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/inquire-asking-price-exp-ccn': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/inquire-time-itemchartprice': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/inquire-investor': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/search-stock-info': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/inquire-vi-status': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/volume-rank': { cost: 1 },
-                        'uapi/domestic-stock/v1/ranking/fluctuation': { cost: 1 },
-                        'uapi/domestic-stock/v1/ranking/after-hour-balance': { cost: 1 },
-                        'uapi/domestic-stock/v1/ranking/bulk-trans-num': { cost: 1 },
-                        'uapi/domestic-stock/v1/ranking/disparity': { cost: 1 },
-                        'uapi/domestic-stock/v1/ranking/exp-trans-updown': { cost: 1 },
-                        'uapi/domestic-stock/v1/ranking/market-cap': { cost: 1 },
-                        'uapi/domestic-stock/v1/ranking/near-new-highlow': { cost: 1 },
-                        'uapi/domestic-stock/v1/ranking/prefer-disparate-ratio': { cost: 1 },
-                        'uapi/domestic-stock/v1/ranking/quote-balance': { cost: 1 },
-                        'uapi/domestic-stock/v1/ranking/top-interest-stock': { cost: 1 },
-                        'uapi/domestic-stock/v1/ranking/traded-by-company': { cost: 1 },
-                        'uapi/domestic-stock/v1/ranking/volume-power': { cost: 1 },
-                        'uapi/domestic-stock/v1/ranking/credit-balance': { cost: 1 },
-                        'uapi/domestic-stock/v1/ranking/dividend-rate': { cost: 1 },
-                        'uapi/domestic-stock/v1/ranking/finance-ratio': { cost: 1 },
-                        'uapi/domestic-stock/v1/ranking/hts-top-view': { cost: 1 },
-                        'uapi/domestic-stock/v1/ranking/market-value': { cost: 1 },
-                        'uapi/domestic-stock/v1/ranking/overtime-exp-trans-fluct': { cost: 1 },
-                        'uapi/domestic-stock/v1/ranking/overtime-fluctuation': { cost: 1 },
-                        'uapi/domestic-stock/v1/ranking/overtime-volume': { cost: 1 },
-                        'uapi/domestic-stock/v1/ranking/profit-asset-index': { cost: 1 },
-                        'uapi/domestic-stock/v1/ranking/short-sale': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/exp-closing-price': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/inquire-ccnl': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/inquire-time-itemconclusion': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/inquire-time-overtimeconclusion': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/inquire-overtime-price': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/inquire-overtime-asking-price': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/inquire-daily-overtimeprice': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/inquire-member': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/frgnmem-trade-trend': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/inquire-daily-indexchartprice': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/inquire-time-indexchartprice': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/inquire-time-dailychartprice': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/inquire-daily-price': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/inquire-price-2': { cost: 1 },
-                        'uapi/etfetn/v1/quotations/inquire-price': { cost: 1 },
-                        'uapi/etfetn/v1/quotations/inquire-component-stock-price': { cost: 1 },
-                        'uapi/etfetn/v1/quotations/nav-comparison-trend': { cost: 1 },
-                        'uapi/etfetn/v1/quotations/nav-comparison-daily-trend': { cost: 1 },
-                        'uapi/etfetn/v1/quotations/nav-comparison-time-trend': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/inquire-elw-price': { cost: 1 },
-                        'uapi/elw/v1/ranking/updown-rate': { cost: 1 },
-                        'uapi/elw/v1/ranking/volume-rank': { cost: 1 },
-                        'uapi/elw/v1/ranking/indicator': { cost: 1 },
-                        'uapi/elw/v1/ranking/sensitivity': { cost: 1 },
-                        'uapi/elw/v1/ranking/quick-change': { cost: 1 },
-                        'uapi/elw/v1/quotations/compare-stocks': { cost: 1 },
-                        'uapi/elw/v1/quotations/expiration-stocks': { cost: 1 },
-                        'uapi/elw/v1/quotations/newly-listed': { cost: 1 },
-                        'uapi/elw/v1/quotations/udrl-asset-list': { cost: 1 },
-                        'uapi/elw/v1/quotations/udrl-asset-price': { cost: 1 },
-                        'uapi/elw/v1/quotations/indicator-trend-ccnl': { cost: 1 },
-                        'uapi/elw/v1/quotations/indicator-trend-daily': { cost: 1 },
-                        'uapi/elw/v1/quotations/indicator-trend-minute': { cost: 1 },
-                        'uapi/elw/v1/quotations/sensitivity-trend-ccnl': { cost: 1 },
-                        'uapi/elw/v1/quotations/sensitivity-trend-daily': { cost: 1 },
-                        'uapi/elw/v1/quotations/volatility-trend-ccnl': { cost: 1 },
-                        'uapi/elw/v1/quotations/volatility-trend-daily': { cost: 1 },
-                        'uapi/elw/v1/quotations/volatility-trend-minute': { cost: 1 },
-                        'uapi/elw/v1/quotations/cond-search': { cost: 1 },
-                        'uapi/elw/v1/quotations/lp-trade-trend': { cost: 1 },
-                        'uapi/elw/v1/quotations/volatility-trend-tick': { cost: 1 },
-                        'uapi/domestic-futureoption/v1/quotations/display-board-callput': { cost: 1 },
-                        'uapi/domestic-futureoption/v1/quotations/display-board-futures': { cost: 1 },
-                        'uapi/domestic-futureoption/v1/quotations/display-board-option-list': { cost: 1 },
-                        'uapi/domestic-futureoption/v1/quotations/display-board-top': { cost: 1 },
-                        'uapi/domestic-futureoption/v1/quotations/exp-price-trend': { cost: 1 },
-                        'uapi/domestic-futureoption/v1/quotations/inquire-asking-price': { cost: 1 },
-                        'uapi/domestic-futureoption/v1/quotations/inquire-price': { cost: 1 },
-                        'uapi/domestic-futureoption/v1/quotations/inquire-daily-fuopchartprice': { cost: 1 },
-                        'uapi/domestic-futureoption/v1/quotations/inquire-time-fuopchartprice': { cost: 1 },
-                        'uapi/overseas-futureoption/v1/quotations/inquire-price': { cost: 1 },
-                        'uapi/overseas-futureoption/v1/quotations/opt-price': { cost: 1 },
-                        'uapi/overseas-futureoption/v1/quotations/stock-detail': { cost: 1 },
-                        'uapi/overseas-futureoption/v1/quotations/opt-detail': { cost: 1 },
-                        'uapi/overseas-futureoption/v1/quotations/search-contract-detail': { cost: 1 },
-                        'uapi/overseas-futureoption/v1/quotations/search-opt-detail': { cost: 1 },
-                        'uapi/overseas-futureoption/v1/quotations/inquire-asking-price': { cost: 1 },
-                        'uapi/overseas-futureoption/v1/quotations/opt-asking-price': { cost: 1 },
-                        'uapi/overseas-futureoption/v1/quotations/market-time': { cost: 1 },
-                        'uapi/overseas-futureoption/v1/quotations/investor-unpd-trend': { cost: 1 },
-                        'uapi/overseas-futureoption/v1/quotations/tick-ccnl': { cost: 1 },
-                        'uapi/overseas-futureoption/v1/quotations/daily-ccnl': { cost: 1 },
-                        'uapi/overseas-futureoption/v1/quotations/weekly-ccnl': { cost: 1 },
-                        'uapi/overseas-futureoption/v1/quotations/monthly-ccnl': { cost: 1 },
-                        'uapi/overseas-futureoption/v1/quotations/inquire-time-futurechartprice': { cost: 1 },
-                        'uapi/overseas-futureoption/v1/quotations/opt-tick-ccnl': { cost: 1 },
-                        'uapi/overseas-futureoption/v1/quotations/opt-daily-ccnl': { cost: 1 },
-                        'uapi/overseas-futureoption/v1/quotations/opt-weekly-ccnl': { cost: 1 },
-                        'uapi/overseas-futureoption/v1/quotations/opt-monthly-ccnl': { cost: 1 },
-                        'uapi/domestic-bond/v1/quotations/inquire-price': { cost: 1 },
-                        'uapi/domestic-bond/v1/quotations/inquire-asking-price': { cost: 1 },
-                        'uapi/domestic-bond/v1/quotations/inquire-ccnl': { cost: 1 },
-                        'uapi/domestic-bond/v1/quotations/inquire-daily-price': { cost: 1 },
-                        'uapi/domestic-bond/v1/quotations/inquire-daily-itemchartprice': { cost: 1 },
-                        'uapi/domestic-bond/v1/quotations/issue-info': { cost: 1 },
-                        'uapi/domestic-bond/v1/quotations/search-bond-info': { cost: 1 },
-                        'uapi/domestic-bond/v1/quotations/avg-unit': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/comp-program-trade-daily': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/comp-program-trade-today': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/estimate-perform': { cost: 1 },
-                        'uapi/overseas-stock/v1/trading/inquire-algo-ccnl': { cost: 1 },
-                        'uapi/domestic-futureoption/v1/trading/inquire-balance': { cost: 1 },
-                        'uapi/domestic-futureoption/v1/trading/inquire-balance-settlement-pl': { cost: 1 },
-                        'uapi/domestic-futureoption/v1/trading/inquire-balance-valuation-pl': { cost: 1 },
-                        'uapi/domestic-futureoption/v1/trading/inquire-ccnl': { cost: 1 },
-                        'uapi/domestic-futureoption/v1/trading/inquire-ccnl-bstime': { cost: 1 },
-                        'uapi/domestic-futureoption/v1/trading/inquire-daily-amount-fee': { cost: 1 },
-                        'uapi/domestic-futureoption/v1/trading/inquire-deposit': { cost: 1 },
-                        'uapi/domestic-futureoption/v1/trading/inquire-ngt-balance': { cost: 1 },
-                        'uapi/domestic-futureoption/v1/trading/inquire-ngt-ccnl': { cost: 1 },
-                        'uapi/domestic-futureoption/v1/trading/inquire-psbl-ngt-order': { cost: 1 },
-                        'uapi/domestic-futureoption/v1/trading/inquire-psbl-order': { cost: 1 },
-                        'uapi/domestic-futureoption/v1/trading/ngt-margin-detail': { cost: 1 },
-                        'uapi/domestic-bond/v1/trading/inquire-balance': { cost: 1 },
-                        'uapi/domestic-bond/v1/trading/inquire-daily-ccld': { cost: 1 },
-                        'uapi/domestic-bond/v1/trading/inquire-psbl-order': { cost: 1 },
-                        'uapi/domestic-bond/v1/trading/inquire-psbl-rvsecncl': { cost: 1 },
-                        'uapi/overseas-futureoption/v1/trading/inquire-ccld': { cost: 1 },
-                        'uapi/overseas-futureoption/v1/trading/inquire-daily-ccld': { cost: 1 },
-                        'uapi/overseas-futureoption/v1/trading/inquire-daily-order': { cost: 1 },
-                        'uapi/overseas-futureoption/v1/trading/inquire-deposit': { cost: 1 },
-                        'uapi/overseas-futureoption/v1/trading/inquire-period-ccld': { cost: 1 },
-                        'uapi/overseas-futureoption/v1/trading/inquire-period-trans': { cost: 1 },
-                        'uapi/overseas-futureoption/v1/trading/inquire-psamount': { cost: 1 },
-                        'uapi/overseas-futureoption/v1/trading/inquire-unpd': { cost: 1 },
-                        'uapi/overseas-futureoption/v1/trading/margin-detail': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/daily-credit-balance': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/daily-loan-trans': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/daily-short-sale': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/inquire-daily-trade-volume': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/investor-trade-by-stock-daily': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/investor-trend-estimate': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/frgnmem-pchs-trend': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/inquire-member-daily': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/program-trade-by-stock': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/program-trade-by-stock-daily': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/foreign-institution-total': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/frgnmem-trade-estimate': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/capture-uplowprice': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/investor-program-trade-today': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/inquire-investor-daily-by-market': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/mktfunds': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/exp-price-trend': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/pbar-tratio': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/tradprt-byamt': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/intstock-grouplist': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/intstock-stocklist-by-group': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/psearch-title': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/psearch-result': { cost: 1 },
-                        'uapi/domestic-stock/v1/finance/balance-sheet': { cost: 1 },
-                        'uapi/domestic-stock/v1/finance/income-statement': { cost: 1 },
-                        'uapi/domestic-stock/v1/finance/financial-ratio': { cost: 1 },
-                        'uapi/domestic-stock/v1/finance/profit-ratio': { cost: 1 },
-                        'uapi/domestic-stock/v1/finance/other-major-ratios': { cost: 1 },
-                        'uapi/domestic-stock/v1/finance/stability-ratio': { cost: 1 },
-                        'uapi/domestic-stock/v1/finance/growth-ratio': { cost: 1 },
-                        'uapi/domestic-stock/v1/ksdinfo/paidin-capin': { cost: 1 },
-                        'uapi/domestic-stock/v1/ksdinfo/bonus-issue': { cost: 1 },
-                        'uapi/domestic-stock/v1/ksdinfo/dividend': { cost: 1 },
-                        'uapi/domestic-stock/v1/ksdinfo/purreq': { cost: 1 },
-                        'uapi/domestic-stock/v1/ksdinfo/merger-split': { cost: 1 },
-                        'uapi/domestic-stock/v1/ksdinfo/rev-split': { cost: 1 },
-                        'uapi/domestic-stock/v1/ksdinfo/cap-dcrs': { cost: 1 },
-                        'uapi/domestic-stock/v1/ksdinfo/list-info': { cost: 1 },
-                        'uapi/domestic-stock/v1/ksdinfo/pub-offer': { cost: 1 },
-                        'uapi/domestic-stock/v1/ksdinfo/forfeit': { cost: 1 },
-                        'uapi/domestic-stock/v1/ksdinfo/mand-deposit': { cost: 1 },
-                        'uapi/domestic-stock/v1/ksdinfo/sharehld-meet': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/credit-by-company': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/invest-opbysec': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/invest-opinion': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/news-title': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/search-info': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/lendable-by-company': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/inquire-index-price': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/inquire-index-daily-price': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/inquire-index-timeprice': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/inquire-index-tickprice': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/inquire-index-category-price': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/exp-index-trend': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/exp-total-index': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/comp-interest': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/market-time': { cost: 1 },
-                        // 해외 순위
-                        'uapi/overseas-stock/v1/ranking/market-cap': { cost: 1 },
-                        'uapi/overseas-stock/v1/ranking/new-highlow': { cost: 1 },
-                        'uapi/overseas-stock/v1/ranking/price-fluct': { cost: 1 },
-                        'uapi/overseas-stock/v1/ranking/updown-rate': { cost: 1 },
-                        'uapi/overseas-stock/v1/ranking/trade-vol': { cost: 1 },
-                        'uapi/overseas-stock/v1/ranking/trade-pbmn': { cost: 1 },
-                        'uapi/overseas-stock/v1/ranking/trade-growth': { cost: 1 },
-                        'uapi/overseas-stock/v1/ranking/trade-turnover': { cost: 1 },
-                        'uapi/overseas-stock/v1/ranking/volume-power': { cost: 1 },
-                        'uapi/overseas-stock/v1/ranking/volume-surge': { cost: 1 },
-                        'uapi/overseas-price/v1/quotations/inquire-asking-price': { cost: 1 },
-                        'uapi/overseas-price/v1/quotations/price-detail': { cost: 1 },
-                        'uapi/overseas-price/v1/quotations/inquire-ccnl': { cost: 1 },
-                        'uapi/overseas-price/v1/quotations/inquire-daily-chartprice': { cost: 1 },
-                        'uapi/overseas-price/v1/quotations/inquire-time-indexchartprice': { cost: 1 },
-                        'uapi/overseas-price/v1/quotations/inquire-time-itemchartprice': { cost: 1 },
-                        'uapi/overseas-price/v1/quotations/industry-price': { cost: 1 },
-                        'uapi/overseas-price/v1/quotations/industry-theme': { cost: 1 },
-                        'uapi/overseas-stock/v1/quotations/countries-holiday': { cost: 1 },
-                        'uapi/overseas-price/v1/quotations/brknews-title': { cost: 1 },
-                        'uapi/overseas-price/v1/quotations/news-title': { cost: 1 },
-                        'uapi/overseas-price/v1/quotations/inquire-search': { cost: 1 },
-                        'uapi/overseas-price/v1/quotations/colable-by-company': { cost: 1 },
-                        'uapi/overseas-price/v1/quotations/period-rights': { cost: 1 },
-                        'uapi/overseas-price/v1/quotations/rights-by-ice': { cost: 1 },
-                        'uapi/overseas-price/v1/quotations/search-info': { cost: 1 },
-                        'uapi/domestic-stock/v1/quotations/chk-holiday': { cost: 1 },
-                        // 국내 계좌
-                        'uapi/domestic-stock/v1/trading/inquire-balance': { cost: 1 },
-                        'uapi/domestic-stock/v1/trading/inquire-psbl-order': { cost: 1 },
-                        'uapi/domestic-stock/v1/trading/inquire-psbl-rvsecncl': { cost: 1 },
-                        'uapi/domestic-stock/v1/trading/inquire-daily-ccld': { cost: 1 },
-                        'uapi/domestic-stock/v1/trading/inquire-period-trade-profit': { cost: 1 },
-                        'uapi/domestic-stock/v1/trading/inquire-account-balance': { cost: 1 },
-                        'uapi/domestic-stock/v1/trading/inquire-balance-rlz-pl': { cost: 1 },
-                        'uapi/domestic-stock/v1/trading/inquire-credit-psamount': { cost: 1 },
-                        'uapi/domestic-stock/v1/trading/inquire-period-profit': { cost: 1 },
-                        'uapi/domestic-stock/v1/trading/inquire-psbl-sell': { cost: 1 },
-                        'uapi/domestic-stock/v1/trading/intgr-margin': { cost: 1 },
-                        'uapi/domestic-stock/v1/trading/order-resv-ccnl': { cost: 1 },
-                        'uapi/domestic-stock/v1/trading/period-rights': { cost: 1 },
-                        'uapi/domestic-stock/v1/trading/pension/inquire-balance': { cost: 1 },
-                        'uapi/domestic-stock/v1/trading/pension/inquire-daily-ccld': { cost: 1 },
-                        'uapi/domestic-stock/v1/trading/pension/inquire-deposit': { cost: 1 },
-                        'uapi/domestic-stock/v1/trading/pension/inquire-present-balance': { cost: 1 },
-                        'uapi/domestic-stock/v1/trading/pension/inquire-psbl-order': { cost: 1 },
-                        // 해외 시세
-                        'uapi/overseas-price/v1/quotations/price': { cost: 1 },
-                        'uapi/overseas-price/v1/quotations/dailyprice': { cost: 1 },
-                        // 해외 계좌
-                        'uapi/overseas-stock/v1/trading/inquire-balance': { cost: 1 },
-                        'uapi/overseas-stock/v1/trading/inquire-present-balance': { cost: 1 },
-                        'uapi/overseas-stock/v1/trading/inquire-ccnl': { cost: 1 },
-                        'uapi/overseas-stock/v1/trading/inquire-nccs': { cost: 1 },
-                        'uapi/overseas-stock/v1/trading/algo-ordno': { cost: 1 },
-                        'uapi/overseas-stock/v1/trading/foreign-margin': { cost: 1 },
-                        'uapi/overseas-stock/v1/trading/inquire-paymt-stdr-balance': { cost: 1 },
-                        'uapi/overseas-stock/v1/trading/inquire-period-profit': { cost: 1 },
-                        'uapi/overseas-stock/v1/trading/inquire-period-trans': { cost: 1 },
-                        'uapi/overseas-stock/v1/trading/inquire-psamount': { cost: 1 },
-                        'uapi/overseas-stock/v1/trading/order-resv-list': { cost: 1 },
-                    },
-                    post: {
-                        'uapi/domestic-stock/v1/trading/order-cash': { cost: 1, order: true },
-                        'uapi/domestic-stock/v1/trading/order-rvsecncl': { cost: 1, order: true },
-                        'uapi/overseas-stock/v1/trading/order': { cost: 1, order: true },
-                        'uapi/overseas-stock/v1/trading/order-rvsecncl': { cost: 1, order: true },
-                        'uapi/domestic-stock/v1/trading/order-credit': { cost: 1, order: true },
-                        'uapi/domestic-stock/v1/trading/order-resv': { cost: 1, order: true },
-                        'uapi/domestic-stock/v1/trading/order-resv-rvsecncl': { cost: 1, order: true },
-                        'uapi/overseas-stock/v1/trading/daytime-order': { cost: 1, order: true },
-                        'uapi/overseas-stock/v1/trading/daytime-order-rvsecncl': { cost: 1, order: true },
-                        'uapi/overseas-stock/v1/trading/order-resv': { cost: 1, order: true },
-                        'uapi/overseas-stock/v1/trading/order-resv-ccnl': { cost: 1, order: true },
-                        'uapi/domestic-futureoption/v1/trading/order': { cost: 1, order: true },
-                        'uapi/domestic-futureoption/v1/trading/order-rvsecncl': { cost: 1, order: true },
-                        'uapi/overseas-futureoption/v1/trading/order': { cost: 1, order: true },
-                        'uapi/overseas-futureoption/v1/trading/order-rvsecncl': { cost: 1, order: true },
-                        'uapi/domestic-bond/v1/trading/buy': { cost: 1, order: true },
-                        'uapi/domestic-bond/v1/trading/sell': { cost: 1, order: true },
-                        'uapi/domestic-bond/v1/trading/order-rvsecncl': { cost: 1, order: true },
-                    },
-                },
-            },
+            // 엔드포인트 표(`spec/kis.json`)에서 만든 트리다. 엔드포인트는 표에 더한다.
+            api: KIS_API_TREE,
             fees: {
                 trading: {
                     tierBased: false,
@@ -4144,6 +3857,13 @@ export class kis extends Exchange {
             body = JSON.stringify(query);
         }
         return { url, method, headers: this.extend(requestHeaders, headers), body };
+    }
+
+    /** `private` GET 엔드포인트를 경로로 부른다. 표로 정의한 조회처럼 경로를 실행 중에 정하는 곳이 쓴다. */
+    private async callPrivateGet(path: string, request: Dict): Promise<unknown> {
+        const call = this.implicitApiMethod(implicitMethodName(['private'], 'GET', path));
+        if (call === undefined) throw new NotSupported(`${this.id} 에 없는 엔드포인트다: GET ${path}`);
+        return call(request);
     }
 
     // ============ 인증 ============
@@ -6031,8 +5751,7 @@ export class kis extends Exchange {
             const supported = ['tick', '1d', ...(trs.minute === undefined ? [] : Object.keys(KIS_ELW_MINUTE_SECONDS))].join(', ');
             throw new NotSupported(`${this.id} ${method}() 는 ${supported} 만 지원한다: ${timeframe}`);
         }
-        const call = this[kisImplicitGet(`uapi/elw/v1/quotations/${family}-trend-${kind}`)] as (request: Dict) => Promise<unknown>;
-        const response = await call.call(this, this.extend({ ...request, tr_id: trId }, params));
+        const response = await this.callPrivateGet(`uapi/elw/v1/quotations/${family}-trend-${kind}`, this.extend({ ...request, tr_id: trId }, params));
         return { rows: rowsOf(this.safeValue(response, 'output')), minute: kind === 'minute' };
     }
 
@@ -6424,8 +6143,7 @@ export class kis extends Exchange {
         codes.forEach((code, i) => {
             request[`SRS_CD_${String(i + 1).padStart(2, '0')}`] = this.overseasDerivativeCode(code, method);
         });
-        const call = this[kisImplicitGet(`uapi/overseas-futureoption/v1/quotations/${kind === 'futures' ? 'search-contract-detail' : 'search-opt-detail'}`)] as (request: Dict) => Promise<unknown>;
-        const response = await call.call(this, this.extend({ ...request, tr_id: kind === 'futures' ? 'HHDFC55200000' : 'HHDFO55200000' }, params));
+        const response = await this.callPrivateGet(`uapi/overseas-futureoption/v1/quotations/${kind === 'futures' ? 'search-contract-detail' : 'search-opt-detail'}`, this.extend({ ...request, tr_id: kind === 'futures' ? 'HHDFC55200000' : 'HHDFO55200000' }, params));
         return rowsOf(this.safeValue(response, 'output2')).map((row) => this.overseasDerivativeContract(row));
     }
 
@@ -6523,8 +6241,7 @@ export class kis extends Exchange {
         const spec = KIS_OVERSEAS_DERIVATIVE_TRENDS.futures[interval];
         if (spec === undefined && minutes === null) throw new NotSupported(`${this.id} fetchOverseasFuturesTrend() 는 tick, 1d, 1w, 1M, 분(예: 5m)만 지원한다: ${interval}`);
         const [path, trId] = spec ?? ['inquire-time-futurechartprice', 'HHDFC55020400'];
-        const call = this[kisImplicitGet(`uapi/overseas-futureoption/v1/quotations/${path}`)] as (request: Dict) => Promise<unknown>;
-        const response = await call.call(this, this.extend({
+        const response = await this.callPrivateGet(`uapi/overseas-futureoption/v1/quotations/${path}`, this.extend({
             SRS_CD: srs,
             EXCH_CD: exch,
             START_DATE_TIME: '',
@@ -6549,8 +6266,7 @@ export class kis extends Exchange {
         const exch = this.overseasDerivativeExchange(exchange, 'fetchOverseasOptionTrend');
         const spec = KIS_OVERSEAS_DERIVATIVE_TRENDS.option[interval];
         if (spec === undefined) throw new NotSupported(`${this.id} fetchOverseasOptionTrend() 는 tick, 1d, 1w, 1M 만 지원한다: ${interval}`);
-        const call = this[kisImplicitGet(`uapi/overseas-futureoption/v1/quotations/${spec[0]}`)] as (request: Dict) => Promise<unknown>;
-        const response = await call.call(this, this.extend({
+        const response = await this.callPrivateGet(`uapi/overseas-futureoption/v1/quotations/${spec[0]}`, this.extend({
             SRS_CD: srs,
             EXCH_CD: exch,
             QRY_CNT: '30',
@@ -8218,8 +7934,7 @@ export class kis extends Exchange {
         if (spec === undefined) throw new NotSupported(`${this.id} fetchFinancials() 가 지원하지 않는 종류다: ${statement}`);
         const div = period === 'annual' ? '0' : period === 'quarter' ? '1' : undefined;
         if (div === undefined) throw new BadRequest(`${this.id} fetchFinancials() 의 period 는 annual 이나 quarter 여야 한다: ${period}`);
-        const call = this[kisImplicitGet(spec.path)] as (request: Dict) => Promise<unknown>;
-        const response = await call.call(this, this.extend({
+        const response = await this.callPrivateGet(spec.path, this.extend({
             [spec.divKey]: div,
             fid_cond_mrkt_div_code: 'J',
             fid_input_iscd: code,
@@ -8245,8 +7960,7 @@ export class kis extends Exchange {
         if (spec === undefined) throw new NotSupported(`${this.id} fetchCorporateSchedules() 가 지원하지 않는 종류다: ${type}`);
         if (since === undefined) throw new ArgumentsRequired(`${this.id} fetchCorporateSchedules() 는 since 인자가 필요하다`);
         const code = symbol !== undefined ? this.domesticInstrument(symbol, 'fetchCorporateSchedules').code : '';
-        const call = this[kisImplicitGet(spec.path)] as (request: Dict) => Promise<unknown>;
-        const response = await call.call(this, this.extend({
+        const response = await this.callPrivateGet(spec.path, this.extend({
             ...spec.params,
             CTS: '',
             F_DT: kstYmd(since),
@@ -9992,8 +9706,7 @@ export class kis extends Exchange {
     /** 표(`KIS_RANKING_SPECS`)로 정의한 순위 하나를 부른다. */
     private async fetchSpecRanking(spec: KisRankingSpec, params: Dict): Promise<KisRankingItem[]> {
         const prepared = spec.prepare ? spec.prepare(params) : params;
-        const call = this[kisImplicitGet(spec.path)] as (request: Dict) => Promise<unknown>;
-        const response = await call.call(this, this.extend({ ...spec.params(this.milliseconds()), tr_id: spec.trId }, prepared));
+        const response = await this.callPrivateGet(spec.path, this.extend({ ...spec.params(this.milliseconds()), tr_id: spec.trId }, prepared));
         const f = spec.fields ?? {};
         return rowsOf(this.safeValue(response, spec.rowsKey ?? 'output')).map((row) => ({
             rank: this.safeNumber(row, f.rank ?? 'data_rank'),
