@@ -307,6 +307,19 @@ describe('fetchIndexOHLCV', () => {
         expect(candles).toEqual([[Date.parse('2026-09-22T01:10:00Z'), 2600, 2602, 2599, 2601, 900]]);
     });
 
+    it('분봉에서 범위를 넘는 시각(240000)의 행은 그날 0시로 두지 않고 버린다', async () => {
+        mockFetch.mockResolvedValueOnce(tokenOk()).mockResolvedValueOnce(dataOk({
+            output2: [
+                { stck_bsop_date: '20260922', stck_cntg_hour: '240000', bstp_nmix_prpr: '2605' },
+                { stck_bsop_date: '20260922', stck_cntg_hour: '100000', bstp_nmix_prpr: '2600' },
+            ],
+        }));
+
+        const candles = await newKis().fetchIndexOHLCV('0001', '10m');
+
+        expect(candles.map((c) => [c[0], c[4]])).toEqual([[Date.parse('2026-09-22T01:00:00Z'), 2600]]);
+    });
+
     it('업종코드가 네 자리 숫자가 아니거나 봉 길이가 문서 밖이면 보내기 전에 던진다', async () => {
         const broker = newKis();
         await expect(broker.fetchIndexOHLCV('KOSPI')).rejects.toThrow(BadRequest);
@@ -349,6 +362,21 @@ describe('fetchMinuteOHLCVAt', () => {
         const candles = await newKis().fetchMinuteOHLCVAt('005930/KRW', undefined, 1, { until: Date.parse('2026-09-21T04:00:00Z') });
 
         expect(candles.map((c) => c[0])).toEqual([Date.parse('2026-09-21T03:59:00Z')]);
+    });
+});
+
+describe('fetchMinuteOHLCVAt 시각', () => {
+    it('범위를 넘는 시각(240000)의 행은 그날 0시로 두지 않고 버린다', async () => {
+        mockFetch.mockResolvedValueOnce(tokenOk()).mockResolvedValueOnce(dataOk({
+            output2: [
+                { stck_bsop_date: '20260921', stck_cntg_hour: '240000', stck_prpr: '71100' },
+                { stck_bsop_date: '20260921', stck_cntg_hour: '125900', stck_prpr: '71000' },
+            ],
+        }));
+
+        const candles = await newKis().fetchMinuteOHLCVAt('005930/KRW', undefined, undefined, { until: Date.parse('2026-09-21T04:00:00Z') });
+
+        expect(candles.map((c) => [c[0], c[4]])).toEqual([[Date.parse('2026-09-21T03:59:00Z'), 71000]]);
     });
 });
 

@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'vitest';
 
 import { BadRequest } from '../errors';
+import { strictKstTimestampOf } from '../Exchange';
 import { FakeExchange } from './support/fake-exchange';
 
 const ex = () => new FakeExchange({});
@@ -66,6 +67,16 @@ describe('kstStamp, msStamp', () => {
         for (const hms of ['9300', '250000', '126000', '120060', 'abcdef']) {
             expect(ex().kstStamp('20260922', hms).timestamp, hms).toBe(midnight);
         }
+    });
+
+    it('strictKstTimestampOf 는 읽을 수 없는 시각을 그날 0시로 두지 않고 비운다. 시각이 비었거나 앞의 0 이 빠졌으면 kstStamp 와 같다', () => {
+        for (const hms of ['240000', '9300', '126000', '120060', 'abcdef', '1234567']) {
+            expect(strictKstTimestampOf('20260922', hms), hms).toBeUndefined();
+        }
+        expect(strictKstTimestampOf('20260922', '93000')).toBe(Date.parse('2026-09-22T00:30:00Z'));
+        expect(strictKstTimestampOf('20260922', '')).toBe(Date.parse('2026-09-21T15:00:00Z'));
+        expect(strictKstTimestampOf('20260922')).toBe(Date.parse('2026-09-21T15:00:00Z'));
+        expect(strictKstTimestampOf('20260230', '153000')).toBeUndefined();
     });
 
     it('msStamp 는 이미 있는 ms 로 datetime 을 채운다', () => {

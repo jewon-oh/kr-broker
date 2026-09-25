@@ -4,6 +4,7 @@
  *
  * 모듈에는 두 가지가 들어간다. 증권사 클래스가 `describe().api` 에 넣는 API 트리 상수(`deriveApiTree(spec)` 와 같다)와, ccxt 의
  * `abstract/<거래소>.d.ts` 처럼 엔드포인트마다 암묵 메서드 하나를 적은 인터페이스다. 증권사 클래스가 인터페이스를 선언 병합으로 받는다.
+ * 경로를 실행 중에 골라 부르는 증권사(`PATH_TYPES`)에는 그 경로의 문자열 유니언 타입도 넣는다.
  * 실행 코드가 JSON 을 불러오지 않도록 표를 TypeScript 상수로 옮긴다.
  *
  * ```bash
@@ -29,6 +30,19 @@ const CAPITALIZE = (s) => (s.length ? s.charAt(0).toUpperCase() + s.slice(1) : s
 /** 생성하는 이름. 클래스 이름 표기(`Kis`·`Kbsec`)를 따른다. */
 export function generatedNames(broker) {
     return { tree: `${broker.toUpperCase()}_API_TREE`, api: `${CAPITALIZE(broker)}ImplicitApi` };
+}
+
+/**
+ * 경로 문자열 유니언 타입을 만들 엔드포인트 묶음. 쓰는 곳이 있는 증권사만 둔다.
+ * 한국투자증권은 표로 경로를 정하는 조회가 `callPrivateGet` 으로 `private` GET 을 부른다.
+ */
+export const PATH_TYPES = {
+    kis: [{ api: ['private'], method: 'GET' }],
+};
+
+/** 경로 유니언 타입의 이름(`KisPrivateGetPath`). */
+export function pathTypeName(broker, { api, method }) {
+    return `${CAPITALIZE(broker)}${api.map(CAPITALIZE).join('')}${CAPITALIZE(method.toLowerCase())}Path`;
 }
 
 /** `spec.endpoints` 를 `describe().api` 모양으로 접는다. `ts/src/spec/spec-validate.ts` 의 `deriveApiTree` 와 같고, 테스트가 둘을 대조한다. */
@@ -92,6 +106,17 @@ export function renderTsAbstract(spec) {
         lines.push(`    ${camel}: ImplicitApiMethod;`);
     }
     lines.push('}');
+    for (const group of PATH_TYPES[spec.broker] ?? []) {
+        const paths = Object.values(spec.endpoints)
+            .filter((ep) => ep.api.join('.') === group.api.join('.') && ep.method === group.method)
+            .map((ep) => ep.path);
+        lines.push(
+            '',
+            `/** \`${group.api.join('.')}\` ${group.method} 엔드포인트의 경로. 경로를 실행 중에 골라 부르는 곳이 경로 오타를 컴파일할 때 잡는다. */`,
+            `export type ${pathTypeName(spec.broker, group)} =`,
+            ...paths.map((p, i) => `    | ${tsString(p)}${i === paths.length - 1 ? ';' : ''}`),
+        );
+    }
     return `${lines.join('\n')}\n`;
 }
 

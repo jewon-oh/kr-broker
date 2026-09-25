@@ -293,6 +293,14 @@ describe('fetchOHLCV — 국내(명세 기준, 실계좌 미검증)', () => {
         expect(await newExchange().fetchOHLCV('005930/KRW', '1m')).toHaveLength(1);
     });
 
+    it('범위를 넘는 시각(240000)의 행은 그날 0시로 두지 않고 버린다', async () => {
+        routeTr(mockFetch, { [KBSEC_TR.CHART_KR]: { Record1: [{ ...ROWS.Record1[0], tm: '240000' }, ROWS.Record1[1]] } });
+
+        const candles = await newExchange().fetchOHLCV('005930/KRW', '1m');
+
+        expect(candles.map(c => c[0])).toEqual([Date.UTC(2026, 7, 19, 0, 0, 0)]);
+    });
+
     it('해외는 지원하지 않는다 — 해외 차트는 15분 지연 시세라 fetchOverseasCandles 로만 준다', async () => {
         await expect(newExchange().fetchOHLCV('AAPL/USD', '1d')).rejects.toThrow(NotSupported);
         expect(mockFetch).not.toHaveBeenCalled();

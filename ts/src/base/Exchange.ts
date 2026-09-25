@@ -127,11 +127,26 @@ export function kstTimestampOf(ymd: Str, hms: Str = undefined): number | undefin
     const [year, month, day] = [Number(date[1]), Number(date[2]), Number(date[3])];
     const probe = new Date(Date.UTC(year, month - 1, day));
     if (year < 1 || probe.getUTCFullYear() !== year || probe.getUTCMonth() !== month - 1 || probe.getUTCDate() !== day) return undefined;
-    const time = /^(\d{2})(\d{2})(\d{2})$/.exec(hms !== undefined && hms !== '' ? hms.padStart(6, '0') : '000000');
-    // 범위를 넘는 시각(`009300` 의 93분 등)은 `Date.UTC` 가 다음 시각으로 넘기므로 읽지 못한 시각으로 본다.
-    const [hh, mm, ss] = time !== null && Number(time[1]) < 24 && Number(time[2]) < 60 && Number(time[3]) < 60
-        ? [Number(time[1]), Number(time[2]), Number(time[3])] : [0, 0, 0];
+    const [hh, mm, ss] = (hms !== undefined && hms !== '' ? kstClockOf(hms) : undefined) ?? [0, 0, 0];
     return Date.UTC(year, month - 1, day, hh, mm, ss) - KST_OFFSET_MS;
+}
+
+/**
+ * `kstTimestampOf` 와 같되, 시각을 읽을 수 없으면(숫자가 아니거나 `240000` 처럼 범위를 넘으면) 그날 0시가 아니라 `undefined` 다.
+ * 시각을 읽지 못한 행을 버려야 하는 곳(봉)에 쓴다. 시각이 비었으면 그날 0시다. Python 판은 `strict_kst_timestamp_of` 다.
+ */
+export function strictKstTimestampOf(ymd: Str, hms: Str = undefined): number | undefined {
+    if (hms !== undefined && hms !== '' && kstClockOf(hms) === undefined) return undefined;
+    return kstTimestampOf(ymd, hms);
+}
+
+/** `HHMMSS` 를 시, 분, 초로 읽는다. 앞의 0 이 빠진 값(`93000`)은 여섯 자리로 채운다. 숫자가 아니거나 범위(`235959`)를 넘으면 `undefined` 다. */
+function kstClockOf(hms: string): [number, number, number] | undefined {
+    const time = /^(\d{2})(\d{2})(\d{2})$/.exec(hms.padStart(6, '0'));
+    if (time === null) return undefined;
+    const [hh, mm, ss] = [Number(time[1]), Number(time[2]), Number(time[3])];
+    // 범위를 넘는 시각(`009300` 의 93분 등)은 `Date.UTC` 가 다음 시각으로 넘기므로 읽지 못한 시각으로 본다.
+    return hh < 24 && mm < 60 && ss < 60 ? [hh, mm, ss] : undefined;
 }
 
 /**

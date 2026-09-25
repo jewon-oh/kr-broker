@@ -188,6 +188,12 @@ def test_range_sends_the_given_dates_and_returns_numbers_oldest_first(rig: Rig) 
     assert candles == [[kst('2026-05-21T09:00:00'), 0, 2, -1, 1, 100], [kst('2026-05-22T09:00:00'), 1, 3, 0, 2, 100]]
 
 
+def test_range_skips_dates_that_are_not_on_the_calendar(rig: Rig) -> None:
+    service, _ = rig.make(daily=[{'output2': [daily_row('20260302', 3), daily_row('20260230', 2), daily_row('20260227', 1)]}])
+    candles = rig.run(service.fetch_daily_ohlcv_range('005930', 'D', '20260201', '20260302'))
+    assert [(c[0], c[4]) for c in candles] == [(kst('2026-02-27T09:00:00'), 1), (kst('2026-03-02T09:00:00'), 3)]
+
+
 def test_range_is_empty_when_output2_is_not_a_list(rig: Rig) -> None:
     service, _ = rig.make(daily=[{'output2': None}, {'output2': {'stck_bsop_date': '20260522'}}])
     assert rig.run(service.fetch_daily_ohlcv_range('005930', 'D', '20260501', '20260522')) == []
@@ -233,6 +239,15 @@ def test_minute_stops_when_the_cursor_stalls_and_skips_rows_without_date_or_time
     assert rig.run(blanks.fetch_minute_ohlcv('005930', 1, 100)) == [[kst('2026-09-25T10:01:00'), 7, 8, 6, 7, 10]]
 
 
+def test_minute_skips_unreadable_dates_and_times_and_pads_five_digit_times(rig: Rig) -> None:
+    rows = [minute_row('93100', 4), minute_row('93000', 3), minute_row('240000', 9), minute_row('100000', 9, '20260230')]
+    service, _ = rig.make(minute=[{'output2': rows}])
+    assert rig.run(service.fetch_minute_ohlcv('005930', 1, 100)) == [
+        [kst('2026-09-25T09:30:00'), 3, 4, 2, 3, 10],
+        [kst('2026-09-25T09:31:00'), 4, 5, 3, 4, 10],
+    ]
+
+
 def test_minute_resamples_into_n_minute_buckets_on_kst_boundaries(rig: Rig) -> None:
     # 10:39 부터 10:30 까지. 종가는 10:30 이 0, 10:39 가 9 다.
     rows = [minute_row(f'10{39 - i}00', 9 - i) for i in range(10)]
@@ -251,6 +266,17 @@ def test_minute_logs_and_raises_instead_of_returning_empty(rig: Rig, caplog: pyt
         rig.run(service.fetch_minute_ohlcv('005930', 1, 10))
     assert raised.value is boom
     assert '[KISCandleService] 분봉 캔들 조회 실패 (stockCode=005930, minuteInterval=1)' in caplog.messages
+
+
+# ============ fetch_overseas_daily_ohlcv ============
+
+def test_overseas_skips_dates_that_are_not_on_the_calendar(rig: Rig) -> None:
+    def row(xymd: str, clos: str) -> Dict[str, str]:
+        return {'xymd': xymd, 'open': '1', 'high': '2', 'low': '0.5', 'clos': clos, 'tvol': '10'}
+
+    service, _ = rig.make(now=utc('2026-03-03T12:00:00'), overseas=[{'output2': [row('20260302', '3'), row('20260230', '2'), row('20260227', '1')]}])
+    candles = rig.run(service.fetch_overseas_daily_ohlcv('AAPL', 'NAS', '1d', 10))
+    assert [(c[0], c[4]) for c in candles] == [(utc('2026-02-27T00:00:00'), 1), (utc('2026-03-02T00:00:00'), 3)]
 
 
 # ============ 실행 환경 시간대 ============

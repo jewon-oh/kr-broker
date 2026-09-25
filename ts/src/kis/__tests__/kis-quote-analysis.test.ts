@@ -405,6 +405,20 @@ describe('종목 시세분석', () => {
         expect(trend.points[0]).toMatchObject({ timestamp: Date.parse('2026-09-21T23:55:00Z'), price: 71200, volume: 50000 });
     });
 
+    it('fetchExpectedPriceTrend 는 범위를 넘는 시각(240000)을 그날 0시로 읽지 않고 시각을 비운다', async () => {
+        mockFetch.mockResolvedValueOnce(tokenOk()).mockResolvedValueOnce(dataOk({
+            output1: {},
+            output2: [
+                { stck_bsop_date: '20260922', stck_cntg_hour: '240000', stck_prpr: '71300' },
+                { stck_bsop_date: '20260922', stck_cntg_hour: '085500', stck_prpr: '71200' },
+            ],
+        }));
+
+        const trend = await newKis().fetchExpectedPriceTrend('005930/KRW');
+
+        expect(trend.points.map((p) => [p.timestamp, p.price])).toEqual([[undefined, 71300], [Date.parse('2026-09-21T23:55:00Z'), 71200]]);
+    });
+
     it('fetchVolumeProfile 은 화면 코드와 빈 입력시간을 보내고 가격대별 거래를 정리한다', async () => {
         mockFetch.mockResolvedValueOnce(tokenOk()).mockResolvedValueOnce(dataOk({
             output1: { wghn_avrg_stck_prc: '70850', lstn_stcn: '5969782550' },

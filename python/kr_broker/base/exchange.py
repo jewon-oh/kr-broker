@@ -109,12 +109,26 @@ def kst_timestamp_of(ymd: Str, hms: Str = None) -> Optional[int]:
     date = re.fullmatch(r'(\d{4})(\d{2})(\d{2})', ymd or '')
     if date is None or not _is_calendar_date(int(date.group(1)), int(date.group(2)), int(date.group(3))):
         return None
-    clock = re.fullmatch(r'(\d{2})(\d{2})(\d{2})', hms.rjust(6, '0') if hms else '000000')
-    hh, mm, ss = (int(clock.group(1)), int(clock.group(2)), int(clock.group(3))) if clock else (0, 0, 0)
-    if hh > 23 or mm > 59 or ss > 59:
-        # `calendar.timegm` 은 범위를 넘는 시각(93분 등)을 다음 시각으로 넘기므로 읽지 못한 시각으로 본다.
-        hh, mm, ss = 0, 0, 0
+    hh, mm, ss = (_kst_clock_of(hms) if hms else None) or (0, 0, 0)
     return calendar.timegm((int(date.group(1)), int(date.group(2)), int(date.group(3)), hh, mm, ss, 0, 0, 0)) * 1000 - KST_OFFSET_MS
+
+
+def strict_kst_timestamp_of(ymd: Str, hms: Str = None) -> Optional[int]:
+    """`kst_timestamp_of` 와 같되, 시각을 읽을 수 없으면(숫자가 아니거나 `240000` 처럼 범위를 넘으면) 그날 0시가 아니라 `None` 이다.
+    시각을 읽지 못한 행을 버려야 하는 곳(봉)에 쓴다. 시각이 비었으면 그날 0시다. TypeScript 판 `strictKstTimestampOf` 와 같다."""
+    if hms and _kst_clock_of(hms) is None:
+        return None
+    return kst_timestamp_of(ymd, hms)
+
+
+def _kst_clock_of(hms: str) -> Optional[Tuple[int, int, int]]:
+    """`HHMMSS` 를 시, 분, 초로 읽는다. 앞의 0 이 빠진 값(`93000`)은 여섯 자리로 채운다. 숫자가 아니거나 범위(`235959`)를 넘으면 `None` 이다."""
+    clock = re.fullmatch(r'(\d{2})(\d{2})(\d{2})', hms.rjust(6, '0'))
+    if clock is None:
+        return None
+    hh, mm, ss = int(clock.group(1)), int(clock.group(2)), int(clock.group(3))
+    # `calendar.timegm` 은 범위를 넘는 시각(93분 등)을 다음 시각으로 넘기므로 읽지 못한 시각으로 본다.
+    return (hh, mm, ss) if hh < 24 and mm < 60 and ss < 60 else None
 
 
 def assert_secure_url(exchange_id: str, url: str, allow_insecure: bool) -> None:

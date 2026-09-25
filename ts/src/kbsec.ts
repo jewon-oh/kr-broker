@@ -2731,9 +2731,11 @@ export class kbsec extends Exchange {
             const ms = kbsecUsCandleTimestamp(pickStr(row, 'dt'), pickStr(row, 'tm'));
             return ms !== undefined && period !== undefined ? candlePeriodUtcMs(ms, period, 'US') : ms;
         };
+        // 일자나 시각을 읽을 수 없는 봉은 지어낸 시각으로 채우지 않고 버린다.
+        const rows = pickArray(body).filter((row) => stamp(row) !== undefined);
         return {
             fields: kbsecRawResponse(body).fields,
-            candles: pickArray(body).map((row) => ({
+            candles: rows.map((row) => ({
                 ...this.msStamp(stamp(row)),
                 date: pickStr(row, 'dt'),
                 time: pickStr(row, 'tm'),

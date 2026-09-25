@@ -488,14 +488,6 @@ def test_kst_timestamp_follows_kst_stamp() -> None:
     assert kst_timestamp(None, '093000') is None
 
 
-def test_js_date_parse_iso() -> None:
-    assert fn.js_date_parse_iso('2026-03-25T09:00:00+09:00') == utc('2026-03-25T00:00:00')
-    assert fn.js_date_parse_iso('2026-03-25T00:00:00Z') == utc('2026-03-25T00:00:00')
-    assert fn.js_date_parse_iso('2026-01-01T24:00:00Z') == utc('2026-01-02T00:00:00')
-    for text in ('2026-01-01T24:00:01Z', '2026-13-01T00:00:00Z', '2026-01-01T00:60:00Z', '2026--T09:00:00+09:00', ' 2026-01-01T00:00:00Z'):
-        assert fn.js_date_parse_iso(text) is None
-
-
 def test_kst_and_et_dates() -> None:
     at = utc('2026-03-25T02:00:00')
     assert kst_ymd(at) == '20260325'
