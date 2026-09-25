@@ -82,10 +82,6 @@
       "types": "./dist/kbsec/kbsec-fee.d.ts",
       "default": "./dist/kbsec/kbsec-fee.js"
     },
-    "./kbsec/kbsec-fill-row": {
-      "types": "./dist/kbsec/kbsec-fill-row.d.ts",
-      "default": "./dist/kbsec/kbsec-fill-row.js"
-    },
     "./kbsec/kbsec-fill-warnings": {
       "types": "./dist/kbsec/kbsec-fill-warnings.d.ts",
       "default": "./dist/kbsec/kbsec-fill-warnings.js"
@@ -125,14 +121,6 @@
     "./kis": {
       "types": "./dist/kis.d.ts",
       "default": "./dist/kis.js"
-    },
-    "./kis/kis-auth": {
-      "types": "./dist/kis/kis-auth.d.ts",
-      "default": "./dist/kis/kis-auth.js"
-    },
-    "./kis/kis-candle-pagination": {
-      "types": "./dist/kis/kis-candle-pagination.d.ts",
-      "default": "./dist/kis/kis-candle-pagination.js"
     },
     "./kis/kis-candle-service": {
       "types": "./dist/kis/kis-candle-service.d.ts",

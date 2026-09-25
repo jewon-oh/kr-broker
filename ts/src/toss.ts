@@ -103,6 +103,7 @@ import {
 } from './base';
 import { confirmExecution, type ExecutionSnapshot } from './execution-confirm';
 import { buildExtendedSessionLimit } from './extended-session-limit';
+import type { StockMarketGroup } from './broker-market-group';
 import { candlePeriodUtcMs, isDailyOrLongerTimeframe } from './broker-time';
 import { logger } from './logger';
 import type { UsdKrwRateOption } from './options';
@@ -153,7 +154,6 @@ import {
     type TossCandlesResult,
     type TossKrMarketCalendar,
     type TossKrSession,
-    type TossMarketCountry,
     type TossOrder,
     type TossOrderCreateResponse,
     type TossOrderStatus,
@@ -301,7 +301,7 @@ function isOrderInfoPeakWindow(now: Date): boolean {
 }
 
 /** `execution` 을 체결 확정 폴링이 쓰는 스냅샷으로 옮긴다. 체결이 0 이면 `null`(기록할 사실이 없다). */
-function toExecutionSnapshot(order: TossOrder | null | undefined, country: TossMarketCountry): ExecutionSnapshot | null {
+function toExecutionSnapshot(order: TossOrder | null | undefined, country: StockMarketGroup): ExecutionSnapshot | null {
     const filled = Number(order?.execution?.filledQuantity) || 0;
     if (!(filled > 0)) return null;
 
@@ -396,7 +396,7 @@ export class toss extends Exchange {
     private tokenAuthClientId: string | undefined;
     private accountSeqLoading: Promise<void> | undefined;
     private readonly calendars: { KR?: { value: TossKrMarketCalendar; fetchedAt: number }; US?: { value: TossUsMarketCalendar; fetchedAt: number } } = {};
-    private readonly commissionRates = new Map<TossMarketCountry, number>();
+    private readonly commissionRates = new Map<StockMarketGroup, number>();
     private commissionsFetchedAt = 0;
     private fxRate: { rate: number; fetchedAt: number } | undefined;
     private readonly blockedUntil = new Map<string, number>();
@@ -948,7 +948,7 @@ export class toss extends Exchange {
         const id = this.safeString(market, 'symbol');
         if (id === undefined) throw new ExchangeError(`${this.id} parseMarket() missing symbol`);
         const listedMarket = this.safeString(market, 'market');
-        const country: TossMarketCountry = listedMarket !== undefined && KR_LISTED_MARKETS.has(listedMarket) ? 'KR' : 'US';
+        const country: StockMarketGroup = listedMarket !== undefined && KR_LISTED_MARKETS.has(listedMarket) ? 'KR' : 'US';
         const quote = country === 'KR' ? 'KRW' : 'USD';
         const brokerage = country === 'KR' ? TOSS_BROKERAGE_FEE : TOSS_US_BROKERAGE_FEE;
         return this.safeMarketStructure({
@@ -979,7 +979,7 @@ export class toss extends Exchange {
     }
 
     /** 종목의 시장. */
-    private countryOf(market: MarketInterface): TossMarketCountry {
+    private countryOf(market: MarketInterface): StockMarketGroup {
         return market.quote === 'KRW' ? 'KR' : 'US';
     }
 
@@ -1087,7 +1087,7 @@ export class toss extends Exchange {
      */
     async fetchRankings(
         type: TossRankingType,
-        marketCountry: TossMarketCountry = 'KR',
+        marketCountry: StockMarketGroup = 'KR',
         duration = '1d',
         count = 100,
         params: Dict = {},
@@ -1102,7 +1102,7 @@ export class toss extends Exchange {
      * 장 운영 캘린더(전일·당일·익일 영업일의 세션 시각)를 받아 온다. 30분 안에 받은 것은 다시 부르지 않는다(`params.refresh` 로 강제).
      * 받은 날짜별 개장 여부는 공용 휴장일 캘린더에도 넣는다. `market` 은 `'KR'`·`'US'` 이고 대소문자를 가리지 않는다. 그 밖의 값은 요청 없이 `BadRequest` 다.
      */
-    async fetchMarketCalendar(market: TossMarketCountry | Lowercase<TossMarketCountry>, params: Dict = {}): Promise<TossKrMarketCalendar | TossUsMarketCalendar> {
+    async fetchMarketCalendar(market: StockMarketGroup | Lowercase<StockMarketGroup>, params: Dict = {}): Promise<TossKrMarketCalendar | TossUsMarketCalendar> {
         const country = String(market).toUpperCase();
         if (country !== 'KR' && country !== 'US') throw new BadRequest(`${this.id} fetchMarketCalendar() market must be 'KR' or 'US'`);
         const cached = this.calendars[country];
@@ -1453,7 +1453,7 @@ export class toss extends Exchange {
         return { info: Object.fromEntries(this.commissionRates), symbol: market.symbol, maker: brokerage, taker: brokerage, percentage: true, tierBased: false };
     }
 
-    private defaultBrokerage(country: TossMarketCountry): number {
+    private defaultBrokerage(country: StockMarketGroup): number {
         return getTossEffectiveFeeRate(country, 'buy');
     }
 
@@ -1499,7 +1499,7 @@ export class toss extends Exchange {
      * 고액주문 확인 기준을 넘는가. 국내는 1억원, 미국은 1억원을 환율로 나눈 달러 금액이다.
      * 환율을 알 수 없으면 고정 기준(7만 달러)을 쓴다. 환율이 높을수록 기준이 낮아지므로 고정 기준만 쓰면 1억원을 넘는 주문이 확인 없이 나가 거절된다.
      */
-    private async isHighValue(notional: number, country: TossMarketCountry): Promise<boolean> {
+    private async isHighValue(notional: number, country: StockMarketGroup): Promise<boolean> {
         if (!(notional > 0)) return false;
         if (country === 'KR') return notional >= TOSS_HIGH_VALUE_THRESHOLD_KRW;
         if (notional >= TOSS_HIGH_VALUE_THRESHOLD_USD) return true;
@@ -1776,7 +1776,7 @@ export class toss extends Exchange {
      */
     private async checkOrderableSession(
         symbol: string,
-        country: TossMarketCountry,
+        country: StockMarketGroup,
         form: { isMarket: boolean; useAmountBased: boolean; quantity: number },
     ): Promise<string | null> {
         const now = new Date(this.milliseconds());
@@ -1843,7 +1843,7 @@ export class toss extends Exchange {
     }
 
     /** 접수한 주문의 체결을 확정한다. 주문 상세를 예산 안에서 조회하고, 마지막으로 본 주문 원본도 함께 돌려준다. */
-    private async confirmOrderExecution(orderId: string, country: TossMarketCountry): Promise<{ snapshot: ExecutionSnapshot | null; last: TossOrder | null | undefined }> {
+    private async confirmOrderExecution(orderId: string, country: StockMarketGroup): Promise<{ snapshot: ExecutionSnapshot | null; last: TossOrder | null | undefined }> {
         let last: TossOrder | null | undefined;
         const snapshot = await confirmExecution({
             label: '[toss]',

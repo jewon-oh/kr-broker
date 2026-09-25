@@ -29,17 +29,17 @@ import {
     KBSEC_REVOKE_PATH,
     KBSEC_TOKEN_SAFETY_MARGIN_MS,
     KBSEC_TOKEN_DEFAULT_TTL_MS,
-    type KBSecCredentials,
-    type KBSecCachedToken,
-    type KBSecTokenResponse,
-    type KBSecResponseEnvelope,
+    type KbsecCredentials,
+    type KbsecCachedToken,
+    type KbsecTokenResponse,
+    type KbsecResponseEnvelope,
 } from './kbsec-types';
 
 /** 토큰 저장소 키 접두사. 뒤에 앱키의 해시가 붙는다(`tokenStoreKey`). */
 const KBSEC_TOKEN_KEY_PREFIX = 'kbsec:token:';
 
 /** 토큰 발급 요청 본문 — 저장소 예제 형태(봉투 + grantType). */
-function envelopeBody(creds: KBSecCredentials): unknown {
+function envelopeBody(creds: KbsecCredentials): unknown {
     return {
         dataHeader: { ipAddr: '', macAddr: '' },
         dataBody: {
@@ -51,7 +51,7 @@ function envelopeBody(creds: KBSecCredentials): unknown {
 }
 
 /** 토큰 발급 요청 본문 — 포털 가이드 형태(평면 + grant_type). 폴백용. */
-function flatBody(creds: KBSecCredentials): unknown {
+function flatBody(creds: KbsecCredentials): unknown {
     return {
         grant_type: 'client_credentials',
         appKey: creds.appKey,
@@ -62,7 +62,7 @@ function flatBody(creds: KBSecCredentials): unknown {
 /** KB 봉투(`dataHeader.processCode`)의 업무 코드. JSON 이 아니거나 코드가 비었으면 `undefined` 다. */
 function kbsecProcessCodeOf(text: string): string | undefined {
     try {
-        const code = (JSON.parse(text) as KBSecResponseEnvelope<unknown>)?.dataHeader?.processCode;
+        const code = (JSON.parse(text) as KbsecResponseEnvelope<unknown>)?.dataHeader?.processCode;
         return typeof code === 'string' && code.trim() !== '' ? code : undefined;
     } catch {
         return undefined;
@@ -153,9 +153,9 @@ export function tokenJti(token: string): string | null {
     }
 }
 
-export class KBSecAuth {
-    private credentials: KBSecCredentials;
-    private cachedToken: KBSecCachedToken | null = null;
+export class KbsecAuth {
+    private credentials: KbsecCredentials;
+    private cachedToken: KbsecCachedToken | null = null;
     private refreshPromise: Promise<string> | null = null;
     /** 어느 본문 형태가 통했는지 기억 — 두 번째 발급부터는 폴백 왕복을 생략한다. */
     private workingShape: 'envelope' | 'flat' | null = null;
@@ -167,7 +167,7 @@ export class KBSecAuth {
      * @param rawStoreOf 지금 쓸 토큰 저장소를 돌려주는 함수. 저장소가 없으면 `null` 이고, 그러면 프로세스 메모리 캐시만 쓴다.
      */
     constructor(
-        credentials: KBSecCredentials,
+        credentials: KbsecCredentials,
         readonly baseUrl: string = KBSEC_API_BASE,
         private readonly rawStoreOf: () => BrokerTokenStore | null = () => null,
     ) {
@@ -299,7 +299,7 @@ export class KBSecAuth {
                     `${this.baseUrl}${KBSEC_REVOKE_PATH}`,
                     { dataHeader: { ipAddr: '', macAddr: '' }, dataBody },
                 );
-                const flag = (JSON.parse(text) as KBSecResponseEnvelope<unknown>)?.dataHeader?.processFlag;
+                const flag = (JSON.parse(text) as KbsecResponseEnvelope<unknown>)?.dataHeader?.processFlag;
                 if (flag === 'A') {
                     logger.info({ shape: label }, '[KBSecAuth] 토큰 폐기 성공');
                     return true;
@@ -339,7 +339,7 @@ export class KBSecAuth {
         try {
             const raw = await store.get(this.storeKey);
             if (!raw) return null;
-            const parsed = JSON.parse(raw) as KBSecCachedToken;
+            const parsed = JSON.parse(raw) as KbsecCachedToken;
             if (parsed.expiresAt <= Date.now()) return null;
             this.cachedToken = parsed;
             return parsed.accessToken;
@@ -392,7 +392,7 @@ export class KBSecAuth {
             throw new Error(message);
         }
 
-        let parsed: KBSecResponseEnvelope<KBSecTokenResponse> & KBSecTokenResponse;
+        let parsed: KbsecResponseEnvelope<KbsecTokenResponse> & KbsecTokenResponse;
         try {
             parsed = JSON.parse(text);
         } catch {
@@ -400,7 +400,7 @@ export class KBSecAuth {
         }
 
         // 봉투 응답(dataBody.access_token)과 평면 응답(access_token) 모두 수용.
-        const payload: KBSecTokenResponse = parsed.dataBody ?? parsed;
+        const payload: KbsecTokenResponse = parsed.dataBody ?? parsed;
         const accessToken = payload.access_token ?? payload.accessToken;
         if (!accessToken) {
             throw new Error(`KB증권 토큰 응답에 access_token 없음: ${text.slice(0, 200)}`);
@@ -436,3 +436,8 @@ export class KBSecAuth {
         return accessToken;
     }
 }
+
+/** @deprecated `KbsecAuth` 를 쓴다. 다음 판에서 지운다. */
+export const KBSecAuth = KbsecAuth;
+/** @deprecated `KbsecAuth` 를 쓴다. 다음 판에서 지운다. */
+export type KBSecAuth = KbsecAuth;

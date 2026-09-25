@@ -71,10 +71,10 @@ import { assertSecureUrl } from './base/Exchange';
 import { confirmExecution, fillDeviationBps, tradeListProbe } from './execution-confirm';
 import { expandBusinessDays, refreshMarketCalendar as refreshSharedMarketCalendar, type CalendarDay } from './market-calendar';
 import { marketSessionBlockReason } from './trading-hours';
-import { KBSecAuth } from './kbsec/kbsec-auth';
+import { KbsecAuth } from './kbsec/kbsec-auth';
 import { kbsecBarMs, kbsecCandleTimestamp, kbsecChartParams, KBSEC_CHART_MAX, KBSEC_TIMEFRAMES, kbsecUsCandleTimestamp } from './kbsec/kbsec-chart';
 import {
-    isKBSecBusinessError, isKBSecTokenFailure, kbsecHostAddr, type KBSecResponseHeader,
+    isKbsecBusinessError, isKbsecTokenFailure, kbsecHostAddr, type KbsecResponseHeader,
 } from './kbsec/kbsec-envelope';
 import { KBSEC_ERROR_DETAIL, kbsecErrorDetail, kbsecExactExceptions } from './kbsec/kbsec-error-codes';
 import { kbsecEstimatedFeeRate } from './kbsec/kbsec-fee';
@@ -1687,7 +1687,7 @@ const UNSUPPORTED_CONDITIONAL_PARAMS = ['triggerPrice', 'stopPrice', 'stopLossPr
 
 export class kbsec extends Exchange {
     /** 발급한 토큰을 들고 있는 인증 객체. 앱키·시크릿이 바뀌면 다시 만든다. */
-    private authInstance: KBSecAuth | undefined = undefined;
+    private authInstance: KbsecAuth | undefined = undefined;
     private authIdentity = '';
 
     /** 해외 종목의 KB 거래소코드(`krx_cd`). 심볼당 한 번 탐색해 캐시한다. NYSE 종목이 섞여 있어 `NAS` 로 고정하면 안 된다. */
@@ -1855,14 +1855,14 @@ export class kbsec extends Exchange {
         return { ipAddr: this.safeString(given, 'ipAddr') || auto.ipAddr, macAddr: this.safeString(given, 'macAddr') || auto.macAddr };
     }
 
-    private getAuth(): KBSecAuth {
+    private getAuth(): KbsecAuth {
         const identity = `${this.apiKey}\u0000${this.secret}`;
         if (this.authInstance === undefined || identity !== this.authIdentity) {
             const api = this.urls.api;
             const baseUrl = typeof api === 'string' ? api : (api?.private ?? KBSEC_API_BASE);
             // 토큰 발급은 자체 전송 경로라 여기서 주소를 확인한다.
             assertSecureUrl(this.id, baseUrl, this.options.allowInsecureUrl === true);
-            this.authInstance = new KBSecAuth({ appKey: this.apiKey as string, appSecret: this.secret as string, accountNo: this.uid }, baseUrl, () => this.getTokenStore());
+            this.authInstance = new KbsecAuth({ appKey: this.apiKey as string, appSecret: this.secret as string, accountNo: this.uid }, baseUrl, () => this.getTokenStore());
             this.authIdentity = identity;
         }
         return this.authInstance;
@@ -1963,9 +1963,9 @@ export class kbsec extends Exchange {
         statusCode: number, _statusText: string, url: string, method: string, _responseHeaders: Dictionary<string>,
         responseBody: string, response: unknown,
     ): boolean | undefined {
-        const header = safeDict(response, 'dataHeader') as KBSecResponseHeader | undefined;
+        const header = safeDict(response, 'dataHeader') as KbsecResponseHeader | undefined;
         const trCode = (url.split('/').pop() ?? '').toUpperCase();
-        if (isKBSecBusinessError(header)) {
+        if (isKbsecBusinessError(header)) {
             const processCode = String(header?.processCode ?? '').trim();
             const processMessage = String(header?.processMessage ?? '').trim();
             const feedback = `KB증권 업무 오류 (${trCode}): ${processMessage} [processCode=${processCode}]`;
@@ -1973,7 +1973,7 @@ export class kbsec extends Exchange {
             this.throwExactlyMatchedException((this.exceptions as Dict).exact, processCode, feedback, { detail });
             throw new ExchangeError(feedback);
         }
-        if (isKBSecTokenFailure(statusCode, header)) {
+        if (isKbsecTokenFailure(statusCode, header)) {
             throw new AuthenticationError(`${this.id} ${method} ${url} ${statusCode} 토큰이 무효다`, { detail: KBSEC_ERROR_DETAIL.TOKEN_INVALID });
         }
         if (statusCode >= 200 && statusCode < 300 && response === undefined) {

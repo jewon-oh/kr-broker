@@ -5,8 +5,9 @@
  * 단위를 응답 형식 하나로 단정하면 100배 틀린 요율이 조용히 들어오므로, 소매 위탁수수료로 있을 수 있는 범위에 들어오는 쪽을 고른다.
  */
 
+import type { StockMarketGroup } from '../broker-market-group';
 import { logger } from '../logger';
-import type { TossCommission, TossMarketCountry } from './toss-types';
+import type { TossCommission } from './toss-types';
 
 /** 있을 수 있는 위탁수수료율(소수 비율)의 범위: 0.001% 이상 1% 이하. 이 밖이면 단위를 잘못 읽었다는 신호다. */
 const PLAUSIBLE_FEE_RATE = { MIN: 0.00001, MAX: 0.01 } as const;
@@ -41,7 +42,7 @@ export function normalizeCommissionRate(raw: string | number | null | undefined)
  *
  * @param today `YYYY-MM-DD`(한국 시각)
  */
-export function pickCommissionRate(rows: readonly TossCommission[], country: TossMarketCountry, today: string): number | null {
+export function pickCommissionRate(rows: readonly TossCommission[], country: StockMarketGroup, today: string): number | null {
     const active = rows
         .filter((row) => row.marketCountry === country)
         .filter((row) => (row.startDate == null || row.startDate <= today) && (row.endDate == null || today <= row.endDate))

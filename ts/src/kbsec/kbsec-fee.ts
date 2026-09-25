@@ -13,8 +13,9 @@
  * 그 행들은 `fetchDomesticSettlements`·`fetchOverseasSettlements` 로 받을 수 있고, 이 모듈은 조회 실패나 아직 정산되지 않은 구간의 폴백으로 쓴다.
  */
 
+import type { StockMarketGroup } from '../broker-market-group';
 import { krxSellTaxRate, KRX_SELL_TAX_SCHEDULE } from '../krx-sell-tax';
-import { kbsecMarketOf, type KBSecMarketCountry } from './kbsec-types';
+import { kbsecMarketOf } from './kbsec-types';
 
 /** 국내 위탁수수료율(공시 근사) — 실청구액은 정산 TR 로 확정한다. */
 export const KBSEC_BROKERAGE_FEE = 0.00015;
@@ -35,7 +36,7 @@ export { krxSellTaxRate as krSellTaxRate, KRX_SELL_TAX_SCHEDULE as KR_SELL_TAX_S
  * `rate` 는 **실효율**이다(`cost = 명목금액 × rate` 가 성립한다). 토스·KIS 처럼 세금을 포함한다.
  */
 export function kbsecEstimatedFeeRate(
-    market: KBSecMarketCountry,
+    market: StockMarketGroup,
     side: 'buy' | 'sell',
     at: Date = new Date(),
 ): number {
@@ -58,7 +59,7 @@ export function kbsecEstimatedFee(
     symbol: string,
     side: 'buy' | 'sell',
     at: Date = new Date(),
-): { cost: number; rate: number; market: KBSecMarketCountry } {
+): { cost: number; rate: number; market: StockMarketGroup } {
     const market = kbsecMarketOf(symbol);
     const rate = kbsecEstimatedFeeRate(market, side, at);
     return { cost: notional * rate, rate, market };

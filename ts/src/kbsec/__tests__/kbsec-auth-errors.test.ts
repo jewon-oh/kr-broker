@@ -14,7 +14,7 @@
  * 그래서 **모든 형태의 오류를 모아** 던지고, 정답 형태(envelope)가 앞에 오게 한다.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { KBSecAuth } from '../kbsec-auth';
+import { KbsecAuth } from '../kbsec-auth';
 import { kbsec } from '../../kbsec';
 import { AuthenticationError, ExchangeNotAvailable, NetworkError, RateLimitExceeded } from '../../base/errors';
 import { __resetKbsecTokenBreaker } from '../kbsec-token-breaker';
@@ -37,7 +37,7 @@ function mockFetch(bodyFor: (shape: 'envelope' | 'flat') => { status: number; bo
 
 afterEach(() => { vi.unstubAllGlobals(); });
 
-describe('KBSecAuth 토큰 발급 오류 보고', () => {
+describe('KbsecAuth 토큰 발급 오류 보고', () => {
     it('두 형태의 오류를 모두 담는다 — flat 의 E021 만 올라오면 키를 오진한다', async () => {
         // 실서버 응답 재현: envelope 는 HTTP 200 인데 토큰이 없고, flat 은 500 E021.
         mockFetch((shape) => (shape === 'envelope'
@@ -62,7 +62,7 @@ describe('KBSecAuth 토큰 발급 오류 보고', () => {
                 },
             }));
 
-        const auth = new KBSecAuth(CREDS);
+        const auth = new KbsecAuth(CREDS);
         await expect(auth.getAccessToken()).rejects.toThrow(/ordrCtnMtrCsntF/);
 
         // 두 형태가 모두 보고돼야 한다 — 하나만 보이면 진단이 한쪽으로 치우친다.
@@ -86,13 +86,13 @@ describe('KBSecAuth 토큰 발급 오류 보고', () => {
             },
         }));
 
-        const auth = new KBSecAuth(CREDS);
+        const auth = new KbsecAuth(CREDS);
         await expect(auth.getAccessToken()).resolves.toBe('TOK');
         expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
     });
 });
 
-describe('KBSecAuth 토큰 발급의 일시 장애', () => {
+describe('KbsecAuth 토큰 발급의 일시 장애', () => {
     const e021 = {
         dataHeader: { processFlag: 'B', processCode: 'E021', processMessage: '앱키로 앱정보 추출 중 오류가 발생했습니다.' },
         dataBody: { access_token: '', token_type: '', expires_in: 0 },
@@ -101,7 +101,7 @@ describe('KBSecAuth 토큰 발급의 일시 장애', () => {
     it('연결이 실패하면 NetworkError 이고, 다른 본문 형태로 다시 보내지 않는다', async () => {
         vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('fetch failed'); }));
 
-        const error = await new KBSecAuth(CREDS).getAccessToken().catch((e: unknown) => e);
+        const error = await new KbsecAuth(CREDS).getAccessToken().catch((e: unknown) => e);
 
         expect(error).toBeInstanceOf(NetworkError);
         expect(String((error as Error).message)).toContain('oauth2/token:envelope');
@@ -110,18 +110,18 @@ describe('KBSecAuth 토큰 발급의 일시 장애', () => {
 
     it('업무 코드가 없는 5xx 는 ExchangeNotAvailable, 429 는 RateLimitExceeded 이고 한 번만 보낸다', async () => {
         vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 503, text: async () => '<html>Service Unavailable</html>' })));
-        await expect(new KBSecAuth(CREDS).getAccessToken()).rejects.toBeInstanceOf(ExchangeNotAvailable);
+        await expect(new KbsecAuth(CREDS).getAccessToken()).rejects.toBeInstanceOf(ExchangeNotAvailable);
         expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
 
         vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 429, text: async () => '' })));
-        await expect(new KBSecAuth(CREDS).getAccessToken()).rejects.toBeInstanceOf(RateLimitExceeded);
+        await expect(new KbsecAuth(CREDS).getAccessToken()).rejects.toBeInstanceOf(RateLimitExceeded);
         expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
     });
 
     it('HTTP 500 이어도 봉투에 업무 코드(E021)가 있으면 일시 장애가 아니고 두 형태를 모두 시도한다', async () => {
         mockFetch(() => ({ status: 500, body: e021 }));
 
-        const error = await new KBSecAuth(CREDS).getAccessToken().catch((e: unknown) => e);
+        const error = await new KbsecAuth(CREDS).getAccessToken().catch((e: unknown) => e);
 
         expect(error).not.toBeInstanceOf(NetworkError);
         expect(String((error as Error).message)).toContain('E021');

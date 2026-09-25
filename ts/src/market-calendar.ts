@@ -25,9 +25,11 @@
  * - 값은 프로세스 메모리에만 있다. 재시작하면 다시 받는다.
  */
 
+import type { StockMarketGroup } from './broker-market-group';
 import { logger } from './logger';
 
-export type CalendarMarket = 'KR' | 'US';
+/** @deprecated `StockMarketGroup` 을 쓴다. 다음 판에서 지운다. */
+export type CalendarMarket = StockMarketGroup;
 
 /** 시장 현지 달력 날짜(국내는 KST, 미국은 ET)의 개장 여부. `date` 는 `YYYYMMDD`. */
 export interface CalendarDay {
@@ -42,7 +44,7 @@ export const CALENDAR_RETRY_MS = 10 * 60_000;
 
 const DATE_RE = /^\d{8}$/;
 
-const knownDays: Record<CalendarMarket, Map<string, boolean>> = { KR: new Map(), US: new Map() };
+const knownDays: Record<StockMarketGroup, Map<string, boolean>> = { KR: new Map(), US: new Map() };
 const warnedUnknownDays = new Set<string>();
 
 interface RefreshState {
@@ -51,7 +53,7 @@ interface RefreshState {
     inflight: Promise<boolean> | null;
 }
 
-const refreshState: Record<CalendarMarket, RefreshState> = {
+const refreshState: Record<StockMarketGroup, RefreshState> = {
     KR: { okAtMs: null, failedAtMs: null, inflight: null },
     US: { okAtMs: null, failedAtMs: null, inflight: null },
 };
@@ -75,7 +77,7 @@ function isWeekend(d: Date): boolean {
  * 증권사 API 가 알려 준 날짜별 개장 여부를 넣는다. 같은 날짜가 이미 있으면 새 값으로 덮어쓴다.
  * 형식이 틀린 날짜와 주말은 버린다(주말은 캘린더 없이도 닫혀 있다).
  */
-export function applyMarketCalendar(market: CalendarMarket, days: readonly CalendarDay[]): void {
+export function applyMarketCalendar(market: StockMarketGroup, days: readonly CalendarDay[]): void {
     const target = knownDays[market];
     for (const day of days) {
         const d = parseYmd(day.date);
@@ -105,7 +107,7 @@ export function expandBusinessDays(openDates: readonly string[], closedDates: re
 }
 
 /** 그 날짜가 열린 날인지 닫힌 날인지, 캘린더가 모르는 날짜인지. 주말은 항상 `closed` 다. */
-export function marketDayStatus(market: CalendarMarket, ymd: string): CalendarDayStatus {
+export function marketDayStatus(market: StockMarketGroup, ymd: string): CalendarDayStatus {
     const d = parseYmd(ymd);
     if (!d) return 'unknown';
     if (isWeekend(d)) return 'closed';
@@ -121,7 +123,7 @@ export function marketDayStatus(market: CalendarMarket, ymd: string): CalendarDa
 }
 
 /** 캘린더가 그 날짜를 닫힌 날로 알고 있는가. 모르는 날짜는 `false` 다. */
-export function isMarketClosedDay(market: CalendarMarket, ymd: string): boolean {
+export function isMarketClosedDay(market: StockMarketGroup, ymd: string): boolean {
     return marketDayStatus(market, ymd) === 'closed';
 }
 
@@ -135,7 +137,7 @@ export interface MarketCalendarStatus {
 }
 
 /** 시장별 캘린더 상태 — 호출하는 쪽이 캘린더를 못 받고 있는지 감시하는 데 쓴다. */
-export function marketCalendarStatus(market: CalendarMarket): MarketCalendarStatus {
+export function marketCalendarStatus(market: StockMarketGroup): MarketCalendarStatus {
     const dates = [...knownDays[market].keys()].sort();
     return {
         knownDays: dates.length,
@@ -153,7 +155,7 @@ export function marketCalendarStatus(market: CalendarMarket): MarketCalendarStat
  * @returns 한 번이라도 받은 캘린더가 있으면 `true` 다(이번 호출이 실패했으면 낡았을 수 있다). 신선도는 `marketCalendarStatus().refreshedAtMs` 로 본다.
  */
 export function refreshMarketCalendar(
-    market: CalendarMarket,
+    market: StockMarketGroup,
     fetchDays: () => Promise<readonly CalendarDay[]>,
     opts: { ttlMs: number; nowMs?: number },
 ): Promise<boolean> {

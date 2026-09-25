@@ -15,7 +15,7 @@ import { etYmd } from '../us-market-hours';
 import { resampleCandles } from './candle-resample';
 import type { Exchange } from '../base';
 import { planWindows, mergeCandles, sliceCandleWindow, toKisDate } from './kis-candle-pagination';
-import type { KISDailyCandle, KISOverseasDailyCandle } from './kis-types';
+import type { KisDailyCandle, KisOverseasDailyCandle } from './kis-types';
 import type { OverseasMarket } from './kis-overseas-master';
 
 // ============ 캔들 관련 상수 ============
@@ -65,7 +65,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 // ============ 서비스 ============
 
-export class KISCandleService {
+export class KisCandleService {
     /** @param exchange 자격증명을 채운 `kis` 인스턴스. 암묵 API(`privateGet…`)를 부른다. */
     constructor(private readonly exchange: Exchange) { }
 
@@ -144,7 +144,7 @@ export class KISCandleService {
                 FID_ORG_ADJ_PRC: '0',
                 tr_id: CANDLE_TR_IDS.DAILY_CHART,
             });
-            const data = response.output2 as KISDailyCandle[] | undefined;
+            const data = response.output2 as KisDailyCandle[] | undefined;
 
             logger.info({
                 stockCode, periodCode, startDate, endDate,
@@ -302,7 +302,7 @@ export class KISCandleService {
                     MODP: '1',
                     tr_id: CANDLE_TR_IDS.OVERSEAS_DAILY_CHART,
                 });
-                const data = response.output2 as KISOverseasDailyCandle[] | undefined;
+                const data = response.output2 as KisOverseasDailyCandle[] | undefined;
 
                 if (!Array.isArray(data) || data.length === 0) {
                     exhausted = true;
@@ -362,3 +362,8 @@ export class KISCandleService {
         return `${y}${m}${d}`;
     }
 }
+
+/** @deprecated `KisCandleService` 를 쓴다. 다음 판에서 지운다. */
+export const KISCandleService = KisCandleService;
+/** @deprecated `KisCandleService` 를 쓴다. 다음 판에서 지운다. */
+export type KISCandleService = KisCandleService;

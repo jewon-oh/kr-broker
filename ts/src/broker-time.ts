@@ -2,6 +2,7 @@
  * @fileoverview 타임프레임 변환과 봉 시각 규칙 — 이 패키지가 쓰는 최소 유틸.
  */
 
+import type { StockMarketGroup } from './broker-market-group';
 import { etYmd } from './us-market-hours';
 
 const MS_PER_MINUTE = 60_000;
@@ -40,7 +41,7 @@ export function isDailyOrLongerTimeframe(timeframe: string): boolean {
  * ccxt 의 일봉 관례와 같다. 증권사가 현지 자정(`00:00 KST`, `00:00 ET`)이나 개장 시각(`09:30 ET`)으로 준 봉 시각을 이 규칙으로 옮긴다.
  * 한국 일봉의 09:00 KST 는 00:00 UTC 라 그대로다.
  */
-export function candlePeriodUtcMs(timestamp: number, timeframe: string, market: 'KR' | 'US'): number {
+export function candlePeriodUtcMs(timestamp: number, timeframe: string, market: StockMarketGroup): number {
     let day: number;
     if (market === 'KR') {
         day = Math.floor((timestamp + KST_OFFSET_MS) / MS_PER_DAY) * MS_PER_DAY;

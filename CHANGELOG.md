@@ -6,6 +6,10 @@
 
 ### 바뀜(호환되지 않음)
 
+- `package.json`의 `exports`에서 내부 모듈 경로 세 개를 뺐습니다. `kr-broker/kis/kis-auth`, `kr-broker/kis/kis-candle-pagination`, `kr-broker/kbsec/kbsec-fill-row`는 증권사 클래스가 안에서 쓰는 도우미라 대신할 경로가 없습니다. 인증과 연속조회, 체결 행 해석은 `kis`와 `kbsec` 클래스의 메서드가 처리합니다.
+- 진입점(`kr-broker`)에서 휴장일 캘린더를 바꾸는 함수와 내부 도우미를 더 내보내지 않습니다. 빠진 이름은 `applyMarketCalendar`, `resetMarketCalendar`, `refreshMarketCalendar`, `expandBusinessDays`, `CALENDAR_RETRY_MS`입니다. `resetMarketCalendar()`를 부르면 같은 프로세스의 모든 인스턴스가 받은 휴장일을 잃습니다. 다섯 이름은 `kr-broker/market-calendar`에서 가져옵니다. 캘린더는 인스턴스의 `refreshMarketCalendar()`로 받습니다. 읽기 함수(`marketCalendarStatus`, `marketDayStatus`, `isMarketClosedDay`)와 캘린더 타입은 진입점에 남았습니다.
+- `kr-broker/krx-sell-tax`의 `__resetKrxSellTaxWarnLatchForTest`를 지웠습니다. 테스트도 쓰지 않던 훅입니다.
+- Python 판에서 쓰지 않던 이름을 지웠습니다. `kr_broker.kis_types`의 `get_kis_effective_fee_rate`와 `KIS_DEFAULT_FEE_RATE`는 `KIS_BROKERAGE_FEE`로 바꿉니다. 매도라면 `krx_sell_tax_rate()`를 더합니다. `kr_broker.us_market_hours.et_wall_clock`은 `et_ymd()`나 `format_et_wall_clock()`으로 바꿉니다. 증권사 클래스가 없던 `kr_broker/abstract/kbsec.py`도 지웠습니다.
 - 한국투자증권과 토스증권 `createOrder`가 받지 않는 ccxt 조건 인자를 주면 요청 없이 `NotSupported`를 던집니다. 한국투자증권은 `triggerPrice`, `stopPrice`, `stopLossPrice`, `takeProfitPrice`, `stopLoss`, `takeProfit`를, 토스는 `triggerPrice`를 뺀 다섯 키를 막습니다. 예전에는 이 인자를 버리거나 본문에 합쳐, 조건 없는 일반 주문이 바로 나갈 수 있었습니다. 한국투자증권 스탑지정가는 `createTriggerOrder`로, 토스 조건주문은 `params.triggerPrice`나 `createTriggerOrder`로 냅니다. KB증권은 이미 같은 인자를 막았고, `stopLoss`와 `takeProfit`도 더했습니다.
 - 일봉, 주봉, 월봉의 `timestamp`를 세 증권사 모두 그 기간 첫날(그 시장의 현지 날짜)의 00:00 UTC로 맞춥니다. 주봉은 월요일, 월봉은 1일입니다. ccxt의 일봉 관례와 같습니다. 바뀌는 곳은 한국투자증권 미국 일봉(야후의 09:30 ET), 야후 주봉과 월봉(현지 자정), 토스 일봉(현지 자정), KB증권 국내 봉과 `fetchOverseasCandles`의 일, 주, 월, 연봉(현지 자정)입니다. 한국투자증권 국내 일봉(09:00 KST = 00:00 UTC)은 그대로입니다. Python 판도 같습니다.
 - KB증권 토큰 발급이 연결 실패나 시간 초과, 업무 코드 없는 5xx, 429로 끝나면 `AuthenticationError` 대신 `NetworkError` 계열(`NetworkError`, `RequestTimeout`, `ExchangeNotAvailable`, `RateLimitExceeded`)을 던집니다. 예전에는 일시 장애도 자격증명 오류처럼 보였습니다. 이때는 다른 본문 형태로 다시 보내지 않습니다. 봉투에 업무 코드가 있는 실패(E021 등)는 그대로 `AuthenticationError`입니다.
@@ -62,7 +66,11 @@
 
 ### 바뀜
 
-- 공개 타입의 선택 속성(`ConstructorArgs`, `BaseErrorOptions`, `KisPriceWsOptions`, `KisRealtimeStreamOptions`, `KBSecCredentials` 등)이 `undefined`를 명시적으로 받습니다. 사용하는 쪽이 `exactOptionalPropertyTypes`를 켜도 `{ uid: process.env.X }`처럼 값이 없을 수 있는 인자를 그대로 넘길 수 있습니다. 이 저장소도 이 검사를 켰습니다.
+- 공개 이름의 접두 표기를 `Kis*`와 `Kbsec*`로 맞췄습니다. 옛 이름은 같은 경로에서 `@deprecated` 별칭으로 남겼고 다음 판에서 지웁니다. 대문자 상수(`KIS_...`, `KBSEC_...`)와 Python 판 이름은 그대로입니다.
+  - 한국투자증권: `KISAuth` → `KisAuth`, `KISCandleService` → `KisCandleService`, `KISCredentials` → `KisCredentials`, `KISCachedToken` → `KisCachedToken`, `KISDailyCandle` → `KisDailyCandle`, `KISOverseasDailyCandle` → `KisOverseasDailyCandle`, `KISApprovalResponse` → `KisApprovalResponse`
+  - KB증권: `KBSecAuth` → `KbsecAuth`, `KBSecErrorMapping` → `KbsecErrorMapping`, `KBSecCredentials` → `KbsecCredentials`, `KBSecDataHeader` → `KbsecDataHeader`, `KBSecRequestEnvelope` → `KbsecRequestEnvelope`, `KBSecResponseEnvelope` → `KbsecResponseEnvelope`, `KBSecCommonOutput` → `KbsecCommonOutput`, `KBSecTokenResponse` → `KbsecTokenResponse`, `KBSecCachedToken` → `KbsecCachedToken`, `KBSecResponseHeader` → `KbsecResponseHeader`, `isKBSecOrderTr` → `isKbsecOrderTr`, `isKBSecTokenFailure` → `isKbsecTokenFailure`, `isKBSecBusinessError` → `isKbsecBusinessError`
+- 국내와 미국을 가리키는 `'KR' | 'US'` 타입을 `StockMarketGroup`(`kr-broker/broker-market-group`, 진입점에서도 내보냄) 하나로 모았습니다. `TossMarketCountry`, `KBSecMarketCountry`, `CalendarMarket`은 이 타입의 `@deprecated` 별칭이고 다음 판에서 지웁니다.
+- 공개 타입의 선택 속성(`ConstructorArgs`, `BaseErrorOptions`, `KisPriceWsOptions`, `KisRealtimeStreamOptions`, `KbsecCredentials` 등)이 `undefined`를 명시적으로 받습니다. 사용하는 쪽이 `exactOptionalPropertyTypes`를 켜도 `{ uid: process.env.X }`처럼 값이 없을 수 있는 인자를 그대로 넘길 수 있습니다. 이 저장소도 이 검사를 켰습니다.
 - 토스증권과 KB증권이 캐시 시각과 세션 판정, 날짜 기본값을 인스턴스 시계(`milliseconds()`)에서 읽습니다. 예전에는 `Date.now()`와 `new Date()`를 섞어 써서, `milliseconds`를 바꿔 끼우면 일부 경로만 시각이 바뀌었습니다. 한국투자증권은 이미 인스턴스 시계만 씁니다.
 - 토스증권이 확장세션 국내 주문을 막을 때 내는 오류 문구가 옵션 이름 `nxtRouting`을 가리킵니다. 예전 문구는 `nxt-routing`이었습니다.
 - `build`가 `tsc` 뒤에 `tsc-alias -f`를 돌려 `dist/`의 상대 경로에 확장자를 채웁니다. GitHub 주소로 설치하면 `prepare`가 같은 빌드를 돌립니다.
