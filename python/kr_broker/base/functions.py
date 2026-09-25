@@ -29,6 +29,11 @@ def is_integer(x: Any) -> bool:
     return is_number(x) and float(x).is_integer()
 
 
+def decimal_to_float(x: Any) -> Any:
+    """`Decimal` 은 `float` 로 바꾸고 다른 값은 그대로 돌려준다. ccxt 처럼 숫자 인자와 `params` 에 `Decimal` 을 받으려고 입구에서 쓴다."""
+    return float(x) if isinstance(x, decimal.Decimal) else x
+
+
 def is_string(x: Any) -> bool:
     return isinstance(x, str)
 
@@ -80,8 +85,8 @@ def js_string(x: Any) -> str:
         return 'null'
     if isinstance(x, bool):
         return 'true' if x else 'false'
-    if isinstance(x, (int, float)):
-        return js_number_string(x)
+    if isinstance(x, (int, float, decimal.Decimal)):
+        return js_number_string(decimal_to_float(x))
     if isinstance(x, (list, tuple)):
         return ','.join('' if v is None else js_string(v) for v in x)
     if isinstance(x, dict):
@@ -136,7 +141,8 @@ def json_stringify(value: Any) -> str:
         return 'null'
     if isinstance(value, bool):
         return 'true' if value else 'false'
-    if isinstance(value, (int, float)):
+    if isinstance(value, (int, float, decimal.Decimal)):
+        value = decimal_to_float(value)
         return js_number_string(value) if is_number(value) else 'null'
     if isinstance(value, str):
         return json.dumps(value, ensure_ascii=False)
@@ -151,7 +157,7 @@ def json_stringify(value: Any) -> str:
 
 
 def prop(o: Any, k: Any) -> Any:
-    """키의 값. 값이 없거나 `None` 이거나 빈 문자열이면 `None`."""
+    """키의 값. 값이 없거나 `None` 이거나 빈 문자열이면 `None`. `Decimal` 은 `float` 로 읽는다."""
     if k is None:
         return None
     if isinstance(o, dict):
@@ -160,7 +166,7 @@ def prop(o: Any, k: Any) -> Any:
         x = o[k] if 0 <= k < len(o) else None
     else:
         return None
-    return None if x is None or x == '' else x
+    return None if x is None or x == '' else decimal_to_float(x)
 
 
 def prop_n(o: Any, keys: Iterable[Any]) -> Any:

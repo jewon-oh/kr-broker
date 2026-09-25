@@ -1761,6 +1761,7 @@ class kis(Exchange, ImplicitAPI):
         국내 시장가는 `ORD_DVSN=01`, 지정가는 `00` 이다. 미국은 지정가만 낼 수 있고 실전에서 `market` 을 주면 장마감지정가(LOC)로 낸다.
         두 경우 모두 미국은 `price` 가 필요하다. 응답은 접수 결과라 체결은 알 수 없다(`filled` 가 비어 있다). 체결은 `fetch_order`·`fetch_my_trades` 로 본다.
         """
+        amount, price = fn.decimal_to_float(amount), fn.decimal_to_float(price)
         instrument = self._instrument_of(symbol)
         quantity = self._normalize_quantity(instrument, side, amount)
         if instrument.overseas:
@@ -1822,6 +1823,7 @@ class kis(Exchange, ImplicitAPI):
                              params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """스탑지정가(국내만). 같은 주문 엔드포인트(`order-cash`)에 조건가격(`CNDT_PRIC`)을 실어 보내면 KIS 가 스탑지정가로 처리한다.
         지정가만 받고 정규장 시간에만 낼 수 있다. 해외는 대응하는 API 를 찾지 못해 `NotSupported` 다."""
+        amount, price, trigger_price = fn.decimal_to_float(amount), fn.decimal_to_float(price), fn.decimal_to_float(trigger_price)
         if trigger_price is None:
             raise ArgumentsRequired(f'{self.id} createTriggerOrder() 는 triggerPrice 인자가 필요하다')
         if price is None:
@@ -2038,6 +2040,7 @@ class kis(Exchange, ImplicitAPI):
         """정정. 취소와 같은 엔드포인트(`order-rvsecncl`)를 `RVSE_CNCL_DVSN_CD` 로 나눈다(`01` 정정, `02` 취소). `price` 가 필요하다.
         `amount` 를 주면 그 수량으로 일부 정정(`QTY_ALL_ORD_YN: 'N'`)하고, 주지 않으면 국내는 전량(`'Y'`)을 정정한다.
         국내는 KRX 정규장과 NXT 확장세션이 모두 닫혀 있으면, 미국은 완전 마감이면 `MarketClosed` 다."""
+        amount, price = fn.decimal_to_float(amount), fn.decimal_to_float(price)
         if price is None:
             raise ArgumentsRequired(f'{self.id} editOrder() requires a price argument')
         instrument = self._instrument_of(symbol)

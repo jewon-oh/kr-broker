@@ -5,7 +5,7 @@
 """
 
 import logging
-from typing import Any, Dict, Optional, Protocol, runtime_checkable
+from typing import Any, Awaitable, Dict, Optional, Protocol, Union, runtime_checkable
 
 from kr_broker.broker_krx_code import is_krx_domestic_code
 from kr_broker.kis_stock_master import get_krx_stock_by_code
@@ -15,8 +15,8 @@ logger = logging.getLogger('kr_broker')
 
 @runtime_checkable
 class BrokerStockDirectory(Protocol):
-    def find_kr_market(self, code: str) -> Optional[str]:
-        """6자리 종목코드의 시장(`'KOSPI'`·`'KOSDAQ'`). 모르면 `None` 이고, 조회가 실패하면 던진다."""
+    def find_kr_market(self, code: str) -> Union[Optional[str], Awaitable[Optional[str]]]:
+        """6자리 종목코드의 시장(`'KOSPI'`·`'KOSDAQ'`). 모르면 `None` 이고, 조회가 실패하면 던진다. 비동기 판에는 코루틴 함수도 넘길 수 있다."""
 
 
 def resolve_kr_market(symbol: str, stock_directory: Any, master_data: Dict[str, Any]) -> Optional[str]:

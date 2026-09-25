@@ -8,6 +8,8 @@
 
 import asyncio
 import json
+import math
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -245,3 +247,30 @@ def test_request_fixture(fixture: Dict[str, Any], case: Dict[str, Any], flavor: 
         assert comparable(result) == comparable(case['output'])
     for key, state in case.get('tokenStoreAfter', {}).items():
         assert (key in store.values) == (state == 'present'), f'{key} 는 {state} 여야 한다'
+
+
+def _decimalize(value: Any) -> Any:
+    """숫자를 `Decimal` 로 바꾼다. 사전과 목록은 안쪽까지 바꾼다."""
+    if isinstance(value, bool) or value is None:
+        return value
+    if isinstance(value, int):
+        return Decimal(value)
+    if isinstance(value, float):
+        return Decimal(repr(value)) if math.isfinite(value) else value
+    if isinstance(value, dict):
+        return {key: _decimalize(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_decimalize(item) for item in value]
+    return value
+
+
+def _order_cases() -> List[Any]:
+    return [param for param in _load_cases() if param.values[1]['method'].startswith(('create', 'edit'))]
+
+
+@pytest.mark.parametrize('flavor', ['sync', 'async'])
+@pytest.mark.parametrize('fixture,case', _order_cases())
+def test_request_fixture_with_decimal_arguments(fixture: Dict[str, Any], case: Dict[str, Any], flavor: str,
+                                                monkeypatch: pytest.MonkeyPatch) -> None:
+    """ccxt 처럼 주문 메서드의 숫자 인자와 `params` 에 `Decimal` 을 받는다. `float` 를 준 케이스와 같은 요청과 결과가 나온다."""
+    test_request_fixture(fixture, dict(case, args=_decimalize(case['args'])), flavor, monkeypatch)

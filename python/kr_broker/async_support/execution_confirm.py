@@ -8,7 +8,7 @@
 import logging
 import math
 from collections.abc import Mapping
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from kr_broker.async_support.base.runtime import sleep_seconds
 
@@ -55,7 +55,7 @@ def resolve_confirm_budget(defaults: Optional[Dict[str, Any]] = None, overrides:
     }
 
 
-async def confirm_execution(label: str, order_id: str, exchange: str, probe: Callable[[int], Dict[str, Any]],
+async def confirm_execution(label: str, order_id: str, exchange: str, probe: Callable[[int], Awaitable[Dict[str, Any]]],
                       defaults: Optional[Dict[str, Any]] = None, budget: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
     """체결이 확정될 때까지 짧게 조회한다.
 
@@ -93,8 +93,8 @@ def _num(value: Any) -> float:
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) else 0
 
 
-def trade_list_probe(fetch_trades: Callable[[], List[Dict[str, Any]]], order_id: str, requested_qty: float,
-                     fee_currency: Optional[str] = None) -> Callable[..., Dict[str, Any]]:
+def trade_list_probe(fetch_trades: Callable[[], Awaitable[List[Dict[str, Any]]]], order_id: str, requested_qty: float,
+                     fee_currency: Optional[str] = None) -> Callable[..., Awaitable[Dict[str, Any]]]:
     """체결 내역 목록만 주는 증권사(KB증권)용 조회 함수를 만든다.
 
     주문 하나를 조회하는 API 가 없어 계좌 체결 내역을 주문 id 로 걸러 합산한다. 분할체결이면 같은 주문의 행이 여러 개라 수량 가중으로 합치고,

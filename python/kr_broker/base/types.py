@@ -1,12 +1,14 @@
 """타입 별칭과 암묵 API 선언(`Entry`). ccxt 의 `ccxt/base/types.py` 와 같은 자리다."""
 
 import types
+from decimal import Decimal
 from typing import Any, Callable, Dict, List, Optional, Union
 
 Str = Optional[str]
 Strings = Optional[List[str]]
 Int = Optional[int]
-Num = Optional[Union[int, float]]
+# ccxt 처럼 숫자 인자에 `Decimal` 도 받는다. 주문 메서드가 입구에서 `float` 로 바꾼다.
+Num = Optional[Union[int, float, Decimal]]
 Bool = Optional[bool]
 Market = Optional[Dict[str, Any]]
 Currency = Optional[Dict[str, Any]]

@@ -7,9 +7,10 @@
  *
  * - `async def`·`async with`·`async for` → `def`·`with`·`for`
  * - `await ` → 지운다
+ * - `Awaitable[X]` → `X` (비동기 판의 콜백 힌트를 동기 모양으로 되돌린다). `typing` 가져오기의 `Awaitable` 도 뺀다.
  * - `<패키지>.async_support.` → `<패키지>.` (가져오는 곳을 동기 짝으로 바꾼다. 짝 모듈은 이름과 인자가 같다.)
  *
- * 바꾼 결과에 `async`·`await`·`asyncio` 가 남으면 실패한다. 비동기 소스는 asyncio 를 직접 쓰지 않고
+ * 바꾼 결과에 `async`·`await`·`asyncio`·`Awaitable` 이 남으면 실패한다. 비동기 소스는 asyncio 를 직접 쓰지 않고
  * `async_support/base/runtime.py` 의 `sleep_seconds`·`new_lock`·`new_semaphore`·`maybe_await` 를 쓴다.
  *
  * ```bash
@@ -37,7 +38,30 @@ export const GENERATED_MODULES = [
     'extended_session_limit.py',
 ];
 
-const LEFTOVER = /\bawait\b|\basync\s+(?:def|with|for)\b|\basyncio\b/;
+const LEFTOVER = /\bawait\b|\basync\s+(?:def|with|for)\b|\basyncio\b|\bAwaitable\b/;
+
+/** `Awaitable[X]` 를 `X` 로 벗긴다. 괄호 짝을 세므로 `Awaitable[Dict[str, Any]]` 처럼 겹친 힌트도 된다. */
+function unwrapAwaitable(line) {
+    const head = 'Awaitable[';
+    let out = line;
+    for (let start = out.indexOf(head); start >= 0; start = out.indexOf(head)) {
+        let depth = 1;
+        let end = start + head.length;
+        for (; end < out.length && depth > 0; end++) {
+            if (out[end] === '[') depth++;
+            else if (out[end] === ']') depth--;
+        }
+        if (depth > 0) break; // 한 줄에서 닫히지 않으면 그대로 두고 LEFTOVER 가 알린다.
+        out = out.slice(0, start) + out.slice(start + head.length, end - 1) + out.slice(end);
+    }
+    return out;
+}
+
+/** `from typing import ...` 줄에서 `Awaitable` 을 뺀다. */
+function dropAwaitableImport(line) {
+    if (!/^\s*from typing import /.test(line)) return line;
+    return line.replace(/\bAwaitable, /, '').replace(/, Awaitable\b/, '');
+}
 
 /** 비동기 소스 한 파일을 동기 판으로 바꾼다. `source` 는 비동기 소스의 저장소 기준 경로다(생성 표시에 쓴다). */
 export function toSync(text, pkg, source) {
@@ -45,7 +69,8 @@ export function toSync(text, pkg, source) {
     const lines = text.split('\n').map((line) => line
         .replace(/^(\s*)async\s+(def|with|for)\b/, '$1$2')
         .replace(/\bawait\s+/g, '')
-        .replace(asyncPrefix, `${pkg}.`));
+        .replace(asyncPrefix, `${pkg}.`))
+        .map((line) => dropAwaitableImport(unwrapAwaitable(line)));
     lines.forEach((line, index) => {
         if (LEFTOVER.test(line)) {
             throw new Error(`${source}:${index + 1} 동기 판으로 바꾸지 못한 비동기 구문이 남는다: ${line.trim()}`);
