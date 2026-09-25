@@ -195,17 +195,17 @@ const toYmd = (date: string): string => date.replace(/-/g, '');
 
 /**
  * 미국 캘린더(전일·당일·익일 영업일)를 날짜별 개장 여부로 바꾼다.
- * 네 세션 가운데 하나라도 있는 날이 열린 날이다. 세션이 전부 `null` 인 날은 닫힌 날이고,
- * 전일과 익일 영업일 사이에서 응답에 없는 평일도 닫힌 날이다.
+ * 네 세션 가운데 하나라도 있는 날이 열린 날이다. 세션이 `null` 이거나 키가 아예 없으면 그 세션은 없고, 네 세션이 모두 없는 날은 닫힌 날이다.
+ * 전일과 익일 영업일 사이에서 응답에 없는 평일도 닫힌 날이다. 날짜가 없는 항목은 건너뛴다.
  */
 export function tossUsCalendarDays(calendar: TossUsMarketCalendar | null | undefined): CalendarDay[] {
     if (!calendar) return [];
     const open: string[] = [];
     const closed: string[] = [];
     for (const day of [calendar.previousBusinessDay, calendar.today, calendar.nextBusinessDay]) {
-        if (!day) continue;
-        const hasSession = day.dayMarket !== null || day.preMarket !== null
-            || day.regularMarket !== null || day.afterMarket !== null;
+        if (!day || typeof day.date !== 'string' || day.date === '') continue;
+        const hasSession = day.dayMarket != null || day.preMarket != null
+            || day.regularMarket != null || day.afterMarket != null;
         (hasSession ? open : closed).push(toYmd(day.date));
     }
     return expandBusinessDays(open, closed);

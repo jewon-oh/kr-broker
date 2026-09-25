@@ -97,6 +97,34 @@ describe('tossUsCalendarDays', () => {
         expect(openOf(days, '20261228')).toBe(true);
     });
 
+    it('세션 키가 아예 없는 날(undefined)도 세션이 없는 날이라 닫힌 날이다', () => {
+        const cal = {
+            previousBusinessDay: usDay('2026-12-24', true),
+            today: { date: '2026-12-25' },
+            nextBusinessDay: usDay('2026-12-28', true),
+        } as unknown as TossUsMarketCalendar;
+
+        const days = tossUsCalendarDays(cal);
+
+        expect(openOf(days, '20261225')).toBe(false);
+        expect(openOf(days, '20261224')).toBe(true);
+        expect(openOf(days, '20261228')).toBe(true);
+    });
+
+    it('날짜가 없는 항목({})은 던지지 않고 건너뛴다', () => {
+        const cal = {
+            previousBusinessDay: {},
+            today: usDay('2026-12-24', true),
+            nextBusinessDay: usDay('2026-12-28', true),
+        } as unknown as TossUsMarketCalendar;
+
+        const days = tossUsCalendarDays(cal);
+
+        expect(openOf(days, '20261224')).toBe(true);
+        expect(openOf(days, '20261228')).toBe(true);
+        expect(days.every((d) => /^\d{8}$/.test(d.date))).toBe(true);
+    });
+
     it('응답이 없으면 빈 목록이다', () => {
         expect(tossUsCalendarDays(undefined)).toEqual([]);
     });

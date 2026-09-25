@@ -24,7 +24,9 @@ def _in_band(rate: float) -> bool:
 
 def normalize_commission_rate(raw: Any) -> Optional[float]:
     """수수료율 응답을 소수 비율로 바꾼다. 그대로 범위에 들면 그 값(문서 형식)이고, 아니면 100으로 나눈 값이 범위에 드는지 본다.
-    둘 다 범위 밖이면 `None` 이다. 0 은 무료 이벤트라 유효한 값이다."""
+    둘 다 범위 밖이면 `None` 이다. 0 은 무료 이벤트라 유효한 값이다. 값이 없으면(`None`·빈 문자열) 무료가 아니라 모르는 값이라 `None` 이다."""
+    if raw is None:
+        return None
     if isinstance(raw, str) and raw.strip() == '':
         return None
     value = js_number(raw)
@@ -53,5 +55,5 @@ def pick_commission_rate(rows: Iterable[Dict[str, Any]], country: str, today: st
     picked = active[0]
     rate = normalize_commission_rate(picked.get('commissionRate'))
     if rate is None:
-        logger.warning('[toss] 수수료율이 있을 수 있는 범위 밖이라 기본 요율을 유지한다(%s %r)', country, picked.get('commissionRate'))
+        logger.warning('[toss] 수수료율이 비었거나 있을 수 있는 범위 밖이라 기본 요율을 유지한다(%s %r)', country, picked.get('commissionRate'))
     return rate

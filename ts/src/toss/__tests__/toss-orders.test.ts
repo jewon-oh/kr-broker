@@ -434,6 +434,16 @@ describe('체결 확정', () => {
         expect(polls()).toBe(0);
     });
 
+    it('체결 조회의 마지막 결과가 null 이어도 TypeError 없이 open 으로 돌려주고 주문은 한 번만 보낸다', async () => {
+        const { fake, polls } = fill((n) => (n < 2 ? orderDetail({ status: 'PENDING', filledQuantity: '0' }) : jsonOk(null)));
+        const order = await makeToss({ options: { confirmBudget: { attempts: 2, intervalMs: 0 } } }).createOrder('051910', 'limit', 'buy', 4, 114200);
+        expect(polls()).toBe(2);
+        expect(order.id).toBe('OID-FILL');
+        expect(order.status).toBe('open');
+        expect(order.filled).toBeUndefined();
+        expect(fake.requestsTo('POST /api/v1/orders')).toHaveLength(1);
+    });
+
     it('체결 조회가 실패해도 주문 접수는 성공이다', async () => {
         installFakeToss({
             'POST /api/v1/orders': jsonOk({ orderId: 'OID-FILL' }),
