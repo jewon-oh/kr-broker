@@ -73,7 +73,10 @@ import {
     PermissionDenied,
     Precise,
     RateLimitExceeded,
+    DECIMAL_PLACES,
     TICK_SIZE,
+    TRUNCATE,
+    decimalToPrecision,
     type ApiName,
     type Balances,
     type Dict,
@@ -1486,7 +1489,8 @@ export class toss extends Exchange {
         }
         const country = this.countryOf(this.market(symbol));
         const fractionalAllowed = country === 'US' && type === 'market' && side === 'sell';
-        if (fractionalAllowed) return Math.floor(amount * US_FRACTION_SCALE) / US_FRACTION_SCALE;
+        // 십진 문자열로 자른다. `Math.floor(8.2 * 1e6)` 은 `8199999` 라 0.000001주가 덜 나간다.
+        if (fractionalAllowed) return Number(decimalToPrecision(amount, TRUNCATE, US_FRACTION_DIGITS, DECIMAL_PLACES));
         const floored = Math.floor(amount);
         if (floored <= 0) {
             const hint = country === 'US' && side === 'buy' ? ' — US 소수점 매수는 금액(cost) 주문을 사용할 것' : '';

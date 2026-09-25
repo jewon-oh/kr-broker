@@ -136,6 +136,13 @@ describe('수량 규칙', () => {
         expect(postedOrder(fake).quantity).toBe('0.5');
     });
 
+    it('★미국 시장가 매도의 소수점 수량은 십진으로 잘라 부동소수 곱셈 때문에 0.000001주 덜 나가지 않는다', () => {
+        const exchange = makeToss();
+        for (const [amount, expected] of [[8.2, 8.2], [1.005, 1.005], [1.001, 1.001], [0.1234567, 0.123456]] as const) {
+            expect(exchange.normalizeQuantity('AAPL', 'market', 'sell', amount), String(amount)).toBe(expected);
+        }
+    });
+
     it('미국 지정가의 소수점은 정수로 내린다. 소수점은 시장가 매도 전용이다', async () => {
         const fake = installFakeToss({
             'GET /api/v1/market-calendar/US': usCalendar('regularMarket'),

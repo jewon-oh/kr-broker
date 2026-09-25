@@ -46,7 +46,7 @@ from kr_broker.async_support.base.token_store import LegacyKeyTokenStore, refres
 from kr_broker.async_support.execution_confirm import confirm_execution
 from kr_broker.async_support.extended_session_limit import build_extended_session_limit
 from kr_broker.base import functions as fn
-from kr_broker.base.decimal_to_precision import TICK_SIZE
+from kr_broker.base.decimal_to_precision import DECIMAL_PLACES, TICK_SIZE, TRUNCATE, decimal_to_precision
 from kr_broker.base.errors import (
     AccountNotEnabled, ArgumentsRequired, AuthenticationError, BadRequest, BadResponse, BadSymbol, DuplicateOrderId, ExchangeError,
     ExchangeNotAvailable, InsufficientFunds, InvalidOrder, ManualInteractionNeeded, MarketClosed, NotSupported, NullResponse,
@@ -1085,7 +1085,8 @@ class toss(Exchange, ImplicitAPI):
             raise ArgumentsRequired(f'{self.id} 주문 수량 비정상: {fn.js_string(amount)} ({symbol} {side})')
         country = self._country_of(self.market(symbol))
         if country == 'US' and type == 'market' and side == 'sell':
-            return math.floor(amount * US_FRACTION_SCALE) / US_FRACTION_SCALE
+            # 십진 문자열로 자른다. `math.floor(8.2 * 1e6)` 은 `8199999` 라 0.000001주가 덜 나간다.
+            return float(decimal_to_precision(amount, TRUNCATE, US_FRACTION_DIGITS, DECIMAL_PLACES))
         floored = math.floor(amount)
         if floored <= 0:
             hint = ' — US 소수점 매수는 금액(cost) 주문을 사용할 것' if country == 'US' and side == 'buy' else ''

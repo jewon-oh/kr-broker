@@ -129,6 +129,32 @@ describe('항목2 — 국내 KRW 잔고 free/used/total 매핑', () => {
         expect(balances['035420']).toBeUndefined(); // 보유 0 은 담지 않는다
     });
 
+    it('★같은 종목이 매매구분별로 여러 행이면 수량을 더하고 원문 행은 info.rows 에 모은다', async () => {
+        mockFetch.mockResolvedValueOnce(tokenOk()).mockResolvedValueOnce(dataOk({
+            output1: [
+                { pdno: '005930', trad_dvsn_name: '현금', hldg_qty: '10', ord_psbl_qty: '10' },
+                { pdno: '005930', trad_dvsn_name: '자기융자', loan_dt: '20260901', hldg_qty: '5', ord_psbl_qty: '3' },
+            ],
+            output2: [{ dnca_tot_amt: '0' }],
+        }));
+
+        const balances = await newKis().fetchBalance({ scope: 'kr', orderable: false });
+
+        expect(balances['005930']).toMatchObject({ free: 13, used: 2, total: 15 });
+        expect((balances['005930'].info.rows as unknown[]).length).toBe(2);
+        expect(balances['005930'].info.trad_dvsn_name).toBe('현금');
+    });
+
+    it('★달러 예수금과 매수증거금을 문자열로 빼서 부동소수 잡음이 남지 않는다', async () => {
+        mockFetch.mockResolvedValueOnce(tokenOk()).mockResolvedValueOnce(dataOk({
+            output1: [], output2: [{ crcy_cd: 'USD', frcr_dncl_amt_2: '1000.1', frcr_buy_mgn_amt: '200.2' }], output3: {},
+        }));
+
+        const balances = await newKis().fetchBalance({ scope: 'usd' });
+
+        expect(balances.USD).toMatchObject({ free: 799.9, used: 200.2, total: 1000.1 });
+    });
+
     it('조회가 실패하면 빈 잔고가 아니라 던진다', async () => {
         mockFetch.mockResolvedValueOnce(tokenOk()).mockRejectedValueOnce(new TypeError('fetch failed'));
 

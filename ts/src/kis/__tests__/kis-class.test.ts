@@ -97,6 +97,18 @@ describe('fetchMarkets / loadMarkets — 종목 마스터 데이터로 만든다
 
         expect(ticker.symbol).toBe('005930/KRW');
     });
+
+    it('★등락률이 반올림으로 0 이면 전일대비 부호를 전일대비부호(prdy_vrss_sign)로 정한다', async () => {
+        mockFetch.mockResolvedValueOnce(tokenOk())
+            .mockResolvedValueOnce(dataOk({ output: { stck_prpr: '999950', prdy_ctrt: '0.00', prdy_vrss: '50', prdy_vrss_sign: '5' } }))
+            .mockResolvedValueOnce(dataOk({ output: { stck_prpr: '1000050', prdy_ctrt: '0.00', prdy_vrss: '50', prdy_vrss_sign: '2' } }))
+            .mockResolvedValueOnce(dataOk({ output: { stck_prpr: '70000', prdy_ctrt: '-0.71', prdy_vrss: '500', prdy_vrss_sign: '2' } }));
+        const k = newKis();
+
+        expect((await k.fetchTicker('005930/KRW')).change).toBe(-50);
+        expect((await k.fetchTicker('005930/KRW')).change).toBe(50);
+        expect((await k.fetchTicker('005930/KRW')).change).toBe(-500); // 등락률이 0 이 아니면 등락률의 부호를 쓴다
+    });
 });
 
 describe('priceToPrecision — 호가 단위', () => {

@@ -56,6 +56,8 @@ import {
     NotSupported,
     NullResponse,
     OrderNotFound,
+    Precise,
+    numberToString,
     omit,
     safeDict,
     safeString,
@@ -4557,7 +4559,8 @@ export class kbsec extends Exchange {
                 '[kbsec] 체결수량이 주문수량을 초과해 상한으로 자름 — 체결 행 해석 대조 필요');
         }
         // 자른 경우 체결금액도 같이 자른다. 수량과 금액이 어긋나면 평단이 틀어진다.
-        const cost = clamped ? filled * (matched.average ?? 0) : (matched.amount ?? matched.filled * (matched.average ?? 0));
+        const product = (a: number, b: Num): number => Number(Precise.stringMul(numberToString(a), numberToString(b ?? 0)) ?? 0);
+        const cost = clamped ? product(filled, matched.average) : (matched.amount ?? product(matched.filled, matched.average));
         logger.info({
             orderId, symbol: market.symbol, side, requestedPrice: price, actualPrice: matched.average, actualQty: filled,
             deviationBps: fillDeviationBps(price, matched.average),
@@ -4929,8 +4932,10 @@ export class kbsec extends Exchange {
         if (symbol === undefined) throw new ArgumentsRequired(`${this.id} fetchOrder() requires a symbol argument`);
         const market = this.market(symbol);
         const trades = (await this.fetchMyTrades(symbol, undefined, undefined, params)).filter(trade => trade.order === id);
-        const filled = trades.reduce((sum, trade) => sum + (trade.amount ?? 0), 0);
-        const cost = trades.reduce((sum, trade) => sum + (trade.cost ?? 0), 0);
+        // 체결 행의 수량과 금액은 문자열로 더한다. `Number` 로 더하면 부동소수 잡음이 남는다.
+        const sum = (pick: (trade: Trade) => Num): number => Number(trades.reduce((acc, trade) => Precise.stringAdd(acc, numberToString(pick(trade) ?? 0)) ?? acc, '0'));
+        const filled = sum((trade) => trade.amount);
+        const cost = sum((trade) => trade.cost);
         const tradeInfo = trades.map(trade => trade.info);
         if (this.isUs(market)) return this.overseasOrderOf(id, market, trades, filled, cost);
         const open = (await this.fetchOpenOrders(symbol)).find(order => order.id === id);

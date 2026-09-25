@@ -3645,6 +3645,20 @@ const toNumber = (value: unknown): number => {
     return Number.isFinite(n) ? n : 0;
 };
 
+/** 금액 문자열이 음수면 `'0'` 이다. */
+const nonNegative = (value: Str): string => (value === undefined || Precise.stringLt(value, '0') ? '0' : value);
+
+/**
+ * 전일대비에 부호를 붙인다. 부호는 등락률의 부호를 쓰고, 등락률이 반올림으로 0 이면 전일대비부호(1 상한, 2 상승, 3 보합, 4 하한,
+ * 5 하락)로 정한다. 등락률만 보면 호가단위가 작은 고가 종목의 작은 변동이 0 이 된다.
+ */
+const signedChange = (change: Str, percentage: Str, sign: Str): string => {
+    const magnitude = Precise.stringAbs(change ?? '0') ?? '0';
+    let direction = Math.sign(toNumber(percentage));
+    if (direction === 0) direction = sign === '4' || sign === '5' ? -1 : sign === '1' || sign === '2' ? 1 : 0;
+    return direction === 0 ? '0' : direction < 0 ? (Precise.stringNeg(magnitude) ?? '0') : magnitude;
+};
+
 export class kis extends Exchange {
     /** 접근 토큰·실시간 접속키 캐시. 앱키가 바뀌면 다시 만든다. */
     private authState: { appKey: string; auth: KISAuth } | undefined;
@@ -4623,7 +4637,7 @@ export class kis extends Exchange {
         const last = this.safeString(ticker, 'stck_prpr');
         const percentage = this.safeString(ticker, 'prdy_ctrt');
         // 전일대비(`prdy_vrss`)는 부호가 없을 수 있어 등락률의 부호로 정한다. 보합(등락률 0)이면 변동도 0이다.
-        const change = numberToString(Math.abs(toNumber(this.safeString(ticker, 'prdy_vrss'))) * Math.sign(toNumber(percentage)));
+        const change = signedChange(this.safeString(ticker, 'prdy_vrss'), percentage, this.safeString(ticker, 'prdy_vrss_sign'));
         return this.safeTicker({
             symbol: market?.symbol,
             timestamp,
@@ -4839,7 +4853,8 @@ export class kis extends Exchange {
      *
      * - `KRW`: `total`=예수금총액(`dnca_tot_amt`), `free`=주문가능현금(`ord_psbl_cash`), `used`=둘의 차이(0 밑으로 내려가지 않는다)
      * - `USD`: `total`=예수금, `free`=예수금에서 미결제 매수증거금을 뺀 값. 종목 평가금액 합계는 `info.stockValue` 에 있다.
-     * - 종목: `total`=보유수량, `free`=주문가능수량(없으면 보유수량)
+     * - 종목: `total`=보유수량, `free`=주문가능수량(없으면 보유수량). 같은 종목이 매매구분이나 대출일자별로 여러 행이면 수량을 더한다.
+     *   `info` 는 첫 행이고, `info.rows` 에 원문 행 전부가 있다.
      */
     override parseBalance(response: Dict): Balances {
         const result: Dict = { info: response, timestamp: undefined, datetime: undefined };
@@ -4851,7 +4866,7 @@ export class kis extends Exchange {
             const free = orderable === undefined ? undefined : this.safeString(orderable, 'ord_psbl_cash');
             result.KRW = {
                 free,
-                used: free !== undefined && total !== undefined ? numberToString(Math.max(0, Number(total) - Number(free))) : undefined,
+                used: free !== undefined && total !== undefined ? nonNegative(Precise.stringSub(total, free)) : undefined,
                 total,
                 info: { summary, orderable },
             };
@@ -4864,27 +4879,38 @@ export class kis extends Exchange {
         const usd = this.safeDict(response, 'usd');
         if (usd !== undefined) {
             const cash = rowsOf(usd.currencies).find((row) => (this.safeString(row, 'crcy_cd') ?? '').toUpperCase() === 'USD') ?? {};
-            const deposit = toNumber(this.safeString(cash, 'frcr_dncl_amt_2'));
-            const buyMargin = toNumber(this.safeString(cash, 'frcr_buy_mgn_amt'));
+            // 금액은 문자열로 더하고 뺀다. `Number` 로 빼면 `1000.1 - 200.2` 가 `799.9000000000001` 이 된다.
+            const deposit = this.safeString(cash, 'frcr_dncl_amt_2') ?? '0';
+            const buyMargin = this.safeString(cash, 'frcr_buy_mgn_amt') ?? '0';
             const stockValue = rowsOf(usd.stocks)
                 .filter((row) => (this.safeString(row, 'buy_crcy_cd') ?? 'USD').toUpperCase() === 'USD')
-                .reduce((sum, row) => sum + toNumber(this.safeString(row, 'frcr_evlu_amt2')), 0);
-            const free = Math.max(0, deposit - buyMargin);
+                .reduce((sum, row) => Precise.stringAdd(sum, this.safeString(row, 'frcr_evlu_amt2') ?? '0') ?? sum, '0');
+            const free = nonNegative(Precise.stringSub(deposit, buyMargin));
             result.USD = {
-                free: numberToString(free),
-                used: numberToString(Math.max(0, deposit - free)),
-                total: numberToString(deposit),
-                info: { deposit, buyMargin, stockValue, currencies: usd.currencies, stocks: usd.stocks },
+                free,
+                used: nonNegative(Precise.stringSub(deposit, free)),
+                total: deposit,
+                info: { deposit: toNumber(deposit), buyMargin: toNumber(buyMargin), stockValue: toNumber(stockValue), currencies: usd.currencies, stocks: usd.stocks },
             };
         }
         return this.safeBalance(result);
     }
 
+    /** 보유 행 하나를 더한다. 같은 종목의 행(매매구분, 대출일자별)은 수량을 합치고 원문 행은 `info.rows` 에 모은다. */
     private addHolding(result: Dict, item: Dict, codeKey: string, quantityKey: string): void {
         const code = this.safeString(item, codeKey);
         const quantity = this.safeString(item, quantityKey);
         if (code === undefined || quantity === undefined || !(Number(quantity) > 0)) return;
-        result[code] = { free: this.safeString(item, 'ord_psbl_qty', quantity), used: undefined, total: quantity, info: item };
+        const free = this.safeString(item, 'ord_psbl_qty', quantity) as string;
+        const current = result[code] as { free: string; total: string; info: Dict & { rows: Dict[] } } | undefined;
+        result[code] = current === undefined
+            ? { free, used: undefined, total: quantity, info: { ...item, rows: [item] } }
+            : {
+                free: Precise.stringAdd(current.free, free),
+                used: undefined,
+                total: Precise.stringAdd(current.total, quantity),
+                info: { ...current.info, rows: [...current.info.rows, item] },
+            } as Dict;
     }
 
     // ============ 주문 ============
@@ -5198,8 +5224,8 @@ export class kis extends Exchange {
             last: price('ovtm_untp_prpr'),
             bid: price('bidp'),
             ask: price('askp'),
-            // 대비(`ovtm_untp_prdy_vrss`)는 부호가 없을 수 있어 `fetchTicker`처럼 등락률의 부호로 정한다.
-            change: numberToString(Math.abs(toNumber(this.safeString(output, 'ovtm_untp_prdy_vrss'))) * Math.sign(toNumber(percentage))),
+            // 대비(`ovtm_untp_prdy_vrss`)는 부호가 없을 수 있어 `fetchTicker`처럼 부호를 따로 정한다.
+            change: signedChange(this.safeString(output, 'ovtm_untp_prdy_vrss'), percentage, this.safeString(output, 'ovtm_untp_prdy_vrss_sign')),
             percentage,
             baseVolume: this.safeString(output, 'ovtm_untp_vol'),
             quoteVolume: this.safeString(output, 'ovtm_untp_tr_pbmn'),
