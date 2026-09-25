@@ -98,6 +98,14 @@ describe('fetchMarkets / loadMarkets — 종목 마스터 데이터로 만든다
         expect(ticker.symbol).toBe('005930/KRW');
     });
 
+    it('★market() 과 amountToPrecision() 은 종목 마스터 없이도 심볼 모양으로 종목을 만든다', async () => {
+        const k = newKis({ masterData: { kospi: [], kosdaq: [], nasdaq: [], nyse: [], amex: [] } });
+        expect(k.market('005930/KRW').symbol).toBe('005930/KRW');   // loadMarkets 전에도 된다
+        await k.loadMarkets();
+        expect(k.amountToPrecision('005930/KRW', 3.7)).toBe('3');
+        expect(k.market('AAPL/USD')).toMatchObject({ symbol: 'AAPL/USD', quote: 'USD' }); // 해외는 상장 거래소만 모른다
+    });
+
     it('★등락률이 반올림으로 0 이면 전일대비 부호를 전일대비부호(prdy_vrss_sign)로 정한다', async () => {
         mockFetch.mockResolvedValueOnce(tokenOk())
             .mockResolvedValueOnce(dataOk({ output: { stck_prpr: '999950', prdy_ctrt: '0.00', prdy_vrss: '50', prdy_vrss_sign: '5' } }))

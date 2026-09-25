@@ -26,7 +26,7 @@ import kr_broker.async_support
 from kr_broker.async_support.base.ws.client import session_connector
 from kr_broker.async_support.base.ws.watch_hub import WatchHub
 from kr_broker.async_support.kis import _tpl, kst_ymd
-from kr_broker.base.errors import ArgumentsRequired, BadSymbol, ExchangeError
+from kr_broker.base.errors import ArgumentsRequired, BadSymbol, ExchangeClosedByUser, ExchangeError
 from kr_broker.base.types import Int, Str
 from kr_broker.kis_types import KIS_WS_PATH
 from kr_broker.pro.kis_price_ws import KisPriceWs, OnOrderbook, OnTrade
@@ -132,7 +132,7 @@ class kis(kr_broker.async_support.kis):
             await stream.stop()
         self._watch_keys.clear()
         self._watch_order_state.clear()
-        self._watch_hub.reject(ExchangeError(f'{self.id} 실시간 연결을 닫았다'))
+        self._watch_hub.reject(ExchangeClosedByUser(f'{self.id} 실시간 연결을 닫았다'))
         await super().close()
 
     def _on_watch_record(self, record: KisRealtimeRecord) -> None:

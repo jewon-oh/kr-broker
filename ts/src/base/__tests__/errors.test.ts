@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 
 import * as errors from '../errors';
 import {
-    AccountNotEnabled, AccountSuspended, ArgumentsRequired, AuthenticationError, BadRequest, BadResponse, BadSymbol, BaseError, DDoSProtection,
+    AccountNotEnabled, AccountSuspended, ArgumentsRequired, AuthenticationError, BadRequest, BadResponse, BadSymbol, BaseError, DDoSProtection, ExchangeClosedByUser,
     DuplicateOrderId, ExchangeError, ExchangeNotAvailable, InsufficientFunds, InvalidOrder, ManualInteractionNeeded, MarketClosed, NetworkError,
     NoChange, NotSupported, NullResponse, OnMaintenance, OperationFailed, OperationRejected, OrderNotFound, OrderOutcomeUnknown, PermissionDenied,
     RateLimitExceeded, RequestTimeout,
@@ -24,6 +24,7 @@ const TREE: Array<[ErrorCtor, ErrorCtor]> = [
     [ArgumentsRequired, ExchangeError],
     [BadRequest, ExchangeError],
     [BadSymbol, BadRequest],
+    [ExchangeClosedByUser, ExchangeError],
     [OperationRejected, ExchangeError],
     [NoChange, OperationRejected],
     [ManualInteractionNeeded, OperationRejected],

@@ -14,7 +14,7 @@
 | 인자 순서 | `createOrder(symbol, type, side, amount, price, params)`, `fetchOHLCV(symbol, timeframe, since, limit, params)`, `fetchMyTrades(symbol, since, limit, params)`, `cancelOrder(id, symbol, params)` |
 | 기간 인자 | 기간 시작은 `since`(ms), 개수는 `limit`, 기간 끝은 `params.until`(ms)로 줍니다. 증권사 고유 조회도 이 규칙을 따릅니다 |
 | 자료 구조 | `Market`, `Ticker`, `OrderBook`, `Order`, `Trade`, `Balances`, `OHLCV` |
-| 실시간 | `watchTicker`, `watchTrades`, `watchOrderBook`, `watchOrders`는 호출할 때마다 다음 갱신을 돌려줍니다. 다 쓰면 `close()`로 연결을 닫습니다 |
+| 실시간 | `watchTicker`, `watchTrades`, `watchOrderBook`, `watchOrders`는 호출할 때마다 다음 갱신을 돌려줍니다. 다 쓰면 `close()`로 연결을 닫고, 기다리던 `watch*`는 `ExchangeClosedByUser`로 끝납니다. `close()`는 실시간 연결이 없는 증권사에도 있습니다 |
 | 오류 계층 | `BaseError` 아래에 `ExchangeError`와 `OperationFailed` 두 갈래가 있고 클래스 이름이 같습니다 |
 | `MarketClosed` | ccxt의 `OperationRejected` 아래에 있습니다 |
 | 자격증명 | `apiKey`, `secret`, `uid` 필드와 `requiredCredentials`로 검사합니다 |
@@ -37,11 +37,11 @@ ccxt에 있는 오류 클래스 중 주식 거래에 필요한 것만 옮겼습�
 | 잔고 키 | 통화 코드를 키로 합니다 | 현금은 통화(`KRW`, `USD`)를, 보유 종목은 종목코드를 키로 합니다 |
 | 실주문 | `createOrder()`가 곧바로 주문을 냅니다 | 같습니다. 모의 서버가 있는 증권사는 한국투자증권 하나뿐입니다 |
 | 휴장일 | 없습니다 | 증권사 캘린더 API로 판정합니다. `fetchMarketCalendar`가 있습니다 |
-| 오류 필드 | 오류 클래스와 메시지입니다 | `detail`(증권사 오류 코드)과 `retryable`이 더 있습니다 |
+| 오류 필드 | 오류 클래스와 메시지입니다 | `detail`과 `retryable`이 더 있습니다. 한국투자증권과 토스증권의 `detail`은 증권사 오류 코드입니다. KB증권의 `detail`은 정규화한 이름(`TOKEN_INVALID` 등)이고, 표에 없는 오류나 일부 코드(`I446` 등)에서는 비어 있습니다. KB증권의 원래 코드는 오류 메시지에 있습니다 |
 | 토큰 | 거래소 클래스마다 인증 방식이 다릅니다 | 토큰 발급에 잠금을 걸고 `options.tokenStore`로 프로세스 사이에서 공유합니다 |
 | 실시간 지원 범위 | 거래소마다 `has`의 `watch*` 값이 다릅니다 | 한국투자증권과 토스증권이 `watch*`를 지원하고, KB증권은 웹소켓 API가 없습니다. 콜백으로 받는 `createPriceStream`도 있습니다 |
-| 결과 행의 시각 | 통합 구조(`Ticker`, `Trade`, `Order` 등)에 `timestamp`와 `datetime`이 있습니다 | 통합 구조는 같습니다. 증권사 고유 조회는 국내 행에만 `timestamp`를 넣고 해외 행은 날짜의 시간대를 확인하지 못해 비워 둡니다 |
-| 추가 메서드 | 통합 메서드에 없습니다 | `fetchMarketCalendar`, `fetchStockWarnings`, `fetchInvestorTrading`, `fetchRankings`, `fetchBuyableAmount` 등 증권사 고유 메서드가 있습니다 |
+| 결과 행의 시각 | 통합 구조(`Ticker`, `Trade`, `Order` 등)에 `timestamp`와 `datetime`이 있습니다 | 통합 구조는 같습니다. 다만 KB증권의 `Ticker`, `OrderBook`, `Order`, `Trade`는 응답의 시각 형식을 확인하지 못해 `timestamp`가 비어 있습니다. 시각으로 정렬하거나 `since`로 거르는 코드는 KB증권에서 쓸 수 없습니다. 증권사 고유 조회는 국내 행에만 `timestamp`를 넣고 해외 행은 날짜의 시간대를 확인하지 못해 비워 둡니다 |
+| 추가 메서드 | 통합 메서드에 없습니다 | `fetchMarketCalendar`, `fetchStockWarnings`, `fetchInvestorTrading`, `fetchRankings`, `fetchBuyableAmount` 등 증권사 고유 메서드가 있습니다. 이름이 같아도 증권사마다 인자와 결과가 다릅니다. `has`의 값은 메서드가 있다는 뜻일 뿐이고, 같은 코드로 부를 수 있다는 뜻은 아닙니다. 예를 들어 `fetchMarketCalendar`는 토스증권만 시장 인자를 받고, `fetchInvestorTrading`은 토스증권만 시장 단위(`KOSPI`, `KOSDAQ`)입니다. `fetchStockWarnings`는 KB증권만 객체 하나를 돌려주고, `fetchSellableQuantity`는 토스증권만 숫자를 돌려줍니다. 인자와 결과는 [증권사별 문서](brokers/README.md)에서 확인합니다 |
 | 소스 문법 | ccxt는 TypeScript 소스를 다른 언어로 변환하므로 문법에 제한이 있습니다 | 변환하지 않으므로 옵셔널 체이닝, `??`, `private`, `override`, `declare`, `Map`, `Set`을 씁니다 |
 
 ### 주문 재시도

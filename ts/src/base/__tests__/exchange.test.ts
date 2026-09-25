@@ -1151,3 +1151,10 @@ describe('조회 재시도의 간격', () => {
         expect(ex.calls.filter((c) => c === 'authenticate')).toHaveLength(2);
     });
 });
+
+describe('close', () => {
+    it('★실시간 연결이 없는 증권사도 close() 가 있어 같은 코드로 정리한다(ccxt 와 같다)', async () => {
+        const { kbsec } = await import('../../kbsec');
+        await expect(new kbsec({}).close()).resolves.toBeUndefined();
+    });
+});

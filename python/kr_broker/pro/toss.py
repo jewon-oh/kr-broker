@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional
 import kr_broker.async_support
 from kr_broker.async_support.base.ws.client import session_connector
 from kr_broker.async_support.base.ws.watch_hub import WatchHub
-from kr_broker.base.errors import ExchangeError
+from kr_broker.base.errors import ExchangeClosedByUser
 from kr_broker.base.types import Int, Str
 from kr_broker.pro.toss_price_ws import OnOrder, OnOrderbook, OnTrade, TossPriceWs, TossWsSub
 
@@ -139,5 +139,5 @@ class toss(kr_broker.async_support.toss):
         if socket is not None:
             await socket.stop()
         self._watch_subs.clear()
-        self._watch_hub.reject(ExchangeError(f'{self.id} 실시간 연결을 닫았다'))
+        self._watch_hub.reject(ExchangeClosedByUser(f'{self.id} 실시간 연결을 닫았다'))
         await super().close()

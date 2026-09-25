@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 
-import { ArgumentsRequired, ExchangeError } from '../../base/errors';
+import { ArgumentsRequired, ExchangeClosedByUser, ExchangeError } from '../../base/errors';
 import type { KisRealtimeRecord } from '../kis-realtime-stream';
 import { KIS_MASTER_FIXTURE } from '../../__tests__/support/kis-master-fixture';
 import { newKis } from './support/kis-test-utils';
@@ -156,6 +156,8 @@ describe('close, 구독 거부', () => {
 
         await ex.close();
 
+        // ★ccxt 처럼 ExchangeClosedByUser(ExchangeError 하위)로 끝낸다.
+        await expect(pending).rejects.toBeInstanceOf(ExchangeClosedByUser);
         await expect(pending).rejects.toThrow(ExchangeError);
         expect(stream.stop).toHaveBeenCalled();
     });

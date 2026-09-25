@@ -68,6 +68,8 @@ export class AccountSuspended extends AuthenticationError { override name = 'Acc
 export class ArgumentsRequired extends ExchangeError { override name = 'ArgumentsRequired'; }
 export class BadRequest extends ExchangeError { override name = 'BadRequest'; }
 export class BadSymbol extends BadRequest { override name = 'BadSymbol'; }
+/** 사용자가 `close()` 로 연결을 닫아 기다리던 `watch*` 를 끝낸다. ccxt 와 같다. */
+export class ExchangeClosedByUser extends ExchangeError { override name = 'ExchangeClosedByUser'; }
 export class OperationRejected extends ExchangeError { override name = 'OperationRejected'; }
 export class NoChange extends OperationRejected { override name = 'NoChange'; }
 export class ManualInteractionNeeded extends OperationRejected { override name = 'ManualInteractionNeeded'; }

@@ -370,6 +370,7 @@ class toss(Exchange, ImplicitAPI):
                 'fetchClosedOrders': True,
                 'fetchCanceledOrders': True,
                 'fetchMyTrades': 'emulated',
+                'fetchTrades': True,
                 'fetchMarketCalendar': True,
                 'fetchStockWarnings': True,
                 'fetchInvestorTrading': True,
@@ -1281,7 +1282,9 @@ class toss(Exchange, ImplicitAPI):
         return self.create_order(symbol, type, side, amount, price, self.extend(params, {'triggerPrice': trigger_price}))
 
     def create_market_buy_order_with_cost(self, symbol: str, cost: float, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """미국 주식 시장가 매수를 금액으로 낸다(`create_order` 의 `params['cost']`)."""
+        """미국 주식 시장가 매수를 금액으로 낸다(`create_order` 의 `params['cost']`). 국내는 금액 주문 API 가 없어 요청 없이 `NotSupported` 다."""
+        if self._country_of(self.market(symbol)) != 'US':
+            raise NotSupported(f'{self.id} createMarketBuyOrderWithCost() 는 미국 종목만 지원한다: {symbol}')
         return self.create_order(symbol, 'market', 'buy', 0, None, self.extend(params, {'cost': cost}))
 
     def _parse_time_in_force(self, params: Dict[str, Any]) -> Str:
@@ -1779,6 +1782,26 @@ class toss(Exchange, ImplicitAPI):
         if until is not None:
             trades = [trade for trade in trades if trade['timestamp'] <= until]
         return self.filter_by_since_limit(trades, since, limit)
+
+    def fetch_trades(self, symbol: str, since: Int = None, limit: Int = None,
+                     params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """당일 최근 체결 내역(`GET /trades`, 최대 50건, 기본 50건). 체결가와 체결수량, 체결시각만 오고 방향(매수·매도)과 체결 id 는 없다.
+        자기 주문의 체결(`fetch_my_trades`)과 행 모양이 달라 따로 옮긴다."""
+        market = self.market(symbol)
+        request: Dict[str, Any] = {'symbol': market['id']}
+        if limit is not None:
+            request['count'] = min(max(1, limit), 50)
+        response = self.unwrap(self.private_market_get_trades(self.extend(request, params)))
+        trades = [self._parse_public_trade(row, market) for row in fn.to_array(response)]
+        return trades if since is None else [trade for trade in trades if (trade['timestamp'] or 0) >= since]
+
+    def _parse_public_trade(self, trade: Dict[str, Any], market: Dict[str, Any]) -> Dict[str, Any]:
+        timestamp = self.parse8601(self.safe_string(trade, 'timestamp'))
+        return self.safe_trade({
+            'info': trade, 'id': None, 'order': None, 'timestamp': timestamp, 'datetime': self.iso8601(timestamp), 'symbol': market['symbol'],
+            'type': None, 'side': None, 'takerOrMaker': None, 'price': self.safe_string(trade, 'price'), 'amount': self.safe_string(trade, 'volume'),
+            'cost': None, 'fee': None,
+        }, market)
 
     def parse_trade(self, trade: Dict[str, Any], market: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """체결된 주문 하나를 거래 하나로 옮긴다. 체결 시각은 최종 체결 시각(없으면 주문 시각)이다."""
