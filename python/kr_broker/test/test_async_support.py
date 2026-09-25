@@ -253,6 +253,8 @@ def test_broker_overrides_match_base_coroutine_kind(broker: str) -> None:
 
 
 def test_async_and_pro_packages_export_same_names_as_sync() -> None:
+    # 지역 import 가 kr_broker 이름을 새로 묶으므로, pyright 가 async_support 를 알도록 함께 가져온다.
+    import kr_broker.async_support
     import kr_broker.pro
     for package in (kr_broker.async_support, kr_broker.pro):
         assert package.exchanges == kr_broker.exchanges
