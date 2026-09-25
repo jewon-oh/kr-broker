@@ -6,14 +6,13 @@
  * - OAuth2 Client Credentials Grant (POST /oauth2/token)
  * - 요청/응답이 `{ dataHeader, dataBody }` 봉투 — 토큰 발급도 예외가 아니다.
  * - 응답 expires_in(초) 기준 만료 60초 전 자동 재발급 (가이드 예시 86400s)
- * - 인메모리 캐시 + (가용 시) Redis 캐시로 다중 pod 재사용
+ * - 프로세스 메모리 캐시. 토큰 저장소(`options.tokenStore`)가 있으면 여러 프로세스가 토큰을 나눠 쓴다.
  *
  * **1차 자료 간 불일치**
  * 포털 개발가이드 페이지는 토큰 요청을 평면 JSON + snake_case(`grant_type`)로,
  * 공식 예제 저장소(github.com/kbsecurities/kb-openapi)는 봉투 + camelCase(`grantType`)로
- * 적고 있다. 실동작 코드인 저장소 쪽을 **1순위**로 시도하고, 400/401 이면 가이드 형태로
- * **1회 폴백**한다 — 어느 쪽이 맞든 실서버에서 자동으로 통과하게 하는 것이 목적이다.
- * (모의투자 서버가 없어 사전 검증이 불가능한 데서 온 방어다.)
+ * 적고 있다. 저장소 쪽 형태를 먼저 보내고, 실패하면 오류 종류와 관계없이 가이드 형태로
+ * **1회 폴백**한다. 통한 형태는 인스턴스가 기억한다.
  */
 
 import { refreshTokenWithLock } from '../token-refresh-lock';
@@ -36,7 +35,7 @@ import {
     type KBSecResponseEnvelope,
 } from './kbsec-types';
 
-/** Redis 키 prefix — appKey 앞 12자리로 분리 캐시(전체 노출 회피). */
+/** 토큰 저장소 키 접두사. 뒤에 앱키의 해시가 붙는다(`tokenStoreKey`). */
 const KBSEC_TOKEN_KEY_PREFIX = 'kbsec:token:';
 
 /** 토큰 발급 요청 본문 — 저장소 예제 형태(봉투 + grantType). */
@@ -118,8 +117,8 @@ async function postJson(op: string, url: string, body: unknown): Promise<{ res: 
 const TOKEN_FETCH_LOCK_TTL_MS = 90 * 1000;
 
 /**
- * 토큰 폐기 시도 쿨다운. 장애 중에는 **모든 TR 이** I445 라 실패가 분당 수십 건 발생한다
- * (실측 ≈30건/분). 폐기는 성공하면 한 번으로 족하고, 실패했다면 곧바로 다시 해도
+ * 토큰 폐기 시도 쿨다운. 토큰 장애 중에는 **모든 TR 이** I445 로 실패하므로 실패마다 폐기를 부르지 않는다.
+ * 폐기는 성공하면 한 번으로 족하고, 실패했다면 곧바로 다시 해도
  * 결과가 같다 — 반복은 KB 가 경고하는 "잘못된 조회의 과도한 반복" 만 만든다.
  */
 const REVOKE_COOLDOWN_MS = 5 * 60 * 1000;
@@ -128,7 +127,7 @@ const REVOKE_COOLDOWN_MS = 5 * 60 * 1000;
  * JWT 의 `jti` — **토큰 동일성 판정의 정본**.
  *
  * 앞 100자 비교로 판정하지 말 것. 헤더와 payload 앞부분(`sub`·`aud`)이 모든 토큰에서 같아
- * 서로 다른 토큰도 접두가 일치한다(장애 조사에서 실제로 오판한 적이 있다).
+ * 서로 다른 토큰도 접두가 일치한다.
  * 형식이 JWT 가 아니거나 `jti` 가 없으면 `null` — 그때는 동일성을 **모르는 것**으로 다룬다.
  */
 export function tokenJti(token: string): string | null {
@@ -148,7 +147,7 @@ export class KBSecAuth {
     private refreshPromise: Promise<string> | null = null;
     /** 어느 본문 형태가 통했는지 기억 — 두 번째 발급부터는 폴백 왕복을 생략한다. */
     private workingShape: 'envelope' | 'flat' | null = null;
-    /** 마지막 폐기 시도 시각(ms). {@link REVOKE_COOLDOWN_MS} 참조 — 파드 단위로만 제한한다. */
+    /** 마지막 폐기 시도 시각(ms). {@link REVOKE_COOLDOWN_MS} 참조 — 인스턴스 단위로만 제한한다. */
     private lastRevokeAttemptAt = 0;
 
     /**
@@ -179,7 +178,7 @@ export class KBSecAuth {
 
     /**
      * 유효한 access_token 반환.
-     * 우선순위: 인메모리 캐시 → Redis 캐시 → 신규 발급.
+     * 우선순위: 프로세스 메모리 캐시 → 토큰 저장소 → 신규 발급.
      * 같은 프로세스 내 동시 갱신은 refreshPromise 로 단일화한다.
      */
     async getAccessToken(): Promise<string> {
@@ -187,7 +186,7 @@ export class KBSecAuth {
             return this.cachedToken.accessToken;
         }
         if (this.refreshPromise) return this.refreshPromise;
-        this.refreshPromise = this.fetchFromRedisOrIssue();
+        this.refreshPromise = this.fetchFromStoreOrIssue();
         try {
             return await this.refreshPromise;
         } finally {
@@ -196,13 +195,9 @@ export class KBSecAuth {
     }
 
     /**
-     * 토큰 캐시 강제 초기화 — 인메모리 + Redis 모두. 토큰 실패 시 재시도 **전에** 부른다.
+     * 토큰 캐시 강제 초기화 — 프로세스 메모리와 토큰 저장소 모두. 토큰 실패 시 재시도 **전에** 부른다.
      *
-     * `await` 가 계약의 일부다. 종전엔 `void redis.del(...)` 였는데, 그러면 DEL 이 아직
-     * 전송되는 중에 재시도가 `getAccessToken()` → Redis 조회를 해서 **방금 무효라고
-     * 판정한 그 토큰을 다시 읽어 온다**. 재발급이 일어난 것처럼 보이지만 실제로는
-     * 같은 무효 토큰으로 재시도하는 셈이라, 자가복구가 조용히 무효가 된다.
-     * KIS·Toss 어댑터는 이미 `async invalidate()` 로 await 한다 — kbsec 만 달랐다.
+     * `await` 가 계약의 일부다. 저장소 삭제가 끝나기 전에 재시도하면 방금 무효로 판정한 토큰을 저장소에서 다시 읽는다.
      */
     async invalidate(failedToken?: string): Promise<void> {
         // 실패한 토큰이 캐시에 그대로 있을 때만 비운다. 동시 요청 가운데 먼저 끝난 쪽이 새 토큰을 받아 뒀으면 그것을 지우지 않는다.
@@ -213,14 +208,14 @@ export class KBSecAuth {
                 if (failedToken) {
                     // compare-and-delete — 남의 토큰을 지우지 않는다 (구현은 `options.tokenStore` 로 넘기는 토큰 저장소).
                     if (!await store.deleteIfAccessTokenEquals(this.storeKey, failedToken)) {
-                        logger.info('[KBSecAuth] 인메모리만 무효화 — Redis 에는 이미 다른(더 새) 토큰이 있다');
+                        logger.info('[KBSecAuth] 메모리 캐시만 무효화 — 토큰 저장소에는 이미 다른(더 새) 토큰이 있다');
                         return;
                     }
                 } else {
                     await store.delete(this.storeKey);
                 }
             } catch (err) {
-                logger.debug({ err }, '[KBSecAuth] Redis 토큰 캐시 삭제 실패 (인메모리 무효화는 완료)');
+                logger.debug({ err }, '[KBSecAuth] 토큰 저장소 삭제 실패 (메모리 캐시 무효화는 완료)');
             }
         }
         logger.info('[KBSecAuth] 토큰 캐시 초기화');
@@ -230,20 +225,9 @@ export class KBSecAuth {
     /**
      * 토큰 실패(I445) 뒤 **실제로 회전시킨다** — 토큰 장애 대응.
      *
-     * ## 왜 `invalidate()` 만으로는 안 되나
-     *
-     * 장애 때 실측: 전날 토큰이 24h 만료돼 I445 가 났고 곧바로 새 토큰이 발급됐는데,
-     * **그 새 토큰으로도 모든 TR 이 I445** 였다. 그 뒤 수백 번 재발급을 요청해도 KB 는 **같은
-     * 토큰(같은 `jti`)** 만 돌려줬다 — 캐시가 아니라 KB 쪽에서 그렇다(Redis DEL + 파드 재시작
-     * 뒤에도 동일, `expiresInSec` 이 경과 시간만큼만 감소). 즉 "하루 한 개" 정책의 활성 토큰이
-     * 쓸 수 없는 상태로 고정되면 발급 요청은 영원히 그것을 되돌려주고 자가복구가 성립하지 않는다.
-     *
-     * ## 그래서
-     *
-     * 재발급 결과가 **실패한 토큰과 같은 `jti`** 일 때만 `/oauth2/revoke` 로 명시 폐기하고 한 번 더
-     * 발급한다. 조건을 이렇게 좁힌 것이 안전장치다 — 재발급이 정상으로 회전하면(대부분의 I445)
-     * 폐기를 아예 부르지 않으므로, 멀쩡한 토큰을 폐기해 다른 파드의 연결을 끊을 위험이 없다.
-     * 폐기가 실패해도 종전 동작으로 되돌아갈 뿐이다(더 나빠지지 않는다).
+     * KB 는 쓸 수 없게 된 활성 토큰을 재발급 요청에도 같은 `jti` 로 되돌려줄 수 있어, `invalidate()` 만으로는 회복되지 않는다.
+     * 재발급 결과가 **실패한 토큰과 같은 `jti`** 일 때만 `/oauth2/revoke` 로 명시 폐기하고 한 번 더 발급한다. 재발급이 새 토큰을
+     * 주면 폐기를 부르지 않으므로 다른 프로세스가 쓰는 멀쩡한 토큰을 폐기하지 않는다. 폐기가 실패하면 재발급한 토큰을 그대로 둔다.
      *
      * @param failedToken TR 이 I445 로 거부당할 때 실제로 보냈던 토큰.
      */
@@ -254,9 +238,8 @@ export class KBSecAuth {
             return;   // 정상 회전 — 폐기할 이유가 없다.
         }
 
-        // 쿨다운이 없으면 안 된다. 이 상태에서는 **모든 TR 이** I445 라 실패가 분당 30건씩
-        // 발생하고(실측), 그때마다 폐기를 부르면 KB 가 경고하는 "잘못된 조회의
-        // 과도한 반복" 을 이 코드가 일으킨다. 폐기는 성공해도 한 번이면 족하다.
+        // 쿨다운이 없으면 안 된다. 이 상태에서는 **모든 TR 이** I445 로 실패하므로, 그때마다 폐기를 부르면
+        // KB 가 경고하는 "잘못된 조회의 과도한 반복" 을 이 코드가 일으킨다. 폐기는 성공해도 한 번이면 족하다.
         const now = Date.now();
         if (now - this.lastRevokeAttemptAt < REVOKE_COOLDOWN_MS) {
             logger.debug(
@@ -319,15 +302,11 @@ export class KBSecAuth {
     }
 
     /**
-     * Redis 캐시 → 없으면 **교차 pod 락**을 걸고 발급.
-     *
-     * 종전엔 `refreshPromise`(프로세스 내 단일화)뿐이라 **pod 가 둘이면 둘 다 발급**했다.
-     * KB 는 발급 빈도 제한이 있고 "잘못된 조회의 과도한 반복" 을 계정 제한 사유로 경고한다.
-     * KIS 에만 있던 락을 공용 모듈로 분리해 여기에도 건다.
+     * 토큰 저장소 → 없으면 **교차 프로세스 락**을 걸고 발급한다. KB 는 발급 빈도를 제한하므로 여러 프로세스가 함께 발급하지 않게 한다.
      *
      * 저장은 `requestToken` 안에서 이미 await 로 한다 — 그래서 `issueAndCache` 가 곧 발급이다.
      */
-    private async fetchFromRedisOrIssue(): Promise<string> {
+    private async fetchFromStoreOrIssue(): Promise<string> {
         const cached = await this.readCachedToken();
         if (cached !== null) return cached;
 
@@ -341,7 +320,7 @@ export class KBSecAuth {
         });
     }
 
-    /** Redis 캐시의 **유효한** 토큰. 없거나 만료면 null. */
+    /** 토큰 저장소의 **유효한** 토큰. 없거나 만료면 null. */
     private async readCachedToken(): Promise<string | null> {
         const store = this.storeOf();
         if (!store) return null;
@@ -353,7 +332,7 @@ export class KBSecAuth {
             this.cachedToken = parsed;
             return parsed.accessToken;
         } catch (err) {
-            logger.debug({ err }, '[KBSecAuth] Redis 토큰 캐시 조회 실패 — 신규 발급');
+            logger.debug({ err }, '[KBSecAuth] 토큰 저장소 조회 실패 — 신규 발급');
             return null;
         }
     }
@@ -363,11 +342,8 @@ export class KBSecAuth {
             ? [this.workingShape]
             : ['envelope', 'flat'];
 
-        // 형태별 오류를 **전부** 모은다. 종전엔 마지막 시도의 오류만 던졌는데, 폴백 순서상
-        // 그건 언제나 `flat` 이다. flat 은 문서가 "틀린 형태"로 확정한 쪽이라 서버가 늘
-        // `E021 앱키로 앱정보 추출 중 오류` 를 준다 — 즉 **원인과 무관한 "키가 이상하다"는
-        // 메시지가 최종 오류로 올라와** 진짜 원인(envelope 응답)이 가려졌다.
-        // 이것 때문에 멀쩡한 키를 무효로 오진한 적이 있다.
+        // 형태별 오류를 **전부** 모아 던진다. 마지막 시도(`flat`)는 서버가 늘 `E021 앱키로 앱정보 추출 중 오류` 로 답하므로,
+        // 그 오류만 던지면 진짜 원인(envelope 응답)이 가려진다.
         const failures: string[] = [];
         for (const shape of shapes) {
             try {
@@ -421,18 +397,16 @@ export class KBSecAuth {
 
         this.cachedToken = { accessToken, expiresAt };
 
-        // Redis 쓰기도 await 한다. fire-and-forget 이면 동시 발급 경합에서 쓰기 순서가
-        // 보장되지 않아 **더 오래된 토큰이 캐시에 남을 수 있다**. KIS·Toss 와 동일.
+        // 저장소 쓰기도 await 한다. 기다리지 않으면 동시 발급 경합에서 쓰기 순서가
+        // 보장되지 않아 **더 오래된 토큰이 캐시에 남을 수 있다**.
         const store = this.storeOf();
         const ttlSec = Math.floor((expiresAt - Date.now()) / 1000);
         if (store && ttlSec > 0 && !shortLived) {
-            // 남은 수명이 0 이하면 쓰지 않는다 — KB 가 `expires_in` 을 3초·1초로 주는 응답이
-            // 실제로 관측됐다. 그걸 최소 1초로 끌어올려 저장하면 다른 파드가
-            // 곧바로 만료될 토큰을 가져다 쓴다. 캐시 미스가 재발급보다 싸다.
+            // 수명이 짧거나 남은 수명이 0 이하인 토큰은 저장하지 않는다. 다른 프로세스가 곧 만료될 토큰을 가져다 쓰게 된다.
             try {
                 await store.set(this.storeKey, JSON.stringify(this.cachedToken), ttlSec * 1000);
             } catch (err) {
-                logger.warn({ err }, '[KBSecAuth] Redis 토큰 저장 실패 (인메모리 캐시는 유효)');
+                logger.warn({ err }, '[KBSecAuth] 토큰 저장소 쓰기 실패 (메모리 캐시는 유효)');
             }
         }
 

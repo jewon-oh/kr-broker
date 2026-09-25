@@ -98,7 +98,7 @@ class Exchange(BaseExchange):
     async def fetch2(self, path: str, api: ApiName = 'public', method: str = 'GET',  # type: ignore[override]
                      params: Optional[Dict[str, Any]] = None, headers: Optional[Dict[str, str]] = None, body: Str = None,
                      config: Optional[Dict[str, Any]] = None) -> Any:
-        """요청 하나를 처리한다: (비공개면) 자격증명 확인 → `authenticate` → `throttle` → 재시도 루프 { `sign` → `fetch` }."""
+        """요청 하나를 처리한다: (비공개면) 자격증명 확인 → 재시도 루프 { `throttle` → (비공개면) `authenticate` → `sign` → `fetch` }."""
         params = {} if params is None else params
         config = {} if config is None else config
         is_order = fn.safe_bool(config, 'order', False) is True

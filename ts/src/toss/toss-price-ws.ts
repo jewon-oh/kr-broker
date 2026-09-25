@@ -65,7 +65,7 @@ export async function isTossWsSupported(): Promise<boolean> {
  * 테스트 전용 — 동적 `import('ws')` 를 거치지 않고 생성자를 직접 주입한다. `null` 로 리셋한다.
  *
  * `vi.mock('ws', ...)` 로 모듈을 가로채도 fake timer(`vi.useFakeTimers`)와 동적 import 의 프라미스
- * 해석 순서가 맞물려 `advanceTimersByTimeAsync` 로는 안정적으로 플러시되지 않는다(실측). 이 훅으로
+ * 해석 순서가 맞물려 `advanceTimersByTimeAsync` 로는 안정적으로 플러시되지 않는다. 이 훅으로
  * 캐시를 직접 채워 그 경합을 피한다.
  */
 export function __setWsCtorForTests(ctor: WsCtor | null): void {

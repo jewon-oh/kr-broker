@@ -5,9 +5,7 @@
  * 같은 모양으로 만들어 넘긴다.
  *
  * 데이터 출처: KIS Open API 공식 (https://new.real.download.dws.co.kr/common/master/)
- * - kospi — KOSPI 상장 종목 (~1800)
- * - kosdaq — KOSDAQ 상장 종목 (~1800)
- * 합계 ~3600 종목 (펀드/ETN/지수 제외 — 6자리 숫자 단축코드만 등록).
+ * 넘겨받은 `kospi`·`kosdaq` 행을 거르지 않고 그대로 쓴다.
  */
 
 import { logger } from '../logger';
@@ -20,7 +18,7 @@ export interface KRXStock {
     code: string;
     /** 종목명 (한글, 예: '삼성전자') */
     name: string;
-    /** 영문명 (KIS 마스터 미제공 — KRX 외부 출처 합류 시 채워짐) */
+    /** 영문명 (KIS 마스터 파일에는 없다. 넘긴 행에 있으면 검색에 쓴다) */
     nameEn?: string;
     /** 시장 구분 */
     market: 'KOSPI' | 'KOSDAQ';
@@ -30,11 +28,7 @@ export interface KRXStock {
     securityType?: string;
 }
 
-/**
- * 신형 영숫자 KRX 단축코드 큐레이션 보충.
- * 2026-05-27 상장 단일종목 인버스2X ETF — 번들 마스터 스냅샷에 없다. 마스터 스냅샷을 다시 만들어도
- * 유지되도록 코드로 병합한다(중복 시 마스터 우선 — 자가치유).
- */
+/** 넘긴 마스터 데이터에 같은 코드가 없을 때만 더하는 보충 종목. 같은 코드가 있으면 마스터 데이터의 행을 쓴다. */
 const CURATED_KRX_SUPPLEMENT: readonly KRXStock[] = [
     { code: '0193L0', name: 'PLUS 삼성전자선물단일종목인버스2X', market: 'KOSPI', securityType: 'ETF' },
     { code: '0197X0', name: 'SOL SK하이닉스선물단일종목인버스2X', market: 'KOSPI', securityType: 'ETF' },
@@ -65,8 +59,7 @@ function krxStockMaster(data: KisMasterData): readonly KRXStock[] {
 /**
  * 종목 검색 (코드, 한글명 매칭).
  *
- * KIS 마스터에 영문명이 없어 영문 검색은 한글명에 들어간 영문 약어 (LG, SK, KT) 로만
- * 매칭. 정확한 영문 검색이 필요하면 별도 출처 (KRX 공식) 합류 검토.
+ * KIS 마스터에는 영문명이 없어서, 행에 `nameEn` 이 없으면 영문 검색은 한글명에 들어간 영문 약어 (LG, SK, KT) 로만 매칭된다.
  *
  * @param data 마스터 데이터
  * @param query 검색어

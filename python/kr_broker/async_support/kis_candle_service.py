@@ -3,8 +3,8 @@
 `kis.fetch_ohlcv` 는 이력이 긴 야후를 먼저 쓴다. 이 모듈은 KIS 원본 봉이 필요한 경로(깊은 이력 채우기, 당일 분봉, 야후가 빈 해외 일봉)를
 `kis` 인스턴스의 암묵 API 로 조회한다. 인스턴스의 `candles()` 가 이 서비스를 돌려준다.
 
-국내 날짜 인자(`YYYYMMDD`)는 TypeScript 판처럼 이 프로세스의 지역 시간대로 만든다. 해외 기간별 시세의 기준일(`BYMD`)은 미국 거래일이라
-미국 동부 날짜로 적는다.
+국내 날짜 인자(`YYYYMMDD`)는 `fetch_daily_ohlcv` 가 이 프로세스의 지역 시간대로, `fetch_daily_ohlcv_paged` 가 UTC 로 만든다.
+해외 기간별 시세의 기준일(`BYMD`)은 미국 거래일이라 미국 동부 날짜로 적는다.
 """
 
 import datetime
@@ -106,7 +106,7 @@ class KISCandleService:
         return merged
 
     async def fetch_daily_ohlcv_range(self, stock_code: str, period_code: str, start_date: str, end_date: str) -> List[List[float]]:
-        """기간(`YYYYMMDD`)을 정해 국내 일·주·월 봉을 받는다. 한 응답이 100행쯤이다. 실패하면 로그를 남기고 빈 목록이다."""
+        """기간(`YYYYMMDD`)을 정해 국내 일·주·월 봉을 받는다. 한 응답이 100행쯤이다. 실패하면 로그를 남기고 던진다."""
         try:
             response = await self.exchange.private_get_uapi_domestic_stock_v1_quotations_inquire_daily_itemchartprice({
                 'FID_COND_MRKT_DIV_CODE': 'J',
@@ -184,7 +184,7 @@ class KISCandleService:
 
     async def fetch_overseas_daily_ohlcv(self, ticker: str, market: str, timeframe: str, limit: int) -> List[List[float]]:
         """해외 기간별(일·주·월) 봉(`HHDFS76240000`). 한 번에 100건이라, 더 필요하면 기준일(`BYMD`)을 앞 페이지 마지막 날의 하루 전으로
-        옮겨 다시 부른다. `1d`·`1w`·`1M` 만 받는다(KIS 해외 분봉은 이 경로에 없다). 실패하면 로그를 남기고 빈 목록이다.
+        옮겨 다시 부른다. `1d`·`1w`·`1M` 만 받고 다른 봉은 빈 목록이다(KIS 해외 분봉은 이 경로에 없다). 실패하면 로그를 남기고 던진다.
         `BYMD` 는 미국 거래일이라 실행 환경의 시간대가 아니라 미국 동부 날짜로 적는다."""
         gubn = OVERSEAS_GUBN_MAP.get(timeframe)
         if not gubn:

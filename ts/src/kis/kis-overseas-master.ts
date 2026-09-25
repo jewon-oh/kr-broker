@@ -11,13 +11,13 @@
  * - HSX: 호치민, HNX: 하노이, TSE: 도쿄
  *
  * B. **주문/잔고용 (4글자, OVRS_EXCG_CD 파라미터)**:
- * - NASD: 나스닥, NYSE: 뉴욕, AMEX: 아멕스 (실전; 모의는 NASD 만)
+ * - NASD: 나스닥, NYSE: 뉴욕, AMEX: 아멕스 (미국 잔고 조회는 실전이 NASD 한 번으로 미국 전체를 받고, 모의는 세 거래소를 따로 부른다)
  * - SEHK: 홍콩, SHAA: 상해, SZAA: 심천
  * - HASE: 하노이, VNSE: 호치민, TKSE: 일본
  *
  * 본 파일은 시세 코드 (A) 기준 — 주문 시 매핑 함수 `toOrderMarketCode` 사용.
  *
- * 종목 수는 수동 관리하던 50개에서 자동 다운로드로 받는 약 12,000개로 늘었다. ticker 형식은 KIS 정식 (BRK/B 등).
+ * 넘겨받은 나스닥·뉴욕·아멕스 행을 거르지 않고 그대로 쓴다. ticker 형식은 KIS 정식 (BRK/B 등).
  */
 
 import { logger } from '../logger';
@@ -65,15 +65,6 @@ export interface OverseasStock {
     isEtf?: boolean;
 }
 
-/**
- * 해외주식 종목 마스터 — KIS 공식 master 파일 (nasmst.cod 등) 자동 로드.
- *
- * 형식: 5119 (NASDAQ) + 2848 (NYSE) + 4267 (AMEX) ≈ 12200 종목.
- * Index/Warrant 제외 — Stock(securityType=2) + ETP/ETF(=3) 만 등록.
- * Ticker 형식 KIS 정식 (예: 'BRK/B' — `.B` 가 아닌 `/B`).
- *
- * 갱신: 마스터 파일을 다시 내려받아 반영한다 (월 1회 권장).
- */
 /** 파생 목록 캐시 — 마스터 데이터 객체가 같으면 다시 만들지 않는다. 다른 데이터 객체를 넘기면 그 객체로 새로 만든다. */
 const overseasCache = new WeakMap<KisMasterData, readonly OverseasStock[]>();
 
@@ -117,7 +108,7 @@ export function searchOverseasStocks(
     );
 
     logger.debug({ query, market, resultCount: results.length }, '[KIS OverseasMaster] 종목 검색');
-    // 자르기 **전에** 관련도 정렬 — 실측: `query=V&limit=8` 에 Visa(`V`)가 없었다.
+    // 자르기 **전에** 관련도 정렬 — 안 하면 정확히 그 코드인 종목이 한도 밖으로 밀린다.
     return rankMasterMatches(results, q, s => s.code).slice(0, limit);
 }
 

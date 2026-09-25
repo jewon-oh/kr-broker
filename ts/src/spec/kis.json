@@ -31,7 +31,7 @@
                     "description": "주식 현재가(문자열로 온다, 0 또는 빈 값이면 호출부가 NullResponse 를 던진다)"
                 }
             ],
-            "evidence": "ts/src/kis.ts:876-895(fetchTicker 국내 분기)"
+            "evidence": "ts/src/kis.ts(fetchTicker 국내 분기)"
         },
         "privateGetUapiDomesticStockV1QuotationsIntstockMultprice": { "api": ["private"], "method": "GET", "path": "uapi/domestic-stock/v1/quotations/intstock-multprice", "cost": 1 },
         "privateGetUapiDomesticStockV1QuotationsInquireAskingPriceExpCcn": { "api": ["private"], "method": "GET", "path": "uapi/domestic-stock/v1/quotations/inquire-asking-price-exp-ccn", "cost": 1 },

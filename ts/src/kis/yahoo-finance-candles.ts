@@ -64,10 +64,8 @@ const YAHOO_DEFAULT_RANGE: Record<string, string> = {
  * Yahoo Finance 타임프레임별 최대 조회 기간 (ms)
  * 이 범위를 초과하면 Yahoo가 빈 응답을 반환함.
  *
- * 분봉 (1m/5m/15m/30m) 은 Yahoo 가 *strict* 60-day 경계를 적용 — period1 이
- * "now - 60days" 와 같거나 더 과거이면 422 "must be within the last 60 days"
- * 로 거부 → 빈 응답. 운영 사고: 클램핑 후 정확히 60일 경계로 요청 →
- * 매 사이클 빈 응답 → 동일 갭 무한 재검출. 1일 안전 버퍼로 회피.
+ * 분봉 (1m/5m/15m/30m) 은 Yahoo 가 *strict* 60-day 경계를 적용 — 경계와 같거나 더 과거를 요청하면
+ * 422 "must be within the last 60 days" 로 거부 → 빈 응답. 그래서 경계에서 1일을 뺀다.
  *
  * 1h 도 보수적으로 729 일 (730 경계 회피).
  */
@@ -88,10 +86,8 @@ const YAHOO_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/
 
 /**
  * 빈 응답(result:null)·일시적 실패(429/5xx/타임아웃) 재시도.
- * Yahoo 는 100+심볼 버스트(스크리너 유니버스 등) 시 개별 요청은 정상이나 result:null(빈 응답)을
- * 자주 반환한다 → 4h(=1h 리샘플) 캔들이 전부 비어 호출하는 쪽이 "캔들 데이터 부족" 으로 분석을 건너뛴다.
- * 호출하는 쪽의 동시성 상한만으로는 부족해, 지터 백오프 재시도로 스로틀에서 회복한다.
- * 심볼 부재(chart.error)는 재시도 무의미 → 즉시 반환.
+ * Yahoo 는 요청이 몰리면 개별 요청이 정상이어도 result:null(빈 응답)을 자주 반환하므로, 지터 백오프 재시도로 스로틀에서 회복한다.
+ * 심볼 부재(chart.error)는 재시도하지 않고 바로 던진다.
  */
 const YAHOO_MAX_ATTEMPTS = 3;
 const YAHOO_RETRY_BASE_MS = 500;
@@ -99,11 +95,8 @@ const YAHOO_RETRY_BASE_MS = 500;
 const yahooSleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
- * 프로세스 전역 Yahoo 동시 요청 상한. 스크리너 유니버스(100+심볼)를 호출하는 쪽의
- * 동시성 상한 × 여러 호출자 × 재시도로 동시에 반복 호출하면 Yahoo 가
- * `result:null`(빈 응답)을 대량 반환한다 (개별/소규모 요청은 정상 — 순수 버스트 스로틀).
- * 세마포어로 동시성을 낮게 직렬화하면 각 요청이 안정 성공하고, 호출하는 쪽이 성공한 캔들을
- * 저장해 두므로 콜드 사이클 1회만 비용이 든다(이후 캐시 조회). 재시도(위)도 이 상한 안에서 큐잉된다.
+ * 프로세스 전역 Yahoo 동시 요청 상한. 동시에 많이 부르면 Yahoo 가 `result:null`(빈 응답)을 대량 반환하므로
+ * 세마포어로 동시성을 낮춘다. 재시도(위)도 이 상한 안에서 큐잉된다.
  */
 const YAHOO_MAX_CONCURRENT = 6;
 let yahooActive = 0;
@@ -157,21 +150,13 @@ interface YahooChartResponse {
  * 진행 중인 마지막 봉의 타임스탬프를 **시리즈 자신의 그리드**에 맞춘다.
  *
  * Yahoo 차트 API 는 완성된 봉엔 버킷 시작 시각을 주지만, **진행 중인 마지막 봉엔
- * (지연된) 현재 시각**을 준다. 그대로 저장하면 폴링마다 타임스탬프가 달라지고,
- * 캔들 저장소의 유니크 키가 (exchange, symbol, timeframe, marketType, timestamp) 이면
- * **갱신이 아니라 새 행**이 쌓인다.
- *
- * 실측(005930 `1h`): 11:50:16~19 KST 에 4번 폴링해 02:30:15/16/17/18 네 행이
- * 생겼다(무료 시세 20분 지연분이 그대로 타임스탬프가 됨). 이런 행이 누적돼 최근 60봉이
- * 60시간이 아니라 24.3시간만 커버했고, 그 위에서 계산하는 Supertrend 같은 지표 기반 진입·청산이
- * 노이즈를 추세로 읽었다.
+ * (지연된) 현재 시각**을 준다. 그대로 두면 부를 때마다 마지막 봉의 타임스탬프가 달라진다.
  *
  * UTC 정시로 내리면 안 된다. 미국장 시간봉은 개장(13:30 UTC)에 앵커돼
- * 13:30·14:30·15:30… 으로 오는 **정상** 봉이라, 정시 정렬은 전 구간 키를 바꿔버린다
- * (KIS 해외 1h 의 99.2% 가 여기 해당). 그래서 절대 격자가 아니라 **직전 완성봉에서
- * tf 배수만큼** 떨어진 지점으로 스냅해 세션 위상을 보존한다.
+ * 13:30·14:30·15:30… 으로 오는 **정상** 봉이라, 정시 정렬은 전 구간 시각을 바꿔버린다.
+ * 그래서 절대 격자가 아니라 **직전 완성봉에서 tf 배수만큼** 떨어진 지점으로 스냅해 세션 위상을 보존한다.
  *
- * 일봉·주봉·월봉(`d`, `w`, `W`, `M`)은 대상이 아니다 — 진행 중 봉 문제가 없고, 키를 바꾸면 기존 적재분과 어긋난다.
+ * 일봉·주봉·월봉(`d`, `w`, `W`, `M`)은 대상이 아니다 — 진행 중 봉 문제가 없다.
  */
 export function alignTailToSeriesGrid(candles: number[][], timeframe: string): void {
     if (/[dwWM]$/.test(timeframe)) return;
@@ -221,15 +206,13 @@ export async function fetchYahooCandles(
     // Yahoo 티커 변환 (숫자 코드 → .KS/.KQ 접미사)
     const yahooSymbol = toYahooTicker(stockCode, krMarket);
 
-    // Yahoo interval 매핑 — 미지원 timeframe 은 1d silent 폴백이 운영 환경 사고 원인이었음.
-    // 호출 측에서 명시적 timeframe 사용을 강제하기 위해 에러 throw 로 전환.
+    // Yahoo interval 매핑 — 모르는 timeframe 은 다른 봉으로 바꾸지 않고 던진다.
     const interval = YAHOO_INTERVAL_MAP[timeframe];
     if (!interval) {
         logger.error({ timeframe, stockCode }, '[YahooFinance] ❌ 미지원 timeframe — silent 폴백 차단');
         throw new NotSupported(
             `[YahooFinance] 미지원 타임프레임 '${timeframe}'. `
-            + `지원: ${Object.keys(YAHOO_INTERVAL_MAP).join(', ')}. `
-            + `이전 동작(1d silent 폴백)은 지표 오계산 사고로 폐기.`,
+            + `지원: ${Object.keys(YAHOO_INTERVAL_MAP).join(', ')}.`,
         );
     }
 
@@ -237,10 +220,8 @@ export async function fetchYahooCandles(
     const params = new URLSearchParams({ interval });
 
     // 요청 윈도 → Yahoo `range` 버킷 매핑.
-    // 핵심: undici(Node fetch)는 period1/period2 intraday 요청에 HTTP 400 을 반환한다
-    // (curl·브라우저는 200). 캔들 조회가 전부 period 를 써서 주식 캔들이 모두 실패했다. `range`
-    // 파라미터는 undici 에서도 정상(200)이므로 항상 range 로 조회한다. range 는 "지금까지"를
-    // 반환하지만 호출부는 최근 limit개만 슬라이스하므로 무해(라이브 분석 until≈now).
+    // undici(Node fetch)는 period1/period2 intraday 요청에 HTTP 400 을 받으므로 항상 range 로 조회한다.
+    // range 는 "지금까지"를 반환하고, 끝에서 최근 limit개만 남긴다.
     const maxRangeMs = YAHOO_MAX_RANGE_MS[timeframe];
     if (since) {
         let windowMs = (until ?? Date.now()) - since;
@@ -326,12 +307,12 @@ export async function fetchYahooCandles(
                     ]);
                 }
 
-                // 진행 중 마지막 봉만 그리드에 스냅 → 폴링마다 새 행이 쌓이지 않는다. 4h 는 받은 1h 봉의 격자로 맞춘 뒤 합친다.
+                // 진행 중 마지막 봉만 그리드에 스냅해 부를 때마다 시각이 바뀌지 않게 한다. 4h 는 받은 1h 봉의 격자로 맞춘 뒤 합친다.
                 const needsResample = timeframe === '4h';
                 alignTailToSeriesGrid(candles, needsResample ? '1h' : timeframe);
                 dedupeByTimestampKeepLast(candles);
 
-                // 종목당 1줄 → 유니버스 스캔에서 분당 수백 줄.
+                // 종목마다 한 줄이라 debug 로 남긴다.
                 logger.debug({
                     yahooSymbol, timeframe, interval,
                     rawCount: timestamps.length,
@@ -390,7 +371,7 @@ function toYahooRange(windowMs: number): string {
  * 종목코드 → Yahoo Finance 티커 변환
  * - 한국 주식: 005930 → 005930.KS (KOSPI), KOSDAQ 종목은 058470 → 058470.KQ
  * - 미국 주식: AAPL → AAPL (접미사 없음). 클래스 주식의 점은 야후 표기인 하이픈으로 바꾼다(BRK.B → BRK-B)
- * - 프론트에서 'stock:AAPL' 또는 '005930/KRW' 형태로 올 수 있으므로 처리
+ * - `stock:` 접두사와 `/KRW` 같은 접미사는 뗀다
  */
 function toYahooTicker(stockCode: string, krMarket?: 'KOSPI' | 'KOSDAQ'): string {
     // 'stock:' 접두사 제거

@@ -1,12 +1,7 @@
 /**
- * @fileoverview 증권사 API 엔드포인트 표(`spec/*.json`)의 타입. `describe().api`(요청을 보내는 런타임 등록)와
- * `docs/coverage/*.json`(사람이 읽는 지원 현황)이 각자 따로 관리되던 것을, 파라미터·응답 필드까지 담는 한 표로
- * 옮기는 것이 목표다(Python 포팅 방침 0단계).
+ * @fileoverview 증권사 API 엔드포인트 표(`spec/*.json`)의 타입. 경로·HTTP 메서드·비용·버킷에 더해 파라미터·응답 필드까지 담는다.
  *
- * 필드 이름은 TS 쪽 관례(camelCase) 대신 **snake_case**를 쓴다. 이 JSON은 나중에 Python 쪽도 그대로
- * 읽어야 하는데, Python 스파이크로 실제 읽어 보니(9/23) `schemaVersion`·`trId`가 Python 관례와
- * 안 맞아 매번 변환이 필요했다. TS 코드에서 `ep.tr_id`처럼 쓰는 게 이 파일 하나 안에서는 어색해도,
- * 두 언어가 공유하는 자료는 어느 한쪽 관례를 절대 기준으로 삼지 않는 편이 낫다.
+ * 필드 이름은 TS 쪽 관례(camelCase) 대신 **snake_case**를 쓴다. TypeScript 판과 Python 판이 함께 읽는 자료라 어느 한쪽 관례를 기준으로 삼지 않는다.
  */
 
 export type SpecHttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
@@ -50,7 +45,7 @@ export interface EndpointSpec {
     params?: SpecParam[];
     /** 응답 필드. 공식 명세와 대조한 엔드포인트에만 적는다. */
     response?: SpecResponseField[];
-    /** `params`·`response` 의 근거(소스 파일 경로·줄 번호, 또는 공식 문서 링크). */
+    /** `params`·`response` 의 근거(소스 파일 경로와 메서드 이름, 또는 공식 문서 링크). 줄 번호는 코드가 바뀌면 어긋나므로 적지 않는다. */
     evidence?: string;
 }
 

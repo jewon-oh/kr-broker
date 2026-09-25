@@ -52,8 +52,8 @@ export function kbsecCandleTimestamp(dt: string, tm: string): number | undefined
 }
 
 /**
- * 해외 차트(`GSC10060`) 봉의 `dt`와 `tm` → UTC 밀리초. 두 값은 미국 동부 현지 시각이다(2026-09-24 실계좌에서 분봉 시각이 미국 동부 현재
- * 시각과 같았다. 조회시간 `inq_tm`만 한국 시각이다). 서머타임은 `etWallClockToUtcMs`가 반영한다. 일봉은 시각이 비어 현지 자정이 된다.
+ * 해외 차트(`GSC10060`) 봉의 `dt`와 `tm` → UTC 밀리초. 두 값은 미국 동부 현지 시각이다(조회시간 `inq_tm`만 한국 시각이다).
+ * 서머타임은 `etWallClockToUtcMs`가 반영한다. 일봉은 시각이 비어 현지 자정이 된다.
  * 일자를 읽을 수 없으면 `undefined` 다.
  */
 export function kbsecUsCandleTimestamp(dt: string, tm: string): number | undefined {

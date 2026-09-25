@@ -1,10 +1,10 @@
 /**
- * @fileoverview KIS 거래시간 유틸리티
+ * @fileoverview KRX 거래시간 유틸리티(세 증권사 공용)
  * @description 한국 주식시장(KRX) 정규장 시간 체크
  *
  * KRX 정규장: 09:00 ~ 15:30 (KST)
- * - 시간외 단일가: 15:40 ~ 16:00 (미구현)
- * - 공휴일/주말: 휴장
+ * - 시간외 단일가: 16:00 ~ 18:00 (미구현)
+ * - 주말/휴장일: 휴장. 휴장일은 공용 캘린더(`market-calendar.ts`)가 아는 날만 막는다
  *
  * NXT(넥스트레이드) 확장 세션: 프리 08:00~08:50 / 애프터 15:30~20:00 —
  * 정규장 밖 확장 거래는 `getNxtSession` / `isNxtExtendedTradable` 참조.
@@ -35,7 +35,7 @@ const KST_OFFSET_HOURS = 9;
  *
  * 체크 항목:
  * 1. 주말 여부 (토/일 = 휴장)
- * 2. 공휴일 여부 (KRX 휴장일 목록)
+ * 2. 휴장일 여부 (공용 캘린더의 `isMarketClosedDay`)
  * 3. 정규장 시간 (09:00 ~ 15:30 KST)
  *
  * @returns { tradable, reason } — 거래 가능 여부 + 사유
@@ -91,8 +91,6 @@ export function getKrxMarketPhase(now: Date = new Date()): KrxMarketPhase {
 
 /**
  * `now` 기준 다음 KRX 개장(09:00 KST, 휴장일 skip)까지의 밀리초.
- * 호출하는 쪽의 스케줄러가 야간/주말/휴장에 의미 없는 1분 주기 noop 사이클을
- * 돌리지 않도록 다음 개장 시각까지 한 번에 점프하기 위한 헬퍼.
  *
  * @param now 현재 시각. 미지정 시 `new Date()`
  * @returns ms (음수 없음). 지금 거래 가능하면 0
@@ -139,22 +137,7 @@ export function getTimeUntilKrxOpen(now: Date = new Date()): number {
  * 모든 필드 비교는 `getUTC*` 로 한다: `now+9h` 의 wall-clock 이 곧 KST 라, 프로세스가
  * 어느 타임존에서 돌든 같은 답이 나온다.
  *
- * ## 왜 하나로 합쳤나
- *
- * 종전엔 구현이 둘이었다. 인자 없는 `checkKRXTradingHours` 는 `getKSTNow` + 로컬 getter
- * (`getHours`/`getDay`/`getFullYear`)로 KST 를 계산했고, 같은 파일 뒷부분에 그 방식이
- * *"비-UTC 배포 환경에서 fragile"* 이라 적힌 채로 **UTC-getter 버전이 따로** 있었다.
- *
- * 그런데 고친 쪽은 스케줄러만 쓰고, **실주문 경로(`kis.createOrder`)는 fragile 하다고 적힌 옛 함수를
- * 부르고 있었다.** 정본을 만들어 놓고 한 경로에만 적용한 형태였다.
- *
- * 실제 위험: 컨테이너 TZ 가 UTC 가 아니면 `getKSTNow` 는 `getTimezoneOffset` 로
- * 보정하므로 대개 맞지만, **KRX 휴장일 판정**(`isKRXHoliday`)이 로컬 getter 로 연·월·일을
- * 읽어 자정 근처에서 하루가 밀릴 수 있었다. 휴장일에 열려 있다고 답하는 방향이면
- * 실주문이 나간다.
- *
- * 사유 문자열은 상세한 쪽(옛 `checkKRXTradingHours`)을 남긴다 — 이 값이
- * `거래시간 외: ${reason}` 으로 주문 실패 메시지와 로그에 그대로 실린다.
+ * 사유 문자열은 `tradingHoursBlockReason` 을 거쳐 주문을 막는 오류 메시지에 그대로 실린다.
  */
 export function checkKRXTradingHoursAt(now: Date): { tradable: boolean; reason?: string } {
     const kstWall = new Date(now.getTime() + KST_OFFSET_HOURS * 60 * 60 * 1000);

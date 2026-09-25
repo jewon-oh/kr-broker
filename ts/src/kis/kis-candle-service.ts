@@ -79,8 +79,7 @@ export class KISCandleService {
     /**
      * 창을 과거로 옮겨 가며 **여러 번 호출해** 심층 이력을 채운다.
      *
-     * KIS 한 응답이 ~100행이라, 800봉을 원하면 8번 호출해야 한다. 한 번만 호출하면
-     * 100봉을 "성공" 으로 읽어 심층 구간이 영영 쌓이지 않는다.
+     * KIS 한 응답이 ~100행이라, 800봉을 원하면 8번 호출한다.
      *
      * **빈 창이 나오면 멈춘다.** 상장 이전 구간까지 창을 계속 옮기면 호출만 낭비된다.
      * 신규 상장주는 1~2창에서 끝난다.
@@ -115,12 +114,7 @@ export class KISCandleService {
     }
 
     /**
-     * 기간을 **명시해서** 일/주/월 캔들을 조회한다.
-     *
-     * KIS 는 한 응답에 **약 100행**만 준다(`output2`). `fetchDailyOHLCV` 는 기간을
-     * 내부에서 계산하고 항상 오늘로 끝나므로, 800봉을 요청해도 **최근 100봉만** 돌아온다.
-     * 호출부가 그걸 "성공" 으로 읽으면(길이 > 0) 심층 폴백도 실행되지 않아
-     * 심층 이력이 쌓이지 않는다. 창을 옮겨 가며 호출하려면 기간이 인자여야 한다.
+     * 기간을 **명시해서** 일/주/월 캔들을 조회한다. 한 응답은 **약 100행**(`output2`)이라, 창을 옮겨 가며 부르려면 기간이 인자여야 한다.
      *
      * @param startDate `YYYYMMDD`
      * @param endDate `YYYYMMDD`
@@ -238,17 +232,7 @@ export class KISCandleService {
 
             return this.resampleMinuteCandles(sorted, minuteInterval).slice(-limit);
         } catch (err) {
-            // 실패를 `[]` 로 바꾸지 않는다.
-            //
-            // 여기서 빈 배열을 돌려주면 호출부(수집·워밍 작업)는 빈 배열을
-            // **"휴장/거래정지"** 로 읽고 서킷브레이커를 **리셋**한다. 그러면 KIS 에 한 건도
-            // 닿지 못한 날에도 작업이 `완료` 로 끝난다. 실제로 네트워크가 전면 차단됐을 때(egress 정책 누락)
-            // `upserted:0 skipped:100 rows:0 total:100` + "완료" 로 끝난 적이 있다.
-            // 원인은 네트워크 차단이었는데 로그의 결론은 성공이었다.
-            //
-            // "데이터가 없다" 와 "물어보지 못했다" 는 다른 사실이고, 그 둘을 같은 값으로
-            // 표현하는 순간 호출부는 구별할 방법이 없다. 호출부가 이미 `catch` 를
-            // 갖고 있으므로 그대로 올린다.
+            // 실패를 `[]` 로 바꾸지 않는다. 빈 배열은 휴장·거래정지로 읽히므로, 묻지 못한 것과 데이터가 없는 것을 같은 값으로 두지 않는다.
             logger.error({ err, stockCode, minuteInterval }, '[KISCandleService] 분봉 캔들 조회 실패');
             throw err;
         }
@@ -266,7 +250,7 @@ export class KISCandleService {
      * 해외주식 기간별 캔들 조회 (HHDFS76240000)
      *
      * KIS 한 번 호출당 100건 반환 — 더 필요하면 BYMD 를 이전 페이지 마지막 일자로 갱신해
-     * 반복 호출. timeframe 은 1d/1w/1M 만 지원 (KIS 해외 분봉 미지원).
+     * 반복 호출. timeframe 은 1d/1w/1M 만 지원 (해외 분봉은 `kis.fetchOverseasMinuteOHLCV` 가 준다).
      * BYMD 는 미국 거래일이라 실행 환경의 시간대가 아니라 미국 동부 날짜로 적는다.
      */
     async fetchOverseasDailyOHLCV(

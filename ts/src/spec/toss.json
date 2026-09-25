@@ -27,11 +27,11 @@
             "response": [
                 {
                     "field": "rate",
-                    "type": "number",
+                    "type": "string",
                     "description": "기준 통화 1단위당 표시 통화 환율"
                 }
             ],
-            "evidence": "ts/src/toss.ts:1400(usdKrwRate)"
+            "evidence": "ts/src/toss.ts(usdKrwRate)"
         },
         "privateMarketGetMarketCalendarKR": { "api": ["private", "market"], "method": "GET", "path": "market-calendar/KR", "cost": 1, "bucket": "market_info" },
         "privateMarketGetMarketCalendarUS": { "api": ["private", "market"], "method": "GET", "path": "market-calendar/US", "cost": 1, "bucket": "market_info" },

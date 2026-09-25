@@ -1,24 +1,8 @@
 /**
  * @fileoverview 실체결 확정 — 증권사 공용 폴링
  *
- * ## 왜 필요한가
- * 브로커 주문 **접수 응답에는 체결 정보가 없다.** 접수 직후 조회해도 `execution` 은 아직
- * 비어 있어, 한 번만 읽고 포기하면 증권사 클래스는 "요청가/요청수량"을 체결값으로 기록하게 된다.
- * 그 순간 기록되는 진입가는 **호가**가 되고, 사후에 아무도 고치지 않는다 — 잔고 대조는
- * "잔고 존재 여부"만 보고 단가·수량은 보지 않는다.
- *
- * 라이브 실측(토스): 주문 성공 111ms 뒤에 포지션이 생성됐다. 기록된 평단은 114,200(호가),
- * 실제 체결가는 114,100 이었다.
- *
- * 2차 효과로 **슬리피지 계측이 무력화된다.** 호출하는 쪽이
- * `expectedPrice(시그널 시점) vs orderResult.price` 를 비교할 때 후자가 호가면, 이 지표는
- * "시그널→주문접수 사이 가격변동"만 재고 실제 체결 괴리는 구조적으로 0 이다.
- *
- * ## 왜 공용 모듈인가
- * 같은 결함이 증권사마다 형태만 다르게 나타난다(KIS=지정가 조회 자체가 없음,
- * KB증권=`avgPrice` 미반환). 폴링 예산·종료 판정·부분체결
- * 처리·폴백 경고는 전부 브로커 무관한 로직이라 여기 한 곳에 둔다. 증권사 클래스는 **자기 응답을
- * `ExecutionProbe` 로 옮기는 매핑 함수 하나만** 제공하면 된다.
+ * 접수 응답에는 체결 정보가 없으므로 체결이 확정될 때까지 예산 안에서 짧게 조회한다. 폴링 예산·종료 판정·부분체결 처리·경고는
+ * 여기 한 곳에 두고, 증권사 클래스는 자기 응답을 `ExecutionProbe` 로 옮기는 조회 함수 하나만 넘긴다.
  */
 
 import { logger } from './logger';
@@ -77,11 +61,10 @@ export interface ConfirmBudget {
 export type ConfirmBudgetOption = Partial<ConfirmBudget> | (() => Partial<ConfirmBudget>) | undefined;
 
 /**
- * 폴링 예산 기본값.
+ * 폴링 예산 기본값. 6회 × 350ms ≈ 최대 1.75s.
  *
- * 6회 × 350ms ≈ 최대 1.75s. 간격은 브로커 주문조회 레이트리밋에서 역산했다 — 토스
- * ORDER_INFO 그룹이 6 TPS(개장 피크 09:00~09:10 KST 는 3 TPS)라 350ms(≈2.9 TPS)면
- * 피크에도 자기 자신만으로는 한도를 넘지 않는다. 한도가 더 엄격한 브로커는 `options.confirmBudget` 으로 낮춘다.
+ * 간격은 토스 체결 확정 조회(`GET /orders/{orderId}`)가 쓰는 `order_history` 그룹의 한도 안에 들게 정했다. 한도가 더 엄격한 브로커는
+ * `options.confirmBudget` 으로 낮춘다.
  */
 const DEFAULTS = { ATTEMPTS: 6, INTERVAL_MS: 350 } as const;
 
@@ -121,12 +104,9 @@ export function resolveConfirmBudget(defaults?: Partial<ConfirmBudget>, override
  * - `terminal` — 완전체결이면 그 값, 취소·거부면 그때까지의 부분체결(있으면)이 최종값.
  * - 예산 소진 — 그때까지 **가장 많이 채워진** 스냅샷.
  *
- * 부분체결에서 즉시 반환하지 않는 이유: 시장가는 수백 ms 안에 잔량이 마저 체결되는 일이
- * 흔한데, 첫 조각만 기록하면 DB 수량이 실제 보유보다 작아진다.
+ * 부분체결에서 곧바로 끝내지 않는다. 시장가는 잔량이 곧이어 체결되는 일이 흔해서, 첫 조각만 돌려주면 체결 수량이 실제보다 작다.
  *
- * **주문 자체는 이미 접수 성공**이므로 절대 throw 하지 않는다. 확정 실패는 `null` —
- * 호출부가 요청값으로 폴백하되, 그 사실이 로그에 남는다(종전엔 이 경로에 로그가 전혀 없어
- * 호가가 체결가로 기록되는 것을 아무도 몰랐다).
+ * **주문 자체는 이미 접수 성공**이므로 절대 throw 하지 않는다. 확정하지 못하면 `null` 이고, 호출부는 `filled` 를 비운다.
  */
 export async function confirmExecution(p: ConfirmExecutionParams): Promise<ExecutionSnapshot | null> {
     const { attempts, intervalMs } = resolveConfirmBudget(p.defaults, p.budget);
@@ -160,8 +140,8 @@ export async function confirmExecution(p: ConfirmExecutionParams): Promise<Execu
         orderId: p.orderId, exchange: p.exchange,
         attempts, waitedMs: (attempts - 1) * intervalMs, filled: best?.filled ?? 0,
     }, best === null
-        ? `${p.label} ⚠️ 체결 미확인 — 요청 수량/호가로 기록됨(진입가·슬리피지 오차 가능)`
-        : `${p.label} ⚠️ 부분체결 상태로 예산 소진 — 관측된 체결분으로 기록`);
+        ? `${p.label} ⚠️ 체결 미확인 — filled 를 비운 주문을 돌려준다`
+        : `${p.label} ⚠️ 부분체결 상태로 예산 소진 — 관측된 체결분을 돌려준다`);
     return best;
 }
 
@@ -174,9 +154,9 @@ export type TradeLike = Partial<Pick<Trade, 'order' | 'price' | 'amount' | 'cost
 const num = (v: number | null | undefined): number => (Number.isFinite(v as number) ? (v as number) : 0);
 
 /**
- * **체결내역 목록**만 제공하는 증권사용 probe 팩토리 (KIS·KB증권).
+ * **체결내역 목록**만 제공하는 증권사용 probe 팩토리 (KB증권).
  *
- * 이들은 "주문 1건 조회"가 없고 계좌 체결내역만 준다. 그래서 주문 id 로 걸러 합산해야 한다:
+ * KB증권은 "주문 1건 조회"가 없고 계좌 체결내역만 준다. 그래서 주문 id 로 걸러 합산해야 한다:
  * **분할체결이면 같은 주문의 행이 여러 개**라, 첫 행만 집으면(`find`) 수량·단가가 실제보다
  * 작게 기록된다. 수량 가중으로 합산하고 요청 수량을 다 채웠을 때만 종료로 본다 —
  * 체결내역에는 "이 주문 끝났다"는 신호가 없기 때문이다.
@@ -196,8 +176,7 @@ export function tradeListProbe(params: {
 
         const filled = rows.reduce((a, t) => a + num(t.amount), 0);
         if (!(filled > 0)) {
-            // 우리 주문의 행이 **있는데** 수량이 0 이면 "아직 미체결" 이 아니라 **필드명 불일치**다
-            // (KB증권 클래스가 실제로 이 상태였는데 로그가 전혀 없어 알아채지 못했다 — 그냥 null 이었다). 원본 응답(`info`)의 키만 남긴다.
+            // 우리 주문의 행이 **있는데** 수량이 0 이면 "아직 미체결" 이 아니라 **필드명 불일치**다. 원본 응답(`info`)의 키만 남긴다.
             if (rows.length > 0 && !zeroQtyWarned) {
                 zeroQtyWarned = true;
                 const raw = rows[0].info;
