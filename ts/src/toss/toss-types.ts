@@ -5,6 +5,7 @@
  * `toss.ts` 의 `parse*` 메서드가 맡고, 이 파일은 응답 원본의 모양과 시장 판정·수수료 계산 같은 순수 함수만 둔다.
  */
 
+import { isKrxDomesticCode } from '../broker-krx-code';
 import { krxSellTaxRate } from '../krx-sell-tax';
 
 // ============ 상수 ============
@@ -28,15 +29,9 @@ export { krxSellTaxRate };
 /** 종목의 시장 구분. */
 export type TossMarketCountry = 'KR' | 'US';
 
-/**
- * 국내 종목코드의 모양: 6자리이고 첫 글자가 숫자, 나머지는 숫자나 영문 대문자다(`005930`, 신형 영숫자 코드 `0101N0`).
- * 미국 티커는 숫자로 시작하지 않으므로 이 모양으로 국내와 갈린다.
- */
-const KRX_CODE_SHAPE = /^\d[0-9A-Za-z]{5}$/;
-
-/** 종목 심볼(`005930`, `005930/KRW`, `AAPL`)의 시장. 종목코드의 모양만 본다. */
+/** 종목 심볼(`005930`, `005930/KRW`, `AAPL`)의 시장. 종목코드의 모양만 본다(`isKrxDomesticCode`). */
 export function tossMarketCountry(symbol: string): TossMarketCountry {
-    return KRX_CODE_SHAPE.test(symbol.split('/')[0]) ? 'KR' : 'US';
+    return isKrxDomesticCode(symbol.split('/')[0]) ? 'KR' : 'US';
 }
 
 // ============ 수수료 ============

@@ -51,8 +51,8 @@ const tokenOk = () => {
 type UsMode = 'ok' | 'empty' | 'timeout' | 'business';
 let usMode: UsMode = 'ok';
 let depositFails = false;
-/** 국내 1순위 계좌자산평가(SSQM2952). ok=삼성전자 10주, empty=성공했지만 행 없음, timeout=연결 타임아웃 */
-type AssetEvalMode = 'ok' | 'empty' | 'timeout';
+/** 국내 1순위 계좌자산평가(SSQM2952). ok=삼성전자 10주, alnum=삼성전자와 신형 영숫자 코드 ETF, empty=성공했지만 행 없음, timeout=연결 타임아웃 */
+type AssetEvalMode = 'ok' | 'alnum' | 'empty' | 'timeout';
 let assetEvalMode: AssetEvalMode = 'ok';
 /** 국내 폴백 보유주식(SSQM1801). none=0건, ok=삼성전자 10주, filtered=종목코드 없는 1행(전부 걸러짐), endless=연속조회가 끝나지 않음 */
 type HoldingRowsMode = 'none' | 'ok' | 'filtered' | 'endless';
@@ -82,6 +82,9 @@ function route() {
         }
         if (tr === KBSEC_TR.ASSET_EVAL.toLowerCase()) {
             if (assetEvalMode === 'timeout') throw connectTimeout();
+            if (assetEvalMode === 'alnum') {
+                return jsonOk({ Record2: [...DOMESTIC_ASSET_EVAL.Record2, { is_cd: 'A0193L0', is_nm: '인버스2X', ec_q: '7', val_amt: '70000', now_prc: '10000' }] });
+            }
             return jsonOk(assetEvalMode === 'empty' ? {} : DOMESTIC_ASSET_EVAL);
         }
         if (tr === KBSEC_TR.HOLDINGS.toLowerCase()) {
@@ -295,6 +298,16 @@ describe('KB fetchBalance — 국내 보유의 완전성', () => {
 
         expect(b.info.readStatus).toBe('PARTIAL');
         expect(b.info.unreadMarkets).toEqual(['KR']);
+    });
+
+    it('A 접두 신형 영숫자 코드(A0193L0)도 국내 보유로 담는다 — 해외로 분류해 건너뛰면 COMPLETE 인 채 보유가 빠진다', async () => {
+        assetEvalMode = 'alnum';
+
+        const b = await makeService().fetchBalance();
+
+        expect(b.info.readStatus).toBe('COMPLETE');
+        expect(codesOf(b)).toEqual(expect.arrayContaining(['005930', '0193L0']));
+        expect((b['0193L0'] as { total: number }).total).toBe(7);
     });
 
     it('국내와 해외를 모두 못 읽으면 두 시장이 다 표시된다', async () => {

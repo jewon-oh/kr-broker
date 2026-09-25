@@ -45,19 +45,13 @@ describe('isOverseasSymbol — KRX 코드 (6자리 숫자) vs 해외', () => {
     });
 });
 
-describe('isKrxDomesticCode — 6자리 숫자 + 신형 영숫자 화이트리스트', () => {
-    it('6자리 숫자·큐레이션 영숫자만 국내 코드', () => {
-        expect(isKrxDomesticCode('005930')).toBe(true);
-        expect(isKrxDomesticCode('069500')).toBe(true);
-        expect(isKrxDomesticCode('0193L0')).toBe(true);
-        expect(isKrxDomesticCode('0197X0')).toBe(true);
+describe('isKrxDomesticCode — 숫자로 시작하는 6자리 영숫자', () => {
+    it('6자리 숫자와 신형 영숫자 코드는 목록에 없어도 국내 코드다', () => {
+        for (const code of ['005930', '069500', '0193L0', '0197X0', '0101N0', '0193L1']) expect(isKrxDomesticCode(code), code).toBe(true);
     });
 
-    it('화이트리스트는 정확 일치만 — 임의 6자리 영숫자는 확장 안 됨 (오분류 방지)', () => {
-        expect(isKrxDomesticCode('0193L1')).toBe(false); // 인접 코드도 화이트리스트 밖
-        expect(isKrxDomesticCode('AAPL')).toBe(false);
-        expect(isKrxDomesticCode('NVDD')).toBe(false);
-        expect(isKrxDomesticCode('12345')).toBe(false); // 5자리
+    it('해외 티커와 모양이 다른 값은 국내가 아니다', () => {
+        for (const code of ['AAPL', 'NVDD', 'BRK.B', 'A00593', '12345', '1234567', '0193L', '']) expect(isKrxDomesticCode(code), code).toBe(false);
     });
 });
 

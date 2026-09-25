@@ -3,9 +3,9 @@
 응답 원본의 모양(타입 선언)은 옮기지 않았다. Python 판은 응답을 사전 그대로 다루고, 키 이름은 TypeScript 판의 타입 선언과 같다.
 """
 
-import re
 from typing import Optional
 
+from kr_broker.broker_krx_code import is_krx_domestic_code
 from kr_broker.krx_sell_tax import krx_sell_tax_rate
 
 # 국내주식 위탁수수료율 기본값(근사). 실제 요율은 `GET /commissions` 로 받는다.
@@ -20,13 +20,9 @@ TOSS_HIGH_VALUE_THRESHOLD_KRW = 100_000_000
 # 환율을 알 수 없을 때 쓰는 고액주문 확인 기준(달러). 1억원을 보수적인 환율(1달러당 약 1,430원)로 나눈 값이다.
 TOSS_HIGH_VALUE_THRESHOLD_USD = 70_000
 
-# 국내 종목코드의 모양: 6자리이고 첫 글자가 숫자, 나머지는 숫자나 영문이다. 미국 티커는 숫자로 시작하지 않는다.
-_KRX_CODE_SHAPE = re.compile(r'[0-9][0-9A-Za-z]{5}')
-
-
 def toss_market_country(symbol: str) -> str:
-    """종목 심볼(`005930`, `005930/KRW`, `AAPL`)의 시장(`'KR'`·`'US'`). 종목코드의 모양만 본다."""
-    return 'KR' if _KRX_CODE_SHAPE.fullmatch(symbol.split('/')[0]) else 'US'
+    """종목 심볼(`005930`, `005930/KRW`, `AAPL`)의 시장(`'KR'`·`'US'`). 종목코드의 모양만 본다(`is_krx_domestic_code`)."""
+    return 'KR' if is_krx_domestic_code(symbol.split('/')[0]) else 'US'
 
 
 def get_toss_effective_fee_rate(market: str, side: str, at_ms: Optional[int] = None, brokerage: Optional[float] = None,
