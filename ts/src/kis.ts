@@ -4200,7 +4200,7 @@ export class kis extends Exchange {
     }
 
     /** 실시간 시세 스트림을 만든다. 이 인스턴스의 접속키와 모의 여부를 쓴다. 구독은 반환값의 `start(subs)` 로 시작한다. */
-    createPriceStream(handlers: Pick<KisPriceWsOptions, 'onTrade' | 'onOrderbook'> = {}): KisPriceWs {
+    createPriceStream(handlers: Pick<KisPriceWsOptions, 'onTrade' | 'onOrderbook' | 'onSubscribeError'> = {}): KisPriceWs {
         return new KisPriceWs({
             getApprovalKey: () => this.getApprovalKey(),
             isVirtual: this.isSandboxModeEnabled,
@@ -4240,13 +4240,17 @@ export class kis extends Exchange {
     private readonly watchKeys = new Map<string, string>();
     /** 체결통보로 쌓은 주문 상태(주문번호 → 주문). 통보는 한 건씩 오므로 누적 체결 수량을 여기서 더한다 */
     private readonly watchOrderState = new Map<string, Order>();
+    /** 원주문에 반영한 정정·취소 통보의 주문번호. 같은 번호로 통보가 다시 와도 한 번만 반영한다 */
+    private readonly watchRevisionIds = new Set<string>();
+    /** `watchOrders`가 기다리는 해시(`orders`, `orders:<심볼>`). 체결통보 구독이 거부되면 모두 거절한다 */
+    private readonly watchOrderHashes = new Set<string>(['orders']);
 
     private ensureWatchStream(): KisRealtimeStream {
         this.watchStream ??= this.createRealtimeStream(
             (record) => this.onWatchRecord(record),
             (trId, trKey, message) => {
                 const symbol = this.watchKeys.get(trKey);
-                const hashes = symbol === undefined ? ['orders'] : [`ticker:${symbol}`, `trades:${symbol}`, `orderbook:${symbol}`];
+                const hashes = symbol === undefined ? [...this.watchOrderHashes] : [`ticker:${symbol}`, `trades:${symbol}`, `orderbook:${symbol}`];
                 this.watchHub.reject(new ExchangeError(`${this.id} 실시간 구독이 거부됐다 ${trId} ${trKey}: ${message}`), hashes);
             },
         );
@@ -4273,19 +4277,19 @@ export class kis extends Exchange {
     }
 
     /** 다음 시세. 국내는 체결 TR 이 시가, 고가, 저가, 누적거래량까지 준다. 해외는 지연체결가(`HDFSCNT0`)다. */
-    async watchTicker(symbol: string, _params: Dict = {}): Promise<Ticker> {
-        return await this.watchHub.next<Ticker>(`ticker:${await this.watchSubscribe(symbol, 'trade')}`);
+    async watchTicker(symbol: string, params: Dict = {}): Promise<Ticker> {
+        return await this.watchHub.next<Ticker>(`ticker:${await this.watchSubscribe(symbol, 'trade')}`, params.signal);
     }
 
     /** 새 체결. 지난 호출 뒤로 받은 체결을 한꺼번에 돌려준다. */
-    async watchTrades(symbol: string, since: Int = undefined, limit: Int = undefined, _params: Dict = {}): Promise<Trade[]> {
-        const trades = await this.watchHub.nextBatch<Trade>(`trades:${await this.watchSubscribe(symbol, 'trade')}`);
+    async watchTrades(symbol: string, since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<Trade[]> {
+        const trades = await this.watchHub.nextBatch<Trade>(`trades:${await this.watchSubscribe(symbol, 'trade')}`, params.signal);
         return this.filterBySinceLimit(trades as unknown as Dict[], since, limit, 'timestamp', true) as unknown as Trade[];
     }
 
     /** 다음 호가. 국내는 10단계, 해외 지연호가는 1단계다. */
-    async watchOrderBook(symbol: string, limit: Int = undefined, _params: Dict = {}): Promise<OrderBook> {
-        const book = await this.watchHub.next<OrderBook>(`orderbook:${await this.watchSubscribe(symbol, 'book')}`);
+    async watchOrderBook(symbol: string, limit: Int = undefined, params: Dict = {}): Promise<OrderBook> {
+        const book = await this.watchHub.next<OrderBook>(`orderbook:${await this.watchSubscribe(symbol, 'book')}`, params.signal);
         return limit === undefined ? book : { ...book, bids: book.bids.slice(0, limit), asks: book.asks.slice(0, limit) };
     }
 
@@ -4293,12 +4297,14 @@ export class kis extends Exchange {
      * 주문 변화(체결통보). 국내(`H0STCNI0`)와 해외(`H0GSCNI0`) 체결통보를 구독한다. 모의투자는 `H0STCNI9`, `H0GSCNI9`다. 구독 키가 HTS ID 라
      * `options.htsId` 가 필요하다. 통보 필드 해석은 공식 예제의 설명을 따랐고 실계좌로는 확인하지 못했다.
      */
-    async watchOrders(symbol: Str = undefined, since: Int = undefined, limit: Int = undefined, _params: Dict = {}): Promise<Order[]> {
+    async watchOrders(symbol: Str = undefined, since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<Order[]> {
         const htsId = this.htsId('watchOrders');
         const stream = this.ensureWatchStream();
         stream.subscribe(this.isSandboxModeEnabled ? 'H0STCNI9' : 'H0STCNI0', htsId);
         stream.subscribe(this.isSandboxModeEnabled ? 'H0GSCNI9' : 'H0GSCNI0', htsId);
-        const orders = await this.watchHub.nextBatch<Order>(symbol === undefined ? 'orders' : `orders:${this.instrumentOf(symbol).symbol}`);
+        const hash = symbol === undefined ? 'orders' : `orders:${this.instrumentOf(symbol).symbol}`;
+        this.watchOrderHashes.add(hash);
+        const orders = await this.watchHub.nextBatch<Order>(hash, params.signal);
         return this.filterBySinceLimit(orders as unknown as Dict[], since, limit, 'timestamp', true) as unknown as Order[];
     }
 
@@ -4308,6 +4314,7 @@ export class kis extends Exchange {
         this.watchStream = undefined;
         this.watchKeys.clear();
         this.watchOrderState.clear();
+        this.watchRevisionIds.clear();
         this.watchHub.reject(new ExchangeClosedByUser(`${this.id} 실시간 연결을 닫았다`));
     }
 
@@ -4381,7 +4388,8 @@ export class kis extends Exchange {
 
     /**
      * 체결통보 한 건을 주문으로 쌓는다. 체결여부(`cntg_yn`) 2 가 체결 통보이고 1 은 접수·정정·취소·거부 통보다. 매도매수구분은 01 매도, 02 매수,
-     * 정정구분(`rctf_cls`) 2 는 취소, 거부여부(`rfus_yn`) Y 는 거부다.
+     * 정정구분(`rctf_cls`)은 1 정정, 2 취소이고 거부여부(`rfus_yn`)는 1 이 거부다. 체결수량(`cntg_qty`)과 체결단가(`cntg_unpr`) 자리에는 체결 통보면
+     * 체결 값이, 접수 통보면 주문(정정, 취소) 수량과 단가가 온다(공식 예제의 필드 설명).
      */
     private onOrderNotice(trId: string, f: Record<string, string>): void {
         const id = f.oder_no;
@@ -4389,22 +4397,68 @@ export class kis extends Exchange {
         const overseas = trId.startsWith('H0GS');
         const code = f.stck_shrn_iscd ?? '';
         const symbol = overseas ? this.instrumentOf(code).symbol : `${code}/KRW`;
-        const previous = this.watchOrderState.get(id);
-        const fill = f.cntg_yn === '2' ? this.safeNumber(f, 'cntg_qty') ?? 0 : 0;
-        const amount = this.safeNumber(f, 'oder_qty') ?? previous?.amount;
-        const filled = (previous?.filled ?? 0) + fill;
         const stamp = this.kstStamp(kstYmd(this.milliseconds()), f.stck_cntg_hour);
-        const status = f.rfus_yn === 'Y' ? 'rejected'
+        const positive = (key: string): number | undefined => {
+            const value = this.safeNumber(f, key);
+            return value !== undefined && value > 0 ? value : undefined;
+        };
+        const executed = f.cntg_yn === '2';
+        const rejected = f.rfus_yn === '1';
+        const quantity = positive('cntg_qty');
+        // 해외 체결단가는 소수점 없이 오면 미국 종목 기준 소수 넷째 자리까지다(공식 예제: 001480100 은 148.01).
+        const unitPrice = f.cntg_unpr === undefined || f.cntg_unpr === '' ? undefined
+            : overseas && !f.cntg_unpr.includes('.') ? Precise.stringDiv(f.cntg_unpr, '10000') : f.cntg_unpr;
+        // 정정·취소 통보의 `ooder_no` 는 원주문번호로 본다(필드 이름과 공식 예제 설명에 기댄 추정이다).
+        const original = !executed && !rejected && (f.rctf_cls === '1' || f.rctf_cls === '2') && f.ooder_no ? f.ooder_no : undefined;
+        if (original !== undefined) {
+            if (!this.watchRevisionIds.has(id)) {
+                this.watchRevisionIds.add(id);
+                this.reduceWatchOrder(original, quantity ?? positive('oder_qty'), symbol, stamp, f);
+            }
+            // 취소 통보의 주문번호는 취소 요청의 번호라 주문으로 쌓지 않는다. 정정 통보의 주문번호는 새 주문이다.
+            if (f.rctf_cls === '2') return;
+        }
+        const previous = this.watchOrderState.get(id);
+        const fill = executed ? quantity ?? 0 : 0;
+        const amount = positive('oder_qty') ?? (executed ? undefined : quantity) ?? previous?.amount;
+        const previousFilled = previous?.filled ?? 0;
+        const filled = previousFilled + fill;
+        const before = previous?.remaining ?? (amount === undefined ? undefined : amount - previousFilled);
+        const remaining = before === undefined ? undefined : Math.max(before - fill, 0);
+        // 체결 금액은 체결 통보의 체결단가로 쌓는다. 앞선 체결의 금액을 모르면 쌓지 않는다.
+        const previousCost = previousFilled === 0 ? '0' : previous?.cost === undefined ? undefined : numberToString(previous.cost);
+        const cost = fill === 0 ? previousCost
+            : previousCost === undefined || unitPrice === undefined ? undefined : Precise.stringAdd(previousCost, Precise.stringMul(numberToString(fill), unitPrice));
+        const status = rejected ? 'rejected'
             : f.rctf_cls === '2' ? 'canceled'
-                : amount !== undefined && amount > 0 && filled >= amount ? 'closed' : 'open';
+                : remaining !== undefined && remaining <= 0 ? 'closed' : 'open';
         const order = this.safeOrder({
-            id, symbol, ...stamp, side: f.seln_byov_cls === '01' ? 'sell' : f.seln_byov_cls === '02' ? 'buy' : undefined, amount, filled,
-            price: this.safeNumber(f, 'oder_prc') ?? previous?.price, status, lastTradeTimestamp: fill > 0 ? stamp.timestamp : previous?.lastTradeTimestamp,
-            trades: [], info: f,
+            id, symbol, ...stamp, side: f.seln_byov_cls === '01' ? 'sell' : f.seln_byov_cls === '02' ? 'buy' : undefined, amount, filled, remaining, cost,
+            price: this.safeNumber(f, 'oder_prc') ?? (executed ? undefined : this.parseNumber(unitPrice)) ?? previous?.price, status,
+            lastTradeTimestamp: fill > 0 ? stamp.timestamp : previous?.lastTradeTimestamp, trades: [], info: f,
         });
         this.watchOrderState.set(id, order);
         this.watchHub.push('orders', order);
         this.watchHub.push(`orders:${symbol}`, order);
+    }
+
+    /**
+     * 정정·취소 통보를 원주문에 반영한다. 정정·취소 수량만큼 잔량을 줄이고, 잔량이 남지 않으면 `canceled` 다(정정한 수량은 새 주문번호로 옮겨 간다).
+     * 줄일 수량이나 원주문의 잔량을 모르면 잔량을 모두 줄인 것으로 본다.
+     */
+    private reduceWatchOrder(id: string, quantity: number | undefined, symbol: string, stamp: KrTimestamped, f: Record<string, string>): void {
+        const previous = this.watchOrderState.get(id);
+        const before = previous?.remaining ?? (previous?.amount === undefined ? undefined : previous.amount - (previous.filled ?? 0));
+        const remaining = before === undefined || quantity === undefined ? 0 : Math.max(before - quantity, 0);
+        const order = this.safeOrder({
+            id, symbol: previous?.symbol ?? symbol, ...stamp,
+            side: previous?.side ?? (f.seln_byov_cls === '01' ? 'sell' : f.seln_byov_cls === '02' ? 'buy' : undefined),
+            amount: previous?.amount, filled: previous?.filled, remaining, cost: previous?.cost, price: previous?.price,
+            status: remaining > 0 ? 'open' : 'canceled', lastTradeTimestamp: previous?.lastTradeTimestamp, trades: [], info: f,
+        });
+        this.watchOrderState.set(id, order);
+        this.watchHub.push('orders', order);
+        this.watchHub.push(`orders:${order.symbol}`, order);
     }
 
     // ============ 오류 ============

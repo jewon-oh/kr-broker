@@ -29,7 +29,8 @@
  * 2. `error` 만 오고 `close` 는 영영 안 와도, `error` 핸들러가 **직접** 재연결을 예약한다
  *    (close 핸들러가 붙어 있는지, `scheduleReconnect` 가 정말 호출되는지는 라이브 조사만으로는
  *    확인할 수 없었으므로 테스트로 고정한다).
- * 3. 그 재연결 예약 과정에서 `ws.close` 를 부르지 않는다(무한 재귀 함정 회피).
+ * 3. `error` 처리기는 `ws.close` 를 부르지 않는다(무한 재귀 함정 회피). 다음 `connect()` 가 옛 소켓을 떼어 낸 뒤 한 번 닫고,
+ *    그 `close()` 가 동기적으로 내는 `error` 는 떼어 낸 소켓의 이벤트라 무시한다.
  * 4. `close` 이벤트가 오는 경로(핸드셰이크 이후 실패 등)도 여전히 `code`/`reason`/
  *    `wasClean` 을 싣고 재연결을 예약한다 — 둘 다 동작해야 한다.
  *
@@ -53,6 +54,8 @@ class FakeWs {
     private readonly listeners = new Map<string, FakeListener[]>();
 
     closeCallCount = 0;
+    /** undici 처럼 `close()` 가 `error` 를 동기적으로 내게 한다 */
+    errorOnClose = false;
 
     constructor(public readonly url: string) {
         FakeWs.instances.push(this);
@@ -65,7 +68,10 @@ class FakeWs {
     }
 
     send(): void { /* no-op */ }
-    close(): void { this.closeCallCount++; }
+    close(): void {
+        this.closeCallCount++;
+        if (this.errorOnClose) this.emit('error', { message: 'Connection was closed before it was established.' });
+    }
 
     /** 테스트 전용 — 등록된 리스너에 이벤트를 전달한다. */
     emit(type: string, ev: Record<string, unknown> = {}): void {
@@ -111,7 +117,7 @@ describe('KisPriceWs — error/close 이벤트 필드', () => {
         kws.stop();
     });
 
-    it('close 가 영영 안 와도 error 만으로 재연결이 걸린다 — close() 는 안 부른다', async () => {
+    it('close 가 영영 안 와도 error 만으로 재연결이 걸린다 — error 처리기는 close() 를 안 부른다', async () => {
         const getApprovalKey = vi.fn().mockResolvedValue('approval-key');
         const kws = new KisPriceWs({ getApprovalKey, isVirtual: true });
         kws.start([]);
@@ -119,6 +125,7 @@ describe('KisPriceWs — error/close 이벤트 필드', () => {
 
         expect(getApprovalKey).toHaveBeenCalledTimes(1);
         const ws = FakeWs.instances[0];
+        ws.errorOnClose = true;
 
         // close 는 이 테스트 끝까지 한 번도 전달하지 않는다 — 실측이 재현한 그 상태 그대로.
         ws.emit('error', {
@@ -126,15 +133,20 @@ describe('KisPriceWs — error/close 이벤트 필드', () => {
             message: 'Received network error or non-101 status code.',
         });
 
+        // 무한 재귀 함정: 이 상태의 소켓에 close() 를 부르면 동기 재귀로 error 가 급증했다
+        // (실측). error 처리기가 재연결을 예약할 때 ws.close() 를 부르지 않아야 한다.
+        expect(ws.closeCallCount, 'error 처리기가 ws.close() 를 불렀다 — 무한 재귀 위험').toBe(0);
+
         // RECONNECT_BASE_MS = 2_000 — error 핸들러가 직접 scheduleReconnect() 를 부르지
         // 않으면(close 전용 배선이면) 이 시점에도 getApprovalKey 가 그대로 1회다.
         await vi.advanceTimersByTimeAsync(2_000);
         expect(getApprovalKey, 'error 만으로는 재연결이 걸리지 않았다 — close 전용 배선으로 되돌아갔다')
             .toHaveBeenCalledTimes(2);
 
-        // 무한 재귀 함정: 이 상태의 소켓에 close() 를 부르면 동기 재귀로 error 가 급증했다
-        // (실측). error 핸들러가 재연결을 예약할 때 ws.close() 를 부르지 않아야 한다.
-        expect(ws.closeCallCount, 'error 핸들러가 ws.close() 를 불렀다 — 무한 재귀 위험').toBe(0);
+        // 재연결은 옛 소켓을 한 번 닫는다. 그때 오는 error 는 떼어 낸 소켓의 것이라 되풀이되거나 재연결을 더 걸지 않는다.
+        expect(ws.closeCallCount).toBe(1);
+        await vi.advanceTimersByTimeAsync(30_000);
+        expect(getApprovalKey).toHaveBeenCalledTimes(2);
 
         kws.stop();
     });

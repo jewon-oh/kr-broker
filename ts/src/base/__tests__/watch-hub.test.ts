@@ -2,7 +2,7 @@
  * @fileoverview `WatchHub` — ccxt pro 의 `watch*` 의미(호출마다 다음 갱신)를 구현하는 대기열.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 import { WatchHub } from '../watch-hub';
 
@@ -49,5 +49,69 @@ describe('WatchHub', () => {
 
         hub.reject(new Error('전부'));
         await expect(b).rejects.toThrow('전부');
+    });
+});
+
+describe('WatchHub — AbortSignal', () => {
+    it('신호가 오면 그 대기자만 AbortError 로 거절하고, 같은 해시의 다른 대기자는 계속 기다린다', async () => {
+        const hub = new WatchHub();
+        const controller = new AbortController();
+        const aborted = hub.next<number>('ticker:X', controller.signal);
+        const other = hub.next<number>('ticker:X');
+
+        controller.abort();
+        hub.resolve('ticker:X', 1);
+
+        await expect(aborted).rejects.toMatchObject({ name: 'AbortError' });
+        expect(await other).toBe(1);
+    });
+
+    it('신호의 reason 을 cause 로 싣는다', async () => {
+        const hub = new WatchHub();
+        const controller = new AbortController();
+        const reason = new Error('시간 초과');
+        const pending = hub.next('ticker:X', controller.signal);
+
+        controller.abort(reason);
+
+        await expect(pending).rejects.toMatchObject({ name: 'AbortError', cause: reason });
+    });
+
+    it('포기한 nextBatch 대기자는 항목을 가져가지 않는다. 항목은 쌓여 다음 호출이 받는다', async () => {
+        const hub = new WatchHub();
+        const controller = new AbortController();
+        const abandoned = hub.nextBatch('trades:X', controller.signal);
+        controller.abort();
+        await expect(abandoned).rejects.toMatchObject({ name: 'AbortError' });
+
+        hub.push('trades:X', 'a');
+
+        expect(await hub.nextBatch('trades:X')).toEqual(['a']);
+    });
+
+    it('이미 중단된 신호면 대기자를 등록하지 않고 곧바로 거절하며, 쌓인 항목은 그대로 둔다', async () => {
+        const hub = new WatchHub();
+        hub.push('trades:X', 'a');
+
+        await expect(hub.nextBatch('trades:X', AbortSignal.abort())).rejects.toMatchObject({ name: 'AbortError' });
+        await expect(hub.next('ticker:X', AbortSignal.abort())).rejects.toMatchObject({ name: 'AbortError' });
+
+        hub.push('trades:X', 'b');
+        expect(await hub.nextBatch('trades:X')).toEqual(['a', 'b']);
+    });
+
+    it('값을 받거나 거절되면 신호의 abort 처리기를 뗀다', async () => {
+        const hub = new WatchHub();
+        const controller = new AbortController();
+        const removed = vi.spyOn(controller.signal, 'removeEventListener');
+
+        const resolved = hub.next('ticker:X', controller.signal);
+        hub.resolve('ticker:X', 1);
+        await resolved;
+        const rejected = hub.next('ticker:X', controller.signal);
+        hub.reject(new Error('닫음'));
+        await expect(rejected).rejects.toThrow('닫음');
+
+        expect(removed.mock.calls.filter(([type]) => type === 'abort')).toHaveLength(2);
     });
 });

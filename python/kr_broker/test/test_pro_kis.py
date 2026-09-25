@@ -173,6 +173,15 @@ def test_split_short_payload_names_only_present_values() -> None:
     assert record.fields is not None and len(record.fields) == 2
 
 
+def test_split_uses_the_quotient_when_values_divide_evenly_by_count() -> None:
+    # KIS 가 필드를 뒤에 더해도 두 번째 건이 어긋나지 않는다(TS 판과 같다).
+    columns = KIS_REALTIME_COLUMNS['H0IFCNT0']
+    one = [str(i) for i in range(len(columns))] + ['extra']
+    records = split_kis_realtime_records('H0IFCNT0', 2, '^'.join(one + [f'b{v}' for v in one]))
+    assert records[1].fields is not None and records[1].fields[columns[0]] == 'b0'
+    assert len(records[1].values) == len(columns) + 1
+
+
 def test_decrypt_kis_payload_is_aes_cbc_with_key_and_iv() -> None:
     assert decrypt_kis_payload(encrypt('HTSID^12345678^0000117057'), KEY, IV) == 'HTSID^12345678^0000117057'
 
@@ -195,6 +204,25 @@ class StreamRig:
         self.stream.subscribe('H0IFCNT0', '101W12')
         await settle(10)
         return self.connector.last
+
+
+def test_stream_reconnects_an_existing_subscription_in_a_new_event_loop() -> None:
+    """앞선 `asyncio.run` 이 끝나며 연결 작업이 취소됐다. 같은 구독을 다시 부르면 새로 연결해 등록 프레임을 보낸다."""
+    rig = StreamRig()
+
+    async def first() -> None:
+        await rig.open()
+
+    async def second() -> FakeWs:
+        rig.stream.subscribe('H0IFCNT0', '101W12')
+        await settle(10)
+        return rig.connector.last
+
+    asyncio.run(first())
+    ws = asyncio.run(second())
+    assert rig.connector.calls == 2
+    assert [f['body']['input']['tr_id'] for f in frames(ws)] == ['H0IFCNT0']
+    asyncio.run(rig.stream.stop())
 
 
 def test_stream_connects_to_sandbox_and_sends_register_and_unregister_frames() -> None:
@@ -318,6 +346,44 @@ def test_stream_backs_off_from_2s_to_30s_and_resubscribes_after_reconnect() -> N
     asyncio.run(main())
 
 
+def test_stream_keeps_delivering_records_when_on_record_raises(caplog: pytest.LogCaptureFixture) -> None:
+    async def main() -> None:
+        seen: List[str] = []
+
+        def on_record(record: KisRealtimeRecord) -> None:
+            seen.append(record.values[0])
+            if len(seen) == 1:
+                raise RuntimeError('boom')
+
+        connector = FakeConnector()
+        stream = KisRealtimeStream(ApprovalKey(), True, connector, on_record, None, RecordingSleep())
+        stream.subscribe('H0XXXXX0', 'K')
+        await settle(10)
+        connector.last.feed('0|H0XXXXX0|002|a^b^c^d')
+        await settle()
+        assert seen == ['a', 'c']
+        await stream.stop()
+
+    caplog.set_level(logging.WARNING, logger='kr_broker')
+    asyncio.run(main())
+    assert '[KisRealtimeStream] on_record 처리 실패 (trId=H0XXXXX0)' in caplog.messages
+
+
+def test_stream_forgets_a_rejected_subscription_so_subscribing_again_resends_it() -> None:
+    async def main() -> None:
+        rig = StreamRig()
+        ws = await rig.open()
+        ws.feed(json.dumps({'header': {'tr_id': 'H0IFCNT0', 'tr_key': '101W12'}, 'body': {'rt_cd': '1', 'msg1': 'MAX SUBSCRIBE OVER'}}))
+        await settle()
+        rig.stream.subscribe('H0IFCNT0', '101W12')
+        await settle()
+        assert [(f['header']['tr_type'], f['body']['input']['tr_id']) for f in frames(ws)] == [('1', 'H0IFCNT0'), ('1', 'H0IFCNT0')]
+        assert rig.errors == [('H0IFCNT0', '101W12', 'MAX SUBSCRIBE OVER')]
+        await rig.stream.stop()
+
+    asyncio.run(main())
+
+
 def test_create_realtime_stream_follows_sandbox_mode() -> None:
     stream = new_kis(sandbox=False).create_realtime_stream(lambda record: None)
     assert isinstance(stream, KisRealtimeStream)
@@ -407,6 +473,68 @@ def test_price_ws_update_subs_registers_only_new_subscriptions() -> None:
     asyncio.run(main())
 
 
+def test_price_ws_update_subs_unsubscribes_removed_subscriptions() -> None:
+    async def main() -> None:
+        connector = FakeConnector()
+        ws = KisPriceWs(ApprovalKey(), True, connector, sleep=RecordingSleep())
+        ws.start([('H0STCNT0', '005930'), ('H0STCNT0', '000660')])
+        await settle(10)
+        ws.update_subs([('H0STCNT0', '000660'), ('H0STASP0', '000660')])
+        await settle()
+        assert [(f['header']['tr_type'], f['body']['input']['tr_id'], f['body']['input']['tr_key']) for f in frames(connector.last)] == [
+            ('1', 'H0STCNT0', '005930'), ('1', 'H0STCNT0', '000660'), ('2', 'H0STCNT0', '005930'), ('1', 'H0STASP0', '000660'),
+        ]
+        await ws.stop()
+
+    asyncio.run(main())
+
+
+def test_price_ws_reports_subscribe_rejections_to_the_log_and_the_callback(caplog: pytest.LogCaptureFixture) -> None:
+    async def main() -> List[Tuple[str, str, str]]:
+        errors: List[Tuple[str, str, str]] = []
+        connector = FakeConnector()
+        ws = KisPriceWs(ApprovalKey(), True, connector, sleep=RecordingSleep(), on_subscribe_error=lambda *args: errors.append(args))
+        silent = KisPriceWs(ApprovalKey(), True, connector, sleep=RecordingSleep())
+        ws.start([('H0STCNT0', '005930')])
+        await settle(10)
+        silent.start([])
+        await settle(10)
+        ok = json.dumps({'header': {'tr_id': 'H0STCNT0', 'tr_key': '005930'}, 'body': {'rt_cd': '0', 'msg1': 'SUBSCRIBE SUCCESS'}})
+        over = json.dumps({'header': {'tr_id': 'H0STCNT0', 'tr_key': '000660'}, 'body': {'rt_cd': '1', 'msg1': 'MAX SUBSCRIBE OVER'}})
+        connector.sockets[0].feed(ok)
+        connector.sockets[0].feed(over)
+        connector.sockets[1].feed(over)
+        await settle()
+        await ws.stop()
+        await silent.stop()
+        return errors
+
+    caplog.set_level(logging.WARNING, logger='kr_broker')
+    assert asyncio.run(main()) == [('H0STCNT0', '000660', 'MAX SUBSCRIBE OVER')]
+    assert caplog.messages.count('[KisPriceWs] 구독 거부 (trId=H0STCNT0, trKey=000660, message=MAX SUBSCRIBE OVER)') == 2
+
+
+def test_price_ws_keeps_delivering_records_when_a_callback_raises() -> None:
+    async def main() -> None:
+        seen: List[float] = []
+
+        def on_trade(symbol: str, last: float, change_pct: float) -> None:
+            seen.append(last)
+            if len(seen) == 1:
+                raise RuntimeError('boom')
+
+        connector = FakeConnector()
+        ws = KisPriceWs(ApprovalKey(), True, connector, on_trade, sleep=RecordingSleep())
+        ws.start([])
+        await settle(10)
+        connector.last.feed('0|H0STCNT0|002|005930^093000^79000^5^100^2.5^000660^093000^180000^5^100^1.5')
+        await settle()
+        assert seen == [79000, 180000]
+        await ws.stop()
+
+    asyncio.run(main())
+
+
 def test_price_ws_warns_when_subscriptions_exceed_the_connection_limit(caplog: pytest.LogCaptureFixture) -> None:
     async def main() -> None:
         ws = KisPriceWs(ApprovalKey(), True, FakeConnector(), sleep=RecordingSleep())
@@ -421,6 +549,13 @@ def test_price_ws_warns_when_subscriptions_exceed_the_connection_limit(caplog: p
 def test_create_price_stream_follows_sandbox_mode() -> None:
     stream = new_kis(sandbox=True).create_price_stream()
     assert isinstance(stream, KisPriceWs) and stream.is_virtual is True and stream.is_connected() is False
+
+
+def test_create_price_stream_passes_on_subscribe_error() -> None:
+    def on_error(tr_id: str, tr_key: str, message: str) -> None:
+        pass
+
+    assert new_kis().create_price_stream(on_subscribe_error=on_error)._on_subscribe_error is on_error
 
 
 # ============ watch_* ============
@@ -590,13 +725,36 @@ def test_watch_orders_marks_rejected_and_canceled_notices() -> None:
         base = {'seln_byov_cls': '01', 'stck_shrn_iscd': '005930', 'oder_qty': '5', 'stck_cntg_hour': '093001', 'cntg_yn': '1', 'cntg_qty': '0'}
         pending = asyncio.ensure_future(rig.ex.watch_orders('005930/KRW'))
         await settle()
-        rig.emit('H0STCNI9', {**base, 'oder_no': 'A1', 'rfus_yn': 'Y', 'rctf_cls': '0'})
+        rig.emit('H0STCNI9', {**base, 'oder_no': 'A1', 'rfus_yn': '1', 'rctf_cls': '0'})
         rig.emit('H0STCNI9', {**base, 'oder_no': 'A2', 'rfus_yn': 'N', 'rctf_cls': '2'})
         first = await pending
         rest = await rig.ex.watch_orders('005930/KRW')
         assert [(o['id'], o['side'], o['status']) for o in first + rest] == [('A1', 'sell', 'rejected'), ('A2', 'sell', 'canceled')]
 
     asyncio.run(main())
+
+
+def test_watch_ticker_reconnects_in_a_new_event_loop() -> None:
+    """앞선 `asyncio.run` 이 끝나며 연결 작업이 취소됐다. 같은 종목을 다시 기다리면 새로 연결해 구독을 등록한다."""
+    ex = new_kis()
+    connector = FakeConnector()
+    ex.create_realtime_stream = lambda on_record, on_error=None: KisRealtimeStream(  # type: ignore[method-assign]
+        ApprovalKey(), True, connector, on_record, on_error, RecordingSleep())
+    columns = KIS_REALTIME_COLUMNS['H0STCNT0']
+
+    async def next_price(price: str) -> Any:
+        pending = asyncio.ensure_future(ex.watch_ticker('005930/KRW'))
+        await settle(10)
+        ws = connector.last
+        assert not ws.closed and [f['body']['input'] for f in frames(ws)] == [{'tr_id': 'H0STCNT0', 'tr_key': '005930'}]
+        fields = {**DOMESTIC_TRADE, 'stck_prpr': price}
+        ws.feed(f"0|H0STCNT0|001|{'^'.join(fields.get(column, '') for column in columns)}")
+        return (await asyncio.wait_for(pending, 1))['last']
+
+    assert asyncio.run(next_price('71000')) == 71000
+    assert asyncio.run(next_price('71100')) == 71100
+    assert connector.calls == 2
+    asyncio.run(ex.close())
 
 
 def test_close_stops_the_stream_rejects_waiters_and_closes_the_http_session() -> None:
@@ -623,5 +781,116 @@ def test_subscribe_rejection_rejects_waiters_of_that_symbol() -> None:
         rig.fail('H0STCNT0', '005930', 'ALREADY IN USE appkey')
         with pytest.raises(ExchangeError, match='ALREADY IN USE appkey'):
             await pending
+
+    asyncio.run(main())
+
+
+# ============ watch_orders 정정·취소와 체결 금액 ============
+
+ACCEPTED = {'oder_no': 'A', 'seln_byov_cls': '02', 'stck_shrn_iscd': '005930', 'oder_qty': '10', 'oder_prc': '71000', 'stck_cntg_hour': '093001',
+            'rfus_yn': '0'}
+
+
+async def _accepted_rig(symbol: Optional[str] = None) -> WatchRig:
+    """접수 통보(주문 A, 10주)를 받은 뒤의 인스턴스."""
+    rig = WatchRig({'htsId': 'MYHTS'})
+    first = asyncio.ensure_future(rig.ex.watch_orders(symbol))
+    await settle()
+    rig.emit('H0STCNI9', {**ACCEPTED, 'cntg_yn': '1', 'cntg_qty': '10', 'rctf_cls': '0'})
+    await first
+    return rig
+
+
+def test_watch_orders_cancel_notice_reduces_the_original_order_and_is_not_stored_itself() -> None:
+    async def main() -> None:
+        rig = await _accepted_rig()
+        rig.emit('H0STCNI9', {**ACCEPTED, 'cntg_yn': '2', 'cntg_qty': '3', 'cntg_unpr': '71000', 'rctf_cls': '0'})
+        rig.emit('H0STCNI9', {**ACCEPTED, 'oder_no': 'B', 'ooder_no': 'A', 'cntg_yn': '1', 'cntg_qty': '7', 'oder_qty': '', 'rctf_cls': '2'})
+        orders = await rig.ex.watch_orders()
+        assert [(o['id'], o['status'], o['filled'], o['remaining']) for o in orders] == [('A', 'open', 3, 7), ('A', 'canceled', 3, 0)]
+
+    asyncio.run(main())
+
+
+def test_watch_orders_amend_notice_moves_the_remainder_to_the_new_order_once() -> None:
+    async def main() -> None:
+        rig = await _accepted_rig('005930/KRW')
+        amend = {**ACCEPTED, 'oder_no': 'C', 'ooder_no': 'A', 'cntg_yn': '1', 'cntg_qty': '4', 'cntg_unpr': '70500', 'oder_qty': '', 'oder_prc': '70500',
+                 'rctf_cls': '1'}
+        rig.emit('H0STCNI9', {**amend, 'acpt_yn': '1'})
+        rig.emit('H0STCNI9', {**amend, 'acpt_yn': '2'})
+        orders = await rig.ex.watch_orders('005930/KRW')
+        assert [(o['id'], o['status'], o['amount'], o['remaining'], o['price']) for o in orders] == [
+            ('A', 'open', 10, 6, 71000), ('C', 'open', 4, 4, 70500), ('C', 'open', 4, 4, 70500),
+        ]
+
+    asyncio.run(main())
+
+
+def test_watch_orders_full_amend_cancels_the_original_order() -> None:
+    async def main() -> None:
+        rig = await _accepted_rig()
+        rig.emit('H0STCNI9', {**ACCEPTED, 'oder_no': 'C', 'ooder_no': 'A', 'cntg_yn': '1', 'cntg_qty': '10', 'oder_qty': '', 'oder_prc': '70500',
+                              'rctf_cls': '1'})
+        orders = await rig.ex.watch_orders()
+        assert [(o['id'], o['status']) for o in orders] == [('A', 'canceled'), ('C', 'open')]
+
+    asyncio.run(main())
+
+
+def test_watch_orders_rejected_cancel_leaves_the_original_order() -> None:
+    async def main() -> None:
+        rig = await _accepted_rig()
+        rig.emit('H0STCNI9', {**ACCEPTED, 'oder_no': 'B', 'ooder_no': 'A', 'cntg_yn': '1', 'cntg_qty': '10', 'rfus_yn': '1', 'rctf_cls': '2'})
+        orders = await rig.ex.watch_orders()
+        assert [(o['id'], o['status']) for o in orders] == [('B', 'rejected')]
+
+    asyncio.run(main())
+
+
+def test_watch_orders_accumulates_cost_and_average_from_fill_prices() -> None:
+    async def main() -> None:
+        rig = WatchRig({'htsId': 'MYHTS'})
+        first = asyncio.ensure_future(rig.ex.watch_orders())
+        await settle()
+        rig.emit('H0STCNI9', {**ACCEPTED, 'cntg_yn': '2', 'cntg_qty': '3', 'cntg_unpr': '71000', 'rctf_cls': '0'})
+        await first
+        rig.emit('H0STCNI9', {**ACCEPTED, 'cntg_yn': '2', 'cntg_qty': '7', 'cntg_unpr': '71100', 'rctf_cls': '0'})
+        [order] = await rig.ex.watch_orders()
+        assert {k: order[k] for k in ('filled', 'cost', 'average', 'status', 'remaining')} == {
+            'filled': 10, 'cost': 710700, 'average': 71070, 'status': 'closed', 'remaining': 0,
+        }
+
+    asyncio.run(main())
+
+
+def test_watch_orders_reads_overseas_prices_with_four_implied_decimals() -> None:
+    async def main() -> None:
+        rig = WatchRig({'htsId': 'MYHTS'})
+        notice = {'oder_no': 'O1', 'seln_byov_cls': '02', 'stck_shrn_iscd': 'AAPL', 'stck_cntg_hour': '223000', 'rfus_yn': '0', 'rctf_cls': '0'}
+        first = asyncio.ensure_future(rig.ex.watch_orders('AAPL/USD'))
+        await settle()
+        rig.emit('H0GSCNI9', {**notice, 'cntg_yn': '1', 'cntg_qty': '0000000002', 'cntg_unpr': '001480100', 'oder_qty': ''})
+        [receipt] = await first
+        rig.emit('H0GSCNI9', {**notice, 'cntg_yn': '2', 'cntg_qty': '0000000002', 'cntg_unpr': '001480100', 'oder_qty': '0000000002'})
+        [fill] = await rig.ex.watch_orders('AAPL/USD')
+        assert {k: receipt[k] for k in ('id', 'symbol', 'amount', 'price', 'status')} == {
+            'id': 'O1', 'symbol': 'AAPL/USD', 'amount': 2, 'price': 148.01, 'status': 'open',
+        }
+        assert {k: fill[k] for k in ('filled', 'cost', 'average', 'status')} == {'filled': 2, 'cost': 296.02, 'average': 148.01, 'status': 'closed'}
+
+    asyncio.run(main())
+
+
+def test_order_notice_rejection_rejects_per_symbol_watch_orders_too() -> None:
+    async def main() -> None:
+        rig = WatchRig({'htsId': 'MYHTS'})
+        every = asyncio.ensure_future(rig.ex.watch_orders())
+        by_symbol = asyncio.ensure_future(rig.ex.watch_orders('005930/KRW'))
+        await settle()
+        rig.fail('H0STCNI9', 'MYHTS', 'MAX SUBSCRIBE OVER')
+        for pending in (every, by_symbol):
+            with pytest.raises(ExchangeError, match='MAX SUBSCRIBE OVER'):
+                await pending
 
     asyncio.run(main())

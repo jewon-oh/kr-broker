@@ -145,7 +145,16 @@ export class TossPriceWs {
 
     private async connect(): Promise<void> {
         if (!this.running) return;
+        // 재연결 전에 이전 연결을 닫는다(공식 문서 권고 — 안 닫으면 새 연결마다 이전 연결이 밀려난다).
+        // 기다리기 전에 닫고 떼어 내야 그 사이에 온 이전 소켓의 이벤트를 처리기가 무시한다.
+        if (this.ws) {
+            this.stopPing();
+            try { this.ws.close(); } catch { /* ignore */ }
+            this.ws = null;
+        }
         const Ctor = await resolveWsCtor();
+        // `await` 뒤마다 `running` 을 다시 본다. 기다리는 사이에 `stop()` 이 불렸으면 소켓을 만들지 않는다.
+        if (!this.running) return;
         if (!Ctor) {
             logger.error({ nodeVersion: process.version }, '[TossPriceWs] `ws` 패키지 없음 — WS 비활성');
             return;
@@ -158,24 +167,24 @@ export class TossPriceWs {
             this.scheduleReconnect();
             return;
         }
-        // 재연결 전에 이전 연결을 닫는다(공식 문서 권고 — 안 닫으면 새 연결마다 이전 연결이 밀려난다).
-        if (this.ws) {
-            try { this.ws.close(); } catch { /* ignore */ }
-            this.ws = null;
-        }
+        if (!this.running) return;
         try {
             const ws = new Ctor(WSS_URL, { headers: { Authorization: `Bearer ${accessToken}` } });
             this.ws = ws;
+            // 처리기는 지금 소켓(`this.ws`)의 이벤트만 다룬다.
             ws.addEventListener('open', () => {
+                if (ws !== this.ws) return;
                 this.reconnectAttempts = 0;
                 logger.info({ subs: this.subs.length }, '[TossPriceWs] WS 연결 완료 — 구독 선언');
                 this.declare();
                 this.startPing();
             });
             ws.addEventListener('message', (ev) => {
+                if (ws !== this.ws) return;
                 this.onMessage(typeof ev.data === 'string' ? ev.data : String(ev.data ?? ''));
             });
             ws.addEventListener('close', (ev) => {
+                if (ws !== this.ws) return;
                 this.stopPing();
                 if (this.running) {
                     logger.warn({ code: ev.code, reason: ev.reason, wasClean: ev.wasClean }, '[TossPriceWs] WS 종료 — 재연결 예약');
@@ -183,6 +192,7 @@ export class TossPriceWs {
                 }
             });
             ws.addEventListener('error', (ev) => {
+                if (ws !== this.ws) return;
                 logger.warn({ err: ev.error, message: ev.message }, '[TossPriceWs] WS 오류');
                 if (this.running) this.scheduleReconnect();
             });
@@ -211,6 +221,7 @@ export class TossPriceWs {
         this.pingTimer = setInterval(() => {
             try { this.ws?.send('PING'); } catch { /* ignore */ }
         }, PING_INTERVAL_MS);
+        this.pingTimer.unref?.();
     }
 
     private stopPing(): void {

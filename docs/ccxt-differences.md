@@ -39,7 +39,7 @@ ccxt에 있는 오류 클래스 중 주식 거래에 필요한 것만 옮겼습�
 | 휴장일 | 없습니다 | 증권사 캘린더 API로 판정합니다. `fetchMarketCalendar`가 있습니다 |
 | 오류 필드 | 오류 클래스와 메시지입니다 | `detail`과 `retryable`이 더 있습니다. 한국투자증권과 토스증권의 `detail`은 증권사 오류 코드입니다. KB증권의 `detail`은 정규화한 이름(`TOKEN_INVALID` 등)이고, 표에 없는 오류나 일부 코드(`I446` 등)에서는 비어 있습니다. KB증권의 원래 코드는 오류 메시지에 있습니다 |
 | 토큰 | 거래소 클래스마다 인증 방식이 다릅니다 | 토큰 발급에 잠금을 걸고 `options.tokenStore`로 프로세스 사이에서 공유합니다 |
-| 실시간 지원 범위 | 거래소마다 `has`의 `watch*` 값이 다릅니다 | 한국투자증권과 토스증권이 `watch*`를 지원하고, KB증권은 웹소켓 API가 없습니다. 콜백으로 받는 `createPriceStream`도 있습니다 |
+| 실시간 지원 범위 | 거래소마다 `has`의 `watch*` 값이 다릅니다 | 한국투자증권과 토스증권이 `watch*`를 지원하고, KB증권은 웹소켓 API가 없습니다. 콜백으로 받는 `createPriceStream`도 있습니다. `watch*`에 ccxt에 없는 `params.signal`(`AbortSignal`)을 주면, 신호가 올 때 기다리던 호출이 `AbortError`로 끝납니다 |
 | 결과 행의 시각 | 통합 구조(`Ticker`, `Trade`, `Order` 등)에 `timestamp`와 `datetime`이 있습니다 | 통합 구조는 같습니다. 다만 KB증권의 `Ticker`, `OrderBook`, `Order`, `Trade`는 응답의 시각 형식을 확인하지 못해 `timestamp`가 비어 있습니다. 시각으로 정렬하거나 `since`로 거르는 코드는 KB증권에서 쓸 수 없습니다. 증권사 고유 조회는 국내 행에만 `timestamp`를 넣고 해외 행은 날짜의 시간대를 확인하지 못해 비워 둡니다 |
 | 추가 메서드 | 통합 메서드에 없습니다 | `fetchMarketCalendar`, `fetchStockWarnings`, `fetchInvestorTrading`, `fetchRankings`, `fetchBuyableAmount` 등 증권사 고유 메서드가 있습니다. 이름이 같아도 증권사마다 인자와 결과가 다릅니다. `has`의 값은 메서드가 있다는 뜻일 뿐이고, 같은 코드로 부를 수 있다는 뜻은 아닙니다. 예를 들어 `fetchMarketCalendar`는 토스증권만 시장 인자를 받고, `fetchInvestorTrading`은 토스증권만 시장 단위(`KOSPI`, `KOSDAQ`)입니다. `fetchStockWarnings`는 KB증권만 객체 하나를 돌려주고, `fetchSellableQuantity`는 토스증권만 숫자를 돌려줍니다. 인자와 결과는 [증권사별 문서](brokers/README.md)에서 확인합니다 |
 | 소스 문법 | ccxt는 TypeScript 소스를 다른 언어로 변환하므로 문법에 제한이 있습니다 | 변환하지 않으므로 옵셔널 체이닝, `??`, `private`, `override`, `declare`, `Map`, `Set`을 씁니다 |
@@ -65,6 +65,6 @@ ccxt와 마찬가지로 `createOrder()`는 확인 없이 주문을 냅니다. `h
 - 한국투자증권은 같은 앱키와 접속키로 이미 연결된 프로그램이 있으면 새 연결을 곧바로 끊습니다.
 - 토스증권의 `watchTicker`는 체결 가격만 채웁니다.
 
-실시간 데이터를 콜백으로 받으려면 `createPriceStream({ onTrade, onOrderbook })`을 씁니다. `kis`는 `KisPriceWs`를, `toss`는 `TossPriceWs`를 반환합니다. 토스증권은 본인 주문 이벤트(`onOrder`)도 받습니다. 구독은 `start(subs)`로 시작하고 `updateSubs(subs)`로 바꾸며 `stop()`으로 끝냅니다. 한국투자증권의 다른 실시간 TR은 `createRealtimeStream(onRecord)`로 TR 번호를 지정해 구독합니다.
+실시간 데이터를 콜백으로 받으려면 `createPriceStream({ onTrade, onOrderbook })`을 씁니다. `kis`는 `KisPriceWs`를, `toss`는 `TossPriceWs`를 반환합니다. 토스증권은 본인 주문 이벤트(`onOrder`)도 받습니다. 구독은 `start(subs)`로 시작하고 `updateSubs(subs)`로 바꾸며 `stop()`으로 끝냅니다. `updateSubs`는 빠진 구독을 해지합니다. 한국투자증권은 구독이 거부되면 경고 로그를 남기고, `onSubscribeError`를 주면 그 콜백도 부릅니다. 한국투자증권의 다른 실시간 TR은 `createRealtimeStream(onRecord)`로 TR 번호를 지정해 구독합니다.
 
 한국투자증권의 접속키는 `getApprovalKey()`가 발급합니다. KB증권 클래스에는 실시간 시세 기능이 없습니다.

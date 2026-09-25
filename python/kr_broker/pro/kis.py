@@ -20,16 +20,18 @@
 돌려준다. 같은 앱키와 접속키로 다른 프로그램이 이미 연결돼 있으면 KIS 가 이 연결을 곧바로 끊는다(2026-09-24 실측).
 """
 
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Set
 
 import kr_broker.async_support
 from kr_broker.async_support.base.ws.client import session_connector
 from kr_broker.async_support.base.ws.watch_hub import WatchHub
 from kr_broker.async_support.kis import _tpl, kst_ymd
+from kr_broker.base import functions as fn
 from kr_broker.base.errors import ArgumentsRequired, BadSymbol, ExchangeClosedByUser, ExchangeError
+from kr_broker.base.precise import Precise
 from kr_broker.base.types import Int, Str
 from kr_broker.kis_types import KIS_WS_PATH
-from kr_broker.pro.kis_price_ws import KisPriceWs, OnOrderbook, OnTrade
+from kr_broker.pro.kis_price_ws import KisPriceWs, OnOrderbook, OnSubscribeError, OnTrade
 from kr_broker.pro.kis_realtime_stream import KisRealtimeRecord, KisRealtimeStream
 
 
@@ -42,6 +44,10 @@ class kis(kr_broker.async_support.kis):
         self._watch_keys: Dict[str, str] = {}
         # 체결통보로 쌓은 주문 상태(주문번호 → 주문). 통보는 한 건씩 오므로 누적 체결 수량을 여기서 더한다
         self._watch_order_state: Dict[str, Dict[str, Any]] = {}
+        # 원주문에 반영한 정정·취소 통보의 주문번호. 같은 번호로 통보가 다시 와도 한 번만 반영한다
+        self._watch_revision_ids: Set[str] = set()
+        # `watch_orders` 가 기다리는 해시(`orders`, `orders:<심볼>`). 체결통보 구독이 거부되면 모두 거절한다
+        self._watch_order_hashes: Set[str] = {'orders'}
         super().__init__(config)
 
     def describe(self) -> Dict[str, Any]:
@@ -55,9 +61,11 @@ class kis(kr_broker.async_support.kis):
             },
         })
 
-    def create_price_stream(self, on_trade: Optional[OnTrade] = None, on_orderbook: Optional[OnOrderbook] = None) -> KisPriceWs:
+    def create_price_stream(self, on_trade: Optional[OnTrade] = None, on_orderbook: Optional[OnOrderbook] = None,
+                            on_subscribe_error: Optional[OnSubscribeError] = None) -> KisPriceWs:
         """실시간 시세 스트림을 만든다. 이 인스턴스의 접속키와 모의 여부를 쓴다. 구독은 반환값의 `start(subs)` 로 시작한다."""
-        return KisPriceWs(self.get_approval_key, self.isSandboxModeEnabled, session_connector(self), on_trade, on_orderbook, url=self._realtime_url())
+        return KisPriceWs(self.get_approval_key, self.isSandboxModeEnabled, session_connector(self), on_trade, on_orderbook, url=self._realtime_url(),
+                          on_subscribe_error=on_subscribe_error)
 
     def create_realtime_stream(self, on_record: Callable[[KisRealtimeRecord], None],
                                on_subscribe_error: Optional[Callable[[str, str, str], None]] = None) -> KisRealtimeStream:
@@ -81,7 +89,7 @@ class kis(kr_broker.async_support.kis):
 
     def _on_watch_subscribe_error(self, tr_id: str, tr_key: str, message: str) -> None:
         symbol = self._watch_keys.get(tr_key)
-        hashes = ['orders'] if symbol is None else [f'ticker:{symbol}', f'trades:{symbol}', f'orderbook:{symbol}']
+        hashes = sorted(self._watch_order_hashes) if symbol is None else [f'ticker:{symbol}', f'trades:{symbol}', f'orderbook:{symbol}']
         self._watch_hub.reject(ExchangeError(f'{self.id} 실시간 구독이 거부됐다 {tr_id} {tr_key}: {message}'), hashes)
 
     async def _watch_subscribe(self, symbol: str, kind: str) -> str:
@@ -122,7 +130,9 @@ class kis(kr_broker.async_support.kis):
         stream = self._ensure_watch_stream()
         stream.subscribe('H0STCNI9' if self.isSandboxModeEnabled else 'H0STCNI0', hts_id)
         stream.subscribe('H0GSCNI9' if self.isSandboxModeEnabled else 'H0GSCNI0', hts_id)
-        orders = await self._watch_hub.next_batch('orders' if symbol is None else f'orders:{self._instrument_of(symbol).symbol}')
+        hash = 'orders' if symbol is None else f'orders:{self._instrument_of(symbol).symbol}'
+        self._watch_order_hashes.add(hash)
+        orders = await self._watch_hub.next_batch(hash)
         return self.filter_by_since_limit(orders, since, limit, 'timestamp', True)
 
     async def close(self) -> None:
@@ -132,6 +142,7 @@ class kis(kr_broker.async_support.kis):
             await stream.stop()
         self._watch_keys.clear()
         self._watch_order_state.clear()
+        self._watch_revision_ids.clear()
         self._watch_hub.reject(ExchangeClosedByUser(f'{self.id} 실시간 연결을 닫았다'))
         await super().close()
 
@@ -209,7 +220,8 @@ class kis(kr_broker.async_support.kis):
 
     def _on_order_notice(self, tr_id: str, f: Dict[str, str]) -> None:
         """체결통보 한 건을 주문으로 쌓는다. 체결여부(`cntg_yn`) 2 가 체결 통보이고 1 은 접수·정정·취소·거부 통보다. 매도매수구분은 01 매도,
-        02 매수, 정정구분(`rctf_cls`) 2 는 취소, 거부여부(`rfus_yn`) Y 는 거부다."""
+        02 매수, 정정구분(`rctf_cls`)은 1 정정, 2 취소이고 거부여부(`rfus_yn`)는 1 이 거부다. 체결수량(`cntg_qty`)과 체결단가(`cntg_unpr`) 자리에는
+        체결 통보면 체결 값이, 접수 통보면 주문(정정, 취소) 수량과 단가가 온다(공식 예제의 필드 설명)."""
         order_id = f.get('oder_no')
         if not order_id:
             return
@@ -217,36 +229,90 @@ class kis(kr_broker.async_support.kis):
         code = f.get('stck_shrn_iscd')
         code = '' if code is None else code
         symbol = self._instrument_of(code).symbol if overseas else f'{code}/KRW'
+        stamp = self.kst_stamp(kst_ymd(self.milliseconds()), f.get('stck_cntg_hour'))
+
+        def positive(key: str) -> Optional[float]:
+            value = self.safe_number(f, key)
+            return value if value is not None and value > 0 else None
+
+        executed = f.get('cntg_yn') == '2'
+        rejected = f.get('rfus_yn') == '1'
+        quantity = positive('cntg_qty')
+        # 해외 체결단가는 소수점 없이 오면 미국 종목 기준 소수 넷째 자리까지다(공식 예제: 001480100 은 148.01).
+        raw_price = f.get('cntg_unpr')
+        unit_price = None if not raw_price else Precise.string_div(raw_price, '10000') if overseas and '.' not in raw_price else raw_price
+        # 정정·취소 통보의 `ooder_no` 는 원주문번호로 본다(필드 이름과 공식 예제 설명에 기댄 추정이다).
+        original = f.get('ooder_no') if not executed and not rejected and f.get('rctf_cls') in ('1', '2') and f.get('ooder_no') else None
+        if original is not None:
+            if order_id not in self._watch_revision_ids:
+                self._watch_revision_ids.add(order_id)
+                self._reduce_watch_order(original, quantity if quantity is not None else positive('oder_qty'), symbol, stamp, f)
+            # 취소 통보의 주문번호는 취소 요청의 번호라 주문으로 쌓지 않는다. 정정 통보의 주문번호는 새 주문이다.
+            if f.get('rctf_cls') == '2':
+                return
         previous = self._watch_order_state.get(order_id)
-        fill = 0.0
-        if f.get('cntg_yn') == '2':
-            cntg_qty = self.safe_number(f, 'cntg_qty')
-            fill = 0 if cntg_qty is None else cntg_qty
-        amount = self.safe_number(f, 'oder_qty')
+        fill = (quantity or 0) if executed else 0
+        amount = positive('oder_qty')
+        if amount is None and not executed:
+            amount = quantity
         if amount is None and previous is not None:
             amount = previous.get('amount')
-        previous_filled = None if previous is None else previous.get('filled')
-        filled = (0 if previous_filled is None else previous_filled) + fill
-        stamp = self.kst_stamp(kst_ymd(self.milliseconds()), f.get('stck_cntg_hour'))
-        if f.get('rfus_yn') == 'Y':
+        previous_filled = (previous.get('filled') if previous is not None else None) or 0
+        filled = previous_filled + fill
+        before = None if previous is None else previous.get('remaining')
+        if before is None and amount is not None:
+            before = amount - previous_filled
+        remaining = None if before is None else max(before - fill, 0)
+        # 체결 금액은 체결 통보의 체결단가로 쌓는다. 앞선 체결의 금액을 모르면 쌓지 않는다.
+        previous_cost = '0' if previous_filled == 0 else None if previous is None or previous.get('cost') is None else fn.number_to_string(previous['cost'])
+        if fill == 0:
+            cost = previous_cost
+        elif previous_cost is None or unit_price is None:
+            cost = None
+        else:
+            cost = Precise.string_add(previous_cost, Precise.string_mul(fn.number_to_string(fill), unit_price))
+        if rejected:
             status = 'rejected'
         elif f.get('rctf_cls') == '2':
             status = 'canceled'
         else:
-            status = 'closed' if amount is not None and amount > 0 and filled >= amount else 'open'
+            status = 'closed' if remaining is not None and remaining <= 0 else 'open'
         price = self.safe_number(f, 'oder_prc')
+        if price is None and not executed:
+            price = fn.parse_number(unit_price)
         if price is None and previous is not None:
             price = previous.get('price')
         seln_byov_cls = f.get('seln_byov_cls')
         order = self.safe_order({
             'id': order_id, 'symbol': symbol, **stamp, 'side': 'sell' if seln_byov_cls == '01' else 'buy' if seln_byov_cls == '02' else None,
-            'amount': amount, 'filled': filled, 'price': price, 'status': status,
+            'amount': amount, 'filled': filled, 'remaining': remaining, 'cost': cost, 'price': price, 'status': status,
             'lastTradeTimestamp': stamp['timestamp'] if fill > 0 else None if previous is None else previous.get('lastTradeTimestamp'),
             'trades': [], 'info': f,
         })
         self._watch_order_state[order_id] = order
         self._watch_hub.push('orders', order)
         self._watch_hub.push(f'orders:{symbol}', order)
+
+    def _reduce_watch_order(self, order_id: str, quantity: Optional[float], symbol: str, stamp: Dict[str, Any], f: Dict[str, str]) -> None:
+        """정정·취소 통보를 원주문에 반영한다. 정정·취소 수량만큼 잔량을 줄이고, 잔량이 남지 않으면 `canceled` 다(정정한 수량은 새 주문번호로
+        옮겨 간다). 줄일 수량이나 원주문의 잔량을 모르면 잔량을 모두 줄인 것으로 본다."""
+        previous = self._watch_order_state.get(order_id) or {}
+        before = previous.get('remaining')
+        if before is None and previous.get('amount') is not None:
+            before = previous['amount'] - (previous.get('filled') or 0)
+        remaining = 0 if before is None or quantity is None else max(before - quantity, 0)
+        seln_byov_cls = f.get('seln_byov_cls')
+        side = previous.get('side')
+        if side is None:
+            side = 'sell' if seln_byov_cls == '01' else 'buy' if seln_byov_cls == '02' else None
+        order = self.safe_order({
+            'id': order_id, 'symbol': previous.get('symbol') or symbol, **stamp, 'side': side, 'amount': previous.get('amount'),
+            'filled': previous.get('filled'), 'remaining': remaining, 'cost': previous.get('cost'), 'price': previous.get('price'),
+            'status': 'open' if remaining > 0 else 'canceled', 'lastTradeTimestamp': previous.get('lastTradeTimestamp'), 'trades': [], 'info': f,
+        })
+        self._watch_order_state[order_id] = order
+        self._watch_hub.push('orders', order)
+        self._watch_hub.push(f"orders:{order['symbol']}", order)
 
     def _hts_id(self, method: str) -> str:
         """HTS 사용자 ID(`options['htsId']`). 체결통보 구독 키라 없으면 구독하기 전에 `ArgumentsRequired` 다."""

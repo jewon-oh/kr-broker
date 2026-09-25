@@ -89,6 +89,40 @@ def test_cancelled_waiter_does_not_break_resolve() -> None:
     assert asyncio.run(main()) == 7
 
 
+def test_push_keeps_items_when_the_only_waiter_was_cancelled() -> None:
+    async def main() -> Any:
+        hub = WatchHub()
+        hub.next_batch('orders').cancel()
+        hub.push('orders', 'fill')
+        return await asyncio.wait_for(hub.next_batch('orders'), 1)
+
+    assert asyncio.run(main()) == ['fill']
+
+
+def test_timed_out_watch_does_not_take_the_next_items() -> None:
+    async def main() -> Any:
+        hub = WatchHub()
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(hub.next_batch('orders'), 0.01)
+        hub.push('orders', 'fill')
+        return await asyncio.wait_for(hub.next_batch('orders'), 1)
+
+    assert asyncio.run(main()) == ['fill']
+
+
+def test_cancelled_waiters_leave_the_hub() -> None:
+    async def main() -> Dict[str, Any]:
+        hub = WatchHub()
+        for _ in range(3):
+            with pytest.raises(asyncio.TimeoutError):
+                await asyncio.wait_for(hub.next('ticker:X'), 0.001)
+        hub.next('ticker:Y').cancel()
+        await settle()
+        return hub._waiters
+
+    assert asyncio.run(main()) == {}
+
+
 # ============ 재연결 클라이언트 ============
 
 class EchoStream(ReconnectingWebSocket):
@@ -181,6 +215,48 @@ def test_stop_during_backoff_does_not_reconnect() -> None:
         assert connector.calls == 1 and not stream.running
 
     asyncio.run(main())
+
+
+def test_stop_while_preparing_the_connection_opens_nothing() -> None:
+    async def main() -> None:
+        connector, ready = FakeConnector(), asyncio.Event()
+
+        class SlowTarget(EchoStream):
+            async def connect_target(self) -> Tuple[str, Dict[str, str]]:
+                await ready.wait()
+                return await super().connect_target()
+
+        stream = SlowTarget(connector, RecordingSleep(), ['wss://x'])
+        stream.start()
+        await settle()
+        await stream.stop()
+        ready.set()
+        await settle(10)
+        assert connector.calls == 0 and stream.ws is None and not stream.running
+
+    asyncio.run(main())
+
+
+def test_start_in_a_new_event_loop_reconnects() -> None:
+    connector = FakeConnector()
+    stream = EchoStream(connector, RecordingSleep(), ['wss://x'])
+
+    async def first() -> None:
+        stream.start()
+        await settle()
+        assert stream.is_connected()
+
+    async def second() -> None:
+        # 앞선 `asyncio.run` 이 끝나며 연결 작업이 취소됐다. 다시 부르면 새로 잇는다.
+        assert not stream.running
+        stream.start()
+        await settle()
+        assert connector.calls == 2 and stream.is_connected() and connector.last.sent == ['hello']
+        await stream.stop()
+
+    asyncio.run(first())
+    assert connector.sockets[0].closed
+    asyncio.run(second())
 
 
 def test_ping_is_sent_on_interval() -> None:

@@ -139,7 +139,7 @@ describe('watchOrders', () => {
 
         const pending = ex.watchOrders('005930/KRW');
         await flush();
-        emit('H0STCNI9', { ...base, oder_no: 'A1', rfus_yn: 'Y', rctf_cls: '0' });
+        emit('H0STCNI9', { ...base, oder_no: 'A1', rfus_yn: '1', rctf_cls: '0' });
         emit('H0STCNI9', { ...base, oder_no: 'A2', rfus_yn: 'N', rctf_cls: '2' });
         const first = await pending;
         const rest = await ex.watchOrders('005930/KRW');
@@ -170,5 +170,141 @@ describe('close, 구독 거부', () => {
         fail('H0STCNT0', '005930', 'ALREADY IN USE appkey');
 
         await expect(pending).rejects.toThrow('ALREADY IN USE appkey');
+    });
+});
+
+describe('params.signal', () => {
+    it('신호가 오면 기다리던 watchTicker·watchOrderBook 을 AbortError 로 거절한다', async () => {
+        const { ex } = withFakeStream();
+        const controller = new AbortController();
+        const ticker = ex.watchTicker('005930/KRW', { signal: controller.signal });
+        const book = ex.watchOrderBook('005930/KRW', undefined, { signal: controller.signal });
+        await flush();
+
+        controller.abort();
+
+        await expect(ticker).rejects.toMatchObject({ name: 'AbortError' });
+        await expect(book).rejects.toMatchObject({ name: 'AbortError' });
+    });
+
+    it('포기한 watchTrades·watchOrders 는 체결과 주문을 가져가지 않는다. 다음 호출이 받는다', async () => {
+        const { ex, emit } = withFakeStream({ htsId: 'MYHTS' });
+        const controller = new AbortController();
+        const trades = ex.watchTrades('005930/KRW', undefined, undefined, { signal: controller.signal });
+        const orders = ex.watchOrders(undefined, undefined, undefined, { signal: controller.signal });
+        await flush();
+        controller.abort();
+        await expect(trades).rejects.toMatchObject({ name: 'AbortError' });
+        await expect(orders).rejects.toMatchObject({ name: 'AbortError' });
+
+        emit('H0STCNT0', DOMESTIC_TRADE);
+        emit('H0STCNI9', {
+            oder_no: '0000117057', seln_byov_cls: '02', stck_shrn_iscd: '005930', oder_qty: '10', oder_prc: '71000', stck_cntg_hour: '093001', rfus_yn: 'N',
+            cntg_yn: '1', cntg_qty: '0',
+        });
+
+        expect((await ex.watchTrades('005930/KRW')).map((t) => t.amount)).toEqual([15]);
+        expect((await ex.watchOrders()).map((o) => o.id)).toEqual(['0000117057']);
+    });
+});
+
+describe('watchOrders 정정·취소와 체결 금액', () => {
+    const accepted = { oder_no: 'A', seln_byov_cls: '02', stck_shrn_iscd: '005930', oder_qty: '10', oder_prc: '71000', stck_cntg_hour: '093001', rfus_yn: '0' };
+
+    it('취소 통보(정정구분 2)는 원주문번호(ooder_no) 주문을 취소 수량만큼 줄여 canceled 로 두고, 취소 주문번호는 쌓지 않는다', async () => {
+        const { ex, emit } = withFakeStream({ htsId: 'MYHTS' });
+        const first = ex.watchOrders();
+        await flush();
+        emit('H0STCNI9', { ...accepted, cntg_yn: '1', cntg_qty: '10', rctf_cls: '0' });
+        await first;
+        emit('H0STCNI9', { ...accepted, cntg_yn: '2', cntg_qty: '3', cntg_unpr: '71000', rctf_cls: '0' });
+        emit('H0STCNI9', { ...accepted, oder_no: 'B', ooder_no: 'A', cntg_yn: '1', cntg_qty: '7', oder_qty: '', rctf_cls: '2' });
+
+        const orders = await ex.watchOrders();
+
+        expect(orders.map((o) => [o.id, o.status, o.filled, o.remaining])).toEqual([['A', 'open', 3, 7], ['A', 'canceled', 3, 0]]);
+    });
+
+    it('정정 통보(정정구분 1)는 원주문의 잔량을 새 주문번호로 옮긴다. 같은 번호의 통보가 다시 와도 한 번만 줄인다', async () => {
+        const { ex, emit } = withFakeStream({ htsId: 'MYHTS' });
+        const first = ex.watchOrders('005930/KRW');
+        await flush();
+        emit('H0STCNI9', { ...accepted, cntg_yn: '1', cntg_qty: '10', rctf_cls: '0' });
+        await first;
+        const amend = { ...accepted, oder_no: 'C', ooder_no: 'A', cntg_yn: '1', cntg_qty: '4', cntg_unpr: '70500', oder_qty: '', oder_prc: '70500', rctf_cls: '1' };
+        emit('H0STCNI9', { ...amend, acpt_yn: '1' });
+        emit('H0STCNI9', { ...amend, acpt_yn: '2' });
+
+        const orders = await ex.watchOrders('005930/KRW');
+
+        expect(orders.map((o) => [o.id, o.status, o.amount, o.remaining, o.price])).toEqual([
+            ['A', 'open', 10, 6, 71000], ['C', 'open', 4, 4, 70500], ['C', 'open', 4, 4, 70500],
+        ]);
+    });
+
+    it('원주문 전량을 정정하면 원주문은 canceled 다', async () => {
+        const { ex, emit } = withFakeStream({ htsId: 'MYHTS' });
+        const first = ex.watchOrders();
+        await flush();
+        emit('H0STCNI9', { ...accepted, cntg_yn: '1', cntg_qty: '10', rctf_cls: '0' });
+        await first;
+        emit('H0STCNI9', { ...accepted, oder_no: 'C', ooder_no: 'A', cntg_yn: '1', cntg_qty: '10', oder_qty: '', oder_prc: '70500', rctf_cls: '1' });
+
+        const orders = await ex.watchOrders();
+
+        expect(orders.map((o) => [o.id, o.status])).toEqual([['A', 'canceled'], ['C', 'open']]);
+    });
+
+    it('거부된 취소 통보는 원주문을 바꾸지 않는다', async () => {
+        const { ex, emit } = withFakeStream({ htsId: 'MYHTS' });
+        const first = ex.watchOrders();
+        await flush();
+        emit('H0STCNI9', { ...accepted, cntg_yn: '1', cntg_qty: '10', rctf_cls: '0' });
+        await first;
+        emit('H0STCNI9', { ...accepted, oder_no: 'B', ooder_no: 'A', cntg_yn: '1', cntg_qty: '10', rfus_yn: '1', rctf_cls: '2' });
+
+        const orders = await ex.watchOrders();
+
+        expect(orders.map((o) => [o.id, o.status])).toEqual([['B', 'rejected']]);
+    });
+
+    it('체결 통보의 체결단가로 cost 와 average 를 쌓는다', async () => {
+        const { ex, emit } = withFakeStream({ htsId: 'MYHTS' });
+        const first = ex.watchOrders();
+        await flush();
+        emit('H0STCNI9', { ...accepted, cntg_yn: '2', cntg_qty: '3', cntg_unpr: '71000', rctf_cls: '0' });
+        await first;
+        emit('H0STCNI9', { ...accepted, cntg_yn: '2', cntg_qty: '7', cntg_unpr: '71100', rctf_cls: '0' });
+
+        const [order] = await ex.watchOrders();
+
+        expect(order).toMatchObject({ filled: 10, cost: 710700, average: 71070, status: 'closed', remaining: 0 });
+    });
+
+    it('해외 체결단가는 소수점 없이 오면 소수 넷째 자리까지로 읽고, 접수 통보의 단가를 주문 가격으로 쓴다', async () => {
+        const { ex, emit } = withFakeStream({ htsId: 'MYHTS' });
+        const notice = { oder_no: 'O1', seln_byov_cls: '02', stck_shrn_iscd: 'AAPL', stck_cntg_hour: '223000', rfus_yn: '0', rctf_cls: '0' };
+        const first = ex.watchOrders('AAPL/USD');
+        await flush();
+        emit('H0GSCNI9', { ...notice, cntg_yn: '1', cntg_qty: '0000000002', cntg_unpr: '001480100', oder_qty: '' });
+        const [receipt] = await first;
+        emit('H0GSCNI9', { ...notice, cntg_yn: '2', cntg_qty: '0000000002', cntg_unpr: '001480100', oder_qty: '0000000002' });
+
+        const [fill] = await ex.watchOrders('AAPL/USD');
+
+        expect(receipt).toMatchObject({ id: 'O1', symbol: 'AAPL/USD', amount: 2, price: 148.01, status: 'open' });
+        expect(fill).toMatchObject({ filled: 2, cost: 296.02, average: 148.01, status: 'closed' });
+    });
+
+    it('체결통보 구독이 거부되면 종목별로 기다리던 watchOrders 도 거절한다', async () => {
+        const { ex, fail } = withFakeStream({ htsId: 'MYHTS' });
+        const all = ex.watchOrders();
+        const bySymbol = ex.watchOrders('005930/KRW');
+        await flush();
+
+        fail('H0STCNI9', 'MYHTS', 'MAX SUBSCRIBE OVER');
+
+        await expect(all).rejects.toThrow('MAX SUBSCRIBE OVER');
+        await expect(bySymbol).rejects.toThrow('MAX SUBSCRIBE OVER');
     });
 });

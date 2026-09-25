@@ -40,14 +40,16 @@ export interface KisRealtimeStreamOptions {
 }
 
 /**
- * 수신 값을 건수만큼 나눈다. 필드 이름을 아는 TR 은 필드 수로 자르고, 값이 모자라거나 모르는 TR 이면 전체 값 수를 건수로 나눈 길이로 자른다.
- * 필드 이름은 위치대로 붙인다.
+ * 수신 값을 건수만큼 나눈다. 값 수가 건수로 나눠떨어지면 그 몫으로 자른다. 나눠떨어지지 않으면 필드 이름을 아는 TR 은 필드 수로 자르고,
+ * 값이 모자라거나 모르는 TR 이면 전체 값 수를 건수로 나눈 길이로 자른다. 필드 이름은 위치대로 붙인다.
  */
 export function splitKisRealtimeRecords(trId: string, count: number, payload: string): KisRealtimeRecord[] {
     const values = payload.split('^');
     const columns = kisRealtimeColumns(trId);
     const n = Number.isInteger(count) && count > 0 ? count : 1;
-    const size = columns !== undefined && columns.length * n <= values.length ? columns.length : Math.floor(values.length / n);
+    // KIS 가 필드를 뒤에 더해도 두 번째 건부터 어긋나지 않게 필드 수보다 값 수를 먼저 믿는다.
+    const size = values.length % n === 0 ? values.length / n
+        : columns !== undefined && columns.length * n <= values.length ? columns.length : Math.floor(values.length / n);
     if (size <= 0) return [];
     const records: KisRealtimeRecord[] = [];
     for (let i = 0; i < n; i++) {
@@ -79,6 +81,8 @@ export class KisRealtimeStream {
     private running = false;
     private reconnectAttempts = 0;
     private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    /** `connect()`를 시작할 때마다 늘린다. 기다리는 사이에 이 값이 바뀌면(`stop()`, 다음 `connect()`) 그 호출은 소켓을 만들지 않는다 */
+    private connectSeq = 0;
 
     constructor(private readonly opts: KisRealtimeStreamOptions) {}
 
@@ -90,7 +94,7 @@ export class KisRealtimeStream {
         this.subs.set(id, { trId, trKey });
         if (!this.running) {
             this.running = true;
-            void this.connect();
+            this.startConnect();
             return;
         }
         this.send(trId, trKey, '1');
@@ -104,44 +108,77 @@ export class KisRealtimeStream {
 
     stop(): void {
         this.running = false;
+        this.connectSeq++;
         if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
         this.reconnectTimer = null;
-        try { this.ws?.close(); } catch { /* 이미 닫혔다 */ }
-        this.ws = null;
+        this.dropSocket();
     }
 
     isConnected(): boolean {
         return this.ws !== null && this.ws.readyState === WS_OPEN;
     }
 
+    /** 지금 소켓을 떼어 내고 닫는다. 떼어 낸 소켓의 이벤트는 처리기가 무시한다. */
+    private dropSocket(): void {
+        const ws = this.ws;
+        this.ws = null;
+        try { ws?.close(); } catch { /* 이미 닫혔다 */ }
+    }
+
+    private startConnect(): void {
+        this.connect().catch((err: unknown) => logger.error({ err }, '[KisRealtimeStream] 연결 실패'));
+    }
+
     private async connect(): Promise<void> {
-        if (!this.running) return;
+        const seq = ++this.connectSeq;
+        // `await` 뒤마다 확인한다. 그사이 `stop()`이나 다음 `connect()`가 왔으면 소켓을 만들지 않는다.
+        const current = (): boolean => this.running && seq === this.connectSeq;
+        if (!current()) return;
+        this.dropSocket();
         const Ctor = await resolveWsCtor();
+        if (!current()) return;
         if (!Ctor) {
             logger.error({}, '[KisRealtimeStream] 전역 WebSocket 도 `ws` 패키지도 없음 — 구독하지 않는다');
             return;
         }
+        let approvalKey: string;
         try {
-            this.approvalKey = await this.opts.getApprovalKey();
+            approvalKey = await this.opts.getApprovalKey();
         } catch (err) {
+            if (!current()) return;
             logger.error({ err }, '[KisRealtimeStream] approval_key 발급 실패 — 재연결 예약');
             this.scheduleReconnect();
             return;
         }
+        if (!current()) return;
+        this.approvalKey = approvalKey;
         const url = this.opts.url ?? (this.opts.isVirtual ? KIS_WS_DOMAINS.VIRTUAL : KIS_WS_DOMAINS.REAL) + KIS_WS_PATH;
-        const ws = new Ctor(url);
+        let ws: WsLike;
+        try {
+            ws = new Ctor(url);
+        } catch (err) {
+            logger.error({ err }, '[KisRealtimeStream] WS 생성 실패 — 재연결 예약');
+            this.scheduleReconnect();
+            return;
+        }
         this.ws = ws;
+        // 처리기는 첫 줄에서 자기 소켓이 지금 소켓인지 본다. 떼어 낸 옛 소켓의 늦은 이벤트로 구독이나 재연결을 하지 않는다.
         ws.addEventListener('open', () => {
+            if (ws !== this.ws) return;
             this.reconnectAttempts = 0;
             for (const sub of this.subs.values()) this.send(sub.trId, sub.trKey, '1');
         });
-        ws.addEventListener('message', (ev) => this.onMessage(typeof ev.data === 'string' ? ev.data : String(ev.data ?? '')));
+        ws.addEventListener('message', (ev) => {
+            if (ws !== this.ws) return;
+            this.onMessage(typeof ev.data === 'string' ? ev.data : String(ev.data ?? ''));
+        });
         ws.addEventListener('close', (ev) => {
-            if (!this.running) return;
+            if (ws !== this.ws || !this.running) return;
             logger.warn({ code: ev.code, reason: ev.reason }, '[KisRealtimeStream] 연결 종료 — 재연결 예약');
             this.scheduleReconnect();
         });
         ws.addEventListener('error', (ev) => {
+            if (ws !== this.ws) return;
             logger.warn({ message: ev.message }, '[KisRealtimeStream] 연결 오류 — 재연결 예약');
             this.scheduleReconnect();
         });
@@ -165,17 +202,24 @@ export class KisRealtimeStream {
             this.onSystemMessage(raw);
             return;
         }
-        void this.onData(raw);
+        this.onData(raw).catch((err: unknown) => logger.error({ err }, '[KisRealtimeStream] 실시간 프레임 처리 실패'));
     }
 
-    /** 구독 응답. 실패면 알리고, 체결통보의 복호 key 와 iv 를 TR 별로 기억한다. */
+    /** 구독 응답. 실패면 그 구독을 지우고 알린다. 성공이면 체결통보의 복호 key 와 iv 를 TR 별로 기억한다. */
     private onSystemMessage(raw: string): void {
         let message: { header?: Record<string, unknown>; body?: { rt_cd?: unknown; msg1?: unknown; output?: Record<string, unknown> } };
         try { message = JSON.parse(raw); } catch { return; }
         const trId = String(message.header?.tr_id ?? '');
         const body = message.body ?? {};
         if (body.rt_cd !== undefined && String(body.rt_cd) !== '0') {
-            this.opts.onSubscribeError?.(trId, String(message.header?.tr_key ?? ''), String(body.msg1 ?? ''));
+            const trKey = String(message.header?.tr_key ?? '');
+            // 거부된 구독을 남겨 두면 같은 구독을 다시 불러도 등록 프레임을 보내지 않는다.
+            this.subs.delete(`${trId}|${trKey}`);
+            try {
+                this.opts.onSubscribeError?.(trId, trKey, String(body.msg1 ?? ''));
+            } catch (err) {
+                logger.warn({ err, trId, trKey }, '[KisRealtimeStream] onSubscribeError 처리 실패');
+            }
             return;
         }
         const key = body.output?.key;
@@ -206,13 +250,20 @@ export class KisRealtimeStream {
                 return;
             }
         }
-        for (const record of splitKisRealtimeRecords(trId, Number(countText), payload)) this.opts.onRecord(record);
+        for (const record of splitKisRealtimeRecords(trId, Number(countText), payload)) {
+            // 한 건의 콜백이 던져도 나머지 건과 연결은 계속 처리한다.
+            try {
+                this.opts.onRecord(record);
+            } catch (err) {
+                logger.warn({ err, trId }, '[KisRealtimeStream] onRecord 처리 실패');
+            }
+        }
     }
 
     private scheduleReconnect(): void {
         if (!this.running || this.reconnectTimer) return;
         this.reconnectAttempts++;
         const delay = Math.min(RECONNECT_BASE_MS * 2 ** (this.reconnectAttempts - 1), RECONNECT_MAX_MS);
-        this.reconnectTimer = setTimeout(() => { this.reconnectTimer = null; void this.connect(); }, delay);
+        this.reconnectTimer = setTimeout(() => { this.reconnectTimer = null; this.startConnect(); }, delay);
     }
 }

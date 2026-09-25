@@ -35,6 +35,8 @@
 
 ### 추가
 
+- `watch*`가 `params.signal`(`AbortSignal`)을 받습니다. 신호가 오면 기다리던 호출만 `AbortError`로 끝나고, 쌓인 갱신은 다음 호출이 받습니다.
+- 한국투자증권 `createPriceStream`과 Python `create_price_stream`이 구독 거부 콜백 `onSubscribeError`(`on_subscribe_error`)를 받습니다.
 - `ExchangeClosedByUser`(ccxt 와 같은 이름, `ExchangeError` 아래)를 더했습니다. 한국투자증권과 토스증권의 `close()`는 기다리던 `watch*`를 이 오류로 끝냅니다. `ExchangeError`를 잡던 코드는 그대로 동작합니다.
 - 모든 증권사에 `close()`가 있습니다. KB증권처럼 실시간 연결이 없는 증권사에서는 아무것도 하지 않습니다.
 - 토스증권과 KB증권이 `has.fetchTrades`를 선언합니다(구현은 예전부터 있었습니다). Python 토스 판에 `fetch_trades`를 더했습니다.
@@ -56,6 +58,10 @@
 
 ### 고침
 
+- 실시간: 한국투자증권 실시간 콜백이 던지면 처리되지 않은 promise 거부로 프로세스가 끝나던 것을 고쳤습니다. 연결을 준비하는 중에 `stop()`이나 `close()`를 부르면 소켓이 뒤늦게 열려 남던 것을 고쳤습니다(한국투자증권, 토스증권). 옛 소켓의 늦은 이벤트는 무시합니다. 토스 핑 타이머가 프로세스 종료를 막지 않습니다.
+- 실시간: 구독이 한 번 거부되면 같은 종목의 `watch*`가 영원히 기다리던 것을 고쳤습니다. 체결통보 구독이 거부되면 `watchOrders(symbol)`도 거절합니다. `KisPriceWs.updateSubs`가 빠진 구독을 해지합니다. 다건 프레임에 필드가 늘어도 두 번째 레코드부터 값이 밀리지 않습니다.
+- 실시간: 한국투자증권 `watchOrders`가 정정과 취소 통보를 원주문(`ooder_no`)에 반영하고, 체결단가로 `cost`와 `average`를 채웁니다. 거부 여부(`rfus_yn`)는 `'1'`을 거부로 읽습니다(예전에는 `'Y'`와 비교해 거부를 잡지 못했습니다). 접수 통보의 수량과 단가, 해외 체결단가의 소수 자리도 공식 예제의 필드 설명대로 읽습니다.
+- Python 실시간: 시간 초과로 취소된 `watch_*` 대기자에게 갱신이 넘어가 사라지던 것을 고쳤습니다. 한 인스턴스를 `asyncio.run` 여러 번에 걸쳐 쓰면 세션과 실시간 연결을 새 이벤트 루프에서 다시 엽니다.
 - 한국투자증권 `market()`과 `amountToPrecision()`이 종목 마스터 없이도 동작합니다. 예전에는 마스터 없이 `loadMarkets()`를 부르면 `BadSymbol`, 부르기 전에는 `markets not loaded`였습니다.
 - 토스증권 국내 종목의 `createMarketBuyOrderWithCost`는 요청 없이 `NotSupported`를 던집니다. 예전에는 수량 검사에 걸려 `ArgumentsRequired`였습니다.
 - 한국투자증권 `fetchBalance`가 같은 종목의 잔고 행(현금, 자기융자, 대출일자별)을 마지막 행으로 덮어쓰던 것을 고쳤습니다. 수량을 더하고, 원문 행 전부를 `info.rows`에 싣습니다. `info`의 나머지 필드는 첫 행입니다.

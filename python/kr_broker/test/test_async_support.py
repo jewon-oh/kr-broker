@@ -427,6 +427,45 @@ def test_session_is_opened_lazily_and_closed_with_the_block() -> None:
     asyncio.run(main())
 
 
+def test_own_session_is_reopened_in_a_new_event_loop() -> None:
+    """세션은 연 이벤트 루프에 묶인다. `close()` 없이 `asyncio.run` 을 다시 불러도 새 루프의 세션으로 요청한다."""
+    broker = kr_broker.async_support.toss({'apiKey': 'id', 'secret': 's'})
+
+    async def open_session() -> aiohttp.ClientSession:
+        broker.open()
+        broker.open()
+        return broker.session
+
+    first = asyncio.run(open_session())
+
+    async def reopen_then_close() -> aiohttp.ClientSession:
+        second = await open_session()
+        await broker.close()
+        return second
+
+    second = asyncio.run(reopen_then_close())
+    assert second is not first and first.closed and second.closed and broker.session is None
+
+    async def reopen_closed() -> None:
+        closed = await open_session()
+        await closed.close()
+        assert await open_session() is not closed
+        await broker.close()
+
+    asyncio.run(reopen_closed())
+
+
+def test_given_session_is_kept_across_event_loops() -> None:
+    mine = _RaisingSession(aiohttp.ClientConnectionError('reset'))
+    broker = AsyncExchange({'session': mine})
+
+    async def open_session() -> Any:
+        broker.open()
+        return broker.session
+
+    assert asyncio.run(open_session()) is mine and asyncio.run(open_session()) is mine and not mine.closed
+
+
 def test_sync_broker_still_opens_a_requests_session() -> None:
     import requests
     assert isinstance(kr_broker.toss({'apiKey': 'id', 'secret': 's'}).session, requests.Session)
@@ -652,6 +691,22 @@ def test_async_load_markets_shares_the_in_flight_fetch_and_retries_after_failure
         return second
 
     assert all('A/KRW' in markets for markets in asyncio.run(main()))
+
+
+def test_async_load_markets_starts_again_after_the_previous_loop_cancelled_it() -> None:
+    class Broker(AsyncExchange):
+        async def fetch_markets(self, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:  # type: ignore[override]
+            await asyncio.sleep(0.01)
+            return [{'id': 'A', 'symbol': 'A/KRW', 'base': 'A', 'quote': 'KRW'}]
+
+    ex = Broker({})
+
+    async def give_up() -> None:
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(ex.load_markets(), 0.001)
+
+    asyncio.run(give_up())  # 끝나며 진행 중인 조회를 취소한다
+    assert 'A/KRW' in asyncio.run(ex.load_markets())
 
 
 def test_async_close_does_not_wait_forever_for_background_tasks(monkeypatch: pytest.MonkeyPatch) -> None:
