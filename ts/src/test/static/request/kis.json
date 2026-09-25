@@ -1553,6 +1553,192 @@
             "output": [[1774224000000, 171, 171.5, 169, 170, 38000000], [1774310400000, 170.5, 173.1, 169.9, 172.5, 41234567]]
         },
         {
+            "description": "fetchOHLCV 는 먼 과거 since 부터 params.until 까지의 봉을 앞에서부터 limit 개 준다. 야후 range 는 since 부터 지금까지를 덮는다",
+            "now": 1774440000000,
+            "method": "fetchOHLCV",
+            "args": ["AAPL/USD", "1d", 1704067200000, 3, { "until": 1704499200000 }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=1d&range=5y",
+                        "headers": { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "chart": {
+                                "result": [
+                                    {
+                                        "meta": { "symbol": "AAPL", "currency": "USD", "exchangeTimezoneName": "America/New_York", "regularMarketPrice": 172.5 },
+                                        "timestamp": [1703860200, 1704205800, 1704292200, 1704378600, 1704465000, 1704724200, 1774359000],
+                                        "indicators": {
+                                            "quote": [
+                                                {
+                                                    "open": [193.9, 187.15, 184.22, 182.15, 181.99, 182.09, 170.5],
+                                                    "high": [194.4, 188.44, 185.88, 183.09, 182.76, 185.6, 173.1],
+                                                    "low": [191.73, 183.89, 183.43, 180.88, 180.17, 181.5, 169.9],
+                                                    "close": [192.53, 185.64, 184.25, 181.91, 181.18, 185.56, 172.5],
+                                                    "volume": [42628800, 82488700, 58414500, 71983600, 62303300, 59144500, 41234567]
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ],
+                                "error": null
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                [1704205800000, 187.15, 188.44, 183.89, 185.64, 82488700],
+                [1704292200000, 184.22, 185.88, 183.43, 184.25, 58414500],
+                [1704378600000, 182.15, 183.09, 180.88, 181.91, 71983600]
+            ]
+        },
+        {
+            "description": "fetchOHLCV 미국 일봉 KIS 폴백도 since 와 params.until 을 따른다. 기준일(BYMD)은 until 의 미국 동부 날짜다",
+            "now": 1774440000000,
+            "method": "fetchOHLCV",
+            "args": ["AAPL/USD", "1d", 1704067200000, 3, { "until": 1704499200000 }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=1d&range=5y",
+                        "headers": { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": { "chart": { "result": null, "error": { "code": "Not Found", "description": "No data found, symbol may be delisted" } } }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-price/v1/quotations/dailyprice?AUTH=&EXCD=NAS&SYMB=AAPL&GUBN=0&BYMD=20240105&MODP=1",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "HHDFS76240000",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output1": { "rsym": "DNASAAPL", "zdiv": "4", "nrec": "5" },
+                            "output2": [
+                                { "xymd": "20240105", "open": "181.9900", "high": "182.7600", "low": "180.1700", "clos": "181.1800", "tvol": "62303300" },
+                                { "xymd": "20240104", "open": "182.1500", "high": "183.0900", "low": "180.8800", "clos": "181.9100", "tvol": "71983600" },
+                                { "xymd": "20240103", "open": "184.2200", "high": "185.8800", "low": "183.4300", "clos": "184.2500", "tvol": "58414500" },
+                                { "xymd": "20240102", "open": "187.1500", "high": "188.4400", "low": "183.8900", "clos": "185.6400", "tvol": "82488700" },
+                                { "xymd": "20231229", "open": "193.9000", "high": "194.4000", "low": "191.7300", "clos": "192.5300", "tvol": "42628800" }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": [
+                [1704153600000, 187.15, 188.44, 183.89, 185.64, 82488700],
+                [1704240000000, 184.22, 185.88, 183.43, 184.25, 58414500],
+                [1704326400000, 182.15, 183.09, 180.88, 181.91, 71983600]
+            ]
+        },
+        {
+            "description": "fetchOHLCV 분봉의 since 가 야후 조회 폭 상한보다 오래되면 상한 일수(59d)로 받는다. 3mo 로 올려 적으면 야후가 422 로 거절한다",
+            "now": 1774440000000,
+            "method": "fetchOHLCV",
+            "args": ["005930/KRW", "5m", 1704067200000, 2],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://query1.finance.yahoo.com/v8/finance/chart/005930.KS?interval=5m&range=59d",
+                        "headers": { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "chart": {
+                                "result": [
+                                    {
+                                        "meta": { "symbol": "005930.KS", "currency": "KRW", "exchangeTimezoneName": "Asia/Seoul", "regularMarketPrice": 70900 },
+                                        "timestamp": [1774396800, 1774397100, 1774397400],
+                                        "indicators": {
+                                            "quote": [
+                                                {
+                                                    "open": [70000, 70500, 70800],
+                                                    "high": [70600, 70900, 71000],
+                                                    "low": [69900, 70100, 70700],
+                                                    "close": [70500, 70800, 70900],
+                                                    "volume": [100, 200, 50]
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ],
+                                "error": null
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [[1774396800000, 70000, 70600, 69900, 70500, 100], [1774397100000, 70500, 70900, 70100, 70800, 200]]
+        },
+        {
+            "description": "fetchOHLCV 는 KIS 표기(BRK/B)로 불러도 통합 심볼로 바꿔 야후에 BRK-B 로 묻는다",
+            "now": 1774440000000,
+            "method": "fetchOHLCV",
+            "args": ["BRK/B", "1d", null, 2],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://query1.finance.yahoo.com/v8/finance/chart/BRK-B?interval=1d&range=5y",
+                        "headers": { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "chart": {
+                                "result": [
+                                    {
+                                        "meta": { "symbol": "BRK-B", "currency": "USD", "exchangeTimezoneName": "America/New_York", "regularMarketPrice": 410.25 },
+                                        "timestamp": [1774272600, 1774359000],
+                                        "indicators": {
+                                            "quote": [
+                                                {
+                                                    "open": [408.5, 409.1],
+                                                    "high": [410.2, 411],
+                                                    "low": [407.8, 408.6],
+                                                    "close": [409.3, 410.25],
+                                                    "volume": [3100000, 2800000]
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ],
+                                "error": null
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [[1774272600000, 408.5, 410.2, 407.8, 409.3, 3100000], [1774359000000, 409.1, 411, 408.6, 410.25, 2800000]]
+        },
+        {
             "description": "fetchOHLCV 미국 분봉은 야후가 비어도 KIS 로 다시 받지 않는다",
             "now": 1774440000000,
             "method": "fetchOHLCV",

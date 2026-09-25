@@ -1200,6 +1200,8 @@ export class toss extends Exchange {
      * 필요한 주기는 호출하는 쪽이 1분봉을 모아 만든다.
      *
      * 봉의 `timestamp` 는 봉의 시작 시각이다(토스의 1분봉은 종료 시각으로 오므로 1분을 뺀다). `params.until`(ms)은 이 시각 이전의 봉만 받는다.
+     * `since` 가 있으면 `since` 부터 `limit` 개이고, 없으면 가장 최근 `limit` 개다. 최신 봉부터 200봉씩 10쪽까지 거슬러 받으므로,
+     * 그 안에 `since` 까지 닿지 못하면 경고 로그를 남기고 받은 가장 오래된 봉부터 돌려준다.
      */
     override async fetchOHLCV(symbol: string, timeframe = '1m', since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<OHLCV[]> {
         const interval = this.safeString(this.timeframes, timeframe);
@@ -1213,33 +1215,46 @@ export class toss extends Exchange {
         const barStartShift = timeframe === '1m' ? this.parseTimeframe('1m') * 1000 : 0;
         let before: string | undefined = until !== undefined ? this.iso8601(until) : undefined;
         const rows: OHLCV[] = [];
+        let reachedSince = false;
+        let exhausted = false;
 
-        for (let page = 0; page < MAX_CANDLE_PAGES && rows.length < target; page++) {
-            const count = Math.min(CANDLE_PAGE_LIMIT, target - rows.length);
+        for (let page = 0; page < MAX_CANDLE_PAGES; page++) {
+            // `since` 가 있으면 `since` 까지 거슬러 가야 하므로 쪽마다 최대로 받는다.
+            const count = since === undefined ? Math.min(CANDLE_PAGE_LIMIT, target - rows.length) : CANDLE_PAGE_LIMIT;
             const response = this.unwrap<Dict>(await this.privateMarketGetCandles(this.extend({ symbol: market.id, interval, count, before, adjusted: 'true' }, query)));
             const candles = this.safeList(response, 'candles', []) as Dict[];
-            if (candles.length === 0) break;
-            let allBeforeSince = since !== undefined;
+            if (candles.length === 0) {
+                exhausted = true;
+                break;
+            }
             for (const candle of candles) {
                 const row = this.parseOHLCV(candle, market);
                 const start = row[0];
                 if (start === undefined) continue;
                 const shifted = start - barStartShift;
+                if (since !== undefined && shifted <= since) reachedSince = true;
                 if (since !== undefined && shifted < since) continue;
-                allBeforeSince = false;
                 rows.push([shifted, row[1], row[2], row[3], row[4], row[5]]);
             }
             const nextBefore = this.safeString(response, 'nextBefore');
-            if (nextBefore === undefined || allBeforeSince) break;
+            if (nextBefore === undefined) {
+                exhausted = true;
+                break;
+            }
+            if (since === undefined ? rows.length >= target : reachedSince) break;
             before = nextBefore;
+        }
+        if (since !== undefined && !reachedSince && !exhausted) {
+            logger.warn({ symbol: market.symbol, timeframe, since, pages: MAX_CANDLE_PAGES },
+                '[toss] 캔들 페이지 상한에 닿아 since 까지 받지 못했다. 받은 가장 오래된 봉부터 돌려준다');
         }
 
         const seen = new Set<number>();
-        return rows
+        const sorted = rows
             .filter((row) => (row[0] as number) > 0 && Number.isFinite(row[4]) && (row[4] as number) > 0)
             .filter((row) => { if (seen.has(row[0] as number)) return false; seen.add(row[0] as number); return true; })
-            .sort((a, b) => (a[0] as number) - (b[0] as number))
-            .slice(-target);
+            .sort((a, b) => (a[0] as number) - (b[0] as number));
+        return since === undefined ? sorted.slice(-target) : sorted.slice(0, target);
     }
 
     override parseOHLCV(ohlcv: unknown, _market: Market = undefined): OHLCV {
@@ -2241,7 +2256,14 @@ export class toss extends Exchange {
 
     private async fetchEndedOrders(status: 'closed' | 'canceled', symbol: Str, since: Int, limit: Int, params: Dict): Promise<Order[]> {
         const market = symbol !== undefined ? this.market(symbol) : undefined;
-        const rows = await this.fetchClosedOrderRows(market, since, limit, params, (row) => this.parseOrderStatus(row.status) === status);
+        const until = this.safeInteger(params, 'until');
+        // 서버는 `until` 을 한국 날짜로만 받으므로, 같은 날 `until` 뒤에 낸 주문은 여기서 뺀다.
+        const keep = (row: TossOrder): boolean => {
+            if (this.parseOrderStatus(row.status) !== status) return false;
+            const orderedAt = this.parse8601(row.orderedAt);
+            return until === undefined || (orderedAt !== undefined && orderedAt <= until);
+        };
+        const rows = await this.fetchClosedOrderRows(market, since, limit, params, keep);
         return this.parseOrders(rows, market, since, limit);
     }
 

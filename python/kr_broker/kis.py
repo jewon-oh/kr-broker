@@ -1304,7 +1304,11 @@ class kis(Exchange, ImplicitAPI):
     def fetch_ohlcv(self, symbol: str, timeframe: str = '1d', since: Int = None, limit: Int = 100,
                     params: Optional[Dict[str, Any]] = None) -> List[List[Any]]:
         """봉. 국내는 항상 야후 파이낸스로 받는다(KIS 는 분봉이 당일뿐이고 일봉도 100행이다). 미국 일·주·월봉은 야후를 먼저 부르고,
-        야후가 비거나 실패하면 KIS 로 다시 받는다. 둘 다 실패하면 던진다. `params['until']`(ms)로 끝 시각을 정한다."""
+        야후가 비거나 실패하면 KIS 로 다시 받는다. 둘 다 실패하면 던진다.
+
+        `since <= 시각 <= params['until']` 인 봉을 ccxt 규칙대로 `limit` 개 준다(`since` 가 있으면 가장 이른 것부터, 없으면 가장 최근 것부터).
+        `since` 가 없으면 야후의 타임프레임별 기본 기간(일봉 5년, 1분봉 1일 등) 안에서 고른다. 야후 분봉과 시간봉은 조회 폭 상한(1분봉 6일,
+        5분봉~30분봉 59일, 시간봉 729일)보다 오래된 `since` 를 상한까지 줄여 받고 경고를 남긴다."""
         timeframe = '1d' if timeframe is None else timeframe
         limit = 100 if limit is None else limit
         instrument = self._instrument_of(symbol)
@@ -1318,7 +1322,7 @@ class kis(Exchange, ImplicitAPI):
         yahoo: List[List[Any]] = []
         yahoo_error: Optional[BaseException] = None
         try:
-            yahoo = fetch_yahoo_candles(symbol, timeframe, limit, since, until, kr_market, exchange=self)
+            yahoo = fetch_yahoo_candles(instrument.symbol, timeframe, limit, since, until, kr_market, exchange=self)
         except Exception as e:
             if fallback_exchange is None:
                 raise
@@ -1326,7 +1330,7 @@ class kis(Exchange, ImplicitAPI):
         if len(yahoo) > 0 or fallback_exchange is None:
             return yahoo
         logger.info('[kis] 야후가 비거나 실패해 KIS 해외 일봉으로 폴백한다 (symbol=%s, timeframe=%s, yahooError=%s)', symbol, timeframe, yahoo_error)
-        native = self.candles().fetch_overseas_daily_ohlcv(instrument.code, fallback_exchange, timeframe, limit)
+        native = self.candles().fetch_overseas_daily_ohlcv(instrument.code, fallback_exchange, timeframe, limit, since, until)
         if len(native) == 0 and yahoo_error is not None:
             raise yahoo_error
         return native
@@ -1356,7 +1360,7 @@ class kis(Exchange, ImplicitAPI):
     # ============ 고유 조회 ============
 
     def fetch_stock_warnings(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        """변동성완화장치(VI) 발동 현황(`inquire-vi-status`). 지정한 영업일(기본은 오늘 한국 날짜)에 이 종목의 VI 가 발동한 기록이다.
+        """변동성완화장치(VI) 발동 현황(`inquire-vi-status`). 오늘(한국 날짜) 이 종목의 VI 가 발동한 기록이다. `params.until` 은 읽지 않는다.
         발동한 적이 없으면 빈 목록이다. 국내만 받는다."""
         instrument = self._instrument_of(symbol)
         if instrument.overseas:

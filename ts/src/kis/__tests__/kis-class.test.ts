@@ -14,7 +14,7 @@ import { BadSymbol, ExchangeNotAvailable, NotSupported } from '../../base/errors
 import { KISCandleService } from '../kis-candle-service';
 import { krxSellTaxRate } from '../../krx-sell-tax';
 import { KIS_MASTER_FIXTURE } from '../../__tests__/support/kis-master-fixture';
-import { dataOk, newKis as newKisBase, tokenOk } from './support/kis-test-utils';
+import { dataOk, dataUrls, newKis as newKisBase, tokenOk } from './support/kis-test-utils';
 
 /** 종목 마스터 픽스처를 넘긴 인스턴스. */
 const newKis = (config: Parameters<typeof newKisBase>[0] = {}) => newKisBase({ masterData: KIS_MASTER_FIXTURE, ...config });
@@ -211,6 +211,30 @@ describe('fetchOHLCV — 야후 우선, 미국 일봉은 KIS 폴백', () => {
 
         expect(mockFetch).not.toHaveBeenCalled();
     });
+
+    it('★야후에는 통합 심볼을 넘긴다 — KIS 표기(BRK/B)로 불러도 BRK.B/USD 다', async () => {
+        const nyse = [...KIS_MASTER_FIXTURE.nyse, { code: 'BRK/B', name: 'BERKSHIRE HATHAWAY INC-CL B', market: 'NYS' as const, currency: 'USD' }];
+        mockYahoo.mockResolvedValueOnce(daily);
+
+        await newKis({ masterData: { ...KIS_MASTER_FIXTURE, nyse } }).fetchOHLCV('BRK/B', '1d', undefined, 2);
+
+        expect(mockYahoo.mock.calls[0][0]).toBe('BRK.B/USD');
+    });
+
+    it('★미국 일봉 KIS 폴백도 since 부터 until 까지의 봉을 앞에서부터 limit 개 준다', async () => {
+        const since = Date.UTC(2024, 0, 1);
+        const until = Date.UTC(2024, 0, 6);
+        const row = (xymd: string) => ({ xymd, open: '1', high: '2', low: '0.5', clos: '1.5', tvol: '10' });
+        mockYahoo.mockResolvedValueOnce([]);
+        mockFetch.mockResolvedValueOnce(tokenOk()).mockResolvedValueOnce(dataOk({
+            output2: ['20240105', '20240104', '20240103', '20240102', '20231229'].map(row),
+        }));
+
+        const candles = await newKis().fetchOHLCV('AAPL/USD', '1d', since, 3, { until });
+
+        expect(dataUrls(mockFetch)[0]).toContain('BYMD=20240105'); // until 의 미국 동부 날짜(1/5 19:00 EST)
+        expect(candles.map((c) => c[0])).toEqual([Date.UTC(2024, 0, 2), Date.UTC(2024, 0, 3), Date.UTC(2024, 0, 4)]);
+    });
 });
 
 describe('candles() — KIS 원본 캔들', () => {
@@ -235,6 +259,7 @@ describe('candles() — KIS 원본 캔들', () => {
             const pages = [{ output2: Array.from({ length: 100 }, (_, i) => row(ymd(i))) }, { output2: [row(ymd(100))] }];
             const bymds: unknown[] = [];
             const fake = {
+                milliseconds: () => Date.now(),
                 privateGetUapiOverseasPriceV1QuotationsDailyprice: async (params: Record<string, unknown>) => {
                     bymds.push(params.BYMD);
                     return pages.shift();
@@ -248,6 +273,67 @@ describe('candles() — KIS 원본 캔들', () => {
         } finally {
             vi.useRealTimers();
         }
+    });
+
+    it('★해외 일봉에 since 를 주면 since 에 닿을 때까지 넘기고 since 부터 limit 개를 준다', async () => {
+        const since = Date.UTC(2025, 0, 1);
+        const ymd = (ms: number) => new Date(ms).toISOString().slice(0, 10).replace(/-/g, '');
+        const row = (ms: number) => ({ xymd: ymd(ms), open: '1', high: '2', low: '0.5', clos: '1.5', tvol: '10' });
+        const back = (fromMs: number, count: number, stepDays: number) =>
+            Array.from({ length: count }, (_, i) => row(fromMs - i * stepDays * 86_400_000));
+        const pages = [{ output2: back(Date.UTC(2025, 7, 20), 100, 1) }, { output2: back(Date.UTC(2025, 4, 11), 30, 5) }];
+        const bymds: unknown[] = [];
+        const fake = {
+            milliseconds: () => Date.UTC(2026, 2, 25),
+            privateGetUapiOverseasPriceV1QuotationsDailyprice: async (params: Record<string, unknown>) => {
+                bymds.push(params.BYMD);
+                return pages.shift();
+            },
+        };
+
+        const candles = await new KISCandleService(fake as unknown as Exchange).fetchOverseasDailyOHLCV('AAPL', 'NAS', '1d', 150, since);
+
+        // 첫 기준일은 지금이 아니라 since 에서 150개를 덮는 날(since + 232일)이고, 한 쪽을 다 받아도 since 에 못 닿았으면 더 넘긴다.
+        expect(bymds).toEqual(['20250820', '20250512']);
+        expect(candles).toHaveLength(127);
+        expect(candles[0][0]).toBe(Date.UTC(2025, 0, 1));
+    });
+
+    it('★국내 일봉의 조회 기간은 실행 환경의 시간대가 아니라 한국 날짜이고, 시각은 인스턴스의 시계로 읽는다', async () => {
+        const dates: unknown[] = [];
+        const fake = {
+            milliseconds: () => Date.parse('2026-09-25T20:00:00Z'), // 한국 9/26 05:00
+            privateGetUapiDomesticStockV1QuotationsInquireDailyItemchartprice: async (params: Record<string, unknown>) => {
+                dates.push([params.FID_INPUT_DATE_1, params.FID_INPUT_DATE_2]);
+                return { output2: [] };
+            },
+        };
+        const service = new KISCandleService(fake as unknown as Exchange);
+
+        await service.fetchDailyOHLCV('005930', 'D', 10);
+        await service.fetchDailyOHLCVPaged('005930', 'D', 1);
+
+        // 10봉 × 1.5 = 15일 전(한국 9/11)부터 오늘(한국 9/26)까지, 페이지 창도 한국 9/26 에서 끝난다.
+        expect(dates).toEqual([['20260911', '20260926'], ['20260510', '20260926']]);
+    });
+
+    it('★분봉 연속조회가 커서 시각의 봉을 다시 줘도 한 번만 담는다 — N분봉 거래량을 두 번 더하지 않는다', async () => {
+        const row = (hms: string) => ({
+            stck_bsop_date: '20260325', stck_cntg_hour: hms, stck_oprc: '1', stck_hgpr: '1', stck_lwpr: '1', stck_prpr: '1', cntg_vol: '1',
+        });
+        const page1 = Array.from({ length: 30 }, (_, i) => row(`10${String(59 - i).padStart(2, '0')}00`)); // 10:59 ~ 10:30
+        const page2 = [row('103000'), row('102900')]; // 커서(10:30)의 봉을 다시 준다
+        const pagesFor = () => [{ output2: page1 }, { output2: page2 }];
+        const fakeWith = (pages: Array<{ output2: unknown[] }>) => ({
+            privateGetUapiDomesticStockV1QuotationsInquireTimeItemchartprice: async () => pages.shift(),
+        }) as unknown as Exchange;
+
+        const oneMinute = await new KISCandleService(fakeWith(pagesFor())).fetchMinuteOHLCV('005930', 1, 100);
+        const tenMinute = await new KISCandleService(fakeWith(pagesFor())).fetchMinuteOHLCV('005930', 10, 100);
+
+        expect(oneMinute).toHaveLength(31);
+        expect(new Set(oneMinute.map((c) => c[0])).size).toBe(31);
+        expect(tenMinute.find((c) => c[0] === Date.parse('2026-03-25T10:30:00+09:00'))?.[5]).toBe(10);
     });
 
     it('국내 일봉을 오래된 순으로 돌려준다', async () => {

@@ -1,13 +1,14 @@
 /**
  * @fileoverview `kbsec` 시세 — `fetchTicker`·`fetchOrderBook`·`fetchOHLCV`.
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 
 const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 global.fetch = mockFetch as unknown as typeof fetch;
 
 import { kbsec } from '../../kbsec';
 import { NotSupported, NullResponse } from '../../base/errors';
+import { logger } from '../../logger';
 import { KBSEC_TR } from '../kbsec-types';
 import { kbsecCandleTimestamp } from '../kbsec-chart';
 import { __resetKbsecTokenBreaker } from '../kbsec-token-breaker';
@@ -222,6 +223,67 @@ describe('fetchOHLCV — 국내(명세 기준, 실계좌 미검증)', () => {
 
         expect(latest.map(c => c[0])).toEqual([Date.UTC(2026, 7, 19, 0, 10, 0)]);
         expect(recent.map(c => c[0])).toEqual([Date.UTC(2026, 7, 19, 0, 10, 0)]);
+    });
+
+    describe('since·until', () => {
+        /** 2026-08-19 15:00 KST */
+        const NOW = Date.UTC(2026, 7, 19, 6, 0, 0);
+        const KST_MS = 9 * 60 * 60 * 1000;
+        /** 한국 시각 ms → 명세의 `dt`·`tm` 행. 종가는 행을 가리는 표지다. */
+        const kstRow = (ms: number, close: number) => {
+            const iso = new Date(ms + KST_MS).toISOString();
+            return { dt: iso.slice(0, 10).replaceAll('-', ''), tm: iso.slice(11, 19).replaceAll(':', ''), cls_prc_p2: String(close) };
+        };
+        /** 조회건수(`inq_cnt`)만큼 `NOW` 부터 거꾸로 `stepMs` 간격의 봉을 준다(가장 최근이 먼저). 종가는 봉의 한국 날짜(일)다. */
+        const recentBars = (stepMs: number, anchor: number) => (sent: Record<string, unknown>) => ({
+            Record1: Array.from({ length: Number(sent.inq_cnt) }, (_, i) => anchor - i * stepMs)
+                .map((ms) => kstRow(ms, new Date(ms + KST_MS).getUTCDate())),
+        });
+        const DAY = 24 * 60 * 60 * 1000;
+        /** 08-19 0시(KST) */
+        const TODAY = Date.UTC(2026, 7, 18, 15, 0, 0);
+
+        beforeEach(() => {
+            vi.useFakeTimers({ toFake: ['Date'] });
+            vi.setSystemTime(NOW);
+        });
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
+        it('since 가 있으면 지금부터 since 까지 덮을 만큼 받고 since 부터 limit 개를 돌려준다(최근 limit 개가 아니다)', async () => {
+            routeTr(mockFetch, { [KBSEC_TR.CHART_KR]: recentBars(DAY, TODAY) });
+
+            const candles = await newExchange().fetchOHLCV('005930/KRW', '1d', TODAY - 8 * DAY, 2);
+
+            expect(candles.map(c => c[4])).toEqual([11, 12]);
+            // 08-11 0시부터 지금까지 달력으로 9일 남짓이다.
+            expect(trBody(mockFetch, KBSEC_TR.CHART_KR).dataBody).toMatchObject({ inq_clsf: '2', inq_cnt: '10', strt_dy: '' });
+        });
+
+        it('until 뒤의 봉은 빼고 그 앞의 최근 limit 개를 돌려준다. until 은 TR 입력으로 보내지 않는다', async () => {
+            routeTr(mockFetch, { [KBSEC_TR.CHART_KR]: recentBars(DAY, TODAY) });
+
+            const candles = await newExchange().fetchOHLCV('005930/KRW', '1d', undefined, 2, { until: TODAY - 4 * DAY });
+
+            expect(candles.map(c => c[4])).toEqual([14, 15]);
+            const sent = trBody(mockFetch, KBSEC_TR.CHART_KR).dataBody;
+            expect(sent).not.toHaveProperty('until');
+            expect(Number(sent.inq_cnt)).toBeGreaterThanOrEqual(2 + 4);
+        });
+
+        it('조회건수 상한(9999)으로도 since 에 닿지 못하면 경고를 남기고 받은 가장 오래된 봉부터 돌려준다', async () => {
+            const warn = vi.spyOn(logger, 'warn');
+            const MINUTE = 60 * 1000;
+            routeTr(mockFetch, { [KBSEC_TR.CHART_KR]: recentBars(MINUTE, NOW) });
+
+            const candles = await newExchange().fetchOHLCV('005930/KRW', '1m', NOW - 30 * DAY, 2);
+
+            expect(trBody(mockFetch, KBSEC_TR.CHART_KR).dataBody).toMatchObject({ inq_cnt: '9999' });
+            expect(candles.map(c => c[0])).toEqual([NOW - 9998 * MINUTE, NOW - 9997 * MINUTE]);
+            expect(warn).toHaveBeenCalledWith(expect.objectContaining({ symbol: '005930/KRW', count: 9999 }), expect.stringContaining('since 까지 받지 못했다'));
+            warn.mockRestore();
+        });
     });
 
     it('일자를 읽을 수 없는 행은 버린다 — 지어낸 시각으로 채우지 않는다', async () => {

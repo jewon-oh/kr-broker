@@ -274,7 +274,7 @@ main().catch(console.error);
 
 ### 기간 조회
 
-증권사 고유 조회도 ccxt 규칙을 따릅니다. 기간 시작은 `since`(ms), 개수는 `limit`, 기간 끝은 `params.until`(ms)로 줍니다. 기준일 하나만 받는 조회는 `params.until`의 한국 날짜를 기준일로 씁니다. 국내 결과 행에는 `timestamp`(ms)와 `datetime`(ISO 8601)이 있습니다. 해외 행은 날짜의 시간대를 확인하지 못해 두 값을 비워 둡니다.
+증권사 고유 조회도 ccxt 규칙을 따릅니다. 기간 시작은 `since`(ms), 개수는 `limit`, 기간 끝은 `params.until`(ms)로 줍니다. 기준일 하나만 받는 조회는 `params.until`의 한국 날짜를 기준일로 씁니다. KB증권의 `fetchDomesticSettlements(tradeDateKst)`와 `fetchOverseasSettlements(startDateUs, endDateUs)`는 예외로, 날짜를 `YYYYMMDD` 문자열(국내는 한국 날짜, 해외는 미국 날짜)로 받습니다. 국내 결과 행에는 `timestamp`(ms)와 `datetime`(ISO 8601)이 있습니다. 해외 행은 날짜의 시간대를 확인하지 못해 두 값을 비워 둡니다.
 
 ```ts
 const opinions = await broker.fetchInvestmentOpinions('005930/KRW', Date.parse('2026-06-01T00:00:00+09:00'), 20, { until: Date.now() });

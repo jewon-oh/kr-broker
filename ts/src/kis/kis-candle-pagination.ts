@@ -28,15 +28,17 @@ export interface DateWindow {
     end: string;
 }
 
-/** `Date` → `YYYYMMDD` (KIS 인자 형식). */
+const MS_PER_DAY = 86_400_000;
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+/** `Date` → `YYYYMMDD` (KIS 인자 형식). 실행 환경의 시간대가 아니라 한국 날짜다. */
 export function toKisDate(d: Date): string {
-    const y = d.getUTCFullYear();
-    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(d.getUTCDate()).padStart(2, '0');
+    const kst = new Date(d.getTime() + KST_OFFSET_MS);
+    const y = kst.getUTCFullYear();
+    const m = String(kst.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(kst.getUTCDate()).padStart(2, '0');
     return `${y}${m}${day}`;
 }
-
-const MS_PER_DAY = 86_400_000;
 
 /**
  * `endExclusiveMs` 이전으로 한 창을 만든다.
@@ -94,4 +96,14 @@ export function mergeCandles(pages: ReadonlyArray<number[][]>): number[][] {
         }
     }
     return [...byTs.values()].sort((a, b) => a[0] - b[0]);
+}
+
+/**
+ * 시각 오름차순 봉에서 `since <= 시각 <= until` 인 것만 골라 ccxt 규칙대로 `limit` 개를 남긴다.
+ * `since` 가 있으면 가장 이른 것부터, 없으면 가장 최근 것부터다.
+ */
+export function sliceCandleWindow(candles: number[][], since: number | undefined, until: number | undefined, limit: number | undefined): number[][] {
+    const inWindow = candles.filter((c) => (since === undefined || c[0] >= since) && (until === undefined || c[0] <= until));
+    if (limit === undefined) return inWindow;
+    return since === undefined ? inWindow.slice(-limit) : inWindow.slice(0, limit);
 }

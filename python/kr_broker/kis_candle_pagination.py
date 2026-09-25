@@ -16,12 +16,15 @@ KIS_DAILY_PAGE_DAYS = 140
 KIS_DAILY_MAX_PAGES = 12
 
 MS_PER_DAY = 86_400_000
+KST_OFFSET_MS = 9 * 60 * 60 * 1000
 _EPOCH = datetime.datetime(1970, 1, 1)
 
 
 def to_kis_date(ms: float) -> str:
-    """UTC 밀리초 → `YYYYMMDD`(UTC 날짜). KIS 인자 형식이다."""
-    d = _EPOCH + datetime.timedelta(milliseconds=ms)
+    """UTC 밀리초 → `YYYYMMDD`. KIS 인자 형식이고, 실행 환경의 시간대가 아니라 한국 날짜다. 시각이 아니면 JavaScript 처럼 `NaNNaNNaN` 이다."""
+    if not isinstance(ms, (int, float)) or not math.isfinite(ms):
+        return 'NaNNaNNaN'
+    d = _EPOCH + datetime.timedelta(milliseconds=ms + KST_OFFSET_MS)
     return f'{d.year:04d}{d.month:02d}{d.day:02d}'
 
 
@@ -57,3 +60,13 @@ def merge_candles(pages: Iterable[List[List[float]]]) -> List[List[float]]:
                 continue
             by_ts[ts] = candle
     return sorted(by_ts.values(), key=lambda c: c[0])
+
+
+def slice_candle_window(candles: List[List[float]], since: Optional[float], until: Optional[float],
+                        limit: Optional[int]) -> List[List[float]]:
+    """시각 오름차순 봉에서 `since <= 시각 <= until` 인 것만 골라 ccxt 규칙대로 `limit` 개를 남긴다.
+    `since` 가 있으면 가장 이른 것부터, 없으면 가장 최근 것부터다."""
+    in_window = [c for c in candles if (since is None or c[0] >= since) and (until is None or c[0] <= until)]
+    if limit is None:
+        return in_window
+    return in_window[-limit:] if since is None else in_window[:limit]

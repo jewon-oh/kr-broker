@@ -18,7 +18,8 @@ from kr_broker.base.exchange import Exchange
 from kr_broker.broker_time import timeframe_to_ms
 from kr_broker.kis import et_timestamp, kst_timestamp, kst_ymd, et_ymd
 from kr_broker.kis_candle_pagination import (
-    KIS_DAILY_MAX_PAGES, KIS_DAILY_PAGE_DAYS, KIS_DAILY_PAGE_ROWS, merge_candles, plan_windows, to_kis_date, window_before,
+    KIS_DAILY_MAX_PAGES, KIS_DAILY_PAGE_DAYS, KIS_DAILY_PAGE_ROWS, merge_candles, plan_windows, slice_candle_window, to_kis_date,
+    window_before,
 )
 from kr_broker.kis_candle_resample import resample_candles
 from kr_broker.kis_candle_service import KISCandleService
@@ -72,6 +73,13 @@ def test_to_kis_date_pads() -> None:
     assert to_kis_date(utc('2026-01-05T00:00:00')) == '20260105'
 
 
+def test_to_kis_date_is_kst_date() -> None:
+    # 실행 환경의 시간대가 아니라 한국 날짜다. UTC 20시는 한국 다음 날 새벽이다.
+    assert to_kis_date(utc('2026-09-25T20:00:00')) == '20260926'
+    assert to_kis_date(utc('2026-09-25T14:59:59')) == '20260925'
+    assert plan_windows(1, utc('2026-09-25T20:00:00'))[0] == {'start': '20260510', 'end': '20260926'}
+
+
 def test_window_before_is_days_long() -> None:
     assert window_before(NOW, 10) == {'start': '20260812', 'end': '20260821'}
 
@@ -105,6 +113,14 @@ def test_merge_candles() -> None:
     merged = merge_candles([[c(100, 1)], [c(100, 9), c(200, 2)]])
     assert len(merged) == 2 and merged[0][4] == 9
     assert merge_candles([[], [[float('nan'), 1, 2, 3, 4, 5]]]) == []
+
+
+def test_slice_candle_window() -> None:
+    rows = [[ts, 1, 2, 0, 1, 10] for ts in (100, 200, 300, 400, 500)]
+    assert [c[0] for c in slice_candle_window(rows, 150, None, 2)] == [200, 300]
+    assert [c[0] for c in slice_candle_window(rows, None, None, 2)] == [400, 500]
+    assert [c[0] for c in slice_candle_window(rows, 200, 400, 10)] == [200, 300, 400]
+    assert [c[0] for c in slice_candle_window(rows, None, 300, 2)] == [200, 300]
 
 
 def test_resample_candles() -> None:
@@ -169,6 +185,16 @@ def test_to_yahoo_range_buckets() -> None:
     day = 86_400_000
     assert [to_yahoo_range(n * day) for n in (1, 5, 30, 90, 180, 200, 731, 1826, 3651, 4000)] == [
         '1d', '5d', '1mo', '3mo', '6mo', '1y', '2y', '5y', '10y', 'max']
+
+
+def test_to_yahoo_range_uses_days_over_cap() -> None:
+    # 버킷(3mo·1mo)이 분봉 조회 폭 상한을 넘으면 야후가 422 로 거절하므로 일수로 적는다.
+    day = 86_400_000
+    assert to_yahoo_range(40 * day, 59 * day) == '40d'
+    assert to_yahoo_range(59 * day, 59 * day) == '59d'
+    assert to_yahoo_range(5.5 * day, 6 * day) == '6d'
+    assert to_yahoo_range(20 * day, 59 * day) == '1mo'
+    assert to_yahoo_range(200 * day, 729 * day) == '1y'
 
 
 class FakeResponse:
@@ -266,6 +292,32 @@ def test_yahoo_uses_range_not_period(no_backoff: None) -> None:
     assert session.urls[0].startswith('https://query1.finance.yahoo.com/v8/finance/chart/005930.KS?')
 
 
+US_DAILY = [[utc(t), 1, 2, 0.5, 1.5, 100] for t in (
+    '2023-12-29T14:30:00', '2024-01-02T14:30:00', '2024-01-03T14:30:00', '2024-01-04T14:30:00', '2024-01-05T14:30:00',
+    '2024-01-08T14:30:00', '2026-03-24T13:30:00')]
+
+
+def test_yahoo_since_until_takes_first_limit_from_since(no_backoff: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(fn, 'milliseconds', lambda: utc('2026-03-25T12:00:00'))
+    session = FakeSession([yahoo_ok(US_DAILY)])
+    exchange = Exchange({'session': session})
+    out = fetch_yahoo_candles('AAPL', '1d', 3, utc('2024-01-01T00:00:00'), utc('2024-01-06T00:00:00'), exchange=exchange)
+    assert [c[0] for c in out] == [utc('2024-01-02T14:30:00'), utc('2024-01-03T14:30:00'), utc('2024-01-04T14:30:00')]
+    # range 는 지금에서 거슬러 세므로 until 이 아니라 since 부터 지금까지를 덮는다(814일 → 5y).
+    assert 'range=5y' in session.urls[0]
+    out = fetch_yahoo_candles('AAPL', '1d', 2, None, utc('2024-01-06T00:00:00'), exchange=exchange)
+    assert [c[0] for c in out] == [utc('2024-01-04T14:30:00'), utc('2024-01-05T14:30:00')]
+
+
+def test_yahoo_minute_since_beyond_cap_warns(no_backoff: None, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    monkeypatch.setattr(fn, 'milliseconds', lambda: utc('2026-03-25T12:00:00'))
+    session = FakeSession([yahoo_ok(ONE)])
+    with caplog.at_level('WARNING', logger='kr_broker'):
+        fetch_yahoo_candles('AAPL', '5m', 10, utc('2024-01-01T00:00:00'), exchange=Exchange({'session': session}))
+    assert 'range=59d' in session.urls[0]
+    assert any('상한' in record.getMessage() for record in caplog.records)
+
+
 def test_yahoo_ticker_suffix(no_backoff: None) -> None:
     session = FakeSession([yahoo_ok(ONE)])
     fetch_yahoo_candles('247540/KRW', '1d', 10, kr_market='KOSDAQ', exchange=Exchange({'session': session}))
@@ -293,9 +345,17 @@ def test_yahoo_concurrency_is_capped() -> None:
 # ============ KIS 원본 봉 ============
 
 class FakeKis:
-    def __init__(self, pages: List[Any]) -> None:
+    def __init__(self, pages: List[Any], now: Optional[int] = None) -> None:
         self.pages = list(pages)
         self.calls: List[Dict[str, Any]] = []
+        self.now = now
+
+    def milliseconds(self) -> int:
+        return fn.milliseconds() if self.now is None else self.now
+
+    def private_get_uapi_domestic_stock_v1_quotations_inquire_daily_itemchartprice(self, params: Dict[str, Any]) -> Any:
+        self.calls.append(params)
+        return {'output2': []}
 
     def private_get_uapi_overseas_price_v1_quotations_dailyprice(self, params: Dict[str, Any]) -> Any:
         self.calls.append(params)
@@ -323,6 +383,40 @@ def test_overseas_daily_pages_back_from_last_day(monkeypatch: pytest.MonkeyPatch
     assert len(out) == 101 and out[0][0] == calendar.timegm(days[100].timetuple()) * 1000 and out[-1][0] == utc('2026-03-24T00:00:00')
 
 
+def test_overseas_daily_since_pages_until_reached() -> None:
+    # 첫 기준일은 지금이 아니라 since 에서 150개를 덮는 날(since + 232일)이고, 한 쪽을 다 받아도 since 에 못 닿았으면 더 넘긴다.
+    since = utc('2025-01-01T00:00:00')
+
+    def rows(start: datetime.date, count: int, step: int) -> List[Dict[str, str]]:
+        days = [start - datetime.timedelta(days=i * step) for i in range(count)]
+        return [{'xymd': d.strftime('%Y%m%d'), 'open': '1', 'high': '2', 'low': '0.5', 'clos': '1.5', 'tvol': '10'} for d in days]
+
+    fake = FakeKis([{'output2': rows(datetime.date(2025, 8, 20), 100, 1)}, {'output2': rows(datetime.date(2025, 5, 11), 30, 5)}],
+                   now=utc('2026-03-25T00:00:00'))
+    out = KISCandleService(fake).fetch_overseas_daily_ohlcv('AAPL', 'NAS', '1d', 150, since)
+    assert [call['BYMD'] for call in fake.calls] == ['20250820', '20250512']
+    assert len(out) == 127 and out[0][0] == since
+
+
+def test_overseas_daily_since_until_first_limit() -> None:
+    row = {'open': '1', 'high': '2', 'low': '0.5', 'clos': '1.5', 'tvol': '10'}
+    fake = FakeKis([{'output2': [dict(row, xymd=d) for d in ('20240105', '20240104', '20240103', '20240102', '20231229')]}])
+    out = KISCandleService(fake).fetch_overseas_daily_ohlcv('AAPL', 'NAS', '1d', 3, utc('2024-01-01T00:00:00'), utc('2024-01-06T00:00:00'))
+    # 기준일은 until 의 미국 동부 날짜(1/5 19:00 EST)다.
+    assert fake.calls[0]['BYMD'] == '20240105'
+    assert [c[0] for c in out] == [utc('2024-01-02T00:00:00'), utc('2024-01-03T00:00:00'), utc('2024-01-04T00:00:00')]
+
+
+def test_domestic_daily_dates_are_kst_from_exchange_clock() -> None:
+    # 한국 9/26 05:00. 실행 환경의 시간대와 상관없이 한국 날짜로 적고, 시각은 인스턴스의 시계로 읽는다.
+    fake = FakeKis([], now=utc('2026-09-25T20:00:00'))
+    service = KISCandleService(fake)
+    service.fetch_daily_ohlcv('005930', 'D', 10)
+    service.fetch_daily_ohlcv_paged('005930', 'D', 1)
+    assert [(call['FID_INPUT_DATE_1'], call['FID_INPUT_DATE_2']) for call in fake.calls] == [
+        ('20260911', '20260926'), ('20260510', '20260926')]
+
+
 def test_overseas_daily_rejects_minute_timeframe() -> None:
     fake = FakeKis([])
     assert KISCandleService(fake).fetch_overseas_daily_ohlcv('AAPL', 'NAS', '5m', 10) == []
@@ -342,6 +436,20 @@ def test_minute_candles_follow_cursor_and_resample() -> None:
     assert len(out) == 31 and out[0][0] == utc('2026-03-25T01:29:00')
     fake = FakeKis([{'output2': page1}, {'output2': page2}])
     assert len(KISCandleService(fake).fetch_minute_ohlcv('005930', 10, 100)) == 4
+
+
+def test_minute_candles_keep_cursor_bar_once() -> None:
+    # 연속조회가 커서(10:30)의 봉을 다시 줘도 한 번만 담는다. 10분봉 거래량을 두 번 더하지 않는다.
+    def row(hms: str) -> Dict[str, str]:
+        return {'stck_bsop_date': '20260325', 'stck_cntg_hour': hms, 'stck_oprc': '1', 'stck_hgpr': '1', 'stck_lwpr': '1',
+                'stck_prpr': '1', 'cntg_vol': '1'}
+
+    page1 = [row(f'10{59 - i:02d}00') for i in range(30)]
+    page2 = [row('103000'), row('102900')]
+    out = KISCandleService(FakeKis([{'output2': page1}, {'output2': page2}])).fetch_minute_ohlcv('005930', 1, 100)
+    assert len(out) == 31 and len({c[0] for c in out}) == 31
+    ten = KISCandleService(FakeKis([{'output2': page1}, {'output2': page2}])).fetch_minute_ohlcv('005930', 10, 100)
+    assert next(c for c in ten if c[0] == utc('2026-03-25T01:30:00'))[5] == 10
 
 
 # ============ 시각 ============

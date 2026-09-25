@@ -70,7 +70,7 @@ import { confirmExecution, fillDeviationBps, tradeListProbe } from './execution-
 import { expandBusinessDays, refreshMarketCalendar as refreshSharedMarketCalendar, type CalendarDay } from './market-calendar';
 import { marketSessionBlockReason } from './trading-hours';
 import { KBSecAuth } from './kbsec/kbsec-auth';
-import { kbsecCandleTimestamp, kbsecChartParams, KBSEC_TIMEFRAMES, kbsecUsCandleTimestamp } from './kbsec/kbsec-chart';
+import { kbsecBarMs, kbsecCandleTimestamp, kbsecChartParams, KBSEC_CHART_MAX, KBSEC_TIMEFRAMES, kbsecUsCandleTimestamp } from './kbsec/kbsec-chart';
 import {
     isKBSecBusinessError, isKBSecTokenFailure, kbsecHostAddr, type KBSecResponseHeader,
 } from './kbsec/kbsec-envelope';
@@ -2658,6 +2658,10 @@ export class kbsec extends Exchange {
      * 봉. **국내만 지원한다.** 명세(`IVS11560`)의 필드 이름으로 읽으며, 실계좌로 검증한 적은 없다.
      * 해외 차트(`GSC10060`)는 15분 지연 시세다. 지연 봉을 공통 메서드에 섞지 않으려고 해외는 `fetchOverseasCandles`로만 준다.
      * 시장구분(`mkt_clsf`)은 코스피(`0`)로 보낸다. 코스닥 종목에서 빈 응답이 오면 `params.mkt_clsf` 에 `'1'` 을 넘긴다.
+     *
+     * `since` 가 있으면 `since` 부터 `limit`(기본 100) 개이고, 없으면 가장 최근 `limit` 개다. `params.until`(ms)은 그 시각까지의 봉만 남긴다.
+     * 명세의 시작일(`strt_dy`)은 뜻을 확인하지 못해 비워 보낸다. 대신 지금부터 `since`(또는 `until`)까지 덮을 만큼 최근 봉을 받아 거른다.
+     * 조회건수 상한(9999)으로도 `since` 까지 닿지 못하면 경고 로그를 남기고 받은 가장 오래된 봉부터 돌려준다.
      */
     override async fetchOHLCV(
         symbol: string, timeframe = '1d', since: Int = undefined, limit: Int = undefined, params: Dict = {},
@@ -2667,7 +2671,15 @@ export class kbsec extends Exchange {
             throw new NotSupported(`${this.id} fetchOHLCV() 는 국내 종목만 지원한다: 해외 차트는 15분 지연 시세라 fetchOverseasCandles 로 준다`);
         }
         const { chrt_clsf, minute } = kbsecChartParams(timeframe);
-        const count = Math.min(limit ?? 100, 9999);
+        const wanted = limit ?? 100;
+        const until = this.safeInteger(params, 'until');
+        const query = this.omit(params, 'until');
+        // 조회는 가장 최근 봉부터 개수로만 하므로, 지금부터 그 시각까지 들어가는 봉 수를 달력 시간으로 넉넉히 센다.
+        const barsSince = (from: number): number => Math.ceil((this.milliseconds() - from) / kbsecBarMs(timeframe)) + 1;
+        let count = wanted;
+        if (since !== undefined) count = Math.max(wanted, barsSince(since));
+        else if (until !== undefined) count = wanted + Math.max(0, barsSince(until));
+        count = Math.min(count, KBSEC_CHART_MAX);
         const body = await this.callTr(KBSEC_TR.CHART_KR, {
             info_ccd: '1', // 원주가
             mkt_clsf: '0', // KOSPI. KOSDAQ 종목도 KB 가 종목코드로 해석하는지는 실측이 필요하다.
@@ -2676,10 +2688,16 @@ export class kbsec extends Exchange {
             is_cd: market.id,
             inq_clsf: '2', // 데이터 수로 조회
             inq_cnt: kbsecNum(count),
-            ...params,
+            ...query,
         });
-        const rows = pickArray(body).filter(row => kbsecCandleTimestamp(pickStr(row, 'dt'), pickStr(row, 'tm')) !== undefined);
-        return this.parseOHLCVs(rows, market, timeframe, since, limit);
+        const received = pickArray(body);
+        const rows = received.filter(row => kbsecCandleTimestamp(pickStr(row, 'dt'), pickStr(row, 'tm')) !== undefined);
+        const candles = this.parseOHLCVs(rows, market, timeframe).filter((candle) => until === undefined || (candle[0] as number) <= until);
+        const oldest = candles[0]?.[0];
+        if (since !== undefined && received.length >= count && oldest !== undefined && oldest > since) {
+            logger.warn({ symbol: market.symbol, timeframe, since, oldest, count }, '[kbsec] 봉 조회건수 상한에 닿아 since 까지 받지 못했다. 받은 가장 오래된 봉부터 돌려준다');
+        }
+        return this.filterBySinceLimit(candles, since, wanted, 0) as OHLCV[];
     }
 
     override parseOHLCV(ohlcv: Dict): OHLCV {

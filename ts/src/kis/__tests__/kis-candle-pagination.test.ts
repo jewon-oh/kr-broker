@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 
 import {
-    planWindows, windowBefore, toKisDate, mergeCandles,
+    planWindows, windowBefore, toKisDate, mergeCandles, sliceCandleWindow,
     KIS_DAILY_PAGE_DAYS, KIS_DAILY_PAGE_ROWS, KIS_DAILY_MAX_PAGES,
 } from '../kis-candle-pagination';
 
@@ -17,6 +17,11 @@ const NOW = Date.UTC(2026, 7, 21); // 2026-08-21
 describe('toKisDate', () => {
     it('YYYYMMDD 로 0 패딩한다', () => {
         expect(toKisDate(new Date(Date.UTC(2026, 0, 5)))).toBe('20260105');
+    });
+
+    it('★실행 환경의 시간대가 아니라 한국 날짜다 — UTC 20시는 한국 다음 날 새벽이다', () => {
+        expect(toKisDate(new Date(Date.parse('2026-09-25T20:00:00Z')))).toBe('20260926');
+        expect(toKisDate(new Date(Date.parse('2026-09-25T14:59:59Z')))).toBe('20260925');
     });
 });
 
@@ -58,6 +63,10 @@ describe('planWindows', () => {
         }
     });
 
+    it('★첫 창의 끝은 기준 시각의 한국 날짜다', () => {
+        expect(planWindows(1, Date.parse('2026-09-25T20:00:00Z'))[0]).toEqual({ start: '20260510', end: '20260926' });
+    });
+
     it('창은 과거로 간다 — 순서가 뒤집히지 않는다', () => {
         const ws = planWindows(400, NOW);
         for (let i = 0; i + 1 < ws.length; i++) {
@@ -86,5 +95,23 @@ describe('mergeCandles', () => {
 
     it('빈 페이지·잘못된 타임스탬프를 걸러낸다', () => {
         expect(mergeCandles([[], [[NaN, 1, 2, 3, 4, 5]]])).toEqual([]);
+    });
+});
+
+describe('sliceCandleWindow', () => {
+    const c = (ts: number) => [ts, 1, 2, 0, 1, 10];
+    const rows = [c(100), c(200), c(300), c(400), c(500)];
+
+    it('since 가 있으면 since 부터 앞에서 limit 개다', () => {
+        expect(sliceCandleWindow(rows, 150, undefined, 2).map((x) => x[0])).toEqual([200, 300]);
+    });
+
+    it('since 가 없으면 가장 최근 limit 개다', () => {
+        expect(sliceCandleWindow(rows, undefined, undefined, 2).map((x) => x[0])).toEqual([400, 500]);
+    });
+
+    it('until 은 그 시각을 포함하고 그 뒤를 뺀다', () => {
+        expect(sliceCandleWindow(rows, 200, 400, 10).map((x) => x[0])).toEqual([200, 300, 400]);
+        expect(sliceCandleWindow(rows, undefined, 300, 2).map((x) => x[0])).toEqual([200, 300]);
     });
 });

@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ArgumentsRequired, BadResponse, NotSupported, NullResponse } from '../../base';
 import { krxSellTaxRate } from '../../krx-sell-tax';
+import { logger } from '../../logger';
 import { TOSS_BROKERAGE_FEE, TOSS_US_BROKERAGE_FEE } from '../toss-types';
 import { errorReply, installFakeToss, jsonOk, makeToss, type FakeRequest } from './support/toss-fake';
 
@@ -165,6 +166,44 @@ describe('봉', () => {
         const rows = await makeToss().fetchOHLCV('005930', '1d', Date.parse('2026-07-16T00:00:00+09:00'), 10, { until });
         expect(rows.map((row) => row[4])).toEqual([70500]);
         expect(fake.requestsTo('GET /api/v1/candles')[0].query.get('before')).toBe('2026-07-17T00:00:00.000Z');
+    });
+
+    /** `before`(없으면 07-21 0시) 전날부터 거꾸로 하루 한 봉씩, 쪽마다 `perPage` 봉을 준다. 종가는 그날의 일(日)이다. */
+    const dailyPages = (perPage: number) => (request: FakeRequest) => {
+        const end = Date.parse(request.query.get('before') ?? '2026-07-21T00:00:00+09:00');
+        const candles = Array.from({ length: perPage }, (_, i) => {
+            // 한국 자정에 9시간을 더해 UTC 필드로 한국 날짜를 읽는다.
+            const kst = new Date(end - (i + 1) * 86_400_000 + 9 * 3_600_000);
+            return candle(`${kst.toISOString().slice(0, 10)}T00:00:00+09:00`, String(kst.getUTCDate()));
+        });
+        return jsonOk({ candles, nextBefore: candles[candles.length - 1].timestamp });
+    };
+
+    it('since 가 있으면 since 까지 거슬러 받고 since 부터 limit 개를 돌려준다(최근 limit 개가 아니다)', async () => {
+        const fake = installFakeToss({ 'GET /api/v1/candles': dailyPages(3) });
+        const rows = await makeToss().fetchOHLCV('005930', '1d', Date.parse('2026-07-11T00:00:00+09:00'), 3);
+        expect(rows.map((row) => row[4])).toEqual([11, 12, 13]);
+        // 쪽마다 최대로 받고, since 가 든 쪽에서 멈춘다.
+        const requests = fake.requestsTo('GET /api/v1/candles');
+        expect(requests.map((r) => r.query.get('count'))).toEqual(['200', '200', '200', '200']);
+    });
+
+    it('쪽 수 상한까지 받아도 since 에 닿지 못하면 경고를 남기고 받은 가장 오래된 봉부터 돌려준다', async () => {
+        const warn = vi.spyOn(logger, 'warn');
+        const fake = installFakeToss({ 'GET /api/v1/candles': dailyPages(1) });
+        const rows = await makeToss().fetchOHLCV('005930', '1d', Date.parse('2026-01-01T00:00:00+09:00'), 2);
+        expect(fake.requestsTo('GET /api/v1/candles')).toHaveLength(10);
+        // 07-20 부터 10봉을 거슬러 07-11 까지 받았다.
+        expect(rows.map((row) => row[4])).toEqual([11, 12]);
+        expect(warn).toHaveBeenCalledWith(expect.objectContaining({ symbol: '005930/KRW', since: Date.parse('2026-01-01T00:00:00+09:00') }), expect.stringContaining('since 까지 받지 못했다'));
+    });
+
+    it('since 뒤에 상장해 봉이 먼저 끝나면 경고 없이 있는 봉부터 돌려준다', async () => {
+        const warn = vi.spyOn(logger, 'warn');
+        installFakeToss({ 'GET /api/v1/candles': jsonOk({ candles: [candle('2026-07-16T00:00:00+09:00', '70500')], nextBefore: null }) });
+        const rows = await makeToss().fetchOHLCV('005930', '1d', Date.parse('2026-01-01T00:00:00+09:00'), 2);
+        expect(rows.map((row) => row[4])).toEqual([70500]);
+        expect(warn).not.toHaveBeenCalled();
     });
 });
 

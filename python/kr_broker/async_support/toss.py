@@ -879,7 +879,9 @@ class toss(Exchange, ImplicitAPI):
     async def fetch_ohlcv(self, symbol: str, timeframe: str = '1m', since: Int = None, limit: Int = None,
                     params: Optional[Dict[str, Any]] = None) -> List[List[Any]]:
         """봉. 토스는 `1m` 과 `1d` 만 준다. 다른 주기는 가까운 주기로 바꾸지 않고 던진다.
-        봉의 시각은 시작 시각이다(토스의 1분봉은 종료 시각으로 오므로 1분을 뺀다). `params['until']`(ms)은 이 시각 이전의 봉만 받는다."""
+        봉의 시각은 시작 시각이다(토스의 1분봉은 종료 시각으로 오므로 1분을 뺀다). `params['until']`(ms)은 이 시각 이전의 봉만 받는다.
+        `since` 가 있으면 `since` 부터 `limit` 개이고, 없으면 가장 최근 `limit` 개다. 최신 봉부터 200봉씩 10쪽까지 거슬러 받으므로,
+        그 안에 `since` 까지 닿지 못하면 경고 로그를 남기고 받은 가장 오래된 봉부터 돌려준다."""
         params = {} if params is None else params
         interval = self.safe_string(self.timeframes, timeframe)
         if interval is None:
@@ -891,30 +893,39 @@ class toss(Exchange, ImplicitAPI):
         bar_start_shift = int(self.parse_timeframe('1m') * 1000) if timeframe == '1m' else 0
         before = self.iso8601(until) if until is not None else None
         rows: List[List[Any]] = []
-        page = 0
-        while page < MAX_CANDLE_PAGES and len(rows) < target:
-            page += 1
-            count = min(CANDLE_PAGE_LIMIT, target - len(rows))
+        reached_since = False
+        exhausted = False
+        for _ in range(MAX_CANDLE_PAGES):
+            # `since` 가 있으면 `since` 까지 거슬러 가야 하므로 쪽마다 최대로 받는다.
+            count = min(CANDLE_PAGE_LIMIT, target - len(rows)) if since is None else CANDLE_PAGE_LIMIT
             request = {'symbol': market['id'], 'interval': interval, 'count': count, 'before': before, 'adjusted': 'true'}
             response = self.unwrap(await self.private_market_get_candles(self.extend(request, query)))
             candles = self.safe_list(response, 'candles', [])
             if not candles:
+                exhausted = True
                 break
-            all_before_since = since is not None
             for candle in candles:
                 row = self.parse_ohlcv(candle, market)
                 start = row[0]
                 if start is None:
                     continue
                 shifted = start - bar_start_shift
+                if since is not None and shifted <= since:
+                    reached_since = True
                 if since is not None and shifted < since:
                     continue
-                all_before_since = False
                 rows.append([shifted, row[1], row[2], row[3], row[4], row[5]])
             next_before = self.safe_string(response, 'nextBefore')
-            if next_before is None or all_before_since:
+            if next_before is None:
+                exhausted = True
+                break
+            done = len(rows) >= target if since is None else reached_since
+            if done:
                 break
             before = next_before
+        if since is not None and not reached_since and not exhausted:
+            logger.warning('[toss] 캔들 페이지 상한에 닿아 since 까지 받지 못했다. 받은 가장 오래된 봉부터 돌려준다(%s %s since=%s, %d쪽)',
+                           market['symbol'], timeframe, since, MAX_CANDLE_PAGES)
         seen = set()
         result = []
         for row in rows:
@@ -923,7 +934,7 @@ class toss(Exchange, ImplicitAPI):
             seen.add(row[0])
             result.append(row)
         result.sort(key=lambda row: row[0])
-        return result[-target:]
+        return result[-target:] if since is None else result[:target]
 
     def parse_ohlcv(self, ohlcv: Any, market: Optional[Dict[str, Any]] = None) -> List[Any]:
         return [
@@ -1727,8 +1738,17 @@ class toss(Exchange, ImplicitAPI):
     async def _fetch_ended_orders(self, status: str, symbol: Str, since: Int, limit: Int,
                             params: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
         market = self.market(symbol) if symbol is not None else None
-        rows = await self._fetch_closed_order_rows(market, since, limit, {} if params is None else params,
-                                                   lambda row: self.parse_order_status(self.safe_string(row, 'status')) == status)
+        params = {} if params is None else params
+        until = self.safe_integer(params, 'until')
+
+        # 서버는 `until` 을 한국 날짜로만 받으므로, 같은 날 `until` 뒤에 낸 주문은 여기서 뺀다.
+        def keep(row: Dict[str, Any]) -> bool:
+            if self.parse_order_status(self.safe_string(row, 'status')) != status:
+                return False
+            ordered_at = self.parse8601(self.safe_string(row, 'orderedAt'))
+            return until is None or (ordered_at is not None and ordered_at <= until)
+
+        rows = await self._fetch_closed_order_rows(market, since, limit, params, keep)
         return self.parse_orders(rows, market, since, limit)
 
     async def _fetch_closed_order_rows(self, market: Optional[Dict[str, Any]], since: Int, limit: Int,

@@ -3,9 +3,10 @@
  * @description 미지원 timeframe 의 silent 1d 폴백 제거 회귀 방지.
  * 버스트 스로틀(빈 응답) 재시도 회복.
  */
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { BadSymbol, ExchangeNotAvailable, NetworkError, NotSupported } from '../../base/errors';
 import { fetchYahooCandles } from '../yahoo-finance-candles';
+import { logger } from '../../logger';
 
 describe('fetchYahooCandles — 미지원 timeframe', () => {
     it("'3m' 같은 미지원 timeframe 은 throw — silent 1d 폴백 차단", async () => {
@@ -146,6 +147,63 @@ describe('fetchYahooCandles — range 파라미터 (undici period 400 회피)', 
         await fetchYahooCandles('005930', '1d', 10);
         expect(capturedUrl).toContain('range=');
         expect(capturedUrl).not.toContain('period1');
+    });
+});
+
+describe('fetchYahooCandles — since·until', () => {
+    const NOW = Date.parse('2026-03-25T12:00:00Z');
+    const bar = (iso: string): OHLCV => [Date.parse(iso), 1, 2, 0.5, 1.5, 100];
+    // 미국 일봉은 개장 시각(14:30 UTC)에 온다. 먼 과거 구간 뒤에 최근 봉이 이어진다.
+    const daily = [
+        bar('2023-12-29T14:30:00Z'), bar('2024-01-02T14:30:00Z'), bar('2024-01-03T14:30:00Z'), bar('2024-01-04T14:30:00Z'),
+        bar('2024-01-05T14:30:00Z'), bar('2024-01-08T14:30:00Z'), bar('2026-03-24T13:30:00Z'),
+    ];
+    let urls: string[] = [];
+
+    beforeEach(() => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(NOW);
+        urls = [];
+        vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+            urls.push(String(url));
+            return yahooOk(daily);
+        });
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+        vi.restoreAllMocks();
+    });
+
+    it('★since 가 있으면 since 부터 until 까지의 봉을 앞에서부터 limit 개 준다', async () => {
+        const out = await fetchYahooCandles('AAPL', '1d', 3, Date.UTC(2024, 0, 1), Date.UTC(2024, 0, 6));
+
+        expect(out.map((c) => new Date(c[0]).toISOString().slice(0, 10))).toEqual(['2024-01-02', '2024-01-03', '2024-01-04']);
+        // range 는 지금에서 거슬러 세므로 until 이 아니라 since 부터 지금까지를 덮는다(814일 → 5y).
+        expect(urls[0]).toContain('range=5y');
+    });
+
+    it('since 없이 until 만 주면 until 이전의 최근 limit 개다', async () => {
+        const out = await fetchYahooCandles('AAPL', '1d', 2, undefined, Date.UTC(2024, 0, 6));
+
+        expect(out.map((c) => c[0])).toEqual([Date.parse('2024-01-04T14:30:00Z'), Date.parse('2024-01-05T14:30:00Z')]);
+    });
+
+    it('★분봉의 조회 폭이 range 값보다 좁으면 일수로 적는다 — 3mo·1mo 는 야후가 422 로 거절한다', async () => {
+        await fetchYahooCandles('AAPL', '5m', 10, NOW - 40 * 86_400_000);
+        await fetchYahooCandles('AAPL', '1m', 10, NOW - 5.5 * 86_400_000);
+        await fetchYahooCandles('AAPL', '5m', 10, NOW - 20 * 86_400_000);
+
+        expect(urls.map((u) => new URL(u).searchParams.get('range'))).toEqual(['40d', '6d', '1mo']);
+    });
+
+    it('★since 가 조회 폭 상한보다 오래되면 상한까지 줄여 받고 경고를 남긴다', async () => {
+        const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined as never);
+
+        await fetchYahooCandles('AAPL', '5m', 10, Date.UTC(2024, 0, 1));
+
+        expect(new URL(urls[0]).searchParams.get('range')).toBe('59d');
+        expect(warn).toHaveBeenCalledWith(expect.objectContaining({ timeframe: '5m', since: Date.UTC(2024, 0, 1) }), expect.stringContaining('상한'));
     });
 });
 

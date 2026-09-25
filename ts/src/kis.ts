@@ -252,7 +252,7 @@ export interface KisStockInfo {
 }
 
 /**
- * 변동성완화장치(VI) 발동 기록 하나(`inquire-vi-status`, TR `FHPST01390000`). 지정한 영업일에 이 종목의 VI 가
+ * 변동성완화장치(VI) 발동 기록 하나(`inquire-vi-status`, TR `FHPST01390000`). 조회한 날(오늘)에 이 종목의 VI 가
  * 발동한 적이 있으면 그 기록이다(발동한 적 없으면 이 배열 자체가 비어 있다).
  *
  * 토스가 함께 주는 유의사항 여섯 종류(정리매매·투자경고·투자위험·단기과열·VI·신주인수권) 중 발동 기록을 주는 KIS API 는 VI 뿐이다.
@@ -4796,7 +4796,11 @@ export class kis extends Exchange {
 
     /**
      * 캔들. 국내는 항상 야후 파이낸스로 받는다(KIS 는 분봉이 당일뿐이고 일봉도 100행이라 과거 이력이 모자란다). 미국 일봉·주봉·월봉은 야후를
-     * 먼저 부르고, 야후가 비거나 실패하면 KIS 로 다시 받는다. 둘 다 실패하면 던진다. `params.until` 로 끝 시각을 정한다.
+     * 먼저 부르고, 야후가 비거나 실패하면 KIS 로 다시 받는다. 둘 다 실패하면 던진다.
+     *
+     * `since <= 시각 <= params.until` 인 봉을 ccxt 규칙대로 `limit` 개 준다(`since` 가 있으면 가장 이른 것부터, 없으면 가장 최근 것부터).
+     * `since` 가 없으면 야후의 타임프레임별 기본 기간(일봉 5년, 1분봉 1일 등) 안에서 고른다. 야후 분봉과 시간봉은 조회 폭 상한(1분봉 6일,
+     * 5분봉~30분봉 59일, 시간봉 729일)보다 오래된 `since` 를 상한까지 줄여 받고 경고를 남긴다.
      */
     override async fetchOHLCV(symbol: string, timeframe = '1d', since: Int = undefined, limit: Int = 100, params: Dict = {}): Promise<OHLCV[]> {
         const instrument = this.instrumentOf(symbol);
@@ -4809,14 +4813,14 @@ export class kis extends Exchange {
         let yahoo: OHLCV[] = [];
         let yahooError: unknown;
         try {
-            yahoo = await fetchYahooCandles(symbol, timeframe, limit, since, until, krMarket) as OHLCV[];
+            yahoo = await fetchYahooCandles(instrument.symbol, timeframe, limit, since, until, krMarket) as OHLCV[];
         } catch (e) {
             if (fallbackExchange === undefined) throw e;
             yahooError = e;
         }
         if (yahoo.length > 0 || fallbackExchange === undefined) return yahoo;
         logger.info({ symbol, timeframe, yahooError: yahooError === undefined ? undefined : String(yahooError) }, '[kis] 야후가 비거나 실패해 KIS 해외 일봉으로 폴백한다');
-        const native = await this.candles().fetchOverseasDailyOHLCV(instrument.code, fallbackExchange, timeframe, limit ?? 100);
+        const native = await this.candles().fetchOverseasDailyOHLCV(instrument.code, fallbackExchange, timeframe, limit ?? 100, since, until);
         if (native.length === 0 && yahooError !== undefined) throw yahooError;
         return native as OHLCV[];
     }
@@ -5135,7 +5139,7 @@ export class kis extends Exchange {
     }
 
     /**
-     * 변동성완화장치(VI) 발동 현황(`inquire-vi-status`). 지정한 영업일(기본은 오늘 KST)에 이 종목의 VI 가 발동한 기록을 돌려준다.
+     * 변동성완화장치(VI) 발동 현황(`inquire-vi-status`). 오늘(한국 날짜) 이 종목의 VI 가 발동한 기록을 돌려준다. 조회일은 늘 오늘이고 `params.until`은 읽지 않는다.
      * 발동한 적이 없으면 빈 배열이다. 국내만 지원한다(공식 API 목록에 해외 종목 VI 조회가 없다).
      *
      * 토스가 함께 주는 유의사항 여섯 종류 중 발동 기록은 VI 만 준다. 정리매매, 단기과열, 시장경고의 현재 상태는 `fetchStockStatus`에 있다.
@@ -6871,7 +6875,7 @@ export class kis extends Exchange {
         return this.responseBlocks(response);
     }
 
-    /** 선물옵션 잔고정산손익내역(`inquire-balance-settlement-pl`, TR `CTFO6117R`). 조회일자(`date`)는 필수라 기본값을 오늘(한국 날짜)로 둔다. 응답은 블록 원문이다. */
+    /** 선물옵션 잔고정산손익내역(`inquire-balance-settlement-pl`, TR `CTFO6117R`). 조회일자(`params.until`의 한국 날짜)는 필수라 기본값을 오늘(한국 날짜)로 둔다. 응답은 블록 원문이다. */
     async fetchDerivativeSettlementPnl(params: Dict = {}): Promise<KisResponseBlocks> {
         const [until, query] = this.handleUntilParam('fetchDerivativeSettlementPnl', undefined, params);
         const response = await this.privateGetUapiDomesticFutureoptionV1TradingInquireBalanceSettlementPl(this.extend({
@@ -7041,7 +7045,7 @@ export class kis extends Exchange {
         };
     }
 
-    /** 채권정정취소가능주문조회(`inquire-psbl-rvsecncl`, TR `CTSC8035R`). 주문일자(`date`)와 주문번호(`orderId`)는 선택 입력이라 주지 않으면 비운다. */
+    /** 채권정정취소가능주문조회(`inquire-psbl-rvsecncl`, TR `CTSC8035R`). 주문일자(`params.until`의 한국 날짜)와 주문번호(`orderId`)는 선택 입력이라 주지 않으면 비운다. */
     async fetchBondModifiableOrders(orderId: Str = undefined, params: Dict = {}): Promise<KisBondModifiableOrder[]> {
         const [until, query] = this.handleUntilParam('fetchBondModifiableOrders', undefined, params);
         const response = await this.privateGetUapiDomesticBondV1TradingInquirePsblRvsecncl(this.extend({
@@ -7110,7 +7114,7 @@ export class kis extends Exchange {
         return base;
     }
 
-    /** 해외선물옵션 예수금현황(`inquire-deposit`, TR `OTFM1411R`). 통화(`currency`)는 필수이고, 조회일자(`date`)는 기본값을 오늘(한국 날짜)로 둔다. */
+    /** 해외선물옵션 예수금현황(`inquire-deposit`, TR `OTFM1411R`). 통화(`currency`)는 필수이고, 조회일자(`params.until`의 한국 날짜)는 기본값을 오늘(한국 날짜)로 둔다. */
     async fetchOverseasDerivativeDeposit(currency: string, params: Dict = {}): Promise<KisOverseasDerivativeDeposit> {
         const [until, query] = this.handleUntilParam('fetchOverseasDerivativeDeposit', undefined, params);
         const crcy = this.derivativeCurrency(currency, 'fetchOverseasDerivativeDeposit');
@@ -7187,7 +7191,7 @@ export class kis extends Exchange {
         }));
     }
 
-    /** 해외선물옵션 증거금상세(`margin-detail`, TR `OTFM3115R`). 통화(`currency`)는 필수이고, 조회일자(`date`)는 기본값을 오늘(한국 날짜)로 둔다. */
+    /** 해외선물옵션 증거금상세(`margin-detail`, TR `OTFM3115R`). 통화(`currency`)는 필수이고, 조회일자(`params.until`의 한국 날짜)는 기본값을 오늘(한국 날짜)로 둔다. */
     async fetchOverseasDerivativeMargin(currency: string, params: Dict = {}): Promise<KisOverseasDerivativeMargin> {
         const [until, query] = this.handleUntilParam('fetchOverseasDerivativeMargin', undefined, params);
         const crcy = this.derivativeCurrency(currency, 'fetchOverseasDerivativeMargin');
@@ -7938,7 +7942,7 @@ export class kis extends Exchange {
         }), since, limit) as KisMarketInvestorTradingDay[];
     }
 
-    /** 국내 증시자금 종합(`mktfunds`, TR `FHKST649100C0`). 입력 날짜(`date`, `YYYYMMDD`)는 예제가 비워 보내므로 주지 않으면 비운다. */
+    /** 국내 증시자금 종합(`mktfunds`, TR `FHKST649100C0`). 입력 날짜(`params.until`의 한국 날짜)는 예제가 비워 보내므로 주지 않으면 비운다. */
     async fetchMarketFunds(since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<KisMarketFundsRecord[]> {
         const [until, query] = this.handleUntilParam('fetchMarketFunds', limit, params);
         const response = await this.privateGetUapiDomesticStockV1QuotationsMktfunds(this.extend({
@@ -8870,7 +8874,7 @@ export class kis extends Exchange {
         }));
     }
 
-    /** 해외 결제일(`countries-holiday`, TR `CTOS5011R`). 기준일자(`date`)는 필수라 기본값을 오늘(한국 날짜)로 둔다. 연속조회 키는 설명대로 공백이다. */
+    /** 해외 결제일(`countries-holiday`, TR `CTOS5011R`). 기준일자(`params.until`의 한국 날짜)는 필수라 기본값을 오늘(한국 날짜)로 둔다. 연속조회 키는 설명대로 공백이다. */
     async fetchSettlementDates(params: Dict = {}): Promise<KisSettlementDate[]> {
         const [until, query] = this.handleUntilParam('fetchSettlementDates', undefined, params);
         const response = await this.privateGetUapiOverseasStockV1QuotationsCountriesHoliday(this.extend({
