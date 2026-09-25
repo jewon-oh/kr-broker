@@ -10,6 +10,7 @@
  * - resampleMinuteCandles: N분봉 리샘플링
  */
 
+import { kstTimestampOf, strictKstTimestampOf } from '../base/Exchange';
 import { logger } from '../logger';
 import { etYmd } from '../us-market-hours';
 import { resampleCandles, type OhlcvRow } from './candle-resample';
@@ -63,6 +64,14 @@ const OVERSEAS_PERIOD_DAYS: Record<string, number> = {
 const OVERSEAS_END_PAD_DAYS = 7;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * 날짜(`YYYYMMDD`)의 00:00 UTC. 국내 일봉의 시각(09:00 KST)이고, 해외 봉의 미국 날짜도 이렇게 읽는다.
+ * 한국 시각 09:00 이 같은 날의 00:00 UTC 라 `kstTimestampOf` 로 읽는다. 달력에 없는 날짜(`20260230`)면 `undefined` 다.
+ */
+function utcDayOf(ymd: string | undefined): number | undefined {
+    return kstTimestampOf(ymd, '090000');
+}
 
 // ============ 서비스 ============
 
@@ -153,23 +162,21 @@ export class KisCandleService {
 
             if (!Array.isArray(data)) return [];
 
-            return data
-                .map((candle): OhlcvRow => {
-                    const dateStr = candle.stck_bsop_date;
-                    const timestamp = new Date(
-                        `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}T09:00:00+09:00`
-                    ).getTime();
-
-                    return [
-                        timestamp,
-                        Number(candle.stck_oprc),
-                        Number(candle.stck_hgpr),
-                        Number(candle.stck_lwpr),
-                        Number(candle.stck_clpr),
-                        Number(candle.acml_vol),
-                    ];
-                })
-                .sort((a, b) => a[0] - b[0]);
+            const candles: OhlcvRow[] = [];
+            for (const candle of data) {
+                // 날짜를 읽을 수 없는 행은 건너뛴다.
+                const timestamp = utcDayOf(candle.stck_bsop_date);
+                if (timestamp === undefined) continue;
+                candles.push([
+                    timestamp,
+                    Number(candle.stck_oprc),
+                    Number(candle.stck_hgpr),
+                    Number(candle.stck_lwpr),
+                    Number(candle.stck_clpr),
+                    Number(candle.acml_vol),
+                ]);
+            }
+            return candles.sort((a, b) => a[0] - b[0]);
         } catch (err) {
             // 실패를 `[]` 로 바꾸지 않는다(분봉과 같다). 빈 창은 페이지네이션이 "상장 이전"으로 읽는다.
             logger.error({ err, stockCode, periodCode, startDate, endDate },
@@ -210,11 +217,9 @@ export class KisCandleService {
                     const dateStr = item.stck_bsop_date;
                     const timeStr = item.stck_cntg_hour;
                     if (!dateStr || !timeStr) continue;
-
-                    const timestamp = new Date(
-                        `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}` +
-                        `T${timeStr.slice(0, 2)}:${timeStr.slice(2, 4)}:${timeStr.slice(4, 6)}+09:00`
-                    ).getTime();
+                    // 날짜나 시각을 읽을 수 없는 행(`20260230`, `240000`)은 건너뛴다.
+                    const timestamp = strictKstTimestampOf(dateStr, timeStr);
+                    if (timestamp === undefined) continue;
 
                     byTimestamp.set(timestamp, [
                         timestamp,
@@ -311,11 +316,8 @@ export class KisCandleService {
                 }
 
                 for (const c of data) {
-                    if (!c.xymd) continue;
-                    const dateStr = c.xymd;
-                    const ts = new Date(
-                        `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}T00:00:00Z`,
-                    ).getTime();
+                    const ts = utcDayOf(c.xymd);
+                    if (ts === undefined) continue;
                     if (since !== undefined && ts <= since) reachedSince = true;
                     all.push([
                         ts,
@@ -327,17 +329,13 @@ export class KisCandleService {
                     ]);
                 }
 
-                const lastXymd = data[data.length - 1]?.xymd;
-                if (data.length < PAGE_SIZE || !lastXymd) {
+                const lastDay = utcDayOf(data[data.length - 1]?.xymd);
+                if (data.length < PAGE_SIZE || lastDay === undefined) {
                     exhausted = true;
                     break;
                 }
                 // 다음 페이지: 마지막 일자보다 하루 전을 BYMD 로
-                const lastDate = new Date(
-                    `${lastXymd.slice(0, 4)}-${lastXymd.slice(4, 6)}-${lastXymd.slice(6, 8)}T00:00:00Z`,
-                );
-                lastDate.setUTCDate(lastDate.getUTCDate() - 1);
-                bymd = this.formatUtcDate(lastDate);
+                bymd = this.formatUtcDate(new Date(lastDay - DAY_MS));
             }
 
             if (since !== undefined && !reachedSince && !exhausted) {

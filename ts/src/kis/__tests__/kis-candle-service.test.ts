@@ -144,6 +144,14 @@ describe('fetchDailyOHLCVRange', () => {
         expect(candles).toEqual([[kst('2026-05-21T09:00:00'), 0, 2, -1, 1, 100], [kst('2026-05-22T09:00:00'), 1, 3, 0, 2, 100]]);
     });
 
+    it('달력에 없는 날짜(20260230)의 행은 다른 날로 넘기지 않고 건너뛴다', async () => {
+        const { service } = fakeKis(NOW, { daily: [{ output2: [dailyRow('20260302', 3), dailyRow('20260230', 2), dailyRow('20260227', 1)] }] });
+
+        const candles = await service.fetchDailyOHLCVRange('005930', 'D', '20260201', '20260302');
+
+        expect(candles.map((c) => [c[0], c[4]])).toEqual([[kst('2026-02-27T09:00:00'), 1], [kst('2026-03-02T09:00:00'), 3]]);
+    });
+
     it('output2 가 배열이 아니면 빈 배열이다', async () => {
         const { service } = fakeKis(NOW, { daily: [{ output2: undefined }, { output2: { stck_bsop_date: '20260522' } }] });
 
@@ -199,6 +207,15 @@ describe('fetchMinuteOHLCV', () => {
         expect(await blanks.fetchMinuteOHLCV('005930', 1, 100)).toEqual([[kst('2026-09-25T10:01:00'), 7, 8, 6, 7, 10]]);
     });
 
+    it('달력에 없는 날짜(20260230)와 범위를 넘는 시각(240000)의 행은 건너뛰고, 다섯 자리 시각(93000)은 앞에 0 을 채워 읽는다', async () => {
+        const rows = [minuteRow('93100', 4), minuteRow('93000', 3), minuteRow('240000', 9), minuteRow('100000', 9, '20260230')];
+        const { service } = fakeKis(NOW, { minute: [{ output2: rows }] });
+
+        const candles = await service.fetchMinuteOHLCV('005930', 1, 100);
+
+        expect(candles).toEqual([[kst('2026-09-25T09:30:00'), 3, 4, 2, 3, 10], [kst('2026-09-25T09:31:00'), 4, 5, 3, 4, 10]]);
+    });
+
     it('minuteInterval 이 2 이상이면 N분봉으로 합친다. 구간은 한국 시각의 N분 경계에서 시작한다', async () => {
         // 10:39 부터 10:30 까지. 종가는 10:30 이 0, 10:39 가 9 다.
         const rows = Array.from({ length: 10 }, (_, i) => minuteRow(`10${39 - i}00`, 9 - i));
@@ -219,6 +236,17 @@ describe('fetchMinuteOHLCV', () => {
 
         await expect(service.fetchMinuteOHLCV('005930', 1, 10)).rejects.toBe(boom);
         expect(error).toHaveBeenCalledWith({ err: boom, stockCode: '005930', minuteInterval: 1 }, '[KISCandleService] 분봉 캔들 조회 실패');
+    });
+});
+
+describe('fetchOverseasDailyOHLCV', () => {
+    it('달력에 없는 날짜(20260230)의 행은 다른 날로 넘기지 않고 건너뛴다', async () => {
+        const row = (xymd: string, clos: string) => ({ xymd, open: '1', high: '2', low: '0.5', clos, tvol: '10' });
+        const { service } = fakeKis(Date.parse('2026-03-03T12:00:00Z'), { overseas: [{ output2: [row('20260302', '3'), row('20260230', '2'), row('20260227', '1')] }] });
+
+        const candles = await service.fetchOverseasDailyOHLCV('AAPL', 'NAS', '1d', 10);
+
+        expect(candles.map((c) => [c[0], c[4]])).toEqual([[Date.UTC(2026, 1, 27), 1], [Date.UTC(2026, 2, 2), 3]]);
     });
 });
 

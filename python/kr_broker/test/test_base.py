@@ -11,7 +11,7 @@ import pytest
 import kr_broker
 from kr_broker.base import functions as fn
 from kr_broker.base.errors import BadRequest, BaseError, MarketClosed, OrderOutcomeUnknown, RequestTimeout
-from kr_broker.base.exchange import Exchange
+from kr_broker.base.exchange import Exchange, strict_kst_timestamp_of
 from kr_broker.base.throttler import Throttler
 from kr_broker.base.token_store import refresh_token_with_lock
 
@@ -339,6 +339,14 @@ def test_kst_stamp_empties_dates_that_are_not_on_the_calendar() -> None:
     broker = Exchange({})
     for ymd in ('00000000', '20261300', '20260230', '20260000'):
         assert broker.kst_stamp(ymd, '153000') == {'timestamp': None, 'datetime': None}, ymd
+
+
+def test_strict_kst_timestamp_of_empties_unreadable_times() -> None:
+    for hms in ('240000', '9300', '126000', '120060', 'abcdef', '1234567'):
+        assert strict_kst_timestamp_of('20260922', hms) is None, hms
+    assert strict_kst_timestamp_of('20260922', '93000') == 1790037000000
+    assert strict_kst_timestamp_of('20260922', '') == strict_kst_timestamp_of('20260922') == 1790002800000
+    assert strict_kst_timestamp_of('20260230', '153000') is None
 
 
 def test_sync_session_ignores_netrc_and_proxy_env_and_close_keeps_user_session() -> None:

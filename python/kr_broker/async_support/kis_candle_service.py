@@ -13,6 +13,7 @@ import math
 from typing import Any, Callable, Dict, List, Optional
 
 from kr_broker.base import functions as fn
+from kr_broker.base.exchange import kst_timestamp_of, strict_kst_timestamp_of
 from kr_broker.kis_candle_pagination import merge_candles, plan_windows, slice_candle_window, to_kis_date
 from kr_broker.kis_candle_resample import resample_candles
 from kr_broker.us_market_hours import et_ymd
@@ -43,10 +44,8 @@ OVERSEAS_MAX_PAGES = 10
 DAY_MS = 24 * 60 * 60 * 1000
 
 
-def _format_utc_date(ms: float) -> str:
-    """UTC 밀리초의 UTC 달력 날짜 `YYYYMMDD`. 시각이 아니면 JavaScript 처럼 `NaNNaNNaN` 이다."""
-    if not isinstance(ms, (int, float)) or not math.isfinite(ms):
-        return 'NaNNaNNaN'
+def _format_utc_date(ms: int) -> str:
+    """UTC 밀리초의 UTC 달력 날짜 `YYYYMMDD`."""
     d = datetime.datetime(1970, 1, 1) + datetime.timedelta(milliseconds=ms)
     return f'{d.year}{d.month:02d}{d.day:02d}'
 
@@ -56,10 +55,10 @@ def _number(row: Dict[str, Any], key: str) -> float:
     return fn.js_number(row[key]) if key in row else math.nan
 
 
-def _parse_ms(text: str) -> float:
-    """JavaScript 의 `new Date(text).getTime()`. 못 읽으면 NaN 이다."""
-    parsed = fn.js_date_parse_iso(text)
-    return math.nan if parsed is None else parsed
+def _utc_day_of(ymd: Optional[str]) -> Optional[int]:
+    """날짜(`YYYYMMDD`)의 00:00 UTC. 국내 일봉의 시각(09:00 KST)이고, 해외 봉의 미국 날짜도 이렇게 읽는다.
+    한국 시각 09:00 이 같은 날의 00:00 UTC 라 `kst_timestamp_of` 로 읽는다. 달력에 없는 날짜(`20260230`)면 `None` 이다."""
+    return kst_timestamp_of(ymd, '090000')
 
 
 def _output2(response: Any) -> Any:
@@ -119,8 +118,10 @@ class KISCandleService:
                 return []
             candles = []
             for candle in data:
-                date_str = candle['stck_bsop_date']
-                timestamp = _parse_ms(f'{date_str[0:4]}-{date_str[4:6]}-{date_str[6:8]}T09:00:00+09:00')
+                # 날짜를 읽을 수 없는 행은 건너뛴다.
+                timestamp = _utc_day_of(candle.get('stck_bsop_date'))
+                if timestamp is None:
+                    continue
                 candles.append([timestamp, _number(candle, 'stck_oprc'), _number(candle, 'stck_hgpr'), _number(candle, 'stck_lwpr'),
                                 _number(candle, 'stck_clpr'), _number(candle, 'acml_vol')])
             return sorted(candles, key=lambda c: c[0])
@@ -154,8 +155,10 @@ class KISCandleService:
                     time_str = item.get('stck_cntg_hour')
                     if not date_str or not time_str:
                         continue
-                    timestamp = _parse_ms(f'{date_str[0:4]}-{date_str[4:6]}-{date_str[6:8]}'
-                                          f'T{time_str[0:2]}:{time_str[2:4]}:{time_str[4:6]}+09:00')
+                    # 날짜나 시각을 읽을 수 없는 행(`20260230`, `240000`)은 건너뛴다.
+                    timestamp = strict_kst_timestamp_of(date_str, time_str)
+                    if timestamp is None:
+                        continue
                     by_timestamp[timestamp] = [timestamp, _number(item, 'stck_oprc'), _number(item, 'stck_hgpr'),
                                                _number(item, 'stck_lwpr'), _number(item, 'stck_prpr'), _number(item, 'cntg_vol')]
                 if len(data) < MINUTE_PAGE_SIZE:
@@ -214,20 +217,18 @@ class KISCandleService:
                     exhausted = True
                     break
                 for c in data:
-                    date_str = c.get('xymd')
-                    if not date_str:
+                    ts = _utc_day_of(c.get('xymd'))
+                    if ts is None:
                         continue
-                    ts = _parse_ms(f'{date_str[0:4]}-{date_str[4:6]}-{date_str[6:8]}T00:00:00Z')
                     if since is not None and ts <= since:
                         reached_since = True
                     collected.append([ts, _number(c, 'open'), _number(c, 'high'), _number(c, 'low'), _number(c, 'clos'), _number(c, 'tvol')])
-                last_xymd = data[-1].get('xymd')
-                if len(data) < OVERSEAS_PAGE_SIZE or not last_xymd:
+                last_day = _utc_day_of(data[-1].get('xymd'))
+                if len(data) < OVERSEAS_PAGE_SIZE or last_day is None:
                     exhausted = True
                     break
                 # 다음 페이지는 마지막 날의 하루 전을 달력 날짜 그대로(UTC) 적어 부른다.
-                last_date = _parse_ms(f'{last_xymd[0:4]}-{last_xymd[4:6]}-{last_xymd[6:8]}T00:00:00Z')
-                bymd = _format_utc_date(last_date - DAY_MS)
+                bymd = _format_utc_date(last_day - DAY_MS)
                 page += 1
             if since is not None and not reached_since and not exhausted:
                 logger.warning('[KISCandleService] 페이지 상한에 걸려 since 까지 거슬러 가지 못했다 '
