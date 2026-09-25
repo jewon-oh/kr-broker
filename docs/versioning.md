@@ -28,6 +28,11 @@ npm에는 아직 게시하지 않았습니다. 버전별 변경은 [CHANGELOG](.
 
 1.0.0을 내는 시점은 정하지 않았습니다. 1.0.0 이후에는 파괴적 변경을 major로 올립니다.
 
+## 릴리스
+
+- 버전마다 `v<버전>` 태그를 만들고, GitHub Release에 CHANGELOG의 해당 절을 옮깁니다. 만든 태그는 옮기거나 지우지 않습니다.
+- 태그를 만들기 전에 버전 번호 세 곳(`package.json`, `python/pyproject.toml`, `python/kr_broker/__init__.py`)과 README, `python/README.md`의 설치 예시를 새 태그로 바꿉니다.
+
 ## 증권사 API 변경 대응
 
 증권사가 API를 바꾸면 라이브러리는 바뀐 API를 따라갑니다. 버전은 라이브러리 사용자가 보는 결과에 따라 정합니다.

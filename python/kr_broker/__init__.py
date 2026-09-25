@@ -14,7 +14,7 @@ from kr_broker.base.token_store import BrokerTokenStore
 from kr_broker.kis import kis
 from kr_broker.toss import toss
 
-__version__ = '0.4.0'
+__version__ = '0.5.0'
 
 exchanges = ['kis', 'toss']
 
