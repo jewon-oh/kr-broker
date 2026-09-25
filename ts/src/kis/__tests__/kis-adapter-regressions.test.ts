@@ -17,7 +17,7 @@ vi.mock('../us-market-hours', () => ({
 }));
 global.fetch = mockFetch as unknown as typeof fetch;
 
-import { ArgumentsRequired } from '../../base/errors';
+import { ArgumentsRequired, BadRequest } from '../../base/errors';
 import { KIS_MASTER_FIXTURE } from '../../__tests__/support/kis-master-fixture';
 import { bodyOf, dataOk, headersOf, newKis as newKisBase, tokenOk } from './support/kis-test-utils';
 
@@ -90,6 +90,13 @@ describe('항목2 — 국내 KRW 잔고 free/used/total 매핑', () => {
         const index = mockFetch.mock.calls.findIndex((c) => String(c[0]).includes('inquire-psbl-order'));
         expect(headersOf(mockFetch, index).tr_id).toBe('TTTC8908R');
         expect(new URL(String(mockFetch.mock.calls[index][0])).searchParams.get('ORD_DVSN')).toBe('01');
+    });
+
+    it('★모르는 scope 는 요청 없이 빈 잔고를 돌려주지 않고 BadRequest 로 던진다', async () => {
+        for (const scope of ['domestic', 'KR', [], ['kr', 'krw']]) {
+            await expect(newKis({ sandbox: false }).fetchBalance({ scope }), JSON.stringify(scope)).rejects.toBeInstanceOf(BadRequest);
+        }
+        expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it('orderable:false 면 매수가능조회를 부르지 않고 free 를 비워 둔다(호출 한 번 절약)', async () => {

@@ -4,7 +4,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ArgumentsRequired, NotSupported, NullResponse } from '../../base';
+import { ArgumentsRequired, BadResponse, NotSupported, NullResponse } from '../../base';
 import { krxSellTaxRate } from '../../krx-sell-tax';
 import { TOSS_BROKERAGE_FEE, TOSS_US_BROKERAGE_FEE } from '../toss-types';
 import { errorReply, installFakeToss, jsonOk, makeToss, type FakeRequest } from './support/toss-fake';
@@ -221,6 +221,17 @@ describe('잔고', () => {
     it('조회에 실패하면 빈 잔고가 아니라 던진다', async () => {
         installFakeToss({ 'GET /api/v1/holdings': errorReply(500, 'internal-error'), 'GET /api/v1/buying-power': buyingPower });
         await expect(makeToss().fetchBalance()).rejects.toThrow('토스 API 오류: 500');
+    });
+
+    it('★보유 목록이나 매수 가능 금액 필드가 없으면 "없음"이 아니라 모르는 것이라 BadResponse 로 던진다', async () => {
+        installFakeToss({ 'GET /api/v1/holdings': jsonOk({}), 'GET /api/v1/buying-power': buyingPower });
+        await expect(makeToss().fetchBalance()).rejects.toBeInstanceOf(BadResponse);
+
+        installFakeToss({ 'GET /api/v1/holdings': jsonOk(holdings), 'GET /api/v1/buying-power': jsonOk({ currency: 'KRW' }) });
+        await expect(makeToss().fetchBalance()).rejects.toBeInstanceOf(BadResponse);
+
+        installFakeToss({ 'GET /api/v1/holdings': jsonOk(holdings), 'GET /api/v1/buying-power': jsonOk({ currency: 'KRW', cashBuyingPower: '-' }) });
+        await expect(makeToss().fetchBalance()).rejects.toBeInstanceOf(BadResponse);
     });
 
     it('계좌 요청에는 계좌 헤더를 싣는다. uid 가 없으면 /accounts 로 첫 계좌를 찾는다', async () => {

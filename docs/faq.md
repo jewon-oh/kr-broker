@@ -20,7 +20,7 @@
 
 ## OrderOutcomeUnknown이 나오면 어떻게 합니까?
 
-같은 주문을 다시 내지 마십시오. 주문 요청이 시간 초과나 연결 끊김으로 끝나서, 증권사가 주문을 접수했는지 알 수 없다는 뜻입니다.
+같은 주문을 다시 내지 마십시오. 주문 요청이 시간 초과나 연결 끊김으로 끝났거나 증권사 오류 코드 없는 5xx 나 해석할 수 없는 응답을 받아서, 증권사가 주문을 접수했는지 알 수 없다는 뜻입니다.
 
 접수 여부는 `fetchOpenOrders(symbol)`, `fetchMyTrades(symbol)`, `fetchBalance()`, 증권사 앱 순서로 확인합니다.
 자세한 절차는 [안전 가이드](SAFETY.md)에 있습니다.
@@ -101,7 +101,7 @@ KB증권은 NXT에 상장되지 않은 종목의 SOR 주문을 증권사가 거�
 
 한국투자증권과 KB증권 클래스에는 멱등키를 보내는 기능이 없습니다. 두 증권사 API가 멱등키를 지원하는지는 확인 불가입니다. 토스증권은 `clientOrderId`를 멱등키로 받지만, 라이브러리는 `clientOrderId`를 자동으로 재사용하지 않습니다.
 
-그래서 주문 요청은 시간 초과나 연결 끊김 뒤에는 `maxRetriesOnFailure`를 설정해도 다시 보내지 않습니다. 시간 초과와 연결 끊김은 `OrderOutcomeUnknown`으로 바뀌어 던져집니다. 이 오류의 `retryable`은 `false`입니다.
+그래서 주문 요청은 `maxRetriesOnFailure`를 설정해도 다시 보내지 않습니다. 시간 초과와 연결 끊김, 증권사 오류 코드 없는 5xx(게이트웨이 오류 등), 해석할 수 없는 응답은 `OrderOutcomeUnknown`으로 바뀌어 던져집니다. 이 오류의 `retryable`은 `false`입니다.
 
 조회 요청은 다시 보냅니다. 횟수는 `maxRetriesOnFailure`가 정하고 기본값은 0입니다. 한국투자증권의 기본값은 3입니다.
 

@@ -10,7 +10,7 @@ global.fetch = mockFetch as unknown as typeof fetch;
 
 import { kis } from '../../kis';
 import type { Exchange } from '../../base';
-import { NotSupported } from '../../base/errors';
+import { BadSymbol, ExchangeNotAvailable, NotSupported } from '../../base/errors';
 import { KISCandleService } from '../kis-candle-service';
 import { krxSellTaxRate } from '../../krx-sell-tax';
 import { KIS_MASTER_FIXTURE } from '../../__tests__/support/kis-master-fixture';
@@ -165,6 +165,23 @@ describe('fetchOHLCV — 야후 우선, 미국 일봉은 KIS 폴백', () => {
 
         expect(candles).toHaveLength(2);
         expect(candles[1][4]).toBe(308.82); // 오래된 봉이 앞이므로 최근 봉이 뒤에 있다
+    });
+
+    it('★미국 일봉인데 야후가 실패하면 KIS 해외 일봉으로 폴백하고, KIS 도 비면 야후의 오류를 던진다', async () => {
+        mockYahoo.mockRejectedValueOnce(new BadSymbol('야후에 없다'));
+        mockFetch.mockResolvedValueOnce(tokenOk()).mockResolvedValueOnce(dataOk({
+            output2: [{ xymd: '20260522', open: '300', high: '310', low: '299', clos: '308.82', tvol: '1000' }],
+        }));
+        expect(await newKis().fetchOHLCV('AAPL/USD', '1d', undefined, 100)).toHaveLength(1);
+
+        mockYahoo.mockRejectedValueOnce(new BadSymbol('야후에 없다'));
+        mockFetch.mockResolvedValueOnce(tokenOk()).mockResolvedValueOnce(dataOk({ output2: [] }));
+        await expect(newKis().fetchOHLCV('AAPL/USD', '1d', undefined, 100)).rejects.toBeInstanceOf(BadSymbol);
+    });
+
+    it('국내 캔들은 야후 실패를 그대로 던진다 — 빈 배열로 바꾸지 않는다', async () => {
+        mockYahoo.mockRejectedValueOnce(new ExchangeNotAvailable('야후 장애'));
+        await expect(newKis().fetchOHLCV('005930/KRW', '1d')).rejects.toBeInstanceOf(ExchangeNotAvailable);
     });
 
     it('분봉은 야후가 비어도 KIS 로 폴백하지 않는다(KIS 해외 분봉은 받지 않는다)', async () => {

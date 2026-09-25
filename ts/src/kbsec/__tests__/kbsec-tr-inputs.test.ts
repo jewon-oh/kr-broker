@@ -48,6 +48,13 @@ describe('kbsecNormalizeCode — KB 응답의 A 접두 종목코드', () => {
         expect(kbsecNormalizeCode('AMZN')).toBe('AMZN');
     });
 
+    it('신형 영숫자 국내 코드도 A 접두와 ISIN 을 벗기고, 국내 코드 모양이 아니면 벗기지 않는다', () => {
+        expect(kbsecNormalizeCode('A0193L0')).toBe('0193L0');
+        expect(kbsecMarketOf(kbsecNormalizeCode('A0193L0'))).toBe('KR');
+        expect(kbsecNormalizeCode('KR70193L0006')).toBe('0193L0');
+        expect(kbsecNormalizeCode('ABCDEFG')).toBe('ABCDEFG');   // 벗긴 결과가 숫자로 시작하지 않는다
+    });
+
     it('정규화하면 국내로 판정된다 — 안 하면 해외 취소 TR 로 잘못 보낸다', () => {
         expect(kbsecMarketOf('A005930')).toBe('US');                    // 정규화 전(오판)
         expect(kbsecMarketOf(kbsecNormalizeCode('A005930'))).toBe('KR'); // 정규화 후

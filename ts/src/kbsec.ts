@@ -44,6 +44,7 @@ import { masterDataOf } from './kis/kis-master-data';
 import {
     ArgumentsRequired,
     AuthenticationError,
+    BadRequest,
     BadResponse,
     BadSymbol,
     BaseError,
@@ -54,7 +55,6 @@ import {
     NotSupported,
     NullResponse,
     OrderNotFound,
-    RequestTimeout,
     omit,
     safeDict,
     safeString,
@@ -100,6 +100,7 @@ import {
     KBSEC_CCLS_FILLED,
     KBSEC_CCLS_PENDING,
     KBSEC_CONT_FIRST,
+    KBSEC_CONT_NEXT,
     KBSEC_CREDIT_CASH,
     KBSEC_EXCH_RATE_MARKET,
     KBSEC_FEE_EXCLUDED,
@@ -118,6 +119,7 @@ import {
     KBSEC_US_EXCHANGES,
     kbsecBaseSymbol,
     kbsecBusinessDateKst,
+    kbsecBusinessDateUsEastern,
     kbsecDateKst,
     kbsecDateUsEastern,
     kbsecMarketOf,
@@ -1688,8 +1690,8 @@ export class kbsec extends Exchange {
     private readonly holdingPriceCache = new Map<string, { price: number; at: number }>();
     /** NXT 미상장이 실측으로 확인된 종목(인스턴스 수명). 거부 응답으로 역산하며 영속화하지 않는다. 재시작이 캐시 만료다. */
     private readonly nxtIneligible = new Set<string>();
-    /** 조회일자 되감기 캐시(KST 날짜별). 연휴에 사이클마다 같은 실패를 반복하지 않게 한다. */
-    private businessDateBackoff: { day: string; steps: number } = { day: '', steps: 0 };
+    /** 조회일자 되감기 캐시(시장별, 그 시장 날짜별). 연휴에 사이클마다 같은 실패를 반복하지 않게 한다. 국내와 해외는 날짜 축이 달라 따로 둔다. */
+    private businessDateBackoff: Record<'KR' | 'US', { day: string; steps: number }> = { KR: { day: '', steps: 0 }, US: { day: '', steps: 0 } };
     private holdingFieldsLogged = false;
 
     /** 해외 잔고 TR 이 **영구 실패**했는가(권한 없음 등 업무 오류). 반복 호출은 계정 제한 사유라 다시 부르지 않는다. */
@@ -1705,6 +1707,8 @@ export class kbsec extends Exchange {
     private overseasFillsUnavailable = false;
     /** 원마켓 증거금(SPQM3390) 영구 실패. 미신청 계좌는 다시 물어도 답이 같다. */
     private oneMarketUnavailable = false;
+    /** 일시 오류 뒤 원마켓 증거금을 다시 부르기 전까지 기다리는 시각(epoch ms). 0 이면 대기 없음. */
+    private oneMarketRetryAt = 0;
     private oneMarketNoticeLogged = false;
 
     // ============ 선언 ============
@@ -2816,7 +2820,12 @@ export class kbsec extends Exchange {
         // 여러 TR 을 부르지만 `params` 는 기준이 되는 예수금 조회에만 합친다.
         const deposit = await this.callTr(KBSEC_TR.DEPOSIT, { ...params });
         // 실측 필드: ordr_psbl_csh(주문가능현금) · ordr_std_dpstn_csh(주문기준예수금)
-        const krw = pickNum(deposit, 'ordr_psbl_csh', 'ordr_std_dpstn_csh', 'do_psbl_csh');
+        const krwFields = ['ordr_psbl_csh', 'ordr_std_dpstn_csh', 'do_psbl_csh'];
+        // 후보 필드가 모두 없으면 0 이 아니라 모르는 것이다. 0 으로 두면 "예수금 없음"과 섞인다.
+        if (!krwFields.some((k) => k in deposit)) {
+            throw new BadResponse(`${this.id} fetchBalance() 예수금 응답에 주문가능현금 필드가 없다 (${KBSEC_TR.DEPOSIT})`);
+        }
+        const krw = pickNum(deposit, ...krwFields);
 
         // 원마켓(통합증거금) 계좌는 달러 예수금이 0 이어도 원화로 미국 주식을 산다. `krwIntegratedMargin` 옵션이 켜져 있으면 원화환산 외화 예수금을 **USD 로 환산해**
         // 라벨과 값의 축을 맞춘다. 원화 값을 USD 라벨에 그대로 담으면 사이징이 ~1,450배로 읽는다.
@@ -2846,7 +2855,7 @@ export class kbsec extends Exchange {
         // 잔고가 조용히 0 이 되는 것이 이 클래스에서 가장 피해가 큰 실패 모드라, 검증 안 된 경로로 통째로 갈아타지 않는다.
         const assetEval = await this.fetchDomesticHoldingsFromAssetEval();
         const domestic = assetEval.status === 'ok'
-            ? { rows: assetEval.rows, read: true }
+            ? { rows: assetEval.rows, read: assetEval.complete }
             : await this.fetchDomesticHoldingsFromHoldingRows(assetEval.status === 'failed');
         const overseas = await this.fetchOverseasHoldings();
 
@@ -2900,7 +2909,7 @@ export class kbsec extends Exchange {
      *
      * 조회가 실패하면 `failed`, 성공했지만 국내 행이 없으면 `empty` 를 돌려주고 호출부가 보유주식(`SSQM1801`) 경로로 떨어진다.
      */
-    private async fetchDomesticHoldingsFromAssetEval(): Promise<{ status: 'ok'; rows: HoldingRow[] } | { status: 'empty' | 'failed' }> {
+    private async fetchDomesticHoldingsFromAssetEval(): Promise<{ status: 'ok'; rows: HoldingRow[]; complete: boolean } | { status: 'empty' | 'failed' }> {
         let rows: Dict[];
         try {
             // A=통합시세. KRX 만 보면 NXT 체결분 현재가가 빈다.
@@ -2913,12 +2922,21 @@ export class kbsec extends Exchange {
 
         const out: HoldingRow[] = [];
         let domesticRows = 0;
+        // 버린 보유: 종목코드 없이 수량이 있는 행, 수량 필드가 없는 국내 행. 합계 행처럼 코드와 수량이 모두 없는 행은 세지 않는다.
+        let droppedHoldings = 0;
         for (const row of rows) {
             const code = kbsecNormalizeCode(pickStr(row, 'is_cd', 'shrt_cd', 'is_no', 'stnd_is_cd'));
-            if (code === '') continue;
+            if (code === '') {
+                if (pickNum(row, 'ec_q') > 0) droppedHoldings++;
+                continue;
+            }
             // 해외는 이 경로의 범위가 아니다. `SPQM2226` 이 담당하므로 여기서 읽으면 중복 계상된다.
             if (kbsecMarketOf(code) !== 'KR') continue;
             domesticRows++;
+            if (!('ec_q' in row)) {
+                droppedHoldings++;
+                continue;
+            }
             const quantity = pickNum(row, 'ec_q');
             if (quantity <= 0) continue; // 매도 후 결제대기 등 — 실보유 0
             out.push({
@@ -2936,7 +2954,8 @@ export class kbsec extends Exchange {
                 '[kbsec] 계좌자산평가에 국내 행이 없다 — 보유주식 경로로 폴백');
             return { status: 'empty' };
         }
-        return { status: 'ok', rows: out };
+        if (droppedHoldings > 0) logger.warn({ droppedHoldings }, '[kbsec] 계좌자산평가에서 종목코드나 수량을 읽지 못한 보유 행이 있다 — 국내를 못 읽은 시장으로 표시');
+        return { status: 'ok', rows: out, complete: droppedHoldings === 0 };
     }
 
     /**
@@ -3024,6 +3043,8 @@ export class kbsec extends Exchange {
             // 버린 이유를 세어서 남긴다. "종목코드가 비었다"와 "수량이 0 이다"는 원인도 조치도 다르다.
             let droppedNoCode = 0;
             let droppedZeroQty = 0;
+            // 종목코드 없이 수량이 있는 행은 보유를 잃은 것이다. 이 행이 있으면 다 읽었다고 하지 않는다.
+            let droppedHoldings = 0;
             // 수량 후보 중 실제로 0 이 아니었던 필드 이름만 모은다. 알아야 하는 것은 보유 수량이 아니라 어느 필드가 보유수량인가다.
             const nonZeroQtyFields = new Set<string>();
             for (const row of rows) {
@@ -3034,6 +3055,7 @@ export class kbsec extends Exchange {
                     for (const k of OVERSEAS_QTY_CANDIDATES) {
                         if (pickNum(row, k) > 0) nonZeroQtyFields.add(k);
                     }
+                    if (code === '' && OVERSEAS_QTY_CANDIDATES.some((k) => pickNum(row, k) > 0)) droppedHoldings++;
                     continue;
                 }
                 const price = pickNum(row, 'now_prc_p4');
@@ -3058,11 +3080,9 @@ export class kbsec extends Exchange {
             }
             // 호출이 예외 없이 끝났다. 직전의 실패 상태를 푼다(자가 치유).
             this.overseasHoldingsRetryAt = 0;
-            return { rows: out, usdCash, read: this.overseasGridSeen };
+            return { rows: out, usdCash, read: this.overseasGridSeen && droppedHoldings === 0 };
         } catch (err) {
-            // 영구 실패만 래치한다. 긍정형 판정이다. KB 가 영구 오류를 알리는 통로는 응답을 읽고 던지는 `ExchangeError`(권한 없음 I446 등)뿐이고,
-            // 연결 타임아웃·5xx 같은 일시 오류는 냉각 뒤 다시 시도한다.
-            const permanent = err instanceof ExchangeError;
+            const permanent = this.isPermanentFailure(err);
             if (permanent) {
                 this.overseasHoldingsUnavailable = true;
             } else {
@@ -3131,16 +3151,19 @@ export class kbsec extends Exchange {
         for (const [i, params] of attempts.entries()) {
             const rows: Dict[] = [];
             let nextKey = '';
+            let repeated = false;
             for (let page = 0; page < maxPages; page++) {
                 const raw = await this.callTr(KBSEC_TR.HOLDINGS, { ...params, nxt_key: nextKey });
                 lastRaw = raw;
-                rows.push(...pickArray(raw));
                 // KB 는 마지막 페이지에서 공백 문자열을 준다. trim 해야 "끝"으로 읽힌다.
                 const next = String(raw.nxt_key ?? '').trim();
-                if (next === '' || next === nextKey) { nextKey = ''; break; }
+                // 같은 다음키가 되풀이되면 끝까지 읽었는지 알 수 없다. 완주로 보지 않고 잘림으로 표시한다(`collectTrPages` 와 같다).
+                if (next !== '' && next === nextKey) { repeated = true; break; }
+                rows.push(...pickArray(raw));
+                if (next === '') { nextKey = ''; break; }
                 nextKey = next;
             }
-            const truncated = nextKey !== '';
+            const truncated = repeated || nextKey !== '';
             if (truncated) {
                 // 상한에 걸려 중단했다. 조용히 자르면 그 종목들이 청산으로 읽힌다.
                 logger.error({ pages: maxPages, rows: rows.length }, '[kbsec] 보유주식 연속조회 상한 도달 — 목록이 잘렸다(청산 오판 위험)');
@@ -3205,15 +3228,17 @@ export class kbsec extends Exchange {
             const out = new Map<string, number>();
             for (let steps = 0; steps < (this.options.settlementLookbackDays as number); steps++) {
                 const ordrDt = kbsecBusinessDateKst(steps);
-                let body: Dict;
+                let rows: Dict[];
                 try {
-                    body = await this.callTr(KBSEC_TR.TRADES_KR, {
+                    const result = await this.collectTrPages(KBSEC_TR.TRADES_KR, {
                         inq_clsf: KBSEC_INQ_STOCK, // 주식
                         ccls_clsf: KBSEC_CCLS_FILLED, // 체결만. 비우면 거부된다(8654)
                         ordr_dt: ordrDt,
                         cn_clsf: KBSEC_CONT_FIRST,
-                        nxt_key: '',
-                    });
+                    }, (row: Dict) => row);
+                    // 잘리면 빼야 할 매도가 덜 빠진다. 과다보고 쪽이라 보정은 계속하고 기록만 남긴다.
+                    if (result.truncated) logger.warn({ ordrDt, rows: result.rows.length }, '[kbsec] 결제대기 매도 조회가 페이지 상한에서 잘렸다');
+                    rows = result.rows;
                 } catch (err) {
                     // `kbsecBusinessDateKst` 는 주말만 되감고 공휴일은 모르므로 연휴에는 조회일자가 KB 영업일보다 앞서 거부된다. 그 날짜 하나만
                     // 건너뛰고 나머지 영업일은 계속 본다. 통째로 포기하면 공휴일마다 보정이 조용히 꺼진다.
@@ -3223,7 +3248,6 @@ export class kbsec extends Exchange {
                     }
                     throw err;
                 }
-                const rows = pickArray(body);
                 const parsed = rows.map(parseKbsecDomesticFillRow);
                 // 한 행 = 한 체결이라 그대로 더한다. 분할체결 연속 행은 식별자가 비어 오므로 먼저 헤더 행에 귀속시킨다.
                 warnIfFillTotalsInconsistent(parsed, rows, '결제대기 매도 조회');
@@ -3246,6 +3270,14 @@ export class kbsec extends Exchange {
         }
     }
 
+    /**
+     * 이 인스턴스에서 다시 불러도 답이 같은 영구 실패인가. KB 가 응답으로 거절한 업무 오류(권한 없음 I446, 미신청 H049 등)만 해당한다.
+     * 연결 끊김, 시간 초과, 5xx, 토큰 차단기, 토큰 무효(I445, 재발급으로 풀린다)는 냉각 뒤 다시 부른다.
+     */
+    private isPermanentFailure(err: unknown): boolean {
+        return err instanceof ExchangeError && !(err instanceof AuthenticationError && err.detail === KBSEC_ERROR_DETAIL.TOKEN_INVALID);
+    }
+
     /** 1달러당 원화. `options.usdKrwRate` 가 없으면 환율을 알 수 없어 던진다. 조회가 실패해도 던진다. */
     private usdKrwRate(): Promise<number> {
         const source = this.options.usdKrwRate as UsdKrwRateOption | undefined;
@@ -3260,7 +3292,7 @@ export class kbsec extends Exchange {
      * 부르지 않는다. 잔고 조회가 종목마다 불릴 수 있어 래치가 없으면 실패가 종목 수만큼 곱해지고, 미신청 계좌는 다시 물어도 답이 같다.
      */
     async fetchOneMarketMargin(): Promise<KbsecOneMarketMargin | undefined> {
-        if (this.oneMarketUnavailable) return undefined;
+        if (this.oneMarketUnavailable || Date.now() < this.oneMarketRetryAt) return undefined;
         try {
             const body = await this.callTr(KBSEC_TR.ONEMARKET_MARGIN, {});
             return {
@@ -3271,9 +3303,10 @@ export class kbsec extends Exchange {
                 withdrawable: pickNum(body, 'do_psbl_amt'),
             };
         } catch (err) {
-            // 시간 초과는 래치하지 않는다. 일시적 무응답이다.
-            if (!(err instanceof RequestTimeout)) this.oneMarketUnavailable = true;
-            logger.warn({ err, latched: !(err instanceof RequestTimeout) },
+            const permanent = this.isPermanentFailure(err);
+            if (permanent) this.oneMarketUnavailable = true;
+            else this.oneMarketRetryAt = Date.now() + (this.options.transientRetryCooldown as number);
+            logger.warn({ err, latched: permanent },
                 '[kbsec] 원마켓 증거금 조회 실패 — 영구 실패면 이 인스턴스에서 재시도하지 않는다(반복 실패는 계정 제한 사유)');
             return undefined;
         }
@@ -3998,7 +4031,9 @@ export class kbsec extends Exchange {
         let nextKey = '';
         let truncated = false;
         for (let page = 0; page < maxPages; page++) {
-            const body = await this.callTr(trCode, { ...base, nxt_key: nextKey });
+            // 연속구분(`cn_clsf`)을 받는 TR 은 둘째 페이지부터 `1`(연속)을 보낸다.
+            const continued = nextKey !== '' && 'cn_clsf' in base ? { cn_clsf: KBSEC_CONT_NEXT } : {};
+            const body = await this.callTr(trCode, { ...base, ...continued, nxt_key: nextKey });
             const pageRows = rowsOf(body).map(parse);
             const prevKey = nextKey;
             nextKey = pickStr(body, 'nxt_key');
@@ -4374,9 +4409,10 @@ export class kbsec extends Exchange {
         // 브로커에 실제로 나가는 수량은 내림값이다. 이 값이 본문·체결조회·반환값의 정본이다.
         const submittedQty = Math.floor(amount);
 
-        // 국내 주식은 주 단위다. 1주 미만이면 수량이 0 으로 나가 거부된다(`주문수량을 확인하십시오`, 2329). 거부될 주문은 보내지 않는다.
-        if (isKr && amount < 1) {
-            throw new InvalidOrder(`국내 주식 1주 미만 주문 불가 (수량 ${amount})`, { detail: KBSEC_ERROR_DETAIL.QUANTITY_INVALID });
+        // 주 단위 주문은 1주 미만이면 수량이 0 으로 나가 거부된다(`주문수량을 확인하십시오`, 2329). 거부될 주문은 보내지 않는다.
+        // 미국 소수점 주문은 위에서 `params.fractional` 로 따로 나갔다.
+        if (submittedQty < 1) {
+            throw new InvalidOrder(`${this.id} 1주 미만 주문 불가 (수량 ${amount}). 미국 소수점 주문은 params.fractional 을 준다`, { detail: KBSEC_ERROR_DETAIL.QUANTITY_INVALID });
         }
 
         let response: Dict;
@@ -4443,8 +4479,8 @@ export class kbsec extends Exchange {
         }
 
         const submittedQty = Math.floor(amount);
-        if (isKr && submittedQty < 1) {
-            throw new InvalidOrder(`${this.id} 국내 주식 1주 미만 주문 불가 (수량 ${amount})`, { detail: KBSEC_ERROR_DETAIL.QUANTITY_INVALID });
+        if (submittedQty < 1) {
+            throw new InvalidOrder(`${this.id} 1주 미만 주문 불가 (수량 ${amount})`, { detail: KBSEC_ERROR_DETAIL.QUANTITY_INVALID });
         }
 
         let response: Dict;
@@ -4692,8 +4728,10 @@ export class kbsec extends Exchange {
         const market = this.market(symbol);
         let response: Dict;
         if (!this.isUs(market)) {
+            // 원주문의 라우팅(SOR)을 싣는다. 정정과 같이 SOR 주문을 KRX 로 취소하면 거부될 수 있다.
+            const sor = safeString(params, 'sor_ordr_ccd') ?? await this.resolveOrderSor(id, symbol);
             response = await this.callTr(KBSEC_TR.CANCEL_KR, buildKrOrderBody(
-                { base: market.id as string, jbClsf: KBSEC_ORDER_SIDE_KR.CANCEL },
+                { base: market.id as string, jbClsf: KBSEC_ORDER_SIDE_KR.CANCEL, sor },
                 { crct_clsf: '2', orgn_ordr_no: id, ...params }, // 2=전부취소
             ));
         } else {
@@ -4717,7 +4755,9 @@ export class kbsec extends Exchange {
         const results: Order[] = [];
         for (const order of open) {
             try {
-                results.push(await this.cancelOrder(order.id as string, order.symbol));
+                // 목록 행의 라우팅을 넘겨 주문마다 미체결 목록을 다시 조회하지 않는다.
+                const sor = pickStr((order.info ?? {}) as Dict, 'sor_ordr_ccd');
+                results.push(await this.cancelOrder(order.id as string, order.symbol, sor !== '' ? { sor_ordr_ccd: sor } : {}));
             } catch (err) {
                 logger.warn({ err, orderId: order.id }, '[kbsec] 주문 취소 실패');
                 results.push({ ...order, info: { ...order.info, cancelError: err instanceof Error ? err.message : String(err) } });
@@ -4734,21 +4774,21 @@ export class kbsec extends Exchange {
      *
      * 주말은 `kbsecBusinessDateKst` 가 되감으므로 여기까지 오지 않는다. 남는 것은 공휴일인데, 달력을 새로 들고 오는 대신 2854 를 만나면 한 칸씩 더
      * 되감아 재시도한다. 성공한 칸이 처음 칸이 아니면 이 코드가 모르는 휴장일이라는 뜻이므로 WARN 으로 남긴다. 되감은 칸 수는 그날 하루 캐시한다.
-     * 2854 가 아닌 오류는 그대로 던진다. 날짜와 무관한 실패를 날짜 탓으로 삼키지 않는다.
+     * 2854 가 아닌 오류는 그대로 던진다. 날짜와 무관한 실패를 날짜 탓으로 삼키지 않는다. 해외 조회(`US`)는 미국 현지 날짜로 되감는다.
      */
-    private async callOnBusinessDate<T>(call: (ordrDt: string) => Promise<T>): Promise<T> {
-        const today = kbsecTodayKst();
-        if (this.businessDateBackoff.day !== today) this.businessDateBackoff = { day: today, steps: 0 };
-        const startSteps = this.businessDateBackoff.steps;
+    private async callOnBusinessDate<T>(call: (ordrDt: string) => Promise<T>, country: 'KR' | 'US' = 'KR'): Promise<T> {
+        const today = country === 'US' ? kbsecDateUsEastern(new Date()) : kbsecTodayKst();
+        if (this.businessDateBackoff[country].day !== today) this.businessDateBackoff[country] = { day: today, steps: 0 };
+        const startSteps = this.businessDateBackoff[country].steps;
         let lastErr: unknown;
         for (let steps = startSteps; steps <= (this.options.businessDateMaxBackoff as number); steps++) {
-            const ordrDt = kbsecBusinessDateKst(steps);
+            const ordrDt = country === 'US' ? kbsecBusinessDateUsEastern(steps) : kbsecBusinessDateKst(steps);
             try {
                 const result = await call(ordrDt);
                 // 캐시가 적중한 경우는 조용히 지나간다. 새로 되감았을 때만 남기지 않으면 연휴 내내 사이클마다 같은 WARN 이 쌓인다.
                 if (steps !== startSteps) {
-                    logger.warn({ ordrDt, steps }, '[kbsec] 조회일자를 영업일보다 더 되감아 성공 — 미등록 휴장일로 보임');
-                    this.businessDateBackoff = { day: today, steps };
+                    logger.warn({ ordrDt, steps, country }, '[kbsec] 조회일자를 영업일보다 더 되감아 성공 — 미등록 휴장일로 보임');
+                    this.businessDateBackoff[country] = { day: today, steps };
                 }
                 return result;
             } catch (err) {
@@ -4760,8 +4800,49 @@ export class kbsec extends Exchange {
     }
 
     /**
+     * 국내 주문·체결 목록(`SSQM2341`)의 행을 모든 페이지 읽는다. 날짜를 주지 않으면 가장 최근 영업일이다.
+     * 목록이 페이지 상한(`holdingsMaxPages`)에서 잘리면 일부만 돌려주지 않고 던진다. 빠진 주문은 취소 누락이나 재주문으로 이어진다.
+     */
+    private async fetchDomesticOrderRows(cclsClsf: string, market: MarketInterface | undefined, date: Str, params: Dict = {}): Promise<Dict[]> {
+        const request = (ordr_dt: string): Promise<{ rows: Dict[]; truncated: boolean }> => this.collectTrPages(KBSEC_TR.TRADES_KR, {
+            inq_clsf: KBSEC_INQ_STOCK, // 주식
+            ccls_clsf: cclsClsf, // 구분 필드를 비우면 거부된다(`체결구분을 확인하십시오`, 8654)
+            ordr_dt,
+            is_cd: market?.id ?? '',
+            cn_clsf: KBSEC_CONT_FIRST,
+            ...params,
+        }, (row: Dict) => row);
+        const result = date !== undefined ? await request(date) : await this.callOnBusinessDate(request);
+        if (result.truncated) {
+            throw new BadResponse(`${this.id} 주문·체결 목록(${KBSEC_TR.TRADES_KR})이 페이지 상한(holdingsMaxPages)에서 잘렸다. 일부만 돌려주지 않는다`);
+        }
+        return result.rows;
+    }
+
+    /**
+     * 주문·체결 목록 행을 주문 단위로 묶는다. 이 TR 은 한 행이 한 체결이고, 분할체결의 둘째 체결부터는 주문번호를 지운 연속 행으로 온다.
+     * 헤더 행이 주문 하나를 열고 뒤따르는 연속 행의 체결을 그 주문에 더한다. 헤더 없이 온 연속 행은 귀속할 곳이 없어 버린다.
+     */
+    private ordersFromRows(rows: Dict[], market: MarketInterface | undefined, limit: Int): Order[] {
+        const groups: { header: Dict; filled: number; cost: number }[] = [];
+        for (const row of rows) {
+            const fill = parseKbsecDomesticFillRow(row);
+            if (!fill.continuation) {
+                groups.push({ header: row, filled: fill.filledQty, cost: fill.cost });
+            } else if (groups.length > 0) {
+                const group = groups[groups.length - 1];
+                group.filled += fill.filledQty;
+                group.cost += fill.cost;
+            }
+        }
+        const orders = groups.map(({ header, filled, cost }) => this.parseOrderGroup(header, filled, cost, market));
+        const matched = market === undefined ? orders : orders.filter((order) => order.symbol === market.symbol);
+        return limit === undefined ? matched : matched.slice(0, limit);
+    }
+
+    /**
      * 국내 미체결 주문. 계좌별주문체결조회(`SSQM2341`)에서 체결구분 `미체결`로 뽑는다. 이 TR 은 미체결이 0건이면 플래그 `B` 와 1861 로 주는데,
-     * 그것은 빈 결과로 흡수한다. 해외 미체결은 지원하지 않는다.
+     * 그것은 빈 결과로 흡수한다. 해외 미체결은 지원하지 않는다. 모든 페이지를 읽고 분할체결 행을 주문 단위로 묶는다.
      *
      * **`since` 는 적용하지 않는다.** 미체결 행에는 주문 시각의 날짜가 없어 `Order.timestamp` 를 채울 수 없고, 기본 필터는 timestamp 가 없는 항목을
      * 전부 버려서 `since` 를 주면 미체결이 있는데도 빈 목록이 나왔다. 미체결은 빠지면 위험한 목록이라 시각을 모르는 항목을 거르지 않고 전부 돌려준다.
@@ -4770,106 +4851,93 @@ export class kbsec extends Exchange {
     override async fetchOpenOrders(symbol: Str = undefined, _since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<Order[]> {
         const market = symbol !== undefined ? this.market(symbol) : undefined;
         if (market !== undefined && this.isUs(market)) throw new NotSupported(`${this.id} fetchOpenOrders() 는 국내 종목만 지원한다`);
-        const body = await this.callOnBusinessDate(ordr_dt => this.callTr(KBSEC_TR.TRADES_KR, {
-            inq_clsf: KBSEC_INQ_STOCK, // 주식
-            ccls_clsf: KBSEC_CCLS_PENDING, // 미체결만
-            ordr_dt,
-            cn_clsf: KBSEC_CONT_FIRST,
-            nxt_key: '',
-            ...params,
-        }));
-        return this.parseOrders(pickArray(body), market, undefined, limit);
+        const rows = await this.fetchDomesticOrderRows(KBSEC_CCLS_PENDING, market, undefined, params);
+        return this.ordersFromRows(rows, market, limit);
     }
 
     /**
-     * 국내 전체 주문(체결+미체결). 계좌별주문체결조회(`SSQM2341`)에서 체결구분 전체(`KBSEC_CCLS_ALL`)로 뽑는다. 해외는 지원하지 않는다.
+     * 국내 전체 주문(체결+미체결+취소). 계좌별주문체결조회(`SSQM2341`)에서 체결구분 전체(`KBSEC_CCLS_ALL`)로 뽑아 주문 단위로 묶는다. 해외는 지원하지 않는다.
      *
-     * `since` 는 적용하지 않는다. `parseOrder`는 이 TR 행에 `timestamp`를 채우지 않아서(체결·미체결 모두), `since`를 그대로 넘기면
-     * 기본 필터가 전부 버려 빈 목록이 나온다 — `fetchOpenOrders`와 같은 이유다. `params.date`(`YYYYMMDD`)로 조회 영업일을 지정할 수 있다.
+     * `since` 는 적용하지 않는다. 이 TR 행에는 `timestamp`를 채우지 않아서(체결·미체결 모두), `since`를 그대로 넘기면
+     * 기본 필터가 전부 버려 빈 목록이 나온다. `fetchOpenOrders`와 같은 이유다. `params.date`(`YYYYMMDD`)로 조회 영업일을 지정할 수 있다.
      */
     override async fetchOrders(symbol: Str = undefined, _since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<Order[]> {
         const market = symbol !== undefined ? this.market(symbol) : undefined;
         if (market !== undefined && this.isUs(market)) throw new NotSupported(`${this.id} fetchOrders() 는 국내 종목만 지원한다`);
-        const explicitDate = safeString(params, 'date');
-        const request = (ordr_dt: string): Promise<Dict> => this.callTr(KBSEC_TR.TRADES_KR, {
-            inq_clsf: KBSEC_INQ_STOCK,
-            ccls_clsf: KBSEC_CCLS_ALL,
-            ordr_dt,
-            cn_clsf: KBSEC_CONT_FIRST,
-            nxt_key: '',
-        });
-        const body = explicitDate ? await request(explicitDate) : await this.callOnBusinessDate(request);
-        return this.parseOrders(pickArray(body), market, undefined, limit);
+        const rows = await this.fetchDomesticOrderRows(KBSEC_CCLS_ALL, market, safeString(params, 'date'), this.omit(params, 'date'));
+        return this.ordersFromRows(rows, market, limit);
     }
 
     /**
-     * 국내 종료 주문(체결 완료). 계좌별주문체결조회(`SSQM2341`)에서 체결구분 `체결`로 뽑아 `Order` 모양으로 정리한다. 체결 내역 자체(단가·수량 등
-     * 행 단위 상세)는 `fetchMyTrades`로 본다. 해외는 지원하지 않는다. `since`를 적용하지 않는 이유는 `fetchOrders`와 같다.
+     * 국내 종료 주문(전량 체결, 취소). 전체 주문(`fetchOrders`)에서 `open` 이 아닌 주문만 돌려준다. 체결 내역 자체(단가·수량 등 행 단위 상세)는
+     * `fetchMyTrades`로 본다. 해외는 지원하지 않는다. `since`를 적용하지 않는 이유는 `fetchOrders`와 같다.
      */
     override async fetchClosedOrders(symbol: Str = undefined, _since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<Order[]> {
-        const market = symbol !== undefined ? this.market(symbol) : undefined;
-        if (market !== undefined && this.isUs(market)) throw new NotSupported(`${this.id} fetchClosedOrders() 는 국내 종목만 지원한다`);
-        const explicitDate = safeString(params, 'date');
-        const request = (ordr_dt: string): Promise<Dict> => this.callTr(KBSEC_TR.TRADES_KR, {
-            inq_clsf: KBSEC_INQ_STOCK,
-            ccls_clsf: KBSEC_CCLS_FILLED,
-            ordr_dt,
-            cn_clsf: KBSEC_CONT_FIRST,
-            nxt_key: '',
-        });
-        const body = explicitDate ? await request(explicitDate) : await this.callOnBusinessDate(request);
-        return this.parseOrders(pickArray(body), market, undefined, limit);
+        const closed = (await this.fetchOrders(symbol, undefined, undefined, params)).filter((order) => order.status !== 'open');
+        return limit === undefined ? closed : closed.slice(0, limit);
     }
 
     override parseOrder(order: Dict, market: MarketInterface | undefined = undefined): Order {
-        // 필드 이름은 `parseKbsecDomesticFillRow` 가 정본이다. 미체결 조회도 같은 TR(`SSQM2341`)의 행이다.
         const fill = parseKbsecDomesticFillRow(order);
+        return this.parseOrderGroup(order, fill.filledQty, fill.cost, market);
+    }
+
+    /**
+     * 헤더 행과 그 주문의 체결 합계로 주문을 만든다. 필드 이름은 `parseKbsecDomesticFillRow` 가 정본이다.
+     * 상태는 미체결수량(`nccls_q`)으로 정한다. 남았으면 `open`, 전량 체결이면 `closed`, 남지 않았는데 덜 체결됐으면 `canceled`(전부나 일부 취소)다.
+     * 미체결수량 필드가 없으면 취소를 가릴 수 없어 체결 수량만 본다.
+     */
+    private parseOrderGroup(header: Dict, filled: number, cost: number, market: MarketInterface | undefined): Order {
+        const fill = parseKbsecDomesticFillRow(header);
         const quantity = fill.orderQty;
-        const filled = fill.filledQty;
+        const knowsUnfilled = 'nccls_q' in header;
+        const remaining = knowsUnfilled ? fill.unfilledQty : Math.max(0, quantity - filled);
+        const fullyFilled = quantity > 0 && filled >= quantity;
+        const status = fullyFilled ? 'closed' : remaining > 0 || !knowsUnfilled ? 'open' : 'canceled';
         // `A005930` 을 그대로 두면 심볼 필터가 맞지 않고 취소가 해외 TR 로 잘못 넘어간다. 종목코드를 정규화해 심볼로 옮긴다.
         const symbol = fill.symbol !== '' ? this.market(fill.symbol).symbol : market?.symbol;
         return this.safeOrder({
-            info: order,
+            info: header,
             id: fill.orderId === '' ? undefined : fill.orderId,
             symbol,
-            type: pickStr(order, 'ordr_ccd') === KBSEC_ORDER_TYPE_KR.MARKET ? 'market' : 'limit',
+            type: pickStr(header, 'ordr_ccd') === KBSEC_ORDER_TYPE_KR.MARKET ? 'market' : 'limit',
             side: fill.side ?? undefined,
-            status: filled >= quantity && quantity > 0 ? 'closed' : 'open',
-            price: pickNum(order, 'ordr_uprc'),
+            status,
+            price: pickNum(header, 'ordr_uprc'),
             amount: quantity,
             filled,
-            // 스펙은 미체결수량(`nccls_q`)을 직접 준다. 있으면 그 값이고 없으면 역산한다.
-            remaining: fill.unfilledQty > 0 ? fill.unfilledQty : Math.max(0, quantity - filled),
-            cost: fill.cost,
+            remaining: fullyFilled ? 0 : remaining,
+            cost,
+            average: filled > 0 && cost > 0 ? cost / filled : undefined,
             trades: [],
         }, market);
     }
 
     /**
-     * 주문 한 건을 조회한다. 체결내역과 미체결 목록에서 그 주문을 찾는다. 국내는 미체결 목록에 있으면 `open`(체결분이 있으면 반영), 체결내역에만
-     * 있으면 `closed` 다. 어디에도 없으면 `OrderNotFound` 다.
+     * 주문 한 건을 조회한다. 국내는 미체결 목록에 있으면 `open`(체결분이 있으면 반영), 체결내역에만 있으면 `closed` 다.
+     * 미국은 체결내역과 해외 체결현황(`SPQM2204`, 최근 사흘)을 함께 보고 잔량으로 상태를 정한다. 어디에도 없을 때만 `OrderNotFound` 다.
      *
-     * `params.date`(`YYYYMMDD`, 한국 날짜)를 주면 그날을 조회하고 실패를 던진다. 생략하면 가장 최근 영업일이다. 주문이 며칠 전 것이면 그 날짜를 줘야 한다.
+     * `params.date`(`YYYYMMDD`)를 주면 그날의 체결내역을 조회하고 실패를 던진다(국내는 한국 날짜, 미국은 미국 현지 날짜). 생략하면 가장 최근 영업일이다.
      */
     override async fetchOrder(id: string, symbol: Str = undefined, params: Dict = {}): Promise<Order> {
         if (symbol === undefined) throw new ArgumentsRequired(`${this.id} fetchOrder() requires a symbol argument`);
         const market = this.market(symbol);
         const trades = (await this.fetchMyTrades(symbol, undefined, undefined, params)).filter(trade => trade.order === id);
-        const open = this.isUs(market)
-            ? undefined
-            : (await this.fetchOpenOrders(symbol)).find(order => order.id === id);
+        const filled = trades.reduce((sum, trade) => sum + (trade.amount ?? 0), 0);
+        const cost = trades.reduce((sum, trade) => sum + (trade.cost ?? 0), 0);
+        const tradeInfo = trades.map(trade => trade.info);
+        if (this.isUs(market)) return this.overseasOrderOf(id, market, trades, filled, cost);
+        const open = (await this.fetchOpenOrders(symbol)).find(order => order.id === id);
         if (open === undefined && trades.length === 0) {
             throw new OrderNotFound(`${this.id} fetchOrder() ${symbol} 주문 ${id} 을 체결내역과 미체결 목록에서 찾지 못했다`);
         }
-        const filled = trades.reduce((sum, trade) => sum + (trade.amount ?? 0), 0);
-        const cost = trades.reduce((sum, trade) => sum + (trade.cost ?? 0), 0);
         if (open === undefined) {
             return this.safeOrder({
                 id, symbol: market.symbol, status: 'closed', side: trades[0].side, filled, cost,
-                average: filled > 0 ? cost / filled : undefined, trades: [], info: { trades: trades.map(trade => trade.info) },
+                average: filled > 0 ? cost / filled : undefined, trades: [], info: { trades: tradeInfo },
             }, market);
         }
-        // 미체결 행의 체결수량은 그 행 한 건의 것이다. 이 주문의 체결내역 합계가 정본이다.
+        // 미체결 행의 체결수량은 그 날 목록에 보인 것이다. 이 주문의 체결내역 합계가 정본이다.
         const amount = open.amount as number;
         return this.safeOrder({
             ...open, filled, cost, remaining: Math.max(0, amount - filled), average: filled > 0 ? cost / filled : undefined,
@@ -4877,11 +4945,41 @@ export class kbsec extends Exchange {
         }, market);
     }
 
+    /** 미국 주문 한 건. 체결내역에 없어도 해외 체결현황에 있으면 미체결이나 취소로 돌려준다. 둘 다 없을 때만 `OrderNotFound` 다. */
+    private async overseasOrderOf(id: string, market: MarketInterface, trades: Trade[], filled: number, cost: number): Promise<Order> {
+        const lookbackMs = 3 * 24 * 60 * 60 * 1000;
+        const status = (await this.fetchOverseasOrderStatus(this.milliseconds() - lookbackMs)).rows.find(row => row.id === id);
+        if (status === undefined && trades.length === 0) {
+            throw new OrderNotFound(`${this.id} fetchOrder() ${market.symbol} 주문 ${id} 을 체결내역과 해외 체결현황에서 찾지 못했다`);
+        }
+        const tradeInfo = trades.map(trade => trade.info);
+        if (status === undefined) {
+            return this.safeOrder({
+                id, symbol: market.symbol, status: 'closed', side: trades[0].side, filled, cost,
+                average: filled > 0 ? cost / filled : undefined, trades: [], info: { trades: tradeInfo },
+            }, market);
+        }
+        // 체결내역이 비었으면(조회 날짜가 다른 경우) 체결현황의 체결수량과 체결가를 쓴다.
+        const totalFilled = trades.length > 0 ? filled : status.filledQuantity;
+        const totalCost = trades.length > 0 ? cost : status.filledQuantity * status.filledPrice;
+        const amount = status.quantity;
+        const remaining = status.remainingQuantity;
+        const orderStatus = remaining > 0 ? 'open'
+            : amount > 0 && totalFilled >= amount ? 'closed'
+            : status.rejectReason !== '' ? 'rejected' : 'canceled';
+        return this.safeOrder({
+            id, symbol: market.symbol, status: orderStatus, side: trades[0]?.side, amount, filled: totalFilled, remaining,
+            price: status.price > 0 ? status.price : undefined, cost: totalCost,
+            average: totalFilled > 0 && totalCost > 0 ? totalCost / totalFilled : undefined,
+            trades: [], info: { status: status.info, trades: tradeInfo },
+        }, market);
+    }
+
     /**
-     * 체결내역. 계좌 체결내역을 종목 단위로 준다(`symbol` 이 필요하다). 국내는 `SSQM2341`, 해외는 `SPQM2103` 이다.
+     * 체결내역. 계좌 체결내역을 종목 단위로 준다(`symbol` 이 필요하다). 국내는 `SSQM2341`, 해외는 `SPQM2103` 이고 모든 페이지를 읽는다.
      *
-     * 조회일자는 두 가지다. `since` 가 있으면 그 시각의 **한국 날짜**를 정확히 조회하고 실패를 던진다(주문 시각으로 그 주문의 체결 행을 찾을 때).
-     * 없으면 가장 최근 영업일이다. `params.date`(`YYYYMMDD`)로 날짜를 직접 줄 수도 있다.
+     * 조회일자는 세 가지다. `params.date`(`YYYYMMDD`)를 주면 그날만 조회한다. `since` 를 주면 그 날짜부터 오늘까지 영업일마다 조회한다(최대 31일).
+     * 둘 다 없으면 가장 최근 영업일이다. 날짜는 국내가 한국 날짜, 미국이 미국 현지 날짜다. 체결 행에는 시각이 없어 `since` 는 날짜 단위로만 적용된다.
      *
      * 분할체결은 식별자를 지운 연속 행으로 온다. 이 함수가 그 행을 앞 헤더에 귀속시키므로 주문번호(`trade.order`)별로 `amount` 를 더하면 체결수량이다.
      * 단가가 0 인 체결은 체결가를 모르므로 버린다.
@@ -4889,49 +4987,78 @@ export class kbsec extends Exchange {
     override async fetchMyTrades(symbol: Str = undefined, since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<Trade[]> {
         if (symbol === undefined) throw new ArgumentsRequired(`${this.id} fetchMyTrades() requires a symbol argument`);
         const market = this.market(symbol);
-        const explicitDate = safeString(params, 'date') ?? (since !== undefined ? kbsecDateKst(new Date(since)) : undefined);
-        if (this.isUs(market)) return this.fetchOverseasTrades(market, explicitDate, limit);
-        // 구분 필드를 비우면 거부된다(`체결구분을 확인하십시오`, 8654). 그 탓에 체결 확인이 매번 실패해 진입가가 요청 호가로 기록된 적이 있다.
-        const request = (ordr_dt: string): Promise<Dict> => this.callTr(KBSEC_TR.TRADES_KR, {
-            inq_clsf: KBSEC_INQ_STOCK, // 주식
-            ccls_clsf: KBSEC_CCLS_FILLED, // 체결만
-            ordr_dt,
-            is_cd: market.id,
-            cn_clsf: KBSEC_CONT_FIRST,
-            nxt_key: '',
-        });
-        const body = explicitDate !== undefined ? await request(explicitDate) : await this.callOnBusinessDate(request);
-        return this.fillRowsToTrades(pickArray(body), market, limit);
+        const country = this.isUs(market) ? 'US' : 'KR';
+        const explicitDate = safeString(params, 'date');
+        const dates = explicitDate !== undefined ? [explicitDate] : since !== undefined ? this.tradeDatesSince(since, country) : undefined;
+        if (country === 'US') return this.fetchOverseasTrades(market, dates, limit);
+        if (dates === undefined) return this.fillRowsToTrades(await this.fetchDomesticOrderRows(KBSEC_CCLS_FILLED, market, undefined), market, limit);
+        const rows: Dict[] = [];
+        for (const date of dates) rows.push(...await this.onDateSkippingHoliday(date, (d) => this.fetchDomesticOrderRows(KBSEC_CCLS_FILLED, market, d), dates.length > 1));
+        return this.fillRowsToTrades(rows, market, limit);
+    }
+
+    /** `since` 의 날짜부터 오늘까지의 평일(`YYYYMMDD`). 국내는 한국 날짜, 해외는 미국 현지 날짜다. 31일을 넘으면 던진다. */
+    private tradeDatesSince(since: number, country: 'KR' | 'US'): string[] {
+        const dateOf = (at: number): string => country === 'US' ? kbsecDateUsEastern(new Date(at)) : kbsecDateKst(new Date(at));
+        const toUtc = (ymd: string): number => Date.UTC(Number(ymd.slice(0, 4)), Number(ymd.slice(4, 6)) - 1, Number(ymd.slice(6, 8)));
+        const day = 24 * 60 * 60 * 1000;
+        const start = toUtc(dateOf(since));
+        const end = toUtc(dateOf(this.milliseconds()));
+        if (end - start > 31 * day) throw new BadRequest(`${this.id} fetchMyTrades() 는 since 부터 31일까지만 조회한다. 기간을 나눠 부른다`);
+        const dates: string[] = [];
+        for (let at = start; at <= end; at += day) {
+            const dow = new Date(at).getUTCDay();
+            if (dow !== 0 && dow !== 6) dates.push(new Date(at).toISOString().slice(0, 10).replace(/-/g, ''));
+        }
+        return dates;
+    }
+
+    /** 날짜 하나를 조회한다. 여러 날을 도는 중이면 휴장일 거부(2854)는 그날만 건너뛴다. 하루만 조회하면 그대로 던진다. */
+    private async onDateSkippingHoliday<T>(date: string, call: (date: string) => Promise<T[]>, skipHoliday: boolean): Promise<T[]> {
+        try {
+            return await call(date);
+        } catch (err) {
+            if (skipHoliday && err instanceof ExchangeError && err.detail === KBSEC_ERROR_DETAIL.FUTURE_QUERY_DATE) return [];
+            throw err;
+        }
     }
 
     /**
      * 해외 체결내역 — `SPQM2103`. 응답 필드는 공식 스펙 이름(`ccls_q_p6`·`frgn_ccls_prc_p6`·`dl_clsf_nm`)이 1순위이고 국내 이름은 폴백이다.
-     * 체결구분은 비우면 거부되므로 명시한다.
+     * 체결구분은 비우면 거부되므로 명시한다. 조회일자는 미국 현지 날짜이고, 날짜를 주지 않으면 미국 날짜 기준 가장 최근 영업일이다.
+     * 모든 페이지를 읽고, 페이지 상한에서 잘리면 던진다.
      *
-     * 영구 실패면 이 인스턴스에서는 다시 부르지 않는다(반복 실패는 계정 제한 사유). 시간 초과는 래치하지 않는다. 해외 체결 확정이 실패해도 주문
+     * 영구 실패(`isPermanentFailure`)면 이 인스턴스에서는 다시 부르지 않는다(반복 실패는 계정 제한 사유). 해외 체결 확정이 실패해도 주문
      * 자체는 접수된 상태다.
      */
-    private async fetchOverseasTrades(market: MarketInterface, date: Str, limit: Int): Promise<Trade[]> {
+    private async fetchOverseasTrades(market: MarketInterface, dates: string[] | undefined, limit: Int): Promise<Trade[]> {
         if (this.overseasFillsUnavailable) {
             throw new ExchangeError(`${this.id} 해외 체결 조회가 이 인스턴스에서 영구 실패해 다시 부르지 않는다`);
         }
         try {
-            const request = (ordr_dt: string): Promise<Dict> => this.callTr(KBSEC_TR.ORDERS_US, {
-                ccls_clsf: KBSEC_CCLS_FILLED, // 체결만. 비우면 거부된다
-                ordr_dt,
-                is_cd: market.id,
-                nxt_key: '',
-            });
-            const body = date !== undefined ? await request(date) : await this.callOnBusinessDate(request);
-            const rows = pickArray(body);
+            const request = async (ordr_dt: string): Promise<Dict[]> => {
+                const result = await this.collectTrPages(KBSEC_TR.ORDERS_US, {
+                    ccls_clsf: KBSEC_CCLS_FILLED, // 체결만. 비우면 거부된다
+                    ordr_dt,
+                    is_cd: market.id,
+                }, (row: Dict) => row);
+                if (result.truncated) {
+                    throw new BadResponse(`${this.id} 해외 체결 목록(${KBSEC_TR.ORDERS_US})이 페이지 상한(holdingsMaxPages)에서 잘렸다. 일부만 돌려주지 않는다`);
+                }
+                return result.rows;
+            };
+            const rows: Dict[] = [];
+            if (dates === undefined) rows.push(...await this.callOnBusinessDate(request, 'US'));
+            else for (const date of dates) rows.push(...await this.onDateSkippingHoliday(date, request, dates.length > 1));
             const trades = this.fillRowsToTrades(rows, market, limit);
             if (rows.length > 0 && trades.length === 0) {
                 logger.warn({ rows: rows.length, rowKeys: Object.keys(rows[0] ?? {}).slice(0, 40) }, '[kbsec] 해외 체결 행은 있으나 전부 걸러짐 — 응답 필드명 불일치');
             }
             return trades;
         } catch (err) {
-            if (!(err instanceof RequestTimeout)) this.overseasFillsUnavailable = true;
-            logger.warn({ err, symbol: market.symbol, trCode: KBSEC_TR.ORDERS_US, latched: !(err instanceof RequestTimeout) },
+            const permanent = this.isPermanentFailure(err);
+            if (permanent) this.overseasFillsUnavailable = true;
+            logger.warn({ err, symbol: market.symbol, trCode: KBSEC_TR.ORDERS_US, latched: permanent },
                 '[kbsec] 해외 체결 조회 실패 — 영구 실패면 이 인스턴스에서 재시도하지 않는다(반복 실패는 계정 제한 사유)');
             throw err;
         }

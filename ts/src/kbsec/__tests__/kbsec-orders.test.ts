@@ -14,7 +14,7 @@ global.fetch = mockFetch as unknown as typeof fetch;
 
 import { kbsec } from '../../kbsec';
 import {
-    ArgumentsRequired, ExchangeError, InsufficientFunds, InvalidOrder, MarketClosed, NotSupported, OrderNotFound, OrderOutcomeUnknown,
+    ArgumentsRequired, BadRequest, ExchangeError, InsufficientFunds, InvalidOrder, MarketClosed, NotSupported, OrderNotFound, OrderOutcomeUnknown,
     PermissionDenied,
 } from '../../base/errors';
 import { resetMarketCalendar } from '../../market-calendar';
@@ -658,13 +658,31 @@ describe('fetchMyTrades', () => {
         expect(await newExchange().fetchMyTrades('005930/KRW')).toEqual([]);
     });
 
-    it('since 가 있으면 그 시각의 한국 날짜를 정확히 조회한다 — UTC 날짜를 쓰면 하루 전을 뒤진다', async () => {
+    it('since 가 있으면 그 시각의 한국 날짜부터 조회한다 — UTC 날짜를 쓰면 하루 전을 뒤진다', async () => {
+        vi.setSystemTime(new Date('2026-02-13T03:00:00Z'));   // 02-13 12:00 KST
         routeTr(mockFetch, { [KBSEC_TR.TRADES_KR]: {} });
 
         // 2026-02-12 16:00Z = 02-13 01:00 KST
         await newExchange().fetchMyTrades('068270/KRW', new Date('2026-02-12T16:00:00Z').getTime());
 
         expect(trBody(mockFetch, KBSEC_TR.TRADES_KR).dataBody).toMatchObject({ ordr_dt: '20260213', is_cd: '068270', ccls_clsf: '1' });
+    });
+
+    it('★since 부터 오늘까지 평일마다 조회해 합친다 — since 하루만 보면 그 뒤 체결이 빠진다', async () => {
+        vi.setSystemTime(new Date('2026-09-25T03:00:00Z'));   // 금 12:00 KST
+        routeTr(mockFetch, { [KBSEC_TR.TRADES_KR]: {} });
+
+        await newExchange().fetchMyTrades('005930/KRW', new Date('2026-09-21T01:00:00Z').getTime());   // 월
+
+        const dates = mockFetch.mock.calls
+            .filter((c) => String(c[0]).toLowerCase().includes(KBSEC_TR.TRADES_KR.toLowerCase()))
+            .map((c) => JSON.parse((c[1] as { body: string }).body).dataBody.ordr_dt);
+        expect(dates).toEqual(['20260921', '20260922', '20260923', '20260924', '20260925']);
+    });
+
+    it('since 부터 31일을 넘으면 요청 없이 BadRequest 다', async () => {
+        vi.setSystemTime(new Date('2026-09-25T03:00:00Z'));
+        await expect(newExchange().fetchMyTrades('005930/KRW', new Date('2026-08-01T00:00:00Z').getTime())).rejects.toBeInstanceOf(BadRequest);
     });
 
     it('params.date 를 주면 그 날짜를 조회하고 실패는 던진다', async () => {

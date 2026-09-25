@@ -4,7 +4,7 @@
  * 버스트 스로틀(빈 응답) 재시도 회복.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { NotSupported } from '../../base/errors';
+import { BadSymbol, ExchangeNotAvailable, NetworkError, NotSupported } from '../../base/errors';
 import { fetchYahooCandles } from '../yahoo-finance-candles';
 
 describe('fetchYahooCandles — 미지원 timeframe', () => {
@@ -78,18 +78,33 @@ describe('fetchYahooCandles — 재시도 (버스트 스로틀 회복)', () => {
         expect(out[0][4]).toBe(1.5); // close
     });
 
-    it('chart.error(심볼 부재) → 재시도 없이 즉시 [] (한 번만 호출)', async () => {
+    it('chart.error(심볼 부재) → 재시도 없이 BadSymbol (한 번만 호출)', async () => {
         const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(yahooChartError());
-        const out = await fetchYahooCandles('BADSYM', '1d', 10);
+        await expect(fetchYahooCandles('BADSYM', '1d', 10)).rejects.toBeInstanceOf(BadSymbol);
         expect(spy).toHaveBeenCalledTimes(1);
-        expect(out).toEqual([]);
     });
 
-    it('연속 빈 응답 → 최대 3회 시도 후 []', async () => {
+    it('★연속 빈 응답 → 최대 3회 시도 후 던진다 — 조회 실패를 "봉 없음"과 같은 빈 배열로 돌려주지 않는다', async () => {
         const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(yahooEmpty());
-        const out = await fetchYahooCandles('005930', '1d', 10);
+        await expect(fetchYahooCandles('005930', '1d', 10)).rejects.toBeInstanceOf(ExchangeNotAvailable);
         expect(spy).toHaveBeenCalledTimes(3);
-        expect(out).toEqual([]);
+    });
+
+    it('결과는 왔는데 시각이 없으면 그 구간에 봉이 없는 것이라 재시도 없이 빈 배열이다', async () => {
+        const noBars = { ok: true, json: async () => ({ chart: { result: [{ meta: { symbol: 'AAPL' }, indicators: { quote: [{}] } }], error: null } }) } as unknown as Response;
+        const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(noBars);
+        expect(await fetchYahooCandles('AAPL', '5m', 10)).toEqual([]);
+        expect(spy).toHaveBeenCalledTimes(1);
+    });
+
+    it('404 는 BadSymbol, 재시도를 다 쓴 5xx 는 ExchangeNotAvailable, 연결 실패는 NetworkError 다', async () => {
+        const status = (code: number): Response => ({ ok: false, status: code, json: async () => ({}) } as unknown as Response);
+        vi.spyOn(globalThis, 'fetch').mockResolvedValue(status(404));
+        await expect(fetchYahooCandles('005930', '1d', 10)).rejects.toBeInstanceOf(BadSymbol);
+        vi.spyOn(globalThis, 'fetch').mockResolvedValue(status(503));
+        await expect(fetchYahooCandles('005930', '1d', 10)).rejects.toBeInstanceOf(ExchangeNotAvailable);
+        vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('fetch failed'));
+        await expect(fetchYahooCandles('005930', '1d', 10)).rejects.toBeInstanceOf(NetworkError);
     });
 
     it('429(일시적) 후 성공 → 재시도로 캔들 반환', async () => {

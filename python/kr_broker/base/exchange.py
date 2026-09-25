@@ -19,11 +19,13 @@
 """
 
 import calendar
+import inspect
 import json
 import logging
 import re
 import time
 import types
+from collections.abc import Mapping
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import requests
@@ -33,7 +35,7 @@ from kr_broker.base.decimal_to_precision import (
     DECIMAL_PLACES, NO_PADDING, ROUND, TICK_SIZE, TRUNCATE, decimal_to_precision,
 )
 from kr_broker.base.errors import (
-    ArgumentsRequired, AuthenticationError, BadRequest, BadSymbol, BaseError, DDoSProtection, ExchangeError,
+    ArgumentsRequired, AuthenticationError, BadRequest, BadResponse, BadSymbol, BaseError, DDoSProtection, ExchangeError,
     ExchangeNotAvailable, InvalidOrder, NetworkError, NotSupported, NullResponse, OperationFailed, OrderOutcomeUnknown,
     RateLimitExceeded, RequestTimeout,
 )
@@ -343,10 +345,12 @@ class Exchange:
                 self.last_request_method = request['method']
                 self.last_request_headers = request.get('headers')
                 self.last_request_body = request.get('body')
-                return self.fetch(request['url'], request['method'], request.get('headers'), request.get('body'), timeout)
+                response = self.fetch(request['url'], request['method'], request.get('headers'), request.get('body'), timeout)
+                self.check_order_response(is_order, method, path, response)
+                return response
             except BaseError as e:
                 error: BaseError = e
-                if is_order and self.is_outcome_unknown(e):
+                if is_order and not isinstance(e, OrderOutcomeUnknown) and self.is_outcome_unknown(e):
                     error = OrderOutcomeUnknown(f'{self.id} {method} {path} 주문 요청이 접수됐는지 알 수 없다: {e}')
                     error.__cause__ = e
                 retryable = isinstance(error, OperationFailed) and error.retryable is not False
@@ -360,8 +364,21 @@ class Exchange:
                     self.sleep(retry_delay)
 
     def is_outcome_unknown(self, error: BaseException) -> bool:
-        """주문 요청이 이 오류로 끝났을 때 접수 여부를 알 수 없는가. 시간 초과와, 응답 전에 연결이 끊긴 전송 오류(`NetworkError` 그 자체)다."""
-        return isinstance(error, RequestTimeout) or type(error) is NetworkError
+        """주문 요청이 이 오류로 끝났을 때 접수 여부를 알 수 없는가. 시간 초과, 응답 전에 연결이 끊긴 전송 오류(`NetworkError` 그 자체),
+        증권사 오류 코드 없이 HTTP 상태만으로 만든 5xx 오류(`http_status_error`), 해석할 수 없는 응답(`BadResponse`)이다."""
+        return (isinstance(error, RequestTimeout) or type(error) is NetworkError or isinstance(error, BadResponse)
+                or getattr(error, '_http_status', 0) >= 500)
+
+    def http_status_error(self, code: int, error_class: Any, message: str, **options: Any) -> BaseException:
+        """HTTP 상태만 보고 오류를 만든다. 증권사 오류 코드로 분류하지 못한 응답에 쓰고, 주문 요청의 5xx 는 `is_outcome_unknown` 이 접수 미상으로 본다."""
+        error = error_class(message, **options)
+        error._http_status = code
+        return error
+
+    def check_order_response(self, is_order: bool, method: str, path: str, response: Any) -> None:
+        """주문 응답이 비어 있지 않은데 JSON 이 아니면 `BadResponse` 를 던진다(접수 미상이 된다). 빈 본문은 취소 응답일 수 있어 그대로 둔다."""
+        if is_order and isinstance(response, str) and response.strip() != '':
+            raise BadResponse(f'{self.id} {method} {path} 주문 응답이 JSON 이 아니다: {response[:200]}')
 
     def authenticate(self, path: str, api: ApiName, method: str, params: Dict[str, Any], headers: Optional[Dict[str, str]],
                      body: Str) -> None:
@@ -413,6 +430,10 @@ class Exchange:
                                    timeout=timeout_ms / 1000)
         except requests.exceptions.Timeout as e:
             raise RequestTimeout(f'{self.id} {method} {url} 요청이 {int(timeout_ms)}ms 안에 끝나지 않았다') from e
+        except (requests.exceptions.InvalidHeader, requests.exceptions.InvalidURL, requests.exceptions.MissingSchema,
+                requests.exceptions.InvalidSchema, requests.exceptions.URLRequired) as e:
+            # 보내기 전에 실패했으므로 접수 미상이 아니다.
+            raise BadRequest(f'{self.id} {method} {url} 요청을 만들 수 없다: {e}') from e
         except requests.exceptions.RequestException as e:
             raise NetworkError(f'{self.id} {method} {url} 연결에 실패했다: {e}') from e
 
@@ -440,9 +461,10 @@ class Exchange:
         return None
 
     def handle_http_status_code(self, code: int, reason: str, url: str, method: str, body: str) -> None:
-        error_class = self.httpExceptions.get(str(code))
+        """상태 표(`httpExceptions`)의 오류를 던진다. 표에 없는 5xx 는 `ExchangeNotAvailable` 이다."""
+        error_class = self.httpExceptions.get(str(code)) or (ExchangeNotAvailable if code >= 500 else None)
         if error_class is not None:
-            raise error_class(f'{self.id} {method} {url} {code} {reason} {body}')
+            raise self.http_status_error(code, error_class, f'{self.id} {method} {url} {code} {reason} {body}')
 
     @staticmethod
     def parse_json(text: str) -> Any:
@@ -585,8 +607,16 @@ class Exchange:
     def get_confirm_budget(self, defaults: Optional[Dict[str, Any]] = None) -> Dict[str, int]:
         """접수 뒤 체결을 확정할 때 쓰는 조회 예산. `options['confirmBudget']`(사전이거나 사전을 돌려주는 함수)이 증권사가 정한 기본값
         `defaults` 를 이긴다. 범위를 벗어난 값은 무시하고 아래 층의 값을 쓴다."""
-        option = self.options.get('confirmBudget')
-        return resolve_confirm_budget(defaults, option() if callable(option) else option)
+        # 주문을 보낸 뒤에 부르므로 던지지 않는다. 던지면 접수된 주문이 실패처럼 보인다.
+        overrides: Any = None
+        try:
+            option = self.options.get('confirmBudget')
+            overrides = option() if callable(option) else option
+        except Exception as e:
+            logger.warning('[%s] options.confirmBudget 이 던져 기본 예산을 쓴다: %s', self.id, e)
+        if inspect.iscoroutine(overrides):
+            overrides.close()
+        return resolve_confirm_budget(defaults, overrides if isinstance(overrides, Mapping) else None)
 
     # ============ 종목 ============
 

@@ -59,13 +59,25 @@ describe('fetchOrders', () => {
 });
 
 describe('fetchClosedOrders', () => {
-    it('체결구분 체결(1)로 SSQM2341을 부르고, 체결 완료분만 Order 로 정리한다', async () => {
+    it('★체결구분 전체(0)로 SSQM2341을 부르고, 종료된 주문만 돌려준다 — 아직 남은 O2 는 open 이라 빠진다', async () => {
         routeTr(mockFetch, { [KBSEC_TR.TRADES_KR]: ROWS });
 
         const orders = await newExchange().fetchClosedOrders();
 
-        expect(trBody(mockFetch, KBSEC_TR.TRADES_KR).dataBody).toMatchObject({ ccls_clsf: '1', inq_clsf: '1' });
-        expect(orders.map(o => o.id)).toEqual(['O1', 'O2']);
+        expect(trBody(mockFetch, KBSEC_TR.TRADES_KR).dataBody).toMatchObject({ ccls_clsf: '0', inq_clsf: '1' });
+        expect(orders.map(o => [o.id, o.status])).toEqual([['O1', 'closed']]);
+    });
+
+    it('★분할체결 연속 행은 앞 주문에 더하고, 남은 수량 없이 덜 체결된 주문은 canceled 다', async () => {
+        routeTr(mockFetch, { [KBSEC_TR.TRADES_KR]: { Record1: [
+            { ordr_no: 'O3', stnd_is_no: 'A005930', trd_dl_ccd_nm: '현금매수', ordr_q: '4', nccls_q: '0', tl_ccls_q: '1', ccls_uprc: '70000', ordr_uprc: '70000', ordr_ccd: '00' },
+            { ordr_no: '0000000000', stnd_is_no: '', trd_dl_ccd_nm: '', ordr_q: '0', nccls_q: '0', tl_ccls_q: '3', ccls_uprc: '70000' },
+            { ordr_no: 'O4', stnd_is_no: 'A005930', trd_dl_ccd_nm: '현금매수', ordr_q: '5', nccls_q: '0', tl_ccls_q: '2', ccls_uprc: '70000', ordr_uprc: '70000', ordr_ccd: '00' },
+        ] } });
+
+        const orders = await newExchange().fetchClosedOrders();
+
+        expect(orders.map(o => [o.id, o.status, o.filled, o.remaining])).toEqual([['O3', 'closed', 4, 0], ['O4', 'canceled', 2, 0]]);
     });
 
     it('해외는 NotSupported', async () => {

@@ -13,7 +13,7 @@ import pytest
 import kr_broker
 from kr_broker import kis_yahoo_candles
 from kr_broker.base import functions as fn
-from kr_broker.base.errors import BadSymbol, NotSupported
+from kr_broker.base.errors import BadSymbol, ExchangeNotAvailable, NotSupported
 from kr_broker.base.exchange import Exchange
 from kr_broker.broker_time import timeframe_to_ms
 from kr_broker.kis import et_timestamp, kst_timestamp, kst_ymd, et_ymd
@@ -238,13 +238,16 @@ def test_yahoo_retries_empty_then_succeeds(no_backoff: None) -> None:
 
 def test_yahoo_chart_error_does_not_retry(no_backoff: None) -> None:
     session = FakeSession([YAHOO_CHART_ERROR])
-    assert fetch_yahoo_candles('BADSYM', '1d', 10, exchange=Exchange({'session': session})) == []
+    with pytest.raises(BadSymbol):
+        fetch_yahoo_candles('BADSYM', '1d', 10, exchange=Exchange({'session': session}))
     assert len(session.urls) == 1
 
 
-def test_yahoo_gives_up_after_three_empty(no_backoff: None) -> None:
+def test_yahoo_raises_after_three_empty(no_backoff: None) -> None:
+    # 조회 실패를 "봉 없음"과 같은 빈 목록으로 돌려주지 않는다.
     session = FakeSession([YAHOO_EMPTY])
-    assert fetch_yahoo_candles('005930', '1d', 10, exchange=Exchange({'session': session})) == []
+    with pytest.raises(ExchangeNotAvailable):
+        fetch_yahoo_candles('005930', '1d', 10, exchange=Exchange({'session': session}))
     assert len(session.urls) == 3
 
 

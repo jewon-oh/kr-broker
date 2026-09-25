@@ -83,7 +83,7 @@ TypeScript 판과 Python 판이 있습니다. Python 판은 ccxt처럼 동기(`k
 | 취소 `cancelOrder` | ✅ | ✅ | ✅ | `toss` 조건 주문은 `params.trigger`로 취소합니다.<br>`kbsec` 전량 취소만 씁니다. |
 | 전체 취소 `cancelAllOrders` | 🔁 | 🔁 | 🔁 | `kis` 미국은 실전만 지원합니다.<br>`kbsec` 국내만 지원합니다. |
 | 정규장 밖 주문 | ⚠️ | ✅ | ❌ | `kis` 국내만 지원합니다. `options.nxtRouting`이 필요합니다.<br>`toss` 정수 지정가만 받습니다. 국내는 `options.nxtRouting`이 필요합니다.<br>`kbsec` 주문 TR이 시간외 시장을 받지만 세션 검사가 정규장 밖 주문을 막습니다. |
-| 주문 조회 `fetchOrder` | ✅ | ✅ | ⚠️ | `kbsec` 미국은 체결 내역만 조회합니다. |
+| 주문 조회 `fetchOrder` | ✅ | ✅ | ⚠️ | `kbsec` 미국은 최근 사흘의 주문만 찾습니다. |
 | 주문 목록 `fetchOrders` | ✅ | ➖ | ⚠️ | `toss` 주문 목록 API는 상태(OPEN, CLOSED)를 지정해야 합니다.<br>`kbsec` 국내만 지원합니다. `since`는 적용하지 않습니다. |
 | 미체결 `fetchOpenOrders` | ⚠️ | ✅ | ⚠️ | `kis` 미국은 실전만 지원합니다.<br>`toss` 미체결 조건 주문은 100건씩 최대 10쪽(1,000건)까지 받습니다.<br>`kbsec` 국내만 지원합니다. `since`는 적용하지 않습니다. |
 | 종료 주문 `fetchClosedOrders` | 🔁 | ✅ | ⚠️ | `kis` `fetchOrders` 결과에서 체결 완료만 고릅니다.<br>`toss` 100건씩 최대 10쪽을 받습니다.<br>`kbsec` 국내만 지원합니다. `since`는 적용하지 않습니다. 체결 내역 상세는 `fetchMyTrades`로 봅니다. |
@@ -303,7 +303,7 @@ await broker.close();
 | `enableRateLimit` | `true` | 요청 사이에 대기해 호출 한도를 지킵니다 |
 | `rateLimit` | 증권사별 | 요청 간격(ms). 엔드포인트마다 `cost`를 곱합니다 |
 | `timeout` | 조회 상한 | 조회 요청 시간 상한(ms) |
-| `options.maxRetriesOnFailure` | `0` | 조회 재시도 횟수입니다. 한국투자증권은 기본 `3`입니다. 주문 요청은 시간 초과나 연결 끊김 뒤에 재시도하지 않습니다 |
+| `options.maxRetriesOnFailure` | `0` | 조회 재시도 횟수입니다. 한국투자증권은 기본 `3`입니다. 주문 요청은 재시도하지 않습니다 |
 | `orderTimeout` | 주문 상한 | 주문 요청 시간 상한(ms). 넘으면 `OrderOutcomeUnknown` |
 | `options.tokenStore` | 없음 | 접근 토큰과 발급 잠금을 여러 프로세스가 나눠 쓰는 저장소(`BrokerTokenStore`)입니다. 없으면 프로세스 메모리 캐시만 사용합니다. 함수를 전달하면 사용할 때마다 호출합니다 |
 | `options.nxtRouting` | `false` | 정규장 밖(넥스트레이드 프리마켓과 애프터마켓) 국내 주문을 허용합니다(한국투자증권과 토스증권). KB증권에서는 정규장 안에서 주문을 SOR로 보내는 데만 사용하고 정규장 밖은 허용하지 않습니다. 불리언이거나 불리언을 반환하는 함수입니다 |

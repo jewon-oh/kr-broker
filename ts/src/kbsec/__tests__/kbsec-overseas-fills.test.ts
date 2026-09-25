@@ -73,10 +73,11 @@ describe('체결내역 조회는 시장으로 갈린다', () => {
         await expect(makeService().fetchMyTrades('AAPL/USD')).rejects.toThrow();
     });
 
-    it('실패 후에는 다시 부르지 않는다 — 반복 실패는 계정 제한 사유', async () => {
+    it('업무 오류(권한 없음)로 실패한 뒤에는 다시 부르지 않는다 — 반복 실패는 계정 제한 사유', async () => {
         mockFetch.mockImplementation(async (url: string) => {
             if (String(url).includes('/oauth2/token')) return tokenOk();
-            throw new Error('권한 없음');
+            const text = JSON.stringify({ dataHeader: { processFlag: 'B', processCode: 'I446', processMessage: 'API 사용 권한이 없습니다.' }, dataBody: {} });
+            return { ok: true, status: 200, json: async () => JSON.parse(text), text: async () => text };
         });
         const svc = makeService();
 
@@ -85,5 +86,18 @@ describe('체결내역 조회는 시장으로 갈린다', () => {
         await expect(svc.fetchMyTrades('AAPL/USD')).rejects.toThrow(/다시 부르지 않는다/);
 
         expect(calledTrs().length).toBe(afterFirst);
+    });
+
+    it('★연결 끊김 같은 일시 오류는 래치하지 않는다 — 다음 호출에서 다시 부른다', async () => {
+        let failOnce = true;
+        mockFetch.mockImplementation(async (url: string) => {
+            if (String(url).includes('/oauth2/token')) return tokenOk();
+            if (failOnce) { failOnce = false; throw new TypeError('fetch failed'); }
+            return jsonOk({ grid: [] });
+        });
+        const svc = makeService();
+
+        await expect(svc.fetchMyTrades('AAPL/USD', undefined, undefined, { date: '20260922' })).rejects.toThrow();
+        await expect(svc.fetchMyTrades('AAPL/USD', undefined, undefined, { date: '20260922' })).resolves.toEqual([]);
     });
 });

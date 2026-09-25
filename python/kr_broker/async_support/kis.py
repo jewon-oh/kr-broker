@@ -1269,23 +1269,32 @@ class kis(Exchange, ImplicitAPI):
     async def fetch_ohlcv(self, symbol: str, timeframe: str = '1d', since: Int = None, limit: Int = 100,
                     params: Optional[Dict[str, Any]] = None) -> List[List[Any]]:
         """봉. 국내는 항상 야후 파이낸스로 받는다(KIS 는 분봉이 당일뿐이고 일봉도 100행이다). 미국 일·주·월봉은 야후를 먼저 부르고,
-        야후가 비면 KIS 로 다시 받는다. `params['until']`(ms)로 끝 시각을 정한다."""
+        야후가 비거나 실패하면 KIS 로 다시 받는다. 둘 다 실패하면 던진다. `params['until']`(ms)로 끝 시각을 정한다."""
         timeframe = '1d' if timeframe is None else timeframe
         limit = 100 if limit is None else limit
         instrument = self._instrument_of(symbol)
         until = self.safe_integer(params, 'until')
         # 코스피·코스닥 구분으로 야후 티커의 접미사(.KS·.KQ)를 맞게 붙인다.
         kr_market = resolve_kr_market(symbol, self.options.get('stockDirectory'), self._master())
-        yahoo = await fetch_yahoo_candles(symbol, timeframe, limit, since, until, kr_market, exchange=self)
         daily_like = timeframe in ('1d', '1w', '1W', '1M')
-        if len(yahoo) > 0 or not instrument.overseas or not daily_like:
+        # 폴백할 거래소. 자격증명이 없으면 KIS 로 폴백할 수 없다.
+        fallback_exchange = (instrument.quote_exchange if instrument.overseas and daily_like and self.check_required_credentials(False)
+                             else None)
+        yahoo: List[List[Any]] = []
+        yahoo_error: Optional[BaseException] = None
+        try:
+            yahoo = await fetch_yahoo_candles(symbol, timeframe, limit, since, until, kr_market, exchange=self)
+        except Exception as e:
+            if fallback_exchange is None:
+                raise
+            yahoo_error = e
+        if len(yahoo) > 0 or fallback_exchange is None:
             return yahoo
-        # 자격증명이 없으면 KIS 로 다시 받을 수 없어 야후 결과를 그대로 돌려준다.
-        if instrument.quote_exchange is None or not self.check_required_credentials(False):
-            return yahoo
-        logger.info('[kis] 야후가 비어 KIS 해외 일봉으로 폴백한다 (symbol=%s, timeframe=%s)', symbol, timeframe)
-        native = await self.candles().fetch_overseas_daily_ohlcv(instrument.code, instrument.quote_exchange, timeframe, limit)
-        return native if len(native) > 0 else yahoo
+        logger.info('[kis] 야후가 비거나 실패해 KIS 해외 일봉으로 폴백한다 (symbol=%s, timeframe=%s, yahooError=%s)', symbol, timeframe, yahoo_error)
+        native = await self.candles().fetch_overseas_daily_ohlcv(instrument.code, fallback_exchange, timeframe, limit)
+        if len(native) == 0 and yahoo_error is not None:
+            raise yahoo_error
+        return native
 
     def candles(self) -> KISCandleService:
         """KIS 가 직접 주는 봉(일봉·당일 분봉·해외 일봉)과 깊은 이력 페이지 조회. `fetch_ohlcv` 가 쓰지 않는 원본 경로다."""
@@ -1500,7 +1509,8 @@ class kis(Exchange, ImplicitAPI):
         """휴장일 캘린더를 공용 캘린더(`market_calendar`)에 넣는다. 장 시간 판정이 이 값을 읽는다. 12시간 안에 성공한 호출은 다시 하지 않는다.
         국내 실주문 직전에 저절로 부른다. 장 시간 판정을 주문 밖에서 쓰면 시작할 때 한 번 직접 부른다.
 
-        신선한 캘린더가 있으면 `True` 다. 자격증명이 없거나 모의투자면 부르지 않고 `False`, 호출에 실패해도 던지지 않고 `False` 다.
+        한 번이라도 받은 캘린더가 있으면 `True` 다(이번 호출이 실패했으면 낡았을 수 있다). 자격증명이 없거나 모의투자면 부르지 않고
+        `False` 다. 호출에 실패해도 던지지 않는다.
         """
         if self.isSandboxModeEnabled or not self.check_required_credentials(False):
             return False
@@ -1527,9 +1537,13 @@ class kis(Exchange, ImplicitAPI):
         `KRW` 의 `free` 로 쓴다. 원본 응답은 `info` 에 `{'domestic', 'overseas', 'usd'}` 로 담는다.
         """
         scope = self.safe_value(params, 'scope', 'all')
+        # 모르는 범위를 조용히 건너뛰면 요청 없이 빈 잔고가 나온다.
+        scopes = list(scope) if isinstance(scope, (list, tuple)) else [scope]
+        if not scopes or any(name not in ('all', 'kr', 'us', 'usd') for name in scopes):
+            raise BadRequest(f"{self.id} fetchBalance() params.scope 는 'all', 'kr', 'us', 'usd' 또는 그 목록이다: {scope!r}")
 
         def wants(name: str) -> bool:
-            return scope == 'all' or scope == name or (isinstance(scope, list) and name in scope)
+            return 'all' in scopes or name in scopes
 
         orderable = self.safe_bool(params, 'orderable', True)
         raw: Dict[str, Any] = {}

@@ -121,10 +121,12 @@ class Exchange(BaseExchange):
                 self.last_request_method = request['method']
                 self.last_request_headers = request.get('headers')
                 self.last_request_body = request.get('body')
-                return await self.fetch(request['url'], request['method'], request.get('headers'), request.get('body'), timeout)
+                response = await self.fetch(request['url'], request['method'], request.get('headers'), request.get('body'), timeout)
+                self.check_order_response(is_order, method, path, response)
+                return response
             except BaseError as e:
                 error: BaseError = e
-                if is_order and self.is_outcome_unknown(e):
+                if is_order and not isinstance(e, OrderOutcomeUnknown) and self.is_outcome_unknown(e):
                     error = OrderOutcomeUnknown(f'{self.id} {method} {path} 주문 요청이 접수됐는지 알 수 없다: {e}')
                     error.__cause__ = e
                 retryable = isinstance(error, OperationFailed) and error.retryable is not False

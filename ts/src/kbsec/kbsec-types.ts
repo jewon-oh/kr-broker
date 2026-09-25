@@ -455,6 +455,7 @@ export const KBSEC_TRD_SELL = '1';
 
 /** 연속구분 (`cn_clsf`) — `0` 기본(첫 페이지) · `1` 연속. */
 export const KBSEC_CONT_FIRST = '0';
+export const KBSEC_CONT_NEXT = '1';
 
 /**
  * 조회일자(`ordr_dt`) 용 **한국 시각 기준** 오늘 — `YYYYMMDD`.
@@ -532,6 +533,22 @@ export function kbsecBusinessDateKst(stepsBack = 0): string {
         const dow = d.getUTCDay();            // KST 오프셋을 더했으므로 한국 요일
         const isWeekend = dow === 0 || dow === 6;
         if (!isWeekend) {
+            if (remaining === 0) break;
+            remaining -= 1;
+        }
+        d.setUTCDate(d.getUTCDate() - 1);
+    }
+    return d.toISOString().slice(0, 10).replace(/-/g, '');
+}
+
+/** {@link kbsecBusinessDateKst} 의 미국 현지 날짜판 — 해외 조회의 `ordr_dt` 축이다. 주말만 되감는다. */
+export function kbsecBusinessDateUsEastern(stepsBack = 0, now: Date = new Date()): string {
+    const ymd = kbsecDateUsEastern(now);
+    const d = new Date(Date.UTC(Number(ymd.slice(0, 4)), Number(ymd.slice(4, 6)) - 1, Number(ymd.slice(6, 8))));
+    let remaining = stepsBack;
+    for (;;) {
+        const dow = d.getUTCDay();
+        if (dow !== 0 && dow !== 6) {
             if (remaining === 0) break;
             remaining -= 1;
         }
@@ -648,8 +665,11 @@ export function kbsecBaseSymbol(symbol: string): string {
  */
 export function kbsecNormalizeCode(raw: string): string {
     const s = (raw ?? '').trim();
-    if (/^A\d{6}$/.test(s)) return s.slice(1);
-    if (/^KR7\d{9}$/.test(s)) return s.slice(3, 9);
+    // 신형 영숫자 코드(`A0193L0`)도 같은 접두를 단다. 벗긴 결과가 국내 코드 모양일 때만 벗긴다.
+    const prefixed = /^A([0-9A-Za-z]{6})$/.exec(s);
+    if (prefixed && isKrxDomesticCode(prefixed[1])) return prefixed[1];
+    const isin = /^KR7([0-9A-Za-z]{6})[0-9A-Za-z]{3}$/.exec(s);
+    if (isin && isKrxDomesticCode(isin[1])) return isin[1];
     return s;
 }
 

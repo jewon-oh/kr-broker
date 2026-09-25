@@ -111,9 +111,10 @@ def market_calendar_status(market: str) -> Dict[str, Any]:
 
 def refresh_market_calendar(market: str, fetch_days: Callable[[], Iterable[Dict[str, Any]]], ttl_ms: int,
                             now_ms: Optional[int] = None) -> bool:
-    """캘린더를 API 로 갱신한다. 아직 신선하면 부르지 않고, 실패하면 `False` 를 돌려준다(던지지 않는다).
+    """캘린더를 API 로 갱신한다. 아직 신선하면 부르지 않고, 실패해도 던지지 않는다.
 
-    `fetch_days` 는 API 를 불러 날짜별 개장 여부를 돌려주는 함수이고, 던지면 실패로 센다. 신선한 캘린더가 있으면 `True` 다.
+    `fetch_days` 는 API 를 불러 날짜별 개장 여부를 돌려주는 함수이고, 던지면 실패로 센다. 한 번이라도 받은 캘린더가 있으면 `True` 다
+    (이번 호출이 실패했으면 낡았을 수 있다). 신선도는 `market_calendar_status()['refreshedAtMs']` 로 본다.
     비동기 판은 `kr_broker.async_support.market_calendar.refresh_market_calendar` 이고 같은 상태를 쓴다.
     """
     now = fn.milliseconds() if now_ms is None else now_ms

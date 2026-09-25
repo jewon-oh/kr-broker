@@ -14,7 +14,7 @@ from typing import Any, List, Optional
 
 from kr_broker.async_support.base.runtime import new_semaphore, sleep_seconds
 from kr_broker.base import functions as fn
-from kr_broker.base.errors import NotSupported
+from kr_broker.base.errors import BadSymbol, BaseError, ExchangeNotAvailable, NetworkError, NotSupported, RateLimitExceeded, RequestTimeout
 from kr_broker.broker_krx_code import is_krx_domestic_code
 from kr_broker.broker_time import timeframe_to_ms
 from kr_broker.kis_candle_resample import resample_candles
@@ -150,7 +150,8 @@ async def fetch_yahoo_candles(stock_code: str, timeframe: str = '1d', limit: int
                               until: Optional[int] = None, kr_market: Optional[str] = None, exchange: Any = None) -> List[List[float]]:
     """야후에서 봉 `[[시각(ms), 시가, 고가, 저가, 종가, 거래량], ...]` 을 받는다. 최신 `limit` 개를 돌려준다.
 
-    받지 못하면(없는 심볼, 재시도를 다 쓴 빈 응답이나 실패) 빈 목록이다. 지원하지 않는 타임프레임은 `NotSupported` 를 던진다.
+    조회에 성공했는데 봉이 없을 때만 빈 목록이다. 없는 심볼은 `BadSymbol`, 재시도를 다 쓴 실패는 `ExchangeNotAvailable`·`RateLimitExceeded`·
+    `NetworkError` 를 던진다. 지원하지 않는 타임프레임은 `NotSupported` 를 던진다.
     `since` 가 있으면 `until`(없으면 지금)까지의 기간을 덮는 `range` 로, 없으면 타임프레임별 기본 `range` 로 조회한다.
     요청은 `exchange.http_request` 로 보낸다(증권사 인스턴스).
     """
@@ -184,26 +185,34 @@ async def fetch_yahoo_candles(stock_code: str, timeframe: str = '1d', limit: int
                     if retryable and can_retry:
                         await _backoff(attempt)
                         continue
-                    return []
+                    message = f'야후 캔들 조회 실패({yahoo_symbol} {timeframe}): HTTP {status}'
+                    if status == 404:
+                        raise BadSymbol(message)
+                    if status == 429:
+                        raise RateLimitExceeded(message)
+                    raise ExchangeNotAvailable(message)
                 data = json.loads(response.content.decode(response.encoding or 'utf-8', errors='replace'))
                 chart = _prop(data, 'chart')
                 chart_error = _prop(chart, 'error')
                 if _truthy(chart_error):
                     logger.warning('[YahooFinance] 차트 에러 (symbol=%s, error=%s)', yahoo_symbol, chart_error)
-                    return []
+                    raise BadSymbol(f'야후 캔들 조회 실패({yahoo_symbol} {timeframe}): {chart_error}')
                 results = _prop(chart, 'result')
                 result = results[0] if isinstance(results, list) and len(results) > 0 else None
-                timestamps = result.get('timestamp') if isinstance(result, dict) else None
-                indicators = result.get('indicators') if isinstance(result, dict) else None
-                quotes = indicators.get('quote') if isinstance(indicators, dict) else None
-                quote = quotes[0] if isinstance(quotes, list) and len(quotes) > 0 else None
-                if not _truthy(timestamps) or not _truthy(quote):
-                    # 빈 응답은 한꺼번에 많이 부를 때의 조절 신호라 간격을 두고 다시 보낸다.
+                if not isinstance(result, dict):
+                    # 빈 응답(result: null)은 한꺼번에 많이 부를 때의 조절 신호라 간격을 두고 다시 보낸다.
                     if can_retry:
                         logger.debug('[YahooFinance] 빈 응답 — 재시도 (symbol=%s, attempt=%d)', yahoo_symbol, attempt)
                         await _backoff(attempt)
                         continue
                     logger.warning('[YahooFinance] 빈 응답 (재시도 소진) (symbol=%s)', yahoo_symbol)
+                    raise ExchangeNotAvailable(f'야후 캔들 조회 실패({yahoo_symbol} {timeframe}): {YAHOO_MAX_ATTEMPTS}번 모두 빈 응답')
+                timestamps = result.get('timestamp')
+                indicators = result.get('indicators')
+                quotes = indicators.get('quote') if isinstance(indicators, dict) else None
+                quote = quotes[0] if isinstance(quotes, list) and len(quotes) > 0 else None
+                if not _truthy(timestamps) or not _truthy(quote):
+                    # 결과는 왔는데 시각이 없으면 그 구간에 봉이 없는 것이다.
                     return []
                 if not isinstance(timestamps, list):
                     raise TypeError('timestamp 가 배열이 아니다')
@@ -228,11 +237,14 @@ async def fetch_yahoo_candles(stock_code: str, timeframe: str = '1d', limit: int
                 final = resample_candles(candles, 4 * 60) if needs_resample else candles
                 return final if limit is None else final[-limit:]
             except Exception as err:
+                # 위에서 일부러 던진 오류는 그대로 올린다. 전송 실패(`NetworkError`·`RequestTimeout` 그 자체)와 해석 실패만 다시 보낸다.
+                if isinstance(err, BaseError) and type(err) not in (NetworkError, RequestTimeout):
+                    raise
                 if can_retry:
                     logger.debug('[YahooFinance] 요청 실패 — 재시도 (symbol=%s, attempt=%d, err=%s)', yahoo_symbol, attempt, err)
                     await _backoff(attempt)
                     continue
                 logger.warning('[YahooFinance] 캔들 조회 실패 (재시도 소진) (stockCode=%s, symbol=%s, timeframe=%s, err=%s)',
                                stock_code, yahoo_symbol, timeframe, err)
-                return []
-        return []
+                raise NetworkError(f'야후 캔들 조회 실패({yahoo_symbol} {timeframe}): {err}') from err
+        raise ExchangeNotAvailable(f'야후 캔들 조회 실패({yahoo_symbol} {timeframe})')
