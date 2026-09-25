@@ -7,6 +7,7 @@ const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 global.fetch = mockFetch as unknown as typeof fetch;
 
 import { kbsec } from '../../kbsec';
+import { MarketClosed } from '../../base/errors';
 import { KBSEC_TR, kbsecBusinessDateKst } from '../kbsec-types';
 import { applyMarketCalendar, resetMarketCalendar } from '../../market-calendar';
 import { __resetKbsecTokenBreaker } from '../kbsec-token-breaker';
@@ -56,5 +57,24 @@ describe('조회 기준 영업일', () => {
     it('캘린더가 없으면 주말만 건너뛴다(모르는 휴장일은 호출부가 2854 로 되감는다)', () => {
         expect(kbsecBusinessDateKst(0, friday)).toBe('20260925');
         expect(kbsecBusinessDateKst(0, new Date('2026-09-27T03:00:00Z'))).toBe('20260925');   // 일요일
+    });
+});
+
+describe('주문 게이트의 시계', () => {
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('장 시간 게이트는 milliseconds() 로 지금을 읽는다 — 인스턴스 시계가 일요일이면 주문을 보내지 않는다', async () => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date('2026-09-23T01:00:00Z'));   // 수요일 10:00 KST, 벽시계로는 장중이다
+        mockFetch.mockImplementation(async () => ok({}));
+        const exchange = new kbsec({ apiKey: 'kb-app-key-123456', secret: 'kb-secret', rateLimit: 0 });
+        exchange.milliseconds = () => Date.parse('2026-09-27T01:00:00Z');   // 일요일 10:00 KST
+
+        await expect(exchange.createOrder('005930/KRW', 'limit', 'buy', 1, 70000)).rejects.toBeInstanceOf(MarketClosed);
+        // 게이트가 휴장일 캘린더를 받는 요청은 나갈 수 있다. 주문 TR 은 나가지 않아야 한다.
+        const sent = mockFetch.mock.calls.map((call) => String(call[0]).split('/').pop()!.toUpperCase());
+        expect(sent).not.toContain(KBSEC_TR.BUY_KR);
     });
 });

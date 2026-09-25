@@ -4431,7 +4431,7 @@ export class kbsec extends Exchange {
         // 세션 게이트. 거래시간 밖 주문은 KB 로 보내지 않고 `MarketClosed` 로 막는다.
         // KRX 판정은 시장이 아는 사실이라 이 클래스가 자기 시간표를 갖지 않고 공용 술어에 맡긴다.
         if (isKr) await this.refreshMarketCalendar();
-        const closed = marketSessionBlockReason('kbsec', symbol, undefined, masterDataOf(this.options));
+        const closed = marketSessionBlockReason('kbsec', symbol, new Date(this.milliseconds()), masterDataOf(this.options));
         if (closed !== null) {
             logger.info({ symbol, side, reason: closed }, '[kbsec] 거래시간 외 주문 차단');
             throw new MarketClosed(closed);
@@ -4515,7 +4515,7 @@ export class kbsec extends Exchange {
         this.checkOrderArguments(market, 'limit', side, amount, price, params);
 
         if (isKr) await this.refreshMarketCalendar();
-        const closed = marketSessionBlockReason('kbsec', symbol, undefined, masterDataOf(this.options));
+        const closed = marketSessionBlockReason('kbsec', symbol, new Date(this.milliseconds()), masterDataOf(this.options));
         if (closed !== null) {
             logger.info({ symbol, side, reason: closed }, '[kbsec] 거래시간 외 주문 차단');
             throw new MarketClosed(closed);
@@ -4626,7 +4626,7 @@ export class kbsec extends Exchange {
         if (!this.isUs(market)) throw new NotSupported(`${this.id} createMarketBuyOrderWithCost() 는 미국 종목만 지원한다: ${symbol}`);
         if (!(cost > 0)) throw new ArgumentsRequired(`${this.id} createMarketBuyOrderWithCost() requires a cost argument above 0`);
 
-        const closed = marketSessionBlockReason('kbsec', symbol, undefined, masterDataOf(this.options));
+        const closed = marketSessionBlockReason('kbsec', symbol, new Date(this.milliseconds()), masterDataOf(this.options));
         if (closed !== null) {
             logger.info({ symbol, cost, reason: closed }, '[kbsec] 거래시간 외 주문 차단');
             throw new MarketClosed(closed);

@@ -135,6 +135,9 @@ OVERSEAS_ORDER_TR = {
     'VNSE': {'buy': 'TTS0311U', 'sell': 'TTS0310U'},
 }
 
+# `create_order` 가 받지 않는 ccxt 조건 인자. 본문에 합치면 조건 없는 일반 주문이 바로 나갈 수 있어 요청 전에 막는다.
+CONDITIONAL_ORDER_PARAMS = ('triggerPrice', 'stopPrice', 'stopLossPrice', 'takeProfitPrice')
+
 # 미국 거래소. 이 거래소의 주문에는 미국장 세션 게이트를 건다.
 US_ORDER_EXCHANGES = frozenset(['NASD', 'NYSE', 'AMEX'])
 
@@ -1751,11 +1754,16 @@ class kis(Exchange, ImplicitAPI):
         """주문. 수량은 정수 주로 내린다(소수점 매수는 받지 않는다). 거래시간 밖은 주문을 보내지 않고 `MarketClosed` 를 던진다.
 
         `params['session']` 은 `'regular'` 이나 `'nxt'` 다. 생략하면 `options['nxtRouting']` 과 NXT 확장세션 시각으로 정한다(국내).
-        확장세션이면 종목이 NXT 에서 거래되는지 먼저 확인하고(실전만), 아니면 `MarketClosed` 를 던진다. 그 밖의 키는 요청 본문에 합친다.
+        확장세션이면 종목이 NXT 에서 거래되는지 먼저 확인하고(실전만), 아니면 `MarketClosed` 를 던진다. 조건 인자(`triggerPrice`,
+        `stopPrice`, `stopLossPrice`, `takeProfitPrice`)는 요청 없이 `NotSupported` 다(스탑지정가는 `create_trigger_order`). 그 밖의 키는
+        요청 본문에 합친다.
 
         국내 시장가는 `ORD_DVSN=01`, 지정가는 `00` 이다. 미국은 지정가만 낼 수 있고 실전에서 `market` 을 주면 장마감지정가(LOC)로 낸다.
         두 경우 모두 미국은 `price` 가 필요하다. 응답은 접수 결과라 체결은 알 수 없다(`filled` 가 비어 있다). 체결은 `fetch_order`·`fetch_my_trades` 로 본다.
         """
+        for key in CONDITIONAL_ORDER_PARAMS:
+            if self.safe_value(params, key) is not None:
+                raise NotSupported(f'{self.id} createOrder() 는 조건 인자 {key} 를 받지 않는다. 스탑지정가는 createTriggerOrder() 로 낸다')
         amount, price = fn.decimal_to_float(amount), fn.decimal_to_float(price)
         instrument = self._instrument_of(symbol)
         quantity = self._normalize_quantity(instrument, side, amount)

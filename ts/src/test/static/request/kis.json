@@ -5877,6 +5877,24 @@
             "error": { "class": "BadRequest" }
         },
         {
+            "description": "createOrder 에 조건 인자(stopLossPrice)를 주면 조건 없는 일반 주문을 내지 않고 요청 없이 NotSupported 다",
+            "method": "createOrder",
+            "args": [
+                "005930/KRW",
+                "limit",
+                "sell",
+                1,
+                70000,
+                {
+                    "stopLossPrice": 65000
+                }
+            ],
+            "http": [],
+            "error": {
+                "class": "NotSupported"
+            }
+        },
+        {
             "description": "createOrder session 이 nxt 여도 NXT 가 닫힌 새벽에는 주문을 보내지 않고 MarketClosed 다",
             "now": 1774375200000,
             "method": "createOrder",
