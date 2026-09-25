@@ -316,6 +316,8 @@ await broker.close();
 | `options.stockDirectory` | 없음 | 국내 종목이 코스피인지 코스닥인지 알려 주는 `BrokerStockDirectory`입니다. 없으면 마스터 데이터로 판별합니다(한국투자증권) |
 | `options.confirmBudget` | `{ attempts: 6, intervalMs: 350 }` | 주문 접수 뒤 체결을 확정하려고 조회하는 횟수와 간격입니다(토스증권과 KB증권). KB증권 국내 주문은 `{ attempts: 5, intervalMs: 1000 }`이 기본입니다. 한국투자증권은 이 옵션을 읽지 않습니다. 객체이거나 객체를 반환하는 함수입니다 |
 | `options.confirmExecution` | `true` | `false`면 접수 뒤 체결 조회를 하지 않습니다(토스증권) |
+| `options.allowInsecureUrl` | `false` | `true`면 `https`가 아닌 요청 주소를 허용합니다. 꺼져 있으면 `urls`를 `http://`로 바꾼 요청은 보내기 전에 `BadRequest`입니다. 루프백 주소는 옵션 없이 허용합니다 |
+| `options.hostAddr` | 없음 | KB증권 TR 본문에 싣는 호스트 주소 `{ ipAddr, macAddr }`입니다. 주지 않으면 이 호스트의 첫 외부 IPv4 주소와 MAC 주소를 모아 보냅니다(KB증권은 빈 값을 받지 않습니다) |
 
 설정은 전부 인스턴스가 받습니다. 환경 변수는 읽지 않습니다. 라이브러리 전체에 적용되는 설정은 로거 하나뿐입니다. 기본 로거는 아무것도 출력하지 않습니다. `setLogger({ debug, info, warn, error })`로 원하는 로거를 전달합니다.
 

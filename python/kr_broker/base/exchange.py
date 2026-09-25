@@ -26,6 +26,7 @@ import logging
 import re
 import time
 import types
+import urllib.parse
 from collections.abc import Mapping
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -94,6 +95,22 @@ RATIO_TO_PERCENT = '100'
 # 이보다 큰 limit 은 쓰일 일이 없다. 이런 값은 옛 위치 인자 until(ms)이 limit 자리로 들어온 것이다.
 LIMIT_LOOKS_LIKE_MS = 1_000_000_000
 KST_OFFSET_MS = 9 * 60 * 60 * 1000
+
+
+_LOOPBACK_HOSTS = frozenset(['localhost', '127.0.0.1', '::1'])
+
+
+def assert_secure_url(exchange_id: str, url: str, allow_insecure: bool) -> None:
+    """요청 주소가 `https:` 가 아니면 보내기 전에 `BadRequest` 를 던진다. 평문으로 보내면 앱키와 시크릿, 토큰이 경로 위에 드러난다.
+    루프백 주소와 `allow_insecure`(`options['allowInsecureUrl']`)만 예외다. TypeScript 판 `assertSecureUrl` 과 같다."""
+    if allow_insecure:
+        return
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme == 'https' or (parsed.scheme == 'http' and parsed.hostname in _LOOPBACK_HOSTS):
+        return
+    if not parsed.scheme:
+        return
+    raise BadRequest(f'{exchange_id} 요청 주소가 https 가 아니다: {parsed.scheme}://{parsed.netloc}. 평문 전송은 options.allowInsecureUrl 로만 허용한다')
 
 
 def _is_calendar_date(year: int, month: int, day: int) -> bool:
@@ -488,6 +505,7 @@ class Exchange:
                      timeout_ms: Optional[float] = None) -> Any:
         """HTTP 요청 하나를 그대로 보내고 응답(`status_code`·`reason`·`headers`·`encoding`·`content`)을 돌려준다.
         오류 봉투는 보지 않는다. 시간 초과는 `RequestTimeout`, 그 밖의 전송 실패는 `NetworkError` 로 바꿔 던진다."""
+        assert_secure_url(self.id, url, self.options.get('allowInsecureUrl') is True)
         timeout_ms = self.timeout if timeout_ms is None else timeout_ms
         session = self.session if self.session is not None else self._new_requests_session()
         try:

@@ -391,3 +391,21 @@ def test_toss_domestic_cost_order_is_not_supported_before_any_request() -> None:
 def test_exchange_closed_by_user_is_an_exchange_error() -> None:
     from kr_broker.base.errors import ExchangeClosedByUser, ExchangeError
     assert issubclass(ExchangeClosedByUser, ExchangeError) and kr_broker.ExchangeClosedByUser is ExchangeClosedByUser
+
+
+def test_non_https_urls_are_rejected_before_sending() -> None:
+    from kr_broker.base.exchange import assert_secure_url
+
+    with pytest.raises(BadRequest):
+        assert_secure_url('x', 'http://openapi.example.com/a', False)
+    for url in ('https://openapi.example.com/a', 'http://127.0.0.1:8080/a', 'http://localhost/a', 'http://[::1]:9/a'):
+        assert_secure_url('x', url, False)
+    assert_secure_url('x', 'http://openapi.example.com/a', True)
+
+    class Boom:
+        def request(self, *args: object, **kwargs: object) -> None:
+            raise AssertionError('보내면 안 된다')
+
+    broker = Exchange({'session': Boom()})
+    with pytest.raises(BadRequest):
+        broker.http_request('GET', 'http://openapi.example.com/a')

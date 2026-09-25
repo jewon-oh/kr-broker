@@ -66,6 +66,7 @@ import type {
     Balances, Dict, Dictionary, Int, KrTimestamped, MarketInterface, Num, OHLCV, Order, OrderBook, OrderSide, OrderType, Str, Ticker, Trade,
     TradingFeeInterface,
 } from './base';
+import { assertSecureUrl } from './base/Exchange';
 import { confirmExecution, fillDeviationBps, tradeListProbe } from './execution-confirm';
 import { expandBusinessDays, refreshMarketCalendar as refreshSharedMarketCalendar, type CalendarDay } from './market-calendar';
 import { marketSessionBlockReason } from './trading-hours';
@@ -1842,11 +1843,23 @@ export class kbsec extends Exchange {
     // ============ 요청 ============
 
     /** 앱키·시크릿에 묶인 인증 객체. 토큰 캐시와 발급 락이 여기 있다. */
+    /**
+     * TR 본문 `dataHeader` 에 싣는 호스트 주소. `options.hostAddr`(`{ ipAddr, macAddr }`)로 준 값을 쓰고, 빠진 값만 이 호스트에서 모은다.
+     * KB 는 빈 값을 받지 않는다.
+     */
+    private hostAddr(): { ipAddr: string; macAddr: string } {
+        const given = this.safeDict(this.options, 'hostAddr', {}) as Dict;
+        const auto = kbsecHostAddr();
+        return { ipAddr: this.safeString(given, 'ipAddr') || auto.ipAddr, macAddr: this.safeString(given, 'macAddr') || auto.macAddr };
+    }
+
     private getAuth(): KBSecAuth {
         const identity = `${this.apiKey}\u0000${this.secret}`;
         if (this.authInstance === undefined || identity !== this.authIdentity) {
             const api = this.urls.api;
             const baseUrl = typeof api === 'string' ? api : (api?.private ?? KBSEC_API_BASE);
+            // 토큰 발급은 자체 전송 경로라 여기서 주소를 확인한다.
+            assertSecureUrl(this.id, baseUrl, this.options.allowInsecureUrl === true);
             this.authInstance = new KBSecAuth({ appKey: this.apiKey as string, appSecret: this.secret as string, accountNo: this.uid }, baseUrl, () => this.getTokenStore());
             this.authIdentity = identity;
         }
@@ -1884,7 +1897,7 @@ export class kbsec extends Exchange {
             },
             body: JSON.stringify({
                 // 빈 값이면 KB 가 TR 을 거부한다. `kbsecHostAddr` 주석을 본다.
-                dataHeader: kbsecHostAddr(),
+                dataHeader: this.hostAddr(),
                 dataBody: fillTrInputs(path, params),
             }),
         };

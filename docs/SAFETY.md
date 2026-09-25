@@ -110,12 +110,14 @@ KB증권의 미국 주문은 `fetchOpenOrders`가 조회하지 않으므로 `fet
 | 인스턴스의 `apiKey`, `secret`, `uid` | 앱키, 시크릿, 계좌 정보 |
 | 인스턴스의 `token`(한국투자증권), `accessToken`(토스증권) | 접근 토큰 |
 | `last_request_headers` | 한국투자증권은 `authorization`, `appkey`, `appsecret`. 토스증권은 `Authorization`. KB증권은 `Authorization`, `appKey` |
-| `last_request_body` | 토스증권 토큰 발급 본문에 `client_secret`. KB증권 본문에 호스트의 IPv4와 MAC 주소 |
+| `last_request_body` | 토스증권 토큰 발급 본문에 `client_secret`. KB증권 본문에 호스트의 IPv4와 MAC 주소(`options.hostAddr`로 보낼 값을 정할 수 있습니다) |
 | `last_request_url` | 한국투자증권 조회 주소의 쿼리에 계좌번호(`CANO`)와 상품 코드 |
 | `last_http_response`, `last_json_response` | 한국투자증권 토큰 발급 직후에는 접근 토큰이 든 응답 |
 | 오류 메시지 | 한국투자증권 토큰 발급 실패 메시지에 응답 본문 전체. HTTP 오류 메시지에 요청 주소와 응답 본문 |
 | `verbose`가 켜진 로그 | 요청과 응답의 헤더와 본문. 알려진 비밀 헤더(`authorization`, `appkey`, `appsecret`)와 본문 필드(`appsecret`, `secretkey`, `client_secret`, `access_token`, `approval_key`, `refresh_token`)는 `***`로 가리지만, 계좌번호 같은 나머지 값은 그대로 남습니다. JSON 이나 폼으로 읽지 못한 본문은 원문 대신 길이만 남깁니다 |
 | `options.tokenStore`가 가리키는 저장소 | 접근 토큰(JSON) |
+
+요청 주소가 `https`가 아니면 라이브러리는 보내기 전에 `BadRequest`를 던집니다. 앱키와 토큰이 평문으로 나가지 않게 하려는 것입니다. 루프백 주소는 예외이고, 다른 주소는 `options.allowInsecureUrl`을 켜야 보냅니다.
 
 `JSON.stringify(broker)`와 `console.log(broker)`는 `apiKey`와 `secret`을 그대로 출력합니다. 인스턴스를 로그에 넣지 마십시오.
 

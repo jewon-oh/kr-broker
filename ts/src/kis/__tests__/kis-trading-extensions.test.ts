@@ -163,7 +163,7 @@ describe('정리해서 돌려주는 계좌 조회', () => {
 
     it('해외선물옵션 주문내역, 예수금, 거래내역, 주문가능, 미결제, 증거금을 정리한다', async () => {
         fixKst();
-        const orderRow = { ord_dt: '20260922', odno: '00360686', orgn_ord_dt: '', orgn_odno: '', ovrs_futr_fx_pdno: '6AZ26', sll_buy_dvsn_cd: '02', fm_ord_qty: '1', fm_ord_pric: '0.6512', fm_stop_ord_pric: '', fm_ccld_qty: '1', fm_ccld_pric: '0.6512', fm_ord_rmn_qty: '0', ccld_cndt_cd: '6', ccld_dtl_dtime: '20260922213000' };
+        const orderRow = { ord_dt: '20260922', odno: '00000701', orgn_ord_dt: '', orgn_odno: '', ovrs_futr_fx_pdno: '6AZ26', sll_buy_dvsn_cd: '02', fm_ord_qty: '1', fm_ord_pric: '0.6512', fm_stop_ord_pric: '', fm_ccld_qty: '1', fm_ccld_pric: '0.6512', fm_ord_rmn_qty: '0', ccld_cndt_cd: '6', ccld_dtl_dtime: '20260922213000' };
         mockFetch.mockResolvedValueOnce(tokenOk())
             .mockResolvedValueOnce(dataOk({ output: [orderRow] }))
             .mockResolvedValueOnce(dataOk({ output: [orderRow] }))
@@ -191,7 +191,7 @@ describe('정리해서 돌려주는 계좌 조회', () => {
         expect(queryOf(find('/overseas-futureoption/v1/trading/inquire-psamount'))).toEqual({ ...ACCOUNT, OVRS_FUTR_FX_PDNO: '6AZ26', SLL_BUY_DVSN_CD: '02', FM_ORD_PRIC: '', ECIS_RSVN_ORD_YN: '' });
         expect(queryOf(find('/overseas-futureoption/v1/trading/inquire-unpd'))).toEqual({ ...ACCOUNT, FUOP_DVSN: '00', CTX_AREA_FK100: '', CTX_AREA_NK100: '' });
         expect(queryOf(find('/overseas-futureoption/v1/trading/margin-detail'))).toEqual({ ...ACCOUNT, CRCY_CD: 'USD', INQR_DT: '20260922' });
-        expect(today).toMatchObject({ orderDate: '20260922', orderId: '00360686', originalOrderId: undefined, code: '6AZ26', side: 'buy', quantity: 1, price: 0.6512, filledQuantity: 1, remainingQuantity: 0, fillConditionCode: '6', filledAt: '20260922213000' });
+        expect(today).toMatchObject({ orderDate: '20260922', orderId: '00000701', originalOrderId: undefined, code: '6AZ26', side: 'buy', quantity: 1, price: 0.6512, filledQuantity: 1, remainingQuantity: 0, fillConditionCode: '6', filledAt: '20260922213000' });
         expect(deposit).toMatchObject({ currency: 'TUS', deposit: 50000, totalAssets: 52000, realizedPnl: 120, margin: 3000, riskRate: 5.8, orderable: 47000, withdrawable: 46000 });
         expect(transaction).toMatchObject({ date: '20260922', currency: 'USD', amount: 1000, depositBefore: 49000, depositAfter: 50000, remarks: '입금' });
         expect(orderable).toMatchObject({ currency: 'USD', openQuantity: 1, newOrderableQuantity: 15, totalOrderableQuantity: 16, marketTotalOrderableQuantity: 14 });
@@ -226,10 +226,10 @@ const ORDER_CASES: OrderCase[] = [
             ...ACCOUNT, PDNO: 'KR2033022D33', ORD_QTY2: '1', BOND_ORD_UNPR: '10130.5', SAMT_MKET_PTCI_YN: 'N', BOND_RTL_MKET_YN: 'N', ORD_DVSN: '01', SPRX_YN: 'N', BUY_DT: '', BUY_SEQ: '',
             SLL_AGCO_OPPS_SLL_YN: 'N', MGCO_APTM_ODNO: '', ORD_SVR_DVSN_CD: '0', CTAC_TLNO: '',
         } },
-    { name: 'editBondOrder', path: '/domestic-bond/v1/trading/order-rvsecncl', tr: 'TTTC0953U', call: (k) => k.editBondOrder('0004357900', 'KR2033022D33', 10470),
-        body: { ...ACCOUNT, PDNO: 'KR2033022D33', ORGN_ODNO: '0004357900', ORD_QTY2: '0', BOND_ORD_UNPR: '10470', QTY_ALL_ORD_YN: 'Y', RVSE_CNCL_DVSN_CD: '01', MGCO_APTM_ODNO: '', ORD_SVR_DVSN_CD: '0', CTAC_TLNO: '' } },
-    { name: 'cancelBondOrder', path: '/domestic-bond/v1/trading/order-rvsecncl', tr: 'TTTC0953U', call: (k) => k.cancelBondOrder('0004357900', 'KR2033022D33', 3),
-        body: { ...ACCOUNT, PDNO: 'KR2033022D33', ORGN_ODNO: '0004357900', ORD_QTY2: '3', BOND_ORD_UNPR: '0', QTY_ALL_ORD_YN: 'N', RVSE_CNCL_DVSN_CD: '02', MGCO_APTM_ODNO: '', ORD_SVR_DVSN_CD: '0', CTAC_TLNO: '' } },
+    { name: 'editBondOrder', path: '/domestic-bond/v1/trading/order-rvsecncl', tr: 'TTTC0953U', call: (k) => k.editBondOrder('0000000201', 'KR2033022D33', 10470),
+        body: { ...ACCOUNT, PDNO: 'KR2033022D33', ORGN_ODNO: '0000000201', ORD_QTY2: '0', BOND_ORD_UNPR: '10470', QTY_ALL_ORD_YN: 'Y', RVSE_CNCL_DVSN_CD: '01', MGCO_APTM_ODNO: '', ORD_SVR_DVSN_CD: '0', CTAC_TLNO: '' } },
+    { name: 'cancelBondOrder', path: '/domestic-bond/v1/trading/order-rvsecncl', tr: 'TTTC0953U', call: (k) => k.cancelBondOrder('0000000201', 'KR2033022D33', 3),
+        body: { ...ACCOUNT, PDNO: 'KR2033022D33', ORGN_ODNO: '0000000201', ORD_QTY2: '3', BOND_ORD_UNPR: '0', QTY_ALL_ORD_YN: 'N', RVSE_CNCL_DVSN_CD: '02', MGCO_APTM_ODNO: '', ORD_SVR_DVSN_CD: '0', CTAC_TLNO: '' } },
     { name: 'createDerivativeOrder(limit)', path: '/domestic-futureoption/v1/trading/order', tr: 'TTTO1101U', call: (k) => k.createDerivativeOrder('101W12', 'limit', 'buy', 2, 412.35),
         body: {
             ORD_PRCS_DVSN_CD: '02', ...ACCOUNT, SLL_BUY_DVSN_CD: '02', SHTN_PDNO: '101W12', ORD_QTY: '2', UNIT_PRICE: '412.35', NMPR_TYPE_CD: '01', KRX_NMPR_CNDT_CD: '0',
@@ -240,14 +240,14 @@ const ORDER_CASES: OrderCase[] = [
             ORD_PRCS_DVSN_CD: '02', ...ACCOUNT, SLL_BUY_DVSN_CD: '01', SHTN_PDNO: '101W12', ORD_QTY: '1', UNIT_PRICE: '0', NMPR_TYPE_CD: '02', KRX_NMPR_CNDT_CD: '0',
             ORD_DVSN_CD: '02', CTAC_TLNO: '', FUOP_ITEM_DVSN_CD: '',
         } },
-    { name: 'editDerivativeOrder', path: '/domestic-futureoption/v1/trading/order-rvsecncl', tr: 'TTTO1103U', call: (k) => k.editDerivativeOrder('0000004018', 413, 1),
+    { name: 'editDerivativeOrder', path: '/domestic-futureoption/v1/trading/order-rvsecncl', tr: 'TTTO1103U', call: (k) => k.editDerivativeOrder('0000000301', 413, 1),
         body: {
-            ORD_PRCS_DVSN_CD: '02', ...ACCOUNT, RVSE_CNCL_DVSN_CD: '01', ORGN_ODNO: '0000004018', ORD_QTY: '1', UNIT_PRICE: '413', NMPR_TYPE_CD: '01', KRX_NMPR_CNDT_CD: '0',
+            ORD_PRCS_DVSN_CD: '02', ...ACCOUNT, RVSE_CNCL_DVSN_CD: '01', ORGN_ODNO: '0000000301', ORD_QTY: '1', UNIT_PRICE: '413', NMPR_TYPE_CD: '01', KRX_NMPR_CNDT_CD: '0',
             RMN_QTY_YN: 'N', ORD_DVSN_CD: '01', FUOP_ITEM_DVSN_CD: '',
         } },
-    { name: 'cancelDerivativeOrder(night)', path: '/domestic-futureoption/v1/trading/order-rvsecncl', tr: 'TTTN1103U', call: (k) => k.cancelDerivativeOrder('0000004018', undefined, { session: 'night' }),
+    { name: 'cancelDerivativeOrder(night)', path: '/domestic-futureoption/v1/trading/order-rvsecncl', tr: 'TTTN1103U', call: (k) => k.cancelDerivativeOrder('0000000301', undefined, { session: 'night' }),
         body: {
-            ORD_PRCS_DVSN_CD: '02', ...ACCOUNT, RVSE_CNCL_DVSN_CD: '02', ORGN_ODNO: '0000004018', ORD_QTY: '0', UNIT_PRICE: '0', NMPR_TYPE_CD: '02', KRX_NMPR_CNDT_CD: '0',
+            ORD_PRCS_DVSN_CD: '02', ...ACCOUNT, RVSE_CNCL_DVSN_CD: '02', ORGN_ODNO: '0000000301', ORD_QTY: '0', UNIT_PRICE: '0', NMPR_TYPE_CD: '02', KRX_NMPR_CNDT_CD: '0',
             RMN_QTY_YN: 'Y', ORD_DVSN_CD: '01', FUOP_ITEM_DVSN_CD: '',
         } },
     { name: 'createCreditOrder(buy)', path: '/domestic-stock/v1/trading/order-credit', tr: 'TTTC0052U', call: (k) => k.createCreditOrder('005930/KRW', 'limit', 'buy', 3, 70000, '21'),
@@ -268,14 +268,14 @@ const ORDER_CASES: OrderCase[] = [
             ...ACCOUNT, OVRS_FUTR_FX_PDNO: '6AZ26', SLL_BUY_DVSN_CD: '02', FM_LQD_USTL_CCLD_DT: '', FM_LQD_USTL_CCNO: '', PRIC_DVSN_CD: '1', FM_LIMIT_ORD_PRIC: '0.6512',
             FM_STOP_ORD_PRIC: '', FM_ORD_QTY: '1', FM_LQD_LMT_ORD_PRIC: '', FM_LQD_STOP_ORD_PRIC: '', CCLD_CNDT_CD: '6', CPLX_ORD_DVSN_CD: '0', ECIS_RSVN_ORD_YN: 'N', FM_HDGE_ORD_SCRN_YN: 'N',
         } },
-    { name: 'editOverseasDerivativeOrder', path: '/overseas-futureoption/v1/trading/order-rvsecncl', tr: 'OTFM3002U', call: (k) => k.editOverseasDerivativeOrder('00360686', '20260922', 0.652),
+    { name: 'editOverseasDerivativeOrder', path: '/overseas-futureoption/v1/trading/order-rvsecncl', tr: 'OTFM3002U', call: (k) => k.editOverseasDerivativeOrder('00000701', '20260922', 0.652),
         body: {
-            ...ACCOUNT, ORGN_ORD_DT: '20260922', ORGN_ODNO: '00360686', FM_LIMIT_ORD_PRIC: '0.652', FM_STOP_ORD_PRIC: '', FM_LQD_LMT_ORD_PRIC: '', FM_LQD_STOP_ORD_PRIC: '',
+            ...ACCOUNT, ORGN_ORD_DT: '20260922', ORGN_ODNO: '00000701', FM_LIMIT_ORD_PRIC: '0.652', FM_STOP_ORD_PRIC: '', FM_LQD_LMT_ORD_PRIC: '', FM_LQD_STOP_ORD_PRIC: '',
             FM_HDGE_ORD_SCRN_YN: 'N', FM_MKPR_CVSN_YN: '',
         } },
-    { name: 'cancelOverseasDerivativeOrder', path: '/overseas-futureoption/v1/trading/order-rvsecncl', tr: 'OTFM3003U', call: (k) => k.cancelOverseasDerivativeOrder('00360686', '20260922'),
+    { name: 'cancelOverseasDerivativeOrder', path: '/overseas-futureoption/v1/trading/order-rvsecncl', tr: 'OTFM3003U', call: (k) => k.cancelOverseasDerivativeOrder('00000701', '20260922'),
         body: {
-            ...ACCOUNT, ORGN_ORD_DT: '20260922', ORGN_ODNO: '00360686', FM_LIMIT_ORD_PRIC: '', FM_STOP_ORD_PRIC: '', FM_LQD_LMT_ORD_PRIC: '', FM_LQD_STOP_ORD_PRIC: '',
+            ...ACCOUNT, ORGN_ORD_DT: '20260922', ORGN_ODNO: '00000701', FM_LIMIT_ORD_PRIC: '', FM_STOP_ORD_PRIC: '', FM_LQD_LMT_ORD_PRIC: '', FM_LQD_STOP_ORD_PRIC: '',
             FM_HDGE_ORD_SCRN_YN: 'N', FM_MKPR_CVSN_YN: 'N',
         } },
     { name: 'createDaytimeOrder', path: '/overseas-stock/v1/trading/daytime-order', tr: 'TTTS6037U', call: (k) => k.createDaytimeOrder('V/USD', 'sell', 2, 330.5),
@@ -284,8 +284,8 @@ const ORDER_CASES: OrderCase[] = [
         body: { ...ACCOUNT, OVRS_EXCG_CD: 'NASD', PDNO: 'AAPL', ORGN_ODNO: '1234567890', RVSE_CNCL_DVSN_CD: '02', ORD_QTY: '10', OVRS_ORD_UNPR: '0', CTAC_TLNO: '', MGCO_APTM_ODNO: '', ORD_SVR_DVSN_CD: '0' } },
     { name: 'createOverseasReservedOrder(us buy)', path: '/overseas-stock/v1/trading/order-resv', tr: 'TTTT3014U', call: (k) => k.createOverseasReservedOrder('TSLA/USD', 'buy', 1, 900),
         body: { ...ACCOUNT, PDNO: 'TSLA', OVRS_EXCG_CD: 'NASD', FT_ORD_QTY: '1', FT_ORD_UNPR3: '900' } },
-    { name: 'cancelOverseasReservedOrder', path: '/overseas-stock/v1/trading/order-resv-ccnl', tr: 'TTTT3017U', call: (k) => k.cancelOverseasReservedOrder('0030008244', '20260922'),
-        body: { ...ACCOUNT, RSVN_ORD_RCIT_DT: '20260922', OVRS_RSVN_ODNO: '0030008244' } },
+    { name: 'cancelOverseasReservedOrder', path: '/overseas-stock/v1/trading/order-resv-ccnl', tr: 'TTTT3017U', call: (k) => k.cancelOverseasReservedOrder('0000000501', '20260922'),
+        body: { ...ACCOUNT, RSVN_ORD_RCIT_DT: '20260922', OVRS_RSVN_ODNO: '0000000501' } },
 ];
 
 describe('확장 주문', () => {
@@ -295,7 +295,7 @@ describe('확장 주문', () => {
         mockFetch.mockImplementation(async (url: string) => {
             if (String(url).includes('/oauth2/')) return tokenOk();
             if (String(url).includes('/chk-holiday')) return dataOk({ output: [] });
-            return dataOk({ output: { ODNO: '0000117057', ORD_TMD: '101530', RSVN_ORD_SEQ: '88794', OVRS_RSVN_ODNO: '0030008245', ORD_DT: '20260922' } });
+            return dataOk({ output: { ODNO: '0000000101', ORD_TMD: '101530', RSVN_ORD_SEQ: '88794', OVRS_RSVN_ODNO: '0000000502', ORD_DT: '20260922' } });
         });
 
         const ack = await c.call(newKis()) as { orderId: string };
@@ -308,10 +308,10 @@ describe('확장 주문', () => {
 
     it('접수 결과는 API 마다 다른 주문번호 필드를 읽고, 소문자 필드도 읽는다', async () => {
         mockFetch.mockResolvedValueOnce(tokenOk())
-            .mockResolvedValueOnce(dataOk({ output: { KRX_FWDG_ORD_ORGNO: '91252', ODNO: '0000117057', ORD_TMD: '121052' } }))
+            .mockResolvedValueOnce(dataOk({ output: { KRX_FWDG_ORD_ORGNO: '91252', ODNO: '0000000101', ORD_TMD: '121052' } }))
             .mockResolvedValueOnce(dataOk({ output: { rsvn_ord_seq: '88794' } }))
-            .mockResolvedValueOnce(dataOk({ output: { ODNO: '0030008244', RSVN_ORD_RCIT_DT: '20260922', OVRS_RSVN_ODNO: '0030008245' } }))
-            .mockResolvedValueOnce(dataOk({ output: { ORD_DT: '20260922', ODNO: '00360687' } }));
+            .mockResolvedValueOnce(dataOk({ output: { ODNO: '0000000501', RSVN_ORD_RCIT_DT: '20260922', OVRS_RSVN_ODNO: '0000000502' } }))
+            .mockResolvedValueOnce(dataOk({ output: { ORD_DT: '20260922', ODNO: '00000702' } }));
 
         const k = newKis();
         const bond = await k.createBondOrder('KR2033022D33', 'buy', 1, 10125);
@@ -322,11 +322,11 @@ describe('확장 주문', () => {
         // 응답에 주문일자가 없으면 오늘(한국 날짜)과 주문시각으로 timestamp 를 채운다.
         expect(bond).toEqual({
             timestamp: expect.any(Number), datetime: expect.any(String),
-            orderId: '0000117057', orderDate: undefined, orderTime: '121052', info: { KRX_FWDG_ORD_ORGNO: '91252', ODNO: '0000117057', ORD_TMD: '121052' },
+            orderId: '0000000101', orderDate: undefined, orderTime: '121052', info: { KRX_FWDG_ORD_ORGNO: '91252', ODNO: '0000000101', ORD_TMD: '121052' },
         });
         expect(reserved.orderId).toBe('88794');
-        expect(overseas).toMatchObject({ orderId: '0030008245', orderDate: '20260922' });
-        expect(futures).toMatchObject({ orderId: '00360687', orderDate: '20260922' });
+        expect(overseas).toMatchObject({ orderId: '0000000502', orderDate: '20260922' });
+        expect(futures).toMatchObject({ orderId: '00000702', orderDate: '20260922' });
         expect(bodyOf(mockFetch, find('/overseas-futureoption/v1/trading/order'))).toMatchObject({ PRIC_DVSN_CD: '2', FM_LIMIT_ORD_PRIC: '', CCLD_CNDT_CD: '2' });
         expect(headersOf(mockFetch, find('/overseas-stock/v1/trading/order-resv')).tr_id).toBe('TTTT3016U');
     });
@@ -336,7 +336,7 @@ describe('확장 주문', () => {
 
         const k = newKis(true);
         await k.createDerivativeOrder('101W12', 'limit', 'buy', 1, 412);
-        await k.cancelOverseasReservedOrder('0030008244', '20260922');
+        await k.cancelOverseasReservedOrder('0000000501', '20260922');
 
         expect(headersOf(mockFetch, find('/domestic-futureoption/v1/trading/order')).tr_id).toBe('VTTO1101U');
         expect(headersOf(mockFetch, find('/overseas-stock/v1/trading/order-resv-ccnl')).tr_id).toBe('VTTT3017U');
@@ -374,7 +374,7 @@ describe('확장 주문', () => {
         await expect(k.createCreditOrder('005930/KRW', 'limit', 'sell', 1, 70000, '25')).rejects.toThrow(ArgumentsRequired);
         await expect(k.cancelReservedOrder('88793', '001', '2026-09-23')).rejects.toThrow(BadRequest);
         await expect(k.createDaytimeOrder('005930/KRW', 'buy', 1, 100)).rejects.toThrow(BadSymbol);
-        await expect(k.cancelOverseasDerivativeOrder('00360686', undefined as unknown as string)).rejects.toThrow(ArgumentsRequired);
+        await expect(k.cancelOverseasDerivativeOrder('00000701', undefined as unknown as string)).rejects.toThrow(ArgumentsRequired);
         expect(mockFetch).not.toHaveBeenCalled();
     });
 });
