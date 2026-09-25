@@ -1662,8 +1662,11 @@ export class toss extends Exchange {
      * (`params.partial`)은 받지 않는다. 주문 상세 조회가 실패하면 던진다. 미국에서 `amount` 를 주지 않으면 조회는 고액주문 확인에만 쓰므로
      * 실패해도 정정한다. 정정하면 새 `orderId` 가 발급된다 — 반환한 `Order.id` 를 써야 한다.
      *
+     * 장 시간 밖이면 원주문 조회와 정정 요청 없이 `MarketClosed` 다. 판정은 `createOrder` 와 같다. 국내 프리·애프터마켓은 `nxtRouting` 이 켜져
+     * 있을 때만 열고, 국내와 미국 확장세션에서는 지정가 정정만 보낸다. 정정은 신규 진입이 아니라서 `blockAuctionBuys` 의 동시호가 매수 차단은 걸지 않는다.
+     *
      * `params.trigger: true` 는 조건주문 정정이다(`modifyConditionalOrder` 로 넘긴다). 조건주문은 등록과 같은 인자
-     * (`triggerPrice`·`expireDate` 등 `params`)로 조건 전체를 다시 선언한다 — 부분 필드만 바꿀 수 없다.
+     * (`triggerPrice`·`expireDate` 등 `params`)로 조건 전체를 다시 선언한다 — 부분 필드만 바꿀 수 없다. 등록처럼 장 시간 게이트는 거치지 않는다.
      */
     override async editOrder(
         id: string, symbol: string, type: OrderType, side: OrderSide, amount: Num = undefined, price: Num = undefined, params: Dict = {},
@@ -1682,6 +1685,13 @@ export class toss extends Exchange {
             throw new NotSupported(`${this.id} editOrder() 의 일부정정(params.partial)은 지원하지 않는다. 토스 정정은 잔량 전부를 새 가격으로 옮긴다`);
         }
         if (type === 'limit' && price !== undefined) this.assertKrxTickAligned(market, price, 'editOrder');
+
+        // 원주문 조회보다 먼저 판정한다. 정정 본문의 수량은 국내 잔량(정수)이거나 없어서(미국) 소수점 제한에 걸리지 않는 0 을 넘긴다.
+        const gate = await this.checkOrderableSession(symbol, country, { isMarket: type === 'market', useAmountBased: false, quantity: 0 }, undefined);
+        if (gate !== null) {
+            logger.info({ orderId: id, symbol, reason: gate }, '[toss] 거래시간 밖이라 정정 요청을 보내지 않는다');
+            throw new MarketClosed(gate);
+        }
 
         // 국내는 정정 수량을 싣기 위해, `amount` 를 주면 대조하기 위해 원주문을 조회한다. 이때 조회가 실패하면 던진다.
         const original = country === 'KR' || amount !== undefined ? await this.editOriginal(id) : undefined;
@@ -1811,7 +1821,7 @@ export class toss extends Exchange {
      * 미국은 네 세션을 캘린더로 판정하고, 정규장 밖에서는 정규장 전용인 주문 형태(금액 주문·소수점 수량·시장가)를 막는다. 정규장 안에서도 종료 1시간 전 이후에는
      * 금액 주문과 소수점 수량 주문이 접수되지 않는다. 캘린더를 받지 못하면 정적 시간표(`isTossOrderable`)로 판정한다. 그 폴백에서 국내 휴장일은
      * 공용 캘린더가 알 때만 막고(모르면 연다), 미국 확장세션은 막는다(좁히는 쪽). 정규장의 종가 동시호가 신규 매수는 `options.blockAuctionBuys` 가
-     * 켜졌을 때만 막는다(세 증권사 공용 판정 `krxAuctionBuyBlockReason`·`usAuctionBuyBlockReason`).
+     * 켜졌을 때만 막는다(세 증권사 공용 판정 `krxAuctionBuyBlockReason`·`usAuctionBuyBlockReason`). 정정은 `side` 를 비워 이 차단을 걸지 않는다.
      *
      * @returns 막는 사유(한국어). 접수할 수 있으면 `null`.
      */
@@ -1819,11 +1829,11 @@ export class toss extends Exchange {
         symbol: string,
         country: StockMarketGroup,
         form: { isMarket: boolean; useAmountBased: boolean; quantity: number },
-        side: OrderSide,
+        side: OrderSide | undefined,
     ): Promise<string | null> {
         const now = new Date(this.milliseconds());
         const auction = async (): Promise<string | null> => {
-            if (!(await this.isOptionEnabled('blockAuctionBuys'))) return null;
+            if (side === undefined || !(await this.isOptionEnabled('blockAuctionBuys'))) return null;
             return country === 'KR' ? krxAuctionBuyBlockReason(now, side) : usAuctionBuyBlockReason(now, side);
         };
         if (country === 'KR') {

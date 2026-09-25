@@ -4735,6 +4735,8 @@ export class kbsec extends Exchange {
      *   보내고(`crct_clsf: '1'`), 이때 `amount` 는 옮길 수량이다.
      * - 해외 정정은 잔량 전부의 가격만 바꾼다(`SKAM2102` 에 수량 필드가 없다). 일부정정은 `NotSupported` 다. 수량을 바꾸려면 취소 후 재접수해야 한다.
      * - **`price` 가 필요하다.** 국내·해외 모두 정정은 단가를 바꾸는 주문이라, 빼면 요청 없이 `ArgumentsRequired` 다(빼고 보내면 단가 `0` 이 나간다).
+     * - **장 시간 밖이면 원주문 조회와 정정 요청을 보내지 않고 `MarketClosed` 다.** `createOrder` 와 같은 시간표(국내 KRX 정규장, 미국 정규장)다.
+     *   정정은 신규 진입이 아니라서 `blockAuctionBuys` 의 동시호가 매수 차단은 걸지 않는다.
      */
     override async editOrder(
         id: string, symbol: string, _type: OrderType, _side: OrderSide, amount: Num = undefined, price: Num = undefined, params: Dict = {},
@@ -4754,6 +4756,7 @@ export class kbsec extends Exchange {
                 throw new NotSupported(`${this.id} editOrder() 는 해외 주문의 amount 를 받지 않는다. 원주문의 체결 수량을 믿을 만한 조회로 확인할 수 없다. `
                     + 'amount 를 빼면 잔량 전부의 가격만 정정하고, 수량을 바꾸려면 취소한 뒤 다시 주문한다');
             }
+            await this.assertEditSessionOpen(symbol, false);
             const response = await this.callTr(KBSEC_TR.AMEND_CANCEL_US, {
                 is_cd: base,
                 orgn_ordr_no: id,
@@ -4764,6 +4767,7 @@ export class kbsec extends Exchange {
             return this.editedOrder(response, market, price, undefined);
         }
         this.assertKrxTickAligned(market, price, 'editOrder');
+        await this.assertEditSessionOpen(symbol, true);
         let sor: string;
         if (!isPartial && amount !== undefined) {
             // 수량을 대조하므로 원주문 조회 실패를 발주 정책으로 덮지 않고 던진다.
@@ -4781,6 +4785,16 @@ export class kbsec extends Exchange {
         logger.info({ orderId: id, newOrderId: newId, symbol, price, sor, isPartial }, '[kbsec] ✅ 정정주문 — 주문번호가 바뀌었다');
         // 일부정정은 옮긴 수량, 전부정정은 대조한 총수량을 싣는다. `amount` 없이 부른 전부정정의 수량은 이 응답으로 알 수 없어 싣지 않는다.
         return this.editedOrder(response, market, price, amount);
+    }
+
+    /** 정정 게이트. `createOrder` 와 같은 판정이고, 방향을 넘기지 않아 동시호가 매수 차단은 걸지 않는다. 국내는 휴장일 캘린더를 먼저 받는다. */
+    private async assertEditSessionOpen(symbol: string, isKr: boolean): Promise<void> {
+        if (isKr) await this.refreshMarketCalendar();
+        const closed = marketSessionBlockReason('kbsec', symbol, new Date(this.milliseconds()), masterDataOf(this.options));
+        if (closed !== null) {
+            logger.info({ symbol, reason: closed }, '[kbsec] 거래시간 외 정정 차단');
+            throw new MarketClosed(closed);
+        }
     }
 
     private editedOrder(response: Dict, market: MarketInterface, price: Num, amount: Num): Order {

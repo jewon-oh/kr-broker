@@ -45,7 +45,7 @@ const broker = new kis({
 | 국내 종목의 시세 조회와 주문 | `kis` | 필요 없습니다. 종목코드 6자리 모양으로 국내를 판별합니다 |
 | `fetchMarkets()`와 `loadMarkets()`로 종목 목록 채우기 | `kis` | 필요합니다. 없으면 빈 목록을 반환합니다 |
 | 미국 종목의 시세 조회와 주문 | `kis` | 필요합니다. 마스터에 없는 티커는 `BadSymbol`을 던집니다 |
-| 미국 종목의 주문 | `kbsec` | 필요합니다. 없으면 상장 거래소를 알 수 없어 `createOrder`, `createTriggerOrder`, `createMarketBuyOrderWithCost`가 모두 `MarketClosed`를 던집니다 |
+| 미국 종목의 주문 | `kbsec` | 필요합니다. 없으면 상장 거래소를 알 수 없어 `createOrder`, `createTriggerOrder`, `createMarketBuyOrderWithCost`, `editOrder`가 모두 `MarketClosed`를 던집니다 |
 
 토스증권은 `masterData`를 읽지 않습니다. 종목 목록은 토스증권 API에서 받습니다.
 
