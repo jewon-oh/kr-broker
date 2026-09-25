@@ -30,8 +30,8 @@ const TOKEN_FETCH_LOCK_TTL_MS = 90_000;
 export interface TossIssuedToken {
     accessToken: string;
     /** 유효 시간(초). 없거나 0 이하면 기본값을 쓴다. */
-    expiresInSeconds?: number;
-    tokenType?: string;
+    expiresInSeconds?: number | undefined;
+    tokenType?: string | undefined;
 }
 
 interface CachedToken {

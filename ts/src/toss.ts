@@ -82,6 +82,7 @@ import {
     type Balances,
     type Dict,
     type Dictionary,
+    type ErrorClass,
     type ImplicitApiMethod,
     type Int,
     type Market,
@@ -871,7 +872,7 @@ export class toss extends Exchange {
         if (code === 'invalid-request' && this.safeValue(this.safeDict(errorValue, 'data'), 'tickSize') !== undefined) {
             throw new InvalidOrder(feedback, { detail: 'price-tick-invalid' });
         }
-        const exact = this.exceptions?.exact as Dictionary<new (message: string, options?: { detail?: string }) => Error> | undefined;
+        const exact = this.exceptions?.exact as Dictionary<ErrorClass> | undefined;
         this.throwExactlyMatchedException(exact, code, feedback, options);
         // 코드 표에 없는 응답은 상태로만 분류한다. 주문 요청의 5xx 는 접수 미상이 된다(`isOutcomeUnknown`).
         const byStatus = this.httpExceptions[String(statusCode)] ?? (statusCode >= 500 ? ExchangeNotAvailable : undefined);
@@ -1868,9 +1869,9 @@ export class toss extends Exchange {
         extendedSession: Str;
         status: string;
         /** 접수 직후 미체결 장부에 그대로 남아 있다(확장세션 지정가). */
-        stillOpen?: boolean;
-        snapshot?: ExecutionSnapshot | null;
-        raw?: TossOrder;
+        stillOpen?: boolean | undefined;
+        snapshot?: ExecutionSnapshot | null | undefined;
+        raw?: TossOrder | undefined;
     }): Order {
         const { snapshot, raw } = args;
         const timestamp = this.parse8601(raw?.orderedAt) ?? this.milliseconds();

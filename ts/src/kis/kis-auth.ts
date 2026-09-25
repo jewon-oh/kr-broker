@@ -34,7 +34,7 @@ const STORE_TTL_MARGIN_MS = 60_000;
 /** 발급 요청을 보내는 쪽. `kis` 클래스가 자기 `fetch` 로 구현한다. */
 export interface KisTokenSource {
     /** 접근 토큰을 발급한다. 서버가 준 유효 시간(초)이 있으면 함께 돌려준다. */
-    requestToken(): Promise<{ accessToken: string; expiresInSec?: number }>;
+    requestToken(): Promise<{ accessToken: string; expiresInSec?: number | undefined }>;
     /** 실시간 접속키를 발급한다. */
     requestApprovalKey(): Promise<string>;
 }

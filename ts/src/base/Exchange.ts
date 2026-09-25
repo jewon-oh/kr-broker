@@ -183,8 +183,8 @@ export type ApiName = string | string[];
 export interface SignedRequest {
     url: string;
     method: string;
-    headers?: Dictionary<string>;
-    body?: string;
+    headers?: Dictionary<string> | undefined;
+    body?: string | undefined;
 }
 
 /** `fetch` 가 `handleRestResponse` 에 넘기는 응답. `Response` 의 필요한 부분만 갖는다. */
@@ -628,7 +628,7 @@ export class Exchange {
         try {
             const exchange = (async (): Promise<HttpResponseLike> => {
                 // 리다이렉트를 따르지 않는다. 따르면 앱키와 시크릿 헤더, 토큰 발급 본문을 다른 호스트로 다시 보낸다. 3xx 는 오류로 던진다.
-                const res = await fetchImplementation(url, { method, headers: requestHeaders, body, redirect: 'manual', signal: controller.signal as FetchSignal });
+                const res = await fetchImplementation(url, { method, headers: requestHeaders, ...(body !== undefined ? { body } : {}), redirect: 'manual', signal: controller.signal as FetchSignal });
                 // 본문까지 읽어야 시간 상한이 끝난다. 이미 읽은 본문으로 다시 응답을 만들어 넘긴다.
                 const text = await res.text();
                 return { status: res.status, statusText: res.statusText, headers: res.headers, text: async () => text };
