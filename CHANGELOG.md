@@ -33,6 +33,13 @@
 - 빌드한 `dist/`를 Node.js ESM에서 불러오지 못하던 것을 고쳤습니다(확장자 없는 상대 경로 `./base` 때문에 `ERR_UNSUPPORTED_DIR_IMPORT`). CI가 `exports`의 모든 경로를 Node.js로 불러와 확인합니다(`scripts/check-dist-imports.mjs`).
 - KB증권의 `fetchTicker`, `fetchOrderBook`, `fetchBalance`, `cancelOrder`, `fetchOpenOrders` 등이 `params`를 요청에 싣지 않던 것을 고쳤습니다.
 - 한국투자증권 해외 실시간 체결과 호가(`HDFSCNT0`, `HDFSASP0`, `HDFSASP1`)의 필드 이름이 한 칸씩 밀려 있던 것을 고쳤습니다.
+- 토스증권 주문 조회의 `fee.cost`가 문자열(`"889"`)이던 것을 고쳤습니다. 고친 메서드는 `fetchOrder`, `fetchOpenOrders`, `fetchClosedOrders`입니다. 값은 `fees[0].cost`와 같은 숫자입니다.
+- 토스증권 수수료율(`GET /commissions`)의 `commissionRate`가 `null`이면 수수료를 0%로 읽던 것을 고쳤습니다. 이제 `null`은 수수료율을 모르는 경우로 다룹니다. 이때 `fetchTradingFee`는 시장별 기본 위탁수수료율(국내 0.015%, 미국 0.1%)을 돌려줍니다.
+- 토스증권 미국 주식의 `editOrder`가 고액주문 확인 표시(`confirmHighValueOrder`)를 붙이지 못하던 것을 고쳤습니다. 미국 정정은 수량을 받지 않습니다. 그래서 정정 전에 주문 상세(`GET /orders/{orderId}`)를 조회하고 남은 수량과 새 가격으로 주문 금액을 계산합니다. 조회가 실패하면 표시 없이 정정 요청을 보냅니다.
+- 토스증권 `createOrder`가 체결 확정 조회에서 `null`을 받으면 `TypeError`를 던지던 것을 고쳤습니다. 이때 주문은 이미 접수됐으므로 오류를 던지지 않고 `status: 'open'`인 주문을 돌려줍니다.
+- 토스증권 `fetchBalance`에 `symbol`과 `currency`를 함께 주면 요청 없이 빈 잔고를 돌려주던 것을 고쳤습니다. 이제 `symbol`의 보유 수량과 `currency`의 현금을 함께 받습니다.
+- 토스증권 미국 장 운영 캘린더에서 세션 키가 없는 날을 개장일로 보던 것을 고쳤습니다. 날짜가 없는 항목은 오류 없이 건너뜁니다.
+- 토스증권 `fetchMarketCalendar`가 `'KR'`이 아닌 값을 모두 미국으로 보던 것을 고쳤습니다. 대소문자는 가리지 않고(`'kr'`은 국내) `'KR'`과 `'US'` 밖의 값에는 요청 없이 `BadRequest`를 던집니다.
 
 ## [0.1.0] - 2026-09-21
 

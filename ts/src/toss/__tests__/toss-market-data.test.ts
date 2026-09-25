@@ -208,6 +208,16 @@ describe('잔고', () => {
         expect(fake.requestsTo('GET /api/v1/buying-power')).toHaveLength(1);
     });
 
+    it('종목과 통화를 함께 주면 그 종목의 보유와 그 통화의 현금을 모두 받는다', async () => {
+        const fake = installFakeToss({ 'GET /api/v1/holdings': jsonOk(holdings), 'GET /api/v1/buying-power': buyingPower });
+        const balance = await makeToss().fetchBalance({ symbol: '005930/KRW', currency: 'KRW' });
+        expect(balance['005930'].total).toBe(4);
+        expect(balance.KRW.free).toBe(300000);
+        expect(balance.USD).toBeUndefined();
+        expect(fake.requestsTo('GET /api/v1/holdings')[0].query.get('symbol')).toBe('005930');
+        expect(fake.requestsTo('GET /api/v1/buying-power').map((r) => r.query.get('currency'))).toEqual(['KRW']);
+    });
+
     it('조회에 실패하면 빈 잔고가 아니라 던진다', async () => {
         installFakeToss({ 'GET /api/v1/holdings': errorReply(500, 'internal-error'), 'GET /api/v1/buying-power': buyingPower });
         await expect(makeToss().fetchBalance()).rejects.toThrow('토스 API 오류: 500');
