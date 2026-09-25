@@ -6,6 +6,7 @@ import json
 import math
 import threading
 import time
+from decimal import Decimal
 from typing import Any, Dict, Iterator, List, Optional
 
 import pytest
@@ -562,7 +563,7 @@ def test_account_params_default_suffix() -> None:
     assert kr_broker.kis({})._account_params() == {'CANO': '', 'ACNT_PRDT_CD': '01'}
 
 
-@pytest.mark.parametrize('amount', [0, -1, float('nan'), float('inf'), '3', True])
+@pytest.mark.parametrize('amount', [0, -1, float('nan'), float('inf'), '3', True, Decimal('NaN'), Decimal('-1')])
 def test_create_order_rejects_invalid_quantity_before_request(amount: Any) -> None:
     broker = kr_broker.kis({'apiKey': 'k', 'secret': 's', 'uid': '12345678-01'})
     with pytest.raises(kr_broker.InvalidOrder):

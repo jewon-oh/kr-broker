@@ -2,6 +2,7 @@
 
 import hashlib
 import re
+from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 import pytest
@@ -93,6 +94,21 @@ def test_safe_number_and_integer() -> None:
     assert fn.safe_integer(row, 'c') == 5
     assert fn.safe_integer(row, 'd') == 1000
     assert fn.safe_number(row, 'e', 7) == 7
+
+
+def test_decimal_values_read_as_numbers() -> None:
+    # ccxt 처럼 사용자가 넘긴 `Decimal` 을 숫자로 읽는다. 전에는 `safe_*` 가 `None` 을 돌려줘 조건주문 가격과 금액이 빠졌다.
+    params = {'triggerPrice': Decimal('64000'), 'cost': Decimal('1.5'), 'big': Decimal('1E+2'), 'nan': Decimal('NaN')}
+    assert fn.safe_number(params, 'triggerPrice') == 64000.0
+    assert fn.safe_string(params, 'cost') == '1.5'
+    assert fn.safe_integer(params, 'big') == 100
+    assert fn.safe_number(params, 'nan', 7) == 7
+    assert isinstance(fn.safe_value(params, 'cost'), float)
+    assert fn.decimal_to_float(Decimal('0.1')) == 0.1
+    assert fn.decimal_to_float('0.1') == '0.1'
+    # 요청 본문과 쿼리에도 숫자로 쓴다(따옴표로 감싼 문자열이나 지수 표기가 아니다).
+    assert fn.json_stringify({'qty': Decimal('3'), 'price': Decimal('1E+2')}) == '{"qty":3,"price":100}'
+    assert fn.js_string(Decimal('1E+2')) == '100'
 
 
 def test_safe_list_index_and_dict() -> None:

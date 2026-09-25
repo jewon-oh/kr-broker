@@ -37,7 +37,7 @@ ccxt 와 같은 모양으로 다룬다. 실시간(`watch_*`)은 이 클래스를
 import json
 import logging
 import math
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 from kr_broker.abstract.toss import ImplicitAPI
 from kr_broker.async_support.base.exchange import Exchange
@@ -206,7 +206,7 @@ class TossAuth:
     `expires_in` 에서 여유를 뺀 시각까지 메모리와 토큰 저장소에 두고, 발급은 저장소의 락으로 한 번에 한 곳만 한다.
     """
 
-    def __init__(self, client_id: str, issue: Callable[[], Dict[str, Any]],
+    def __init__(self, client_id: str, issue: Callable[[], Awaitable[Dict[str, Any]]],
                  store_of: Callable[[], Optional[BrokerTokenStore]] = lambda: None) -> None:
         self.client_id = client_id
         self.issue = issue
@@ -1116,6 +1116,7 @@ class toss(Exchange, ImplicitAPI):
         이때 지정가가 아직 체결되지 않았으면 미체결 주문(`status: 'open'`, `info['extendedSession']` 에 세션 이름)을 돌려준다.
         """
         params = {} if params is None else params
+        amount, price = fn.decimal_to_float(amount), fn.decimal_to_float(price)
         if side not in ('buy', 'sell'):
             raise InvalidOrder(f"{self.id} createOrder() side must be 'buy' or 'sell'")
         if type not in ('limit', 'market'):
@@ -1221,6 +1222,7 @@ class toss(Exchange, ImplicitAPI):
         미국은 고액주문 확인에 쓸 남은 수량을 정정 전에 주문 상세(`GET /orders/{orderId}`)로 읽는다.
         정정하면 새 주문번호가 나온다. `params['trigger']` 가 `True` 면 조건주문 정정이고, 조건 전체를 등록과 같은 인자로 다시 선언한다."""
         params = {} if params is None else params
+        amount, price = fn.decimal_to_float(amount), fn.decimal_to_float(price)
         if self.safe_bool_2(params, 'trigger', 'stop', False) is True:
             if amount is None:
                 raise ArgumentsRequired(f'{self.id} editOrder() 는 조건주문 정정에 amount 인자가 필요하다')

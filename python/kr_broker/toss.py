@@ -1117,6 +1117,7 @@ class toss(Exchange, ImplicitAPI):
         이때 지정가가 아직 체결되지 않았으면 미체결 주문(`status: 'open'`, `info['extendedSession']` 에 세션 이름)을 돌려준다.
         """
         params = {} if params is None else params
+        amount, price = fn.decimal_to_float(amount), fn.decimal_to_float(price)
         if side not in ('buy', 'sell'):
             raise InvalidOrder(f"{self.id} createOrder() side must be 'buy' or 'sell'")
         if type not in ('limit', 'market'):
@@ -1222,6 +1223,7 @@ class toss(Exchange, ImplicitAPI):
         미국은 고액주문 확인에 쓸 남은 수량을 정정 전에 주문 상세(`GET /orders/{orderId}`)로 읽는다.
         정정하면 새 주문번호가 나온다. `params['trigger']` 가 `True` 면 조건주문 정정이고, 조건 전체를 등록과 같은 인자로 다시 선언한다."""
         params = {} if params is None else params
+        amount, price = fn.decimal_to_float(amount), fn.decimal_to_float(price)
         if self.safe_bool_2(params, 'trigger', 'stop', False) is True:
             if amount is None:
                 raise ArgumentsRequired(f'{self.id} editOrder() 는 조건주문 정정에 amount 인자가 필요하다')
