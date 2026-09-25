@@ -1,4 +1,3 @@
-# 이 파일은 scripts/gen-python-sync.mjs 가 python/kr_broker/async_support/execution_confirm.py 에서 만든다. 직접 고치지 않는다.
 """주문 접수 뒤 실체결 확정(증권사 공용 폴링). TypeScript 판 `ts/src/execution-confirm.ts` 와 같다.
 
 접수 응답에는 체결 정보가 없다. 한 번만 조회하고 포기하면 요청가와 요청 수량이 체결값으로 기록되므로, 체결이 확정될 때까지 예산 안에서 짧게 조회한다.
@@ -11,7 +10,7 @@ import logging
 import math
 from typing import Any, Callable, Dict, List, Optional
 
-from kr_broker.base.runtime import sleep_seconds
+from kr_broker.async_support.base.runtime import sleep_seconds
 
 logger = logging.getLogger('kr_broker')
 
@@ -56,7 +55,7 @@ def resolve_confirm_budget(defaults: Optional[Dict[str, Any]] = None, overrides:
     }
 
 
-def confirm_execution(label: str, order_id: str, exchange: str, probe: Callable[[int], Dict[str, Any]],
+async def confirm_execution(label: str, order_id: str, exchange: str, probe: Callable[[int], Dict[str, Any]],
                       defaults: Optional[Dict[str, Any]] = None, budget: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
     """체결이 확정될 때까지 짧게 조회한다.
 
@@ -68,9 +67,9 @@ def confirm_execution(label: str, order_id: str, exchange: str, probe: Callable[
     best: Optional[Dict[str, Any]] = None
     for attempt in range(1, attempts + 1):
         if attempt > 1 and interval_ms > 0:
-            sleep_seconds(interval_ms / 1000)
+            await sleep_seconds(interval_ms / 1000)
         try:
-            result = probe(attempt)
+            result = await probe(attempt)
         except Exception:
             logger.warning('%s 체결 조회 실패, 다시 시도한다(주문 %s, %s, %d/%d)', label, order_id, exchange, attempt, attempts, exc_info=True)
             continue
@@ -102,8 +101,8 @@ def trade_list_probe(fetch_trades: Callable[[], List[Dict[str, Any]]], order_id:
     """
     warned = [False]
 
-    def probe(*_: Any) -> Dict[str, Any]:
-        rows = [t for t in fetch_trades() if t.get('order') == order_id]
+    async def probe(*_: Any) -> Dict[str, Any]:
+        rows = [t for t in await fetch_trades() if t.get('order') == order_id]
         filled = sum(_num(t.get('amount')) for t in rows)
         if not filled > 0:
             # 주문의 행이 있는데 수량이 0 이면 아직 미체결이 아니라 응답 필드 이름이 어긋난 것이다. 조회마다 쌓이지 않게 한 번만 남긴다.

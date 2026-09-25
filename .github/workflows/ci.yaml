@@ -61,7 +61,8 @@ jobs:
       - name: dist 를 Node.js 로 불러올 수 있는지
         run: node scripts/check-dist-imports.mjs
 
-  # Python 판. 암묵 API 선언이 엔드포인트 표(ts/src/spec)와 같은지 보고, TypeScript 판과 같은 요청 픽스처(ts/src/test/static/request)를 돌린다.
+  # Python 판. 암묵 API 선언이 엔드포인트 표(ts/src/spec)와 같은지, 동기 판이 비동기 소스(python/kr_broker/async_support)에서
+  # 만든 것과 같은지 보고, TypeScript 판과 같은 요청 픽스처(ts/src/test/static/request)를 동기·비동기 두 판으로 돌린다.
   python:
     name: python (${{ matrix.python }})
     runs-on: ubuntu-latest
@@ -81,6 +82,7 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: node scripts/gen-python-abstract.mjs --check
+      - run: node scripts/gen-python-sync.mjs --check
       - run: python -m pip install -e './python[dev]'
       - run: python -m pytest
         working-directory: python

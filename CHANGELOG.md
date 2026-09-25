@@ -19,6 +19,7 @@
 - Python 판을 더했습니다(`python/`). 한국투자증권과 토스증권의 인증, 서명, 오류 처리, 호출 간격 조절이 있고, 모든 엔드포인트를 암묵 메서드로 부를 수 있습니다.
 - 토스증권의 통합 메서드(웹소켓 제외)를 Python 판에 옮겼습니다. 요청 픽스처에는 현재 시각을 고정하는 `now`를 더했습니다.
 - 한국투자증권의 통합 메서드(웹소켓 제외)를 Python 판에 옮겼습니다. 종목 마스터, 야후 파이낸스 캔들, 한국투자증권 원본 캔들(`candles()`) 도우미도 함께 옮겼고, 요청 픽스처에 한국투자증권 케이스를 더했습니다.
+- Python 비동기 판(`kr_broker.async_support`)을 더했습니다. ccxt 처럼 비동기 판 소스가 정본이고, 동기 판 증권사 파일은 `scripts/gen-python-sync.mjs`가 그 소스에서 만듭니다. HTTP 는 aiohttp 로 보내고, 토큰 저장소는 동기 구현과 비동기 구현을 모두 받습니다.
 - 엔드포인트 표(`ts/src/spec/*.json`)에 세 증권사의 모든 엔드포인트를 담았습니다. 표가 `describe().api`와 어긋나면 테스트가 실패합니다.
 - TypeScript 판과 Python 판이 함께 쓰는 요청 픽스처(`ts/src/test/static/request/`)를 더했습니다.
 - 한국투자증권과 토스증권에 `watchTicker`, `watchTrades`, `watchOrderBook`, `watchOrders`, `close`를 넣었습니다.

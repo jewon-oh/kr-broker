@@ -1,4 +1,3 @@
-# 이 파일은 scripts/gen-python-sync.mjs 가 python/kr_broker/async_support/kis_yahoo_candles.py 에서 만든다. 직접 고치지 않는다.
 """야후 파이낸스 차트 API(v8)로 받는 OHLCV 봉. TypeScript 판 `ts/src/kis/yahoo-finance-candles.ts` 와 같다.
 
 KIS 분봉은 당일뿐이고 일봉도 한 번에 100행이라, 한국투자증권 `fetch_ohlcv` 는 이력이 긴 야후를 먼저 쓴다. 키가 필요 없다.
@@ -13,7 +12,7 @@ import math
 import random
 from typing import Any, List, Optional
 
-from kr_broker.base.runtime import new_semaphore, sleep_seconds
+from kr_broker.async_support.base.runtime import new_semaphore, sleep_seconds
 from kr_broker.base import functions as fn
 from kr_broker.base.errors import NotSupported
 from kr_broker.broker_krx_code import is_krx_domestic_code
@@ -143,11 +142,11 @@ def to_yahoo_ticker(stock_code: str, kr_market: Optional[str] = None) -> str:
     return code.replace('.', '-')
 
 
-def _backoff(attempt: int) -> None:
-    sleep_seconds((YAHOO_RETRY_BASE_MS * attempt + math.floor(random.random() * 250)) / 1000)
+async def _backoff(attempt: int) -> None:
+    await sleep_seconds((YAHOO_RETRY_BASE_MS * attempt + math.floor(random.random() * 250)) / 1000)
 
 
-def fetch_yahoo_candles(stock_code: str, timeframe: str = '1d', limit: int = 500, since: Optional[int] = None,
+async def fetch_yahoo_candles(stock_code: str, timeframe: str = '1d', limit: int = 500, since: Optional[int] = None,
                               until: Optional[int] = None, kr_market: Optional[str] = None, exchange: Any = None) -> List[List[float]]:
     """야후에서 봉 `[[시각(ms), 시가, 고가, 저가, 종가, 거래량], ...]` 을 받는다. 최신 `limit` 개를 돌려준다.
 
@@ -172,18 +171,18 @@ def fetch_yahoo_candles(stock_code: str, timeframe: str = '1d', limit: int = 500
         query = {'interval': interval, 'range': YAHOO_DEFAULT_RANGE.get(timeframe, '1y')}
     url = f'{YAHOO_CHART_BASE_URL}/{yahoo_symbol}?{fn.form_urlencode(query)}'
     logger.debug('[YahooFinance] 캔들 요청 url=%s', url)
-    with _yahoo_slots:
+    async with _yahoo_slots:
         for attempt in range(1, YAHOO_MAX_ATTEMPTS + 1):
             can_retry = attempt < YAHOO_MAX_ATTEMPTS
             try:
-                response = exchange.http_request('GET', url, {'User-Agent': YAHOO_USER_AGENT}, None, YAHOO_REQUEST_TIMEOUT_MS)
+                response = await exchange.http_request('GET', url, {'User-Agent': YAHOO_USER_AGENT}, None, YAHOO_REQUEST_TIMEOUT_MS)
                 status = response.status_code
                 if not 200 <= status < 300:
                     # 429·5xx 는 일시적 조절이라 다시 보낸다. 그 밖의 4xx 는 바로 끝낸다.
                     retryable = status == 429 or status >= 500
                     logger.warning('[YahooFinance] API 응답 에러 (status=%s, symbol=%s, attempt=%d)', status, yahoo_symbol, attempt)
                     if retryable and can_retry:
-                        _backoff(attempt)
+                        await _backoff(attempt)
                         continue
                     return []
                 data = json.loads(response.content.decode(response.encoding or 'utf-8', errors='replace'))
@@ -202,7 +201,7 @@ def fetch_yahoo_candles(stock_code: str, timeframe: str = '1d', limit: int = 500
                     # 빈 응답은 한꺼번에 많이 부를 때의 조절 신호라 간격을 두고 다시 보낸다.
                     if can_retry:
                         logger.debug('[YahooFinance] 빈 응답 — 재시도 (symbol=%s, attempt=%d)', yahoo_symbol, attempt)
-                        _backoff(attempt)
+                        await _backoff(attempt)
                         continue
                     logger.warning('[YahooFinance] 빈 응답 (재시도 소진) (symbol=%s)', yahoo_symbol)
                     return []
@@ -231,7 +230,7 @@ def fetch_yahoo_candles(stock_code: str, timeframe: str = '1d', limit: int = 500
             except Exception as err:
                 if can_retry:
                     logger.debug('[YahooFinance] 요청 실패 — 재시도 (symbol=%s, attempt=%d, err=%s)', yahoo_symbol, attempt, err)
-                    _backoff(attempt)
+                    await _backoff(attempt)
                     continue
                 logger.warning('[YahooFinance] 캔들 조회 실패 (재시도 소진) (stockCode=%s, symbol=%s, timeframe=%s, err=%s)',
                                stock_code, yahoo_symbol, timeframe, err)
