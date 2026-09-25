@@ -155,6 +155,18 @@ describe('fetchYahooCandles — range 파라미터 (undici period 400 회피)', 
         expect(capturedUrl).toContain('range=');
         expect(capturedUrl).not.toContain('period1');
     });
+
+    it('클래스 주식은 슬래시 표기(BRK/B)도 점 표기처럼 야후의 BRK-B 로 부른다', async () => {
+        const c: OHLCV[] = [[1_700_000_000_000, 1, 2, 0.5, 1.5, 100]];
+        const tickers: string[] = [];
+        vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+            tickers.push(new URL(String(url)).pathname.split('/').pop() ?? '');
+            return yahooOk(c);
+        });
+        for (const symbol of ['BRK/B', 'BRK/B/USD', 'BRK.B/USD', 'BRK.B']) await fetchYahooCandles(symbol, '1d', 10);
+        await fetchYahooCandles('005930/KRW', '1d', 10);
+        expect(tickers).toEqual(['BRK-B', 'BRK-B', 'BRK-B', 'BRK-B', '005930.KS']);
+    });
 });
 
 describe('fetchYahooCandles — since·until', () => {

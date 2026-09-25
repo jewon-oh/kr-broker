@@ -514,6 +514,51 @@
             }
         },
         {
+            "description": "클래스 주식의 슬래시 표기(BRK/B)는 통합 표기 BRK.B 로 요청하고 BRK.B/USD 로 색인한다",
+            "method": "fetchTickers",
+            "args": [
+                [
+                    "BRK/B"
+                ]
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/prices?symbols=BRK.B",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": [
+                                {
+                                    "symbol": "BRK.B",
+                                    "lastPrice": "486.2",
+                                    "timestamp": "2026-03-25T14:30:00Z"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "BRK.B/USD": {
+                    "symbol": "BRK.B/USD",
+                    "timestamp": 1774449000000,
+                    "datetime": "2026-03-25T14:30:00.000Z",
+                    "close": 486.2,
+                    "last": 486.2,
+                    "info": {
+                        "symbol": "BRK.B",
+                        "lastPrice": "486.2",
+                        "timestamp": "2026-03-25T14:30:00Z"
+                    }
+                }
+            }
+        },
+        {
             "description": "fetchTickers 는 종목 없이 부를 수 없다",
             "method": "fetchTickers",
             "args": [],

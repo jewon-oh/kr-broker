@@ -16,6 +16,7 @@ from kr_broker import kis_yahoo_candles
 from kr_broker.base import functions as fn
 from kr_broker.base.errors import BadSymbol, ExchangeNotAvailable, NotSupported
 from kr_broker.base.exchange import Exchange
+from kr_broker.broker_market_group import symbol_base_code
 from kr_broker.broker_time import timeframe_to_ms
 from kr_broker.kis import et_timestamp, kst_timestamp, kst_ymd, et_ymd
 from kr_broker.kis_candle_pagination import (
@@ -340,8 +341,16 @@ def test_yahoo_ticker_suffix(no_backoff: None) -> None:
 def test_yahoo_ticker_uses_hyphen_for_us_class_shares() -> None:
     assert to_yahoo_ticker('BRK.B/USD') == 'BRK-B'
     assert to_yahoo_ticker('BRK.B') == 'BRK-B'
+    # 슬래시 표기도 같은 종목이다. 첫 슬래시에서 잘라 BRK 로 만들지 않는다.
+    assert to_yahoo_ticker('BRK/B') == 'BRK-B'
+    assert to_yahoo_ticker('BRK/B/USD') == 'BRK-B'
     assert to_yahoo_ticker('005930.KS') == '005930.KS'
     assert to_yahoo_ticker('247540', 'KOSDAQ') == '247540.KQ'
+
+
+def test_symbol_base_code_keeps_class_share_suffix() -> None:
+    symbols = ['005930/KRW', '005930', 'AAPL/USD', 'AAPL', 'BRK.B/USD', 'BRK/B', 'BRK/B/USD']
+    assert [symbol_base_code(s) for s in symbols] == ['005930', '005930', 'AAPL', 'AAPL', 'BRK.B', 'BRK.B', 'BRK.B']
 
 
 def test_yahoo_concurrency_is_capped() -> None:

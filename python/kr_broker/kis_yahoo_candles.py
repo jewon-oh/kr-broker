@@ -17,6 +17,7 @@ from kr_broker.base.runtime import new_semaphore, sleep_seconds
 from kr_broker.base import functions as fn
 from kr_broker.base.errors import BadRequest, BadSymbol, BaseError, ExchangeNotAvailable, NetworkError, NotSupported, RateLimitExceeded, RequestTimeout
 from kr_broker.broker_krx_code import is_krx_domestic_code
+from kr_broker.broker_market_group import symbol_base_code
 from kr_broker.broker_time import candle_period_utc_ms, is_daily_or_longer_timeframe, timeframe_to_ms
 from kr_broker.kis_candle_pagination import slice_candle_window
 from kr_broker.kis_candle_resample import resample_candles
@@ -131,10 +132,10 @@ def to_yahoo_range(window_ms: float, max_range_ms: Optional[float] = None) -> st
 
 
 def to_yahoo_ticker(stock_code: str, kr_market: Optional[str] = None) -> str:
-    """종목코드를 야후 티커로 바꾼다. 국내는 `.KS`(코스닥은 `.KQ`)를 붙이고 미국 티커는 점을 하이픈으로 바꾼다(`BRK.B` → `BRK-B`).
+    """종목코드를 야후 티커로 바꾼다. 국내는 `.KS`(코스닥은 `.KQ`)를 붙이고 미국 티커는 점과 슬래시를 하이픈으로 바꾼다(`BRK.B`, `BRK/B` → `BRK-B`).
     `stock:` 접두사와 `/KRW` 같은 접미사는 뗀다."""
     code = stock_code[6:] if stock_code.startswith('stock:') else stock_code
-    code = code.split('/')[0] if '/' in code else code
+    code = symbol_base_code(code)
     if code.endswith('.KS') or code.endswith('.KQ'):
         return code
     if is_krx_domestic_code(code):

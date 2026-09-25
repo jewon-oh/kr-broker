@@ -57,6 +57,7 @@ from kr_broker.base.errors import (
 from kr_broker.base.precise import Precise
 from kr_broker.base.token_store import BrokerTokenStore, legacy_token_store_key, token_store_key
 from kr_broker.base.types import ApiName, Int, Num, Str, Strings
+from kr_broker.broker_market_group import symbol_base_code
 from kr_broker.broker_time import candle_period_utc_ms, is_daily_or_longer_timeframe
 from kr_broker.market_calendar import apply_market_calendar
 from kr_broker.toss_fee import pick_commission_rate
@@ -678,8 +679,9 @@ class toss(Exchange, ImplicitAPI):
     # ============ 종목 ============
 
     def _market_from_symbol(self, symbol: str) -> Dict[str, Any]:
-        """심볼(`005930`, `005930/KRW`, `AAPL`)에서 종목을 만든다. 종목을 불러오지 않았을 때 코드의 모양으로 시장을 판별한다."""
-        code = symbol.split('/')[0]
+        """심볼(`005930`, `005930/KRW`, `AAPL`)에서 종목을 만든다. 종목을 불러오지 않았을 때 코드의 모양으로 시장을 판별한다.
+        클래스 주식의 `BRK/B` 는 통합 표기 `BRK.B` 로 바꾼다."""
+        code = symbol_base_code(symbol)
         country = toss_market_country(code)
         quote = 'KRW' if country == 'KR' else 'USD'
         return self.safe_market_structure({

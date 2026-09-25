@@ -19,7 +19,7 @@
 
 import { ExchangeError } from '../base/errors';
 import { isKrxDomesticCode } from '../broker-krx-code';
-import type { StockMarketGroup } from '../broker-market-group';
+import { symbolBaseCode, type StockMarketGroup } from '../broker-market-group';
 import { isKrxBusinessDayKst } from '../krx-trading-hours';
 
 // ============ 접속 상수 ============
@@ -607,10 +607,9 @@ export function kbsecMarketOf(symbol: string): StockMarketGroup {
     return isKrxDomesticCode(kbsecBaseSymbol(symbol)) ? 'KR' : 'US';
 }
 
-/** 도메인 심볼 → API 종목코드 (base 만). */
+/** 도메인 심볼 → API 종목코드 (base 만). 클래스 주식의 `BRK/B` 는 통합 표기 `BRK.B` 로 바꾼다. */
 export function kbsecBaseSymbol(symbol: string): string {
-    const [base = ''] = symbol.split('/');
-    return base.trim();
+    return symbolBaseCode(symbol.trim()).trim();
 }
 
 /**
