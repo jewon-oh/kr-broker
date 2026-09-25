@@ -100,10 +100,10 @@ describe('상한 값 — 세 클래스가 같은 값을 쓴다', () => {
         const [reference, ...others] = CASES.map(({ make }) => make());
 
         for (const exchange of others) {
-            expect(exchange.timeout, `${exchange.id}.timeout`).toBe(reference.timeout);
-            expect(exchange.orderTimeout, `${exchange.id}.orderTimeout`).toBe(reference.orderTimeout);
+            expect(exchange.timeout, `${exchange.id}.timeout`).toBe(reference!.timeout);
+            expect(exchange.orderTimeout, `${exchange.id}.orderTimeout`).toBe(reference!.orderTimeout);
         }
-        expect(reference.orderTimeout).toBeGreaterThan(reference.timeout);
+        expect(reference!.orderTimeout).toBeGreaterThan(reference!.timeout);
     });
 });
 
@@ -118,7 +118,7 @@ describe.each(CASES)('$name', ({ make, read, order }) => {
         expect(result.error).toBeInstanceOf(RequestTimeout);
         expect(result.error).not.toBeInstanceOf(OrderOutcomeUnknown);
         expect(hangingSignals).toHaveLength(1); // 시간 초과 뒤에 같은 요청을 되풀이하지 않았다
-        expect(hangingSignals[0].aborted).toBe(true);
+        expect(hangingSignals[0]!.aborted).toBe(true);
     });
 
     it('주문이 응답 없이 멈추면 주문 상한에서 요청을 끊고 OrderOutcomeUnknown 이다. 다시 보내지 않는다', async () => {
@@ -131,7 +131,7 @@ describe.each(CASES)('$name', ({ make, read, order }) => {
         expect(result.error).toBeInstanceOf(OrderOutcomeUnknown);
         expect((result.error as OrderOutcomeUnknown).retryable).toBe(false);
         expect(hangingSignals).toHaveLength(1);
-        expect(hangingSignals[0].aborted).toBe(true);
+        expect(hangingSignals[0]!.aborted).toBe(true);
     });
 
     it('주문은 조회 상한에서는 끊기지 않는다. 주문 상한이 더 길다', async () => {

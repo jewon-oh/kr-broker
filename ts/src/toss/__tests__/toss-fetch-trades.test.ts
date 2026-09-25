@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 
 import { installFakeToss, jsonOk, makeToss, type FakeToss } from './support/toss-fake';
 
-const requestedQuery = (fake: FakeToss): URLSearchParams => fake.requestsTo('GET /api/v1/trades')[0].query;
+const requestedQuery = (fake: FakeToss): URLSearchParams => fake.requestsTo('GET /api/v1/trades')[0]!.query;
 
 describe('fetchTrades', () => {
     it('국내 — 체결 내역을 최신순 그대로 옮긴다', async () => {
@@ -41,7 +41,7 @@ describe('fetchTrades', () => {
         expect(requestedQuery(fake).get('count')).toBe('10');
 
         await makeToss().fetchTrades('005930/KRW', undefined, 200);
-        expect(fake.requestsTo('GET /api/v1/trades')[1].query.get('count')).toBe('50');
+        expect(fake.requestsTo('GET /api/v1/trades')[1]!.query.get('count')).toBe('50');
     });
 
     it('since 이전 체결은 걸러낸다', async () => {
@@ -55,6 +55,6 @@ describe('fetchTrades', () => {
         const trades = await makeToss().fetchTrades('005930/KRW', Date.parse('2026-03-25T09:30:00.000+09:00'));
 
         expect(trades).toHaveLength(1);
-        expect(trades[0].price).toBe(72000);
+        expect(trades[0]!.price).toBe(72000);
     });
 });

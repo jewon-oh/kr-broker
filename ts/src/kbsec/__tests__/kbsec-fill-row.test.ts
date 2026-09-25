@@ -145,11 +145,11 @@ describe('kbsecResolveFills — 실서버 응답 원문 형태 2행', () => {
 
     it('연속 행은 continuation 으로 판별된다 — ordr_no 가 전부 0', () => {
         const [h, c] = parsed();
-        expect(h.continuation).toBe(false);
-        expect(c.continuation).toBe(true);
-        expect(c.orderId).toBe('');   // 자기 식별자는 비운다
-        expect(c.symbol).toBe('');
-        expect(c.side).toBeNull();
+        expect(h!.continuation).toBe(false);
+        expect(c!.continuation).toBe(true);
+        expect(c!.orderId).toBe('');   // 자기 식별자는 비운다
+        expect(c!.symbol).toBe('');
+        expect(c!.side).toBeNull();
     });
 
     it('연속 행이 헤더에 귀속돼 총 4주가 된다 — 종전엔 1주였다', () => {

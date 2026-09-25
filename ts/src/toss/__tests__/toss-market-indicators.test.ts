@@ -19,7 +19,7 @@ describe('fetchMarketIndicators', () => {
 
         expect(result).toHaveLength(2);
         expect(result[0]).toMatchObject({ symbol: 'KOSPI', lastPrice: '2812.45' });
-        expect(fake.requestsTo('GET /api/v1/market-indicators/prices')[0].query.get('symbols')).toBe('KOSPI,KOSDAQ');
+        expect(fake.requestsTo('GET /api/v1/market-indicators/prices')[0]!.query.get('symbols')).toBe('KOSPI,KOSDAQ');
     });
 
     it('국채 수익률도 그대로 옮긴다', async () => {
@@ -49,7 +49,7 @@ describe('fetchMarketIndicatorOHLCV', () => {
         const result = await makeToss().fetchMarketIndicatorOHLCV('KOSPI', '1d');
 
         expect(result).toEqual([[Date.parse('2026-06-11T09:00:00+09:00'), 2798.32, 2820.15, 2790.1, 2812.45, 542000000]]);
-        const query = fake.requestsTo('GET /api/v1/market-indicators/KOSPI/candles')[0].query;
+        const query = fake.requestsTo('GET /api/v1/market-indicators/KOSPI/candles')[0]!.query;
         expect(query.get('interval')).toBe('1d');
         expect(query.get('count')).toBe('100');
     });
@@ -59,7 +59,7 @@ describe('fetchMarketIndicatorOHLCV', () => {
 
         await makeToss().fetchMarketIndicatorOHLCV('KOSPI', '1m', 50);
 
-        const query = fake.requestsTo('GET /api/v1/market-indicators/KOSPI/candles')[0].query;
+        const query = fake.requestsTo('GET /api/v1/market-indicators/KOSPI/candles')[0]!.query;
         expect(query.get('interval')).toBe('1m');
         expect(query.get('count')).toBe('50');
     });

@@ -39,7 +39,7 @@ describe('fetchTrades — 해외', () => {
             { symbol: 'AAPL/USD', price: 150.25, amount: 10, side: 'buy' },
             { symbol: 'AAPL/USD', price: 150.3, amount: 5, side: 'sell' },
         ]);
-        expect(trades[0].timestamp).toBeTypeOf('number');
+        expect(trades[0]!.timestamp).toBeTypeOf('number');
     });
 
     it('거래소코드 캐시를 fetchTicker 와 공유한다', async () => {
@@ -63,6 +63,6 @@ describe('fetchTrades — 해외', () => {
 
         const [trade] = await newExchange().fetchTrades('AAPL/USD');
 
-        expect(trade.side).toBeUndefined();
+        expect(trade!.side).toBeUndefined();
     });
 });

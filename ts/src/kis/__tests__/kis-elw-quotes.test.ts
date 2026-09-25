@@ -24,7 +24,7 @@ afterEach(() => {
 const find = (path: string): number => mockFetch.mock.calls.findIndex((c) => String(c[0]).includes(path));
 
 /** 요청 URL 의 쿼리를 객체로. */
-const queryOf = (index: number): Record<string, string> => Object.fromEntries(new URL(String(mockFetch.mock.calls[index][0])).searchParams);
+const queryOf = (index: number): Record<string, string> => Object.fromEntries(new URL(String(mockFetch.mock.calls[index]![0])).searchParams);
 
 /** KST 2026-09-23 01:30 에 고정한다. */
 const fixKstSep23 = () => {
@@ -83,7 +83,7 @@ describe('ELW 현재가와 종목 목록', () => {
         expect(item).toMatchObject({
             code: '57K281', underlyingCode: '005930', underlyingPrice: 70000, strikePrice: 65000, conversionRatio: 0.01, price: 55, listingDate: '20260301', lastTradeDate: '20260924', listedShares: 10000000,
         });
-        expect(item.info.stlm_date).toBe('20260929');
+        expect(item!.info.stlm_date).toBe('20260929');
     });
 
     it('fetchElwListings 는 발행사와 오늘(한국 날짜)을 보내고, 발행사가 없거나 모양이 틀리면 거절한다', async () => {

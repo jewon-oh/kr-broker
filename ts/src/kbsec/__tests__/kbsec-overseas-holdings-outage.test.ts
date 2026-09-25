@@ -88,7 +88,7 @@ describe('KB 해외 보유 조회 — 일시 오류', () => {
     it('사고 재현 — 그리드를 본 뒤 해외 조회가 연결 타임아웃으로 실패하면 미보유가 아니라 PARTIAL(해외 미확인)이다', async () => {
         const svc = makeService();
         const first = await svc.fetchBalance();
-        expect(first.JNJ.free).toBe(2); // 그리드를 봤다(이력)
+        expect(first.JNJ!.free).toBe(2); // 그리드를 봤다(이력)
         expect(first.info.readStatus).toBe('COMPLETE');
 
         usMode = 'timeout';
@@ -111,7 +111,7 @@ describe('KB 해외 보유 조회 — 일시 오류', () => {
         const b = await svc.fetchBalance();
 
         expect(b.info.unreadMarkets).toEqual(['US']); // 국내는 미확인 시장에 없다
-        expect(b.KRW.free).toBe(5_000_000);
+        expect(b.KRW!.free).toBe(5_000_000);
     });
 
     it('일시 오류는 영구 래치를 걸지 않는다 — 냉각이 지나면 다시 부르고, 성공하면 자가 치유된다', async () => {
@@ -127,8 +127,8 @@ describe('KB 해외 보유 조회 — 일시 오류', () => {
         const again = await svc.fetchBalance();
 
         expect(recovered.info.readStatus).toBe('COMPLETE'); // 조회가 됐다 — 목록에 없으면 확인된 미보유
-        expect(recovered.JNJ.free).toBe(2);
-        expect(again.JNJ.free).toBe(2);
+        expect(recovered.JNJ!.free).toBe(2);
+        expect(again.JNJ!.free).toBe(2);
         // 성공, 실패, 회복, 이어진 조회. 성공한 뒤에는 냉각이 없어 조회마다 다시 부른다.
         expect(usCalls()).toBe(4);
     });

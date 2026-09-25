@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 
 import { installFakeToss, jsonOk, makeToss, type FakeToss } from './support/toss-fake';
 
-const requestedQuery = (fake: FakeToss): URLSearchParams => fake.requestsTo('GET /api/v1/stocks/005930/program-trades')[0].query;
+const requestedQuery = (fake: FakeToss): URLSearchParams => fake.requestsTo('GET /api/v1/stocks/005930/program-trades')[0]!.query;
 
 describe('fetchProgramTrades', () => {
     it('기록과 다음 페이지 커서를 그대로 옮긴다', async () => {

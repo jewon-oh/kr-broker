@@ -68,7 +68,8 @@ export function marketSessionBlockReason(
 ): string | null {
     if (!isStockBrokerExchange(exchangeId)) return null;
 
-    const base = symbol.split('/')[0].trim().toUpperCase();
+    const [code = ''] = symbol.split('/');
+    const base = code.trim().toUpperCase();
     if (isKrxDomesticCode(base)) return tradingHoursBlockReason(exchangeId, now);
 
     // 해외 — **거래소를 먼저 판정한다**. 심볼 모양으로 미국을 추정하지 않는다.

@@ -23,7 +23,7 @@ function probeSeq(seq: Array<ExecutionProbe | Error>) {
     const calls = { count: 0 };
     const probe = async (): Promise<ExecutionProbe> => {
         calls.count++;
-        const v = seq[Math.min(i++, seq.length - 1)];
+        const v = seq[Math.min(i++, seq.length - 1)]!;
         if (v instanceof Error) throw v;
         return v;
     };

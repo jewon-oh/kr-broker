@@ -53,7 +53,7 @@ describe('kis.fetchMarketCalendar', () => {
         const [url] = mockFetch.mock.calls[1] as [string];
         expect(url).toContain('/uapi/domestic-stock/v1/quotations/chk-holiday');
         expect(headersOf(mockFetch, 1).tr_id).toBe('CTCA0903R');
-        const bases = [1, 2].map((i) => (mockFetch.mock.calls[i][0] as string).match(/BASS_DT=(\d{8})/)?.[1]);
+        const bases = [1, 2].map((i) => (mockFetch.mock.calls[i]![0] as string).match(/BASS_DT=(\d{8})/)?.[1]);
         expect(bases[0]! < bases[1]!).toBe(true);
     });
 

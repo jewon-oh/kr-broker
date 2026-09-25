@@ -155,7 +155,7 @@ export { KIS_KRX_CODE_DIGITS };
  * 판정 전 마켓 페어 접미사(`/KRW`·`/USD` 등)를 떼고 base 로 검사한다. `005930/KRW` 와 `005930` 은 같은 결과다.
  */
 export function isOverseasSymbol(symbol: string): boolean {
-    const base = symbol.split('/')[0];
+    const [base = ''] = symbol.split('/');
     return !isKrxDomesticCode(base);
 }
 

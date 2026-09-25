@@ -93,7 +93,8 @@ const LIVE_CONTINUATION = [
 
 describe('kbsecResolveSettlementRows — 단가별 연속 행', () => {
     it('연속 행을 알아본다 — 종목 식별자가 비어 있다', () => {
-        const [head, cont] = LIVE_CONTINUATION.map(parseKbsecDomesticSettlementRow);
+        const head = parseKbsecDomesticSettlementRow(LIVE_CONTINUATION[0]!);
+        const cont = parseKbsecDomesticSettlementRow(LIVE_CONTINUATION[1]!);
         expect(head.continuation).toBe(false);
         expect(head.symbol).toBe('035720');
         expect(cont.continuation).toBe(true);
@@ -118,7 +119,8 @@ describe('kbsecResolveSettlementRows — 단가별 연속 행', () => {
     });
 
     it('묶음으로 검산해야 맞는다 — 행 단위로는 멀쩡한 행이 버려진다', () => {
-        const [head, cont] = LIVE_CONTINUATION.map(parseKbsecDomesticSettlementRow);
+        const head = parseKbsecDomesticSettlementRow(LIVE_CONTINUATION[0]!);
+        const cont = parseKbsecDomesticSettlementRow(LIVE_CONTINUATION[1]!);
         // 행 단위 검산이었다면: |266,140 − 2,109,340| = 1,843,200 ≠ 비용 200 → 버려진다.
         expect(Math.abs(cont.notionalKrw - cont.settledKrw)).not.toBeCloseTo(200, 0);
         // 묶음으로 보면 성립한다: |(1,843,000+266,140) − 2,109,340| = 200.
@@ -128,7 +130,7 @@ describe('kbsecResolveSettlementRows — 단가별 연속 행', () => {
     });
 
     it('주인 없는 연속 행은 버린다 — 남의 종목에 비용을 얹지 않는다', () => {
-        const cont = parseKbsecDomesticSettlementRow(LIVE_CONTINUATION[1]);
+        const cont = parseKbsecDomesticSettlementRow(LIVE_CONTINUATION[1]!);
         const { rows, orphaned } = kbsecResolveSettlementRows([cont]);
         expect(rows).toHaveLength(0);
         expect(orphaned).toBe(1);

@@ -32,7 +32,8 @@ export type TossMarketCountry = StockMarketGroup;
 
 /** 종목 심볼(`005930`, `005930/KRW`, `AAPL`)의 시장. 종목코드의 모양만 본다(`isKrxDomesticCode`). */
 export function tossMarketCountry(symbol: string): StockMarketGroup {
-    return isKrxDomesticCode(symbol.split('/')[0]) ? 'KR' : 'US';
+    const [code = ''] = symbol.split('/');
+    return isKrxDomesticCode(code) ? 'KR' : 'US';
 }
 
 // ============ 수수료 ============

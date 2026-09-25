@@ -231,19 +231,19 @@ export function numberToString(x: unknown): string | undefined {
     const s = x.toString();
     if (s.indexOf('e') < 0) return s;
     if (Math.abs(x) < 1.0) {
-        const parts = s.split('e-');
-        const digits = parts[0].replace('.', '');
-        const e = parseInt(parts[1], 10);
+        const [mantissa = '', exponent = ''] = s.split('e-');
+        const digits = mantissa.replace('.', '');
+        const e = parseInt(exponent, 10);
         const negative = s[0] === '-';
         if (e) {
             return (negative ? '-' : '') + '0.' + '0'.repeat(e - 1) + digits.substring(negative ? 1 : 0);
         }
         return s;
     }
-    const parts = s.split('e');
-    if (parts[1]) {
-        let e = parseInt(parts[1], 10);
-        const mantissa = parts[0].split('.');
+    const [coefficient = '', exponent] = s.split('e');
+    if (exponent) {
+        let e = parseInt(exponent, 10);
+        const mantissa = coefficient.split('.');
         let fraction = '';
         if (mantissa[1]) {
             e -= mantissa[1].length;
@@ -422,6 +422,7 @@ export function decimalToPrecision(
     let signNeeded = isNegative;
     for (let i = chars.length - 1, memo = 0; i >= 0; i--) {
         let c = chars[i];
+        if (c === undefined) continue;
         if (i !== 0) {
             c += memo;
             if (i >= precisionStart + precision) {
@@ -467,9 +468,9 @@ export function decimalToPrecision(
     let out = signNeeded ? '-' : '';
     let i = nSign;
     let j = readStart;
-    for (; i < nBeforeDot; i++, j++) out += String.fromCharCode(chars[j]);
+    for (; i < nBeforeDot; i++, j++) out += String.fromCharCode(chars[j]!);
     if (!isInteger) out += '.';
-    for (i = nBeforeDot + 1, j = afterDot; i < padStart; i++, j++) out += String.fromCharCode(chars[j]);
+    for (i = nBeforeDot + 1, j = afterDot; i < padStart; i++, j++) out += String.fromCharCode(chars[j]!);
     for (i = padStart; i < padEnd; i++) out += '0';
     return out;
 }

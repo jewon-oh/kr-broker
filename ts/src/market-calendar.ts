@@ -94,9 +94,11 @@ export function applyMarketCalendar(market: StockMarketGroup, days: readonly Cal
 export function expandBusinessDays(openDates: readonly string[], closedDates: readonly string[] = []): CalendarDay[] {
     const opens = openDates.filter((d) => parseYmd(d) !== null).sort();
     const out = new Map<string, boolean>();
-    if (opens.length > 0) {
-        const first = parseYmd(opens[0])!;
-        const last = parseYmd(opens[opens.length - 1])!;
+    const firstOpen = opens[0];
+    const lastOpen = opens[opens.length - 1];
+    if (firstOpen !== undefined && lastOpen !== undefined) {
+        const first = parseYmd(firstOpen)!;
+        const last = parseYmd(lastOpen)!;
         for (let t = first.getTime(); t <= last.getTime(); t += 86_400_000) {
             out.set(new Date(t).toISOString().slice(0, 10).replace(/-/g, ''), false);
         }
@@ -141,7 +143,7 @@ export function marketCalendarStatus(market: StockMarketGroup): MarketCalendarSt
     const dates = [...knownDays[market].keys()].sort();
     return {
         knownDays: dates.length,
-        latestDate: dates.length > 0 ? dates[dates.length - 1] : null,
+        latestDate: dates[dates.length - 1] ?? null,
         refreshedAtMs: refreshState[market].okAtMs,
     };
 }

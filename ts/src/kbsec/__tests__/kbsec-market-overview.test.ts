@@ -61,6 +61,6 @@ describe('fetchMarketOverview', () => {
         expect(o.investors).toMatchObject([{
             code: '8', name: '개인', kospi: -500, kosdaq: 700, futures: 10, callOptions: 2, putOptions: -3, starFutures: 0, stockFutures: 4,
         }]);
-        expect(o.indices[0].info).toHaveProperty('bdy_cmpr_ccd', '2');
+        expect(o.indices[0]!.info).toHaveProperty('bdy_cmpr_ccd', '2');
     });
 });

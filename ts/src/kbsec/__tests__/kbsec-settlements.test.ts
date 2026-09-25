@@ -77,7 +77,7 @@ describe('국내 정산(SSQM2121)', () => {
         if (!result.ok) return;
         expect(result.rows.map((r) => r.symbol)).toEqual(['035420', '005930']);
         expect(result.truncated).toBe(false);
-        expect(seen[KBSEC_TR.SETTLEMENT_KR].map((b) => [b.trd_clsf, b.nxt_key])).toEqual([['1', ''], ['1', 'K2'], ['2', '']]);
+        expect(seen[KBSEC_TR.SETTLEMENT_KR]!.map((b) => [b.trd_clsf, b.nxt_key])).toEqual([['1', ''], ['1', 'K2'], ['2', '']]);
     });
 
     it('같은 다음키가 또 오면 그 페이지를 버리고 잘렸다고 표시한다', async () => {
@@ -95,13 +95,13 @@ describe('국내 정산(SSQM2121)', () => {
         const seen = serve({
             [KBSEC_TR.SETTLEMENT_KR]: (b) => (b.trd_clsf === '2'
                 ? ok({ nxt_key: '', Record1: [] })
-                : ok({ nxt_key: `K${Number(b.nxt_key.slice(1) || 0) + 1}`, Record1: [krRow('035420')] })),
+                : ok({ nxt_key: `K${Number(b.nxt_key!.slice(1) || 0) + 1}`, Record1: [krRow('035420')] })),
         });
 
         const result = await newExchange({ settlementMaxPages: 2 }).fetchDomesticSettlements('20260923');
 
         expect(result.ok && result.truncated).toBe(true);
-        expect(seen[KBSEC_TR.SETTLEMENT_KR].filter((b) => b.trd_clsf === '1')).toHaveLength(2);
+        expect(seen[KBSEC_TR.SETTLEMENT_KR]!.filter((b) => b.trd_clsf === '1')).toHaveLength(2);
     });
 
     it('조회가 실패하면 빈 배열이 아니라 ok: false 를 돌려주고 던지지 않는다', async () => {
@@ -132,7 +132,7 @@ describe('해외 정산(SPQM2205)', () => {
         if (!result.ok) return;
         expect(result.rows.map((r) => r.symbol)).toEqual(['KO', 'JNJ']);
         expect(result.truncated).toBe(false);
-        expect(seen[KBSEC_TR.SETTLEMENT_US].map((b) => b.nxt_key)).toEqual(['', 'K2']);
+        expect(seen[KBSEC_TR.SETTLEMENT_US]!.map((b) => b.nxt_key)).toEqual(['', 'K2']);
     });
 
     it('같은 다음키가 또 오면 그 페이지를 버리고 잘렸다고 표시한다', async () => {

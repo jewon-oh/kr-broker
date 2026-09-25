@@ -212,7 +212,7 @@ describe('fetchOHLCV — 국내(명세 기준, 실계좌 미검증)', () => {
 
         const [candle] = await newExchange().fetchOHLCV('005930/KRW', '1d');
 
-        expect(candle[0]).toBe(Date.UTC(2026, 7, 19)); // 거래일 08-19 의 00:00 UTC
+        expect(candle![0]).toBe(Date.UTC(2026, 7, 19)); // 거래일 08-19 의 00:00 UTC
     });
 
     it('limit 은 최근 봉부터 자르고 since 는 그 시각 이후만 남긴다', async () => {

@@ -22,10 +22,11 @@ const TIMEFRAME_UNIT_MS: Record<string, number> = {
  */
 export function timeframeToMs(timeframe: string): number {
     const match = timeframe.match(/^(\d+)([mhdw])$/);
-    if (!match) return Number.NaN;
+    const amount = match?.[1];
+    const unit = match?.[2];
+    if (amount === undefined || unit === undefined) return Number.NaN;
 
-    const value = parseInt(match[1]);
-    const unit = match[2];
+    const value = parseInt(amount);
     return value * (TIMEFRAME_UNIT_MS[unit] || MS_PER_MINUTE);
 }
 

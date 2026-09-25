@@ -52,10 +52,10 @@ export function dataUrls(mockFetch: { mock: { calls: unknown[][] } }): string[] 
 
 /** 호출 순번의 요청 헤더. */
 export function headersOf(mockFetch: { mock: { calls: unknown[][] } }, index: number): Record<string, string> {
-    return (mockFetch.mock.calls[index][1] as { headers: Record<string, string> }).headers;
+    return (mockFetch.mock.calls[index]![1] as { headers: Record<string, string> }).headers;
 }
 
 /** 호출 순번의 요청 본문(JSON). */
 export function bodyOf(mockFetch: { mock: { calls: unknown[][] } }, index: number): Record<string, string> {
-    return JSON.parse(String((mockFetch.mock.calls[index][1] as { body: string }).body)) as Record<string, string>;
+    return JSON.parse(String((mockFetch.mock.calls[index]![1] as { body: string }).body)) as Record<string, string>;
 }

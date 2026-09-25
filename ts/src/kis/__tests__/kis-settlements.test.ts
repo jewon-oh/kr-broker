@@ -30,8 +30,8 @@ describe('fetchDomesticSettlements', () => {
         const [record] = await newKis().fetchDomesticSettlements(Date.parse('2026-09-01T00:00:00+09:00'), undefined, { until: Date.parse('2026-09-22T00:00:00+09:00') });
 
         const call = mockFetch.mock.calls.findIndex((c) => String(c[0]).includes(SETTLEMENT_PATH));
-        expect(String(mockFetch.mock.calls[call][0])).toContain('INQR_STRT_DT=20260901');
-        expect(String(mockFetch.mock.calls[call][0])).toContain('INQR_END_DT=20260922');
+        expect(String(mockFetch.mock.calls[call]![0])).toContain('INQR_STRT_DT=20260901');
+        expect(String(mockFetch.mock.calls[call]![0])).toContain('INQR_END_DT=20260922');
         expect(headersOf(mockFetch, call).tr_id).toBe('TTTC8715R');
         expect(record).toMatchObject({
             tradeDate: '20260920', symbol: '005930/KRW', productName: '삼성전자',
@@ -45,7 +45,7 @@ describe('fetchDomesticSettlements', () => {
         await newKis().fetchDomesticSettlements(Date.parse('2026-09-01T00:00:00+09:00'));
 
         const call = mockFetch.mock.calls.findIndex((c) => String(c[0]).includes(SETTLEMENT_PATH));
-        expect(String(mockFetch.mock.calls[call][0])).toContain('INQR_END_DT=');
+        expect(String(mockFetch.mock.calls[call]![0])).toContain('INQR_END_DT=');
     });
 
     it('since 가 없으면 ArgumentsRequired', async () => {

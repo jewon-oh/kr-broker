@@ -37,7 +37,7 @@ async function routeOrder(symbol: string, side: 'buy' | 'sell', amount: number, 
 
     const order = await newKis().createOrder(symbol, 'limit', side, amount, price);
 
-    return { url: String(mockFetch.mock.calls[1][0]), body: bodyOf(mockFetch, 1), headers: headersOf(mockFetch, 1), order };
+    return { url: String(mockFetch.mock.calls[1]![0]), body: bodyOf(mockFetch, 1), headers: headersOf(mockFetch, 1), order };
 }
 
 describe('createOrder — 심볼 라우팅 (base 추출)', () => {

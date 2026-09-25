@@ -27,7 +27,7 @@ afterEach(() => {
 const find = (path: string): number => mockFetch.mock.calls.findIndex((c) => String(c[0]).includes(path));
 
 /** 요청 URL 의 쿼리를 객체로. */
-const queryOf = (index: number): Record<string, string> => Object.fromEntries(new URL(String(mockFetch.mock.calls[index][0])).searchParams);
+const queryOf = (index: number): Record<string, string> => Object.fromEntries(new URL(String(mockFetch.mock.calls[index]![0])).searchParams);
 
 /** KST 2026-09-23 01:30 에 고정한다. */
 const fixKstSep23 = () => {
@@ -168,12 +168,12 @@ describe('해외 주문과 거래 내역', () => {
 
         const calls = mockFetch.mock.calls.flatMap((c, i) => (String(c[0]).includes('/trading/order-resv-list') ? [i] : []));
         expect(calls).toHaveLength(2);
-        expect(headersOf(mockFetch, calls[0]).tr_id).toBe('TTTT3039R');
-        expect(queryOf(calls[0])).toEqual({
+        expect(headersOf(mockFetch, calls[0]!).tr_id).toBe('TTTT3039R');
+        expect(queryOf(calls[0]!)).toEqual({
             ...ACCOUNT, INQR_STRT_DT: '20260901', INQR_END_DT: '20260923', INQR_DVSN_CD: '00', OVRS_EXCG_CD: 'NASD', PRDT_TYPE_CD: '', CTX_AREA_FK200: '', CTX_AREA_NK200: '',
         });
-        expect(headersOf(mockFetch, calls[1]).tr_id).toBe('TTTS3014R');
-        expect(queryOf(calls[1])).toMatchObject({ OVRS_EXCG_CD: 'SEHK' });
+        expect(headersOf(mockFetch, calls[1]!).tr_id).toBe('TTTS3014R');
+        expect(queryOf(calls[1]!)).toMatchObject({ OVRS_EXCG_CD: 'SEHK' });
         expect(us).toMatchObject({
             reservationId: '0000456', orderId: undefined, receivedDate: '20260922', cancelled: false, side: 'buy', statusCode: '01', statusName: '접수',
             code: 'AAPL', productTypeCode: '512', exchangeCode: 'NASD', quantity: 1, price: 220, filledQuantity: 0, receivedTime: '203015', rejectReason: undefined,

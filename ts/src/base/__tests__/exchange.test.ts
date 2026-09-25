@@ -145,31 +145,31 @@ describe('암묵 API 메서드', () => {
         const { calls } = stubFetch(json({ ok: 1 }));
         const ex = new FakeExchange();
         await ex.publicGetTickerCode({ code: '005930', foo: 'bar baz' });
-        expect(calls[0].url).toBe('https://api.fake.test/v1/ticker/005930?foo=bar%20baz');
-        expect(calls[0].init.method).toBe('GET');
-        expect(calls[0].init.body).toBeUndefined();
+        expect(calls[0]!.url).toBe('https://api.fake.test/v1/ticker/005930?foo=bar%20baz');
+        expect(calls[0]!.init.method).toBe('GET');
+        expect(calls[0]!.init.body).toBeUndefined();
         await ex.publicGetCandlesUnitCode({ unit: 1, code: 'X' });
-        expect(calls[1].url).toBe('https://api.fake.test/v1/candles/1/X');
+        expect(calls[1]!.url).toBe('https://api.fake.test/v1/candles/1/X');
     });
 
     it('POST 는 JSON 본문으로, DELETE 는 쿼리로 보낸다', async () => {
         const { calls } = stubFetch(json({ ok: 1 }));
         const ex = new FakeExchange(CREDENTIALS);
         await ex.privatePostOrders({ code: '005930', side: 'buy' });
-        expect(calls[0].url).toBe('https://api.fake.test/v1/orders');
-        expect(calls[0].init.method).toBe('POST');
-        expect(calls[0].init.body).toBe('{"code":"005930","side":"buy"}');
-        expect((calls[0].init.headers as Dict)['Content-Type']).toBe('application/json');
+        expect(calls[0]!.url).toBe('https://api.fake.test/v1/orders');
+        expect(calls[0]!.init.method).toBe('POST');
+        expect(calls[0]!.init.body).toBe('{"code":"005930","side":"buy"}');
+        expect((calls[0]!.init.headers as Dict)['Content-Type']).toBe('application/json');
         await ex.privateDeleteOrdersId({ id: 'abc' });
-        expect(calls[1].url).toBe('https://api.fake.test/v1/orders/abc');
-        expect(calls[1].init.method).toBe('DELETE');
+        expect(calls[1]!.url).toBe('https://api.fake.test/v1/orders/abc');
+        expect(calls[1]!.init.method).toBe('DELETE');
     });
 
     it('api 이름이 두 단계면 배열로 넘어가고 비공개로 취급한다', async () => {
         const { calls } = stubFetch(json({ ok: 1 }));
         const ex = new FakeExchange(CREDENTIALS);
         await ex.traderPrivateGetV2Assets();
-        expect(calls[0].url).toBe('https://api.fake.test/trader/v2/assets');
+        expect(calls[0]!.url).toBe('https://api.fake.test/trader/v2/assets');
         expect(ex.calls).toContain('authenticate');
     });
 });
@@ -191,7 +191,7 @@ describe('fetch2 파이프라인', () => {
         const ex = new FakeExchange(CREDENTIALS);
         await ex.privateGetAccounts();
         expect(ex.calls).toEqual(['throttle', 'authenticate', 'sign', 'handleErrors']);
-        expect((calls[0].init.headers as Dict).Authorization).toBe('Bearer issued-token');
+        expect((calls[0]!.init.headers as Dict).Authorization).toBe('Bearer issued-token');
     });
 
     it('공개 호출에는 authenticate 를 부르지 않는다', async () => {
@@ -240,7 +240,7 @@ describe('fetch2 파이프라인', () => {
         const { calls } = stubFetch(json({}));
         const ex = new FakeExchange({ headers: { 'X-Team': 'a' }, userAgent: 'sample-agent' });
         await ex.publicGetMarketAll();
-        expect(calls[0].init.headers).toEqual({ 'X-Team': 'a', 'User-Agent': 'sample-agent' });
+        expect(calls[0]!.init.headers).toEqual({ 'X-Team': 'a', 'User-Agent': 'sample-agent' });
     });
 
     it('응답 본문·헤더를 마지막 응답으로 남긴다', async () => {
@@ -281,7 +281,7 @@ describe('setSandboxMode', () => {
         expect(ex.isSandboxModeEnabled).toBe(true);
         expect(ex.urls.api.public).toBe('https://sandbox.fake.test/v1');
         await ex.publicGetMarketAll();
-        expect(calls[0].url).toBe('https://sandbox.fake.test/v1/market/all');
+        expect(calls[0]!.url).toBe('https://sandbox.fake.test/v1/market/all');
         ex.setSandboxMode(false);
         expect(ex.isSandboxModeEnabled).toBe(false);
         expect(ex.urls.api.public).toBe('https://{hostname}/v1');
@@ -413,7 +413,7 @@ describe('오류 매핑', () => {
             for (const status of [301, 302, 307, 308]) {
                 const { calls } = stubFetch(new Response('moved', { status, headers: { Location: 'https://elsewhere.invalid/' } }));
                 expect(await new FakeExchange(CREDENTIALS).privateGetAccounts().catch((e: unknown) => e), String(status)).toBeInstanceOf(ExchangeNotAvailable);
-                expect(calls[0].init.redirect).toBe('manual');
+                expect(calls[0]!.init.redirect).toBe('manual');
             }
         });
 
@@ -462,8 +462,8 @@ describe('재시도', () => {
         const ex = new FakeExchange();
         expect(await ex.publicGetMarketAll({ maxRetriesOnFailure: 1, maxRetriesOnFailureDelay: 1 })).toEqual(MARKET_ROWS);
         expect(calls).toHaveLength(2);
-        expect(calls[0].url).toBe('https://api.fake.test/v1/market/all');
-        expect(calls[1].url).toBe('https://api.fake.test/v1/market/all');
+        expect(calls[0]!.url).toBe('https://api.fake.test/v1/market/all');
+        expect(calls[1]!.url).toBe('https://api.fake.test/v1/market/all');
     });
 
     it('재시도 사이에 maxRetriesOnFailureDelay 만큼 기다린다', async () => {
@@ -670,7 +670,7 @@ describe('시간 초과', () => {
     it('시간 초과 때 요청을 취소한다(AbortSignal)', async () => {
         const { calls } = stubFetch(hanging());
         await settle(new FakeExchange().publicGetMarketAll(), 5000);
-        expect((calls[0].init.signal as AbortSignal).aborted).toBe(true);
+        expect((calls[0]!.init.signal as AbortSignal).aborted).toBe(true);
     });
 
     it('응답 본문을 읽는 중에 멈춰도 상한이 적용된다', async () => {
@@ -775,7 +775,7 @@ describe('속도 제한(throttle)', () => {
         await vi.advanceTimersByTimeAsync(0);
         expect(results.map((r) => r.done())).toEqual([true, true, false]);
         await vi.advanceTimersByTimeAsync(100);
-        expect(results[2].done()).toBe(true);
+        expect(results[2]!.done()).toBe(true);
     });
 
     it('들어온 순서대로 나간다', async () => {
@@ -880,8 +880,8 @@ describe('종목 로딩', () => {
         await ex.loadMarkets();
         expect(ex.codes).toEqual(['000660', '005930', 'KRW']);
         expect(ex.currencies.KRW).toEqual(expect.objectContaining({ id: 'KRW', code: 'KRW' }));
-        expect(ex.currencies['005930'].precision).toBe(1); // 수량 단위
-        expect(ex.currencies_by_id?.KRW.code).toBe('KRW');
+        expect(ex.currencies['005930']!.precision).toBe(1); // 수량 단위
+        expect(ex.currencies_by_id?.KRW!.code).toBe('KRW');
     });
 
     it('동시에 여러 번 불러도 한 번만 받는다', async () => {
@@ -967,7 +967,7 @@ describe('종목 로딩', () => {
         expect(ex.safeMarket('X', undefined, undefined, 'spot').symbol).toBe('X/KRW');
         expect(ex.safeMarket('X', spot).symbol).toBe('X/KRW');
         expect(ex.market('X').symbol).toBe('X/KRW');
-        expect(ex.markets_by_id?.X.map((m) => m.symbol)).toEqual(['X/KRW', 'X/KRW:KRW-260925']);
+        expect(ex.markets_by_id?.X!.map((m) => m.symbol)).toEqual(['X/KRW', 'X/KRW:KRW-260925']);
     });
 
     it('종목에 id 가 없으면 setMarkets 가 ExchangeError', () => {
@@ -979,7 +979,7 @@ describe('종목 로딩', () => {
         stubFetch(json(MARKET_ROWS));
         const ex = new FakeExchange({ currencies: { KRW: { id: 'KRW', code: 'KRW', precision: 1, info: undefined } } });
         await ex.loadMarkets();
-        expect(ex.currencies.KRW.precision).toBe(1);
+        expect(ex.currencies.KRW!.precision).toBe(1);
     });
 });
 

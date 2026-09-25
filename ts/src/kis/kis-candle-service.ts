@@ -12,7 +12,7 @@
 
 import { logger } from '../logger';
 import { etYmd } from '../us-market-hours';
-import { resampleCandles } from './candle-resample';
+import { resampleCandles, type OhlcvRow } from './candle-resample';
 import type { Exchange } from '../base';
 import { planWindows, mergeCandles, sliceCandleWindow, toKisDate } from './kis-candle-pagination';
 import type { KisDailyCandle, KisOverseasDailyCandle } from './kis-types';
@@ -105,8 +105,7 @@ export class KisCandleService {
         if (windows.length === 0) return [];
 
         const pages: number[][][] = [];
-        for (let i = 0; i < windows.length; i++) {
-            const w = windows[i];
+        for (const [i, w] of windows.entries()) {
             const rows = await this.fetchDailyOHLCVRange(stockCode, periodCode, w.start, w.end);
             if (rows.length === 0) {
                 logger.debug({ stockCode, page: i + 1, window: w },
@@ -154,7 +153,7 @@ export class KisCandleService {
             if (!Array.isArray(data)) return [];
 
             return data
-                .map(candle => {
+                .map((candle): OhlcvRow => {
                     const dateStr = candle.stck_bsop_date;
                     const timestamp = new Date(
                         `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}T09:00:00+09:00`
@@ -190,7 +189,7 @@ export class KisCandleService {
     ): Promise<number[][]> {
         try {
             // 연속조회는 커서 시각의 봉을 다음 쪽에 다시 줄 수 있어, 시각마다 한 봉만 담는다.
-            const byTimestamp = new Map<number, number[]>();
+            const byTimestamp = new Map<number, OhlcvRow>();
             let cursor = '';
 
             while (byTimestamp.size < limit) {
@@ -228,7 +227,7 @@ export class KisCandleService {
 
                 if (data.length < MINUTE_PAGE_SIZE) break;
 
-                const lastTime = data[data.length - 1].stck_cntg_hour;
+                const lastTime = data[data.length - 1]?.stck_cntg_hour;
                 if (!lastTime || lastTime === cursor) break;
                 cursor = lastTime;
             }
@@ -273,18 +272,19 @@ export class KisCandleService {
         until?: number,
     ): Promise<number[][]> {
         const gubn = OVERSEAS_GUBN_MAP[timeframe];
-        if (!gubn) {
+        const periodDays = OVERSEAS_PERIOD_DAYS[timeframe];
+        if (!gubn || periodDays === undefined) {
             logger.warn({ ticker, market, timeframe },
                 '[KISCandleService] 해외 timeframe 미지원 — 1d/1w/1M 만 사용 가능');
             return [];
         }
 
         try {
-            const all: number[][] = [];
+            const all: OhlcvRow[] = [];
             // `since` 가 있으면 첫 기준일을 `since` 에서 `limit` 개를 덮는 날로 당긴다.
             let end = until ?? this.exchange.milliseconds();
             if (since !== undefined) {
-                end = Math.min(end, since + (limit * OVERSEAS_PERIOD_DAYS[timeframe] * DATE_MARGIN_FACTOR + OVERSEAS_END_PAD_DAYS) * DAY_MS);
+                end = Math.min(end, since + (limit * periodDays * DATE_MARGIN_FACTOR + OVERSEAS_END_PAD_DAYS) * DAY_MS);
             }
             let bymd = etYmd(end);
             let reachedSince = false;
@@ -326,7 +326,7 @@ export class KisCandleService {
                     ]);
                 }
 
-                const lastXymd = data[data.length - 1].xymd;
+                const lastXymd = data[data.length - 1]?.xymd;
                 if (data.length < PAGE_SIZE || !lastXymd) {
                     exhausted = true;
                     break;

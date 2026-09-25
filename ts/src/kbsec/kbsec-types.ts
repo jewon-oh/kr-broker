@@ -609,7 +609,8 @@ export function kbsecMarketOf(symbol: string): StockMarketGroup {
 
 /** 도메인 심볼 → API 종목코드 (base 만). */
 export function kbsecBaseSymbol(symbol: string): string {
-    return symbol.split('/')[0].trim();
+    const [base = ''] = symbol.split('/');
+    return base.trim();
 }
 
 /**
@@ -623,10 +624,10 @@ export function kbsecBaseSymbol(symbol: string): string {
 export function kbsecNormalizeCode(raw: string): string {
     const s = (raw ?? '').trim();
     // 신형 영숫자 코드(`A0193L0`)도 같은 접두를 단다. 벗긴 결과가 국내 코드 모양일 때만 벗긴다.
-    const prefixed = /^A([0-9A-Za-z]{6})$/.exec(s);
-    if (prefixed && isKrxDomesticCode(prefixed[1])) return prefixed[1];
-    const isin = /^KR7([0-9A-Za-z]{6})[0-9A-Za-z]{3}$/.exec(s);
-    if (isin && isKrxDomesticCode(isin[1])) return isin[1];
+    const prefixed = /^A([0-9A-Za-z]{6})$/.exec(s)?.[1];
+    if (prefixed !== undefined && isKrxDomesticCode(prefixed)) return prefixed;
+    const isin = /^KR7([0-9A-Za-z]{6})[0-9A-Za-z]{3}$/.exec(s)?.[1];
+    if (isin !== undefined && isKrxDomesticCode(isin)) return isin;
     return s;
 }
 

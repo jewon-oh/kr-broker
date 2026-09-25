@@ -76,7 +76,7 @@ describe('fetchUnrealizedPnl', () => {
 
         const { rows } = await newExchange().fetchUnrealizedPnl();
 
-        expect(rows[0].symbol).toBe('005930/KRW');
+        expect(rows[0]!.symbol).toBe('005930/KRW');
     });
 
     it('params 로 조회구분·매매구분을 덮어쓸 수 있고, 넘긴 nxt_key 는 무시하고 처음부터 읽는다', async () => {

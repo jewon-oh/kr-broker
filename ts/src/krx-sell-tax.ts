@@ -51,5 +51,5 @@ export function krxSellTaxRate(at: Date = new Date()): number {
         if (ms >= entry.fromUtcMs) return entry.rate;
     }
     // 표의 가장 오래된 시행일보다 앞선 거래. 이 패키지가 다루는 데이터는 여기 닿지 않는다.
-    return KRX_SELL_TAX_SCHEDULE[KRX_SELL_TAX_SCHEDULE.length - 1].rate;
+    return KRX_SELL_TAX_SCHEDULE[KRX_SELL_TAX_SCHEDULE.length - 1]!.rate;
 }

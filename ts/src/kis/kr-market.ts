@@ -25,7 +25,7 @@ export interface KrMarketSources {
  * @param symbol 종목코드 또는 '005930/KRW' 등 (앞부분만 사용)
  */
 export async function resolveKrMarket(symbol: string, sources: KrMarketSources): Promise<'KOSPI' | 'KOSDAQ' | undefined> {
-    const code = symbol.split('/')[0];
+    const [code = ''] = symbol.split('/');
     if (!isKrxDomesticCode(code)) return undefined;
     try {
         // 종목 디렉터리가 우선이고, 없으면 KIS 마스터 데이터로 판별한다.

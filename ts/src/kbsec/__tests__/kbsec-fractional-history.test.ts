@@ -59,7 +59,7 @@ describe('fetchFractionalTrades', () => {
         expect(rows[0]).toMatchObject({
             date: '20260922', symbol: '005930/KRW', orderQuantity: 0.140845, filledAmount: 10000, fee: 15, settledAmount: 10015,
         });
-        expect(rows[0].info).toHaveProperty('hndl_p_eno_nm', '시스템');
+        expect(rows[0]!.info).toHaveProperty('hndl_p_eno_nm', '시스템');
     });
 });
 
@@ -97,7 +97,7 @@ describe('fetchFractionalOrders', () => {
             result: '정상',
         }]);
         expect(rows[0]).not.toHaveProperty('side');
-        expect(rows[0].info).toHaveProperty('cs_nm', '홍길동');
+        expect(rows[0]!.info).toHaveProperty('cs_nm', '홍길동');
     });
 });
 

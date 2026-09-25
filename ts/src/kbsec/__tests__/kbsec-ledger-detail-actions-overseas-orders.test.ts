@@ -121,6 +121,6 @@ describe('fetchOverseasOrders', () => {
             quantity: 2, price: 230.5, filledQuantity: 0, remainingQuantity: 2,
         }]);
         expect(rows[0]).not.toHaveProperty('symbol');
-        expect(rows[0].info).toHaveProperty('ac_no', '12345678901');
+        expect(rows[0]!.info).toHaveProperty('ac_no', '12345678901');
     });
 });

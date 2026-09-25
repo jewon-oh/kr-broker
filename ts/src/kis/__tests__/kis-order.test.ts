@@ -124,7 +124,7 @@ describe('주문 수량 정규화', () => {
         expect(bodyOf(mockFetch, 1).ORD_QTY).toBe('102');
         expect(order.amount).toBe(102);
         expect(logger.warn).toHaveBeenCalledOnce();
-        expect(vi.mocked(logger.warn).mock.calls[0][0]).toMatchObject({ requested: 102.04, floored: 102, lost: expect.any(Number) });
+        expect(vi.mocked(logger.warn).mock.calls[0]![0]).toMatchObject({ requested: 102.04, floored: 102, lost: expect.any(Number) });
     });
 
     it.each([
@@ -238,7 +238,7 @@ describe('미체결 조회', () => {
             symbol: '005930/KRW', side: 'sell', amount: 10, filled: 4, remaining: 6, price: 71000, status: 'open', type: 'limit',
         });
         expect(orders.find((o) => o.id === 'B')).toMatchObject({ symbol: '000660/KRW', side: 'buy', remaining: 2 });
-        expect(orders[0].info.ord_dvsn_name ?? orders[1].info.ord_dvsn_name).toBe('지정가');
+        expect(orders[0]!.info.ord_dvsn_name ?? orders[1]!.info.ord_dvsn_name).toBe('지정가');
     });
 
     it('실전은 신형 TR(TTTC0084R), 모의는 종전 TR(VTTC8036R)로 조회한다', async () => {
@@ -304,7 +304,7 @@ describe('fetchOrder / fetchOrders', () => {
 
         expect(orders.map((o) => [o.id, o.status])).toEqual([['F', 'closed'], ['O', 'open'], ['C', 'canceled']]);
         expect(orders[0]).toMatchObject({ average: 69900, cost: 699000, filled: 10, remaining: 0 });
-        expect(orders[2].type).toBe('market');
+        expect(orders[2]!.type).toBe('market');
     });
 
     it('fetchClosedOrders 는 체결 완료만, 그 밖은 fetchOrder 로 하나를 찾는다', async () => {

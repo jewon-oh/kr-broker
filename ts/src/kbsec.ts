@@ -4876,12 +4876,12 @@ export class kbsec extends Exchange {
         const groups: { header: Dict; filled: number; cost: number }[] = [];
         for (const row of rows) {
             const fill = parseKbsecDomesticFillRow(row);
+            const lastGroup = groups[groups.length - 1];
             if (!fill.continuation) {
                 groups.push({ header: row, filled: fill.filledQty, cost: fill.cost });
-            } else if (groups.length > 0) {
-                const group = groups[groups.length - 1];
-                group.filled += fill.filledQty;
-                group.cost += fill.cost;
+            } else if (lastGroup !== undefined) {
+                lastGroup.filled += fill.filledQty;
+                lastGroup.cost += fill.cost;
             }
         }
         const orders = groups.map(({ header, filled, cost }) => this.parseOrderGroup(header, filled, cost, market));
@@ -4984,7 +4984,7 @@ export class kbsec extends Exchange {
         }
         if (open === undefined) {
             return this.safeOrder({
-                id, symbol: market.symbol, status: 'closed', side: trades[0].side, filled, cost,
+                id, symbol: market.symbol, status: 'closed', side: trades[0]?.side, filled, cost,
                 average: filled > 0 ? cost / filled : undefined, trades: [], info: { trades: tradeInfo },
             }, market);
         }
@@ -5006,7 +5006,7 @@ export class kbsec extends Exchange {
         const tradeInfo = trades.map(trade => trade.info);
         if (status === undefined) {
             return this.safeOrder({
-                id, symbol: market.symbol, status: 'closed', side: trades[0].side, filled, cost,
+                id, symbol: market.symbol, status: 'closed', side: trades[0]?.side, filled, cost,
                 average: filled > 0 ? cost / filled : undefined, trades: [], info: { trades: tradeInfo },
             }, market);
         }

@@ -25,7 +25,7 @@ afterEach(() => {
 const find = (path: string): number => mockFetch.mock.calls.findIndex((c) => String(c[0]).includes(path));
 
 /** 요청 URL 의 쿼리를 객체로. */
-const queryOf = (index: number): Record<string, string> => Object.fromEntries(new URL(String(mockFetch.mock.calls[index][0])).searchParams);
+const queryOf = (index: number): Record<string, string> => Object.fromEntries(new URL(String(mockFetch.mock.calls[index]![0])).searchParams);
 
 /** KST 2026-09-23 10:15:30 에 고정한다. */
 const fixKst = () => {
@@ -241,7 +241,7 @@ describe('해외 선물옵션', () => {
         expect(headersOf(mockFetch, call).tr_id).toBe('HHDFC55200000');
         expect(queryOf(call)).toEqual({ QRY_CNT: '2', SRS_CD_01: '6AZ26', SRS_CD_02: 'BONZ26' });
         expect(rows.map((r) => r.exchangeCode)).toEqual(['CME', 'EUREX']);
-        expect(rows[0].info.sub_exch_nm).toBe('CBOT');
+        expect(rows[0]!.info.sub_exch_nm).toBe('CBOT');
     });
 
     it('fetchOverseasOptionContracts 는 TR HHDFO55200000 이고 한 번에 30개까지다', async () => {
@@ -413,6 +413,6 @@ describe('ELW 원문 조회', () => {
         expect(headersOf(mockFetch, call).tr_id).toBe('FHPEW02840400');
         expect(queryOf(call)).toEqual({ FID_COND_MRKT_DIV_CODE: 'W', FID_INPUT_ISCD: '58J297' });
         expect(rows).toHaveLength(1);
-        expect(rows[0].elw_prpr).toBe('155');
+        expect(rows[0]!.elw_prpr).toBe('155');
     });
 });

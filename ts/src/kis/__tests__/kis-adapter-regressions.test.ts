@@ -43,12 +43,12 @@ describe('항목1 — 해외 USD 잔고 (체결기준현재잔고 CTRP6504R)', (
         const balances = await newKis({ sandbox: false }).fetchBalance({ scope: 'usd' });
 
         expect(balances.USD).toMatchObject({ free: 700.25, used: 100, total: 800.25 });
-        expect(balances.USD.info.stockValue).toBe(3500.5);
+        expect(balances.USD!.info.stockValue).toBe(3500.5);
         // 손익 필드 요약(TTTS3012R)이 아니라 체결기준현재잔고를 호출했는지 본다.
         const index = mockFetch.mock.calls.findIndex((c) => String(c[0]).includes('inquire-present-balance'));
         expect(index).toBeGreaterThan(0);
         expect(headersOf(mockFetch, index).tr_id).toBe('CTRP6504R');
-        const url = new URL(String(mockFetch.mock.calls[index][0]));
+        const url = new URL(String(mockFetch.mock.calls[index]![0]));
         expect(url.searchParams.get('WCRC_FRCR_DVSN_CD')).toBe('02'); // 외화 기준
         expect(url.searchParams.get('NATN_CD')).toBe('840'); // 미국
     });
@@ -69,8 +69,8 @@ describe('항목1 — 해외 USD 잔고 (체결기준현재잔고 CTRP6504R)', (
 
         const balances = await newKis({ sandbox: false }).fetchBalance({ scope: 'usd' });
 
-        expect(balances.USD.free).toBe(0);
-        expect(balances.USD.total).toBe(50);
+        expect(balances.USD!.free).toBe(0);
+        expect(balances.USD!.total).toBe(50);
     });
 });
 
@@ -84,12 +84,12 @@ describe('항목2 — 국내 KRW 잔고 free/used/total 매핑', () => {
         const balances = await newKis({ sandbox: false }).fetchBalance({ scope: 'kr' });
 
         expect(balances.KRW).toMatchObject({ free: 700000, used: 300000, total: 1000000 });
-        expect(balances.KRW.info.summary.tot_evlu_amt).toBe('1500000');
-        expect(balances.KRW.info.orderable.nrcvb_buy_amt).toBe('650000');
+        expect(balances.KRW!.info.summary.tot_evlu_amt).toBe('1500000');
+        expect(balances.KRW!.info.orderable.nrcvb_buy_amt).toBe('650000');
         // 매수가능조회 TR 로 조회했고 시장가(01)로 물었다(종목 증거금율이 반영된다).
         const index = mockFetch.mock.calls.findIndex((c) => String(c[0]).includes('inquire-psbl-order'));
         expect(headersOf(mockFetch, index).tr_id).toBe('TTTC8908R');
-        expect(new URL(String(mockFetch.mock.calls[index][0])).searchParams.get('ORD_DVSN')).toBe('01');
+        expect(new URL(String(mockFetch.mock.calls[index]![0])).searchParams.get('ORD_DVSN')).toBe('01');
     });
 
     it('★모르는 scope 는 요청 없이 빈 잔고를 돌려주지 않고 BadRequest 로 던진다', async () => {
@@ -106,8 +106,8 @@ describe('항목2 — 국내 KRW 잔고 free/used/total 매핑', () => {
 
         const balances = await newKis({ sandbox: false }).fetchBalance({ scope: 'kr', orderable: false });
 
-        expect(balances.KRW.total).toBe(1000000);
-        expect(balances.KRW.free).toBeUndefined();
+        expect(balances.KRW!.total).toBe(1000000);
+        expect(balances.KRW!.free).toBeUndefined();
         expect(mockFetch).toHaveBeenCalledTimes(2);
     });
 
@@ -124,7 +124,7 @@ describe('항목2 — 국내 KRW 잔고 free/used/total 매핑', () => {
         const balances = await newKis().fetchBalance({ scope: 'kr', orderable: false });
 
         expect(balances['005930']).toMatchObject({ free: 7, used: 3, total: 10 });
-        expect(balances['005930'].info.pchs_avg_pric).toBe('70000');
+        expect(balances['005930']!.info.pchs_avg_pric).toBe('70000');
         expect(balances['000660']).toMatchObject({ free: 3, total: 3 });
         expect(balances['035420']).toBeUndefined(); // 보유 0 은 담지 않는다
     });
@@ -141,8 +141,8 @@ describe('항목2 — 국내 KRW 잔고 free/used/total 매핑', () => {
         const balances = await newKis().fetchBalance({ scope: 'kr', orderable: false });
 
         expect(balances['005930']).toMatchObject({ free: 13, used: 2, total: 15 });
-        expect((balances['005930'].info.rows as unknown[]).length).toBe(2);
-        expect(balances['005930'].info.trad_dvsn_name).toBe('현금');
+        expect((balances['005930']!.info.rows as unknown[]).length).toBe(2);
+        expect(balances['005930']!.info.trad_dvsn_name).toBe('현금');
     });
 
     it('★달러 예수금과 매수증거금을 문자열로 빼서 부동소수 잡음이 남지 않는다', async () => {
@@ -172,7 +172,7 @@ describe('미국 보유 종목 — 실전은 NASD 한 번이 미국 전체다', 
 
         const calls = mockFetch.mock.calls.filter((c) => String(c[0]).includes('overseas-stock/v1/trading/inquire-balance'));
         expect(calls).toHaveLength(1);
-        expect(new URL(String(calls[0][0])).searchParams.get('OVRS_EXCG_CD')).toBe('NASD');
+        expect(new URL(String(calls[0]![0])).searchParams.get('OVRS_EXCG_CD')).toBe('NASD');
         expect(balances.AAPL).toMatchObject({ total: 5, free: 5 });
     });
 

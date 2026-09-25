@@ -76,7 +76,7 @@ describe.each(BROKERS)('%s — has 와 실제 구현의 일치', (_name, make) =
         const exchange = make();
         if (isImplemented(exchange, method)) return;
 
-        const call = (exchange as unknown as Record<string, () => Promise<unknown>>)[method].call(exchange);
+        const call = (exchange as unknown as Record<string, () => Promise<unknown>>)[method]!.call(exchange);
 
         await expect(call).rejects.toBeInstanceOf(NotSupported);
     });

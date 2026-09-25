@@ -331,7 +331,7 @@ export async function fetchYahooCandles(
 
                 // OHLCV 배열 변환 (null 제거)
                 const candles: number[][] = [];
-                for (let i = 0; i < timestamps.length; i++) {
+                for (const [i, timestamp] of timestamps.entries()) {
                     const open = quote.open[i];
                     const high = quote.high[i];
                     const low = quote.low[i];
@@ -342,7 +342,7 @@ export async function fetchYahooCandles(
                     if (open == null || high == null || low == null || close == null) continue;
 
                     candles.push([
-                        timestamps[i] * 1000, // 초 → ms 변환
+                        timestamp * 1000, // 초 → ms 변환
                         open,
                         high,
                         low,
@@ -431,7 +431,7 @@ function toYahooTicker(stockCode: string, krMarket?: 'KOSPI' | 'KOSDAQ'): string
     // 'stock:' 접두사 제거
     let code = stockCode.startsWith('stock:') ? stockCode.slice(6) : stockCode;
     // '/' 포함 시 종목코드만 추출
-    code = code.includes('/') ? code.split('/')[0] : code;
+    code = code.includes('/') ? code.slice(0, code.indexOf('/')) : code;
     // 이미 .KS/.KQ 접미사 포함 시 그대로 반환
     if (code.endsWith('.KS') || code.endsWith('.KQ')) return code;
     // 국내 KR 코드(6자리 숫자·신형 영숫자) → 한국 주식 (.KS/.KQ 접미사)

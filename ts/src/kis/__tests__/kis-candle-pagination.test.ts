@@ -56,8 +56,8 @@ describe('planWindows', () => {
         const ws = planWindows(800, NOW);
         const parse = (s: string) => Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8));
         for (let i = 0; i + 1 < ws.length; i++) {
-            const thisStart = parse(ws[i].start);
-            const nextEnd = parse(ws[i + 1].end);
+            const thisStart = parse(ws[i]!.start);
+            const nextEnd = parse(ws[i + 1]!.end);
             // 다음 창의 끝은 이 창의 시작 **하루 전**이어야 한다.
             expect((thisStart - nextEnd) / 86_400_000).toBe(1);
         }
@@ -70,7 +70,7 @@ describe('planWindows', () => {
     it('창은 과거로 간다 — 순서가 뒤집히지 않는다', () => {
         const ws = planWindows(400, NOW);
         for (let i = 0; i + 1 < ws.length; i++) {
-            expect(ws[i + 1].end < ws[i].start).toBe(true);
+            expect(ws[i + 1]!.end < ws[i]!.start).toBe(true);
         }
     });
 
@@ -90,7 +90,7 @@ describe('mergeCandles', () => {
     it('중복 타임스탬프는 한 번만 — 창 경계가 겹쳐도 안전', () => {
         const out = mergeCandles([[c(100, 1)], [c(100, 9), c(200, 2)]]);
         expect(out).toHaveLength(2);
-        expect(out[0][4]).toBe(9); // 나중 페이지가 이긴다
+        expect(out[0]![4]).toBe(9); // 나중 페이지가 이긴다
     });
 
     it('빈 페이지·잘못된 타임스탬프를 걸러낸다', () => {

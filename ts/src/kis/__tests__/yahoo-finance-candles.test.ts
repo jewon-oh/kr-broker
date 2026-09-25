@@ -78,7 +78,7 @@ describe('fetchYahooCandles — 재시도 (버스트 스로틀 회복)', () => {
         const out = await fetchYahooCandles('005930', '1d', 10);
         expect(spy).toHaveBeenCalledTimes(2);
         expect(out).toHaveLength(1);
-        expect(out[0][4]).toBe(1.5); // close
+        expect(out[0]![4]).toBe(1.5); // close
     });
 
     it('chart.error(심볼 부재) → 재시도 없이 BadSymbol (한 번만 호출)', async () => {
@@ -185,7 +185,7 @@ describe('fetchYahooCandles — since·until', () => {
     it('★since 가 있으면 since 부터 until 까지의 봉을 앞에서부터 limit 개 준다', async () => {
         const out = await fetchYahooCandles('AAPL', '1d', 3, Date.UTC(2024, 0, 1), Date.UTC(2024, 0, 6));
 
-        expect(out.map((c) => new Date(c[0]).toISOString().slice(0, 10))).toEqual(['2024-01-02', '2024-01-03', '2024-01-04']);
+        expect(out.map((c) => new Date(c[0]!).toISOString().slice(0, 10))).toEqual(['2024-01-02', '2024-01-03', '2024-01-04']);
         // range 는 지금에서 거슬러 세므로 until 이 아니라 since 부터 지금까지를 덮는다(814일 → 5y).
         expect(urls[0]).toContain('range=5y');
     });
@@ -210,7 +210,7 @@ describe('fetchYahooCandles — since·until', () => {
 
         await fetchYahooCandles('AAPL', '5m', 10, Date.UTC(2024, 0, 1));
 
-        expect(new URL(urls[0]).searchParams.get('range')).toBe('59d');
+        expect(new URL(urls[0]!).searchParams.get('range')).toBe('59d');
         expect(warn).toHaveBeenCalledWith(expect.objectContaining({ timeframe: '5m', since: Date.UTC(2024, 0, 1) }), expect.stringContaining('상한'));
     });
 });

@@ -25,14 +25,14 @@ describe('spec/*.json 구조 검증', () => {
 
     it('키가 암묵 메서드 이름이 아니면 던진다', () => {
         const bad = JSON.parse(JSON.stringify(tossSpec)) as BrokerSpec;
-        bad.endpoints.exchangeRate = bad.endpoints.privateMarketGetExchangeRate;
+        bad.endpoints.exchangeRate = bad.endpoints.privateMarketGetExchangeRate!;
         delete bad.endpoints.privateMarketGetExchangeRate;
         expect(() => validateBrokerSpec(bad)).toThrow(/암묵 메서드 이름/);
     });
 
     it('params 를 적었는데 evidence 가 없으면 던진다', () => {
         const bad = JSON.parse(JSON.stringify(tossSpec)) as BrokerSpec;
-        delete bad.endpoints.privateMarketGetExchangeRate.evidence;
+        delete bad.endpoints.privateMarketGetExchangeRate!.evidence;
         expect(() => validateBrokerSpec(bad)).toThrow(/evidence/);
     });
 

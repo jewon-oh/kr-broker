@@ -31,8 +31,8 @@ describe('fetchStocks', () => {
         const [info] = await newKis().fetchStocks(['005930/KRW']);
 
         const call = mockFetch.mock.calls.findIndex((c) => String(c[0]).includes(INFO_PATH));
-        expect(String(mockFetch.mock.calls[call][0])).toContain('PRDT_TYPE_CD=300');
-        expect(String(mockFetch.mock.calls[call][0])).toContain('PDNO=005930');
+        expect(String(mockFetch.mock.calls[call]![0])).toContain('PRDT_TYPE_CD=300');
+        expect(String(mockFetch.mock.calls[call]![0])).toContain('PDNO=005930');
         expect(headersOf(mockFetch, call).tr_id).toBe('CTPF1002R');
         expect(info).toMatchObject({
             symbol: '005930/KRW', name: '삼성전자', abbreviatedName: '삼성전자', exchangeCode: 'KSC', kospiListedAt: '19750611',

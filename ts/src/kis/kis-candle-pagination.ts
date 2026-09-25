@@ -91,11 +91,11 @@ export function mergeCandles(pages: ReadonlyArray<number[][]>): number[][] {
     for (const page of pages) {
         for (const c of page) {
             const ts = c[0];
-            if (!Number.isFinite(ts)) continue;
+            if (ts === undefined || !Number.isFinite(ts)) continue;
             byTs.set(ts, c);
         }
     }
-    return [...byTs.values()].sort((a, b) => a[0] - b[0]);
+    return [...byTs].sort(([a], [b]) => a - b).map(([, c]) => c);
 }
 
 /**
@@ -103,7 +103,7 @@ export function mergeCandles(pages: ReadonlyArray<number[][]>): number[][] {
  * `since` 가 있으면 가장 이른 것부터, 없으면 가장 최근 것부터다.
  */
 export function sliceCandleWindow(candles: number[][], since: number | undefined, until: number | undefined, limit: number | undefined): number[][] {
-    const inWindow = candles.filter((c) => (since === undefined || c[0] >= since) && (until === undefined || c[0] <= until));
+    const inWindow = candles.filter((c) => (since === undefined || c[0]! >= since) && (until === undefined || c[0]! <= until));
     if (limit === undefined) return inWindow;
     return since === undefined ? inWindow.slice(-limit) : inWindow.slice(0, limit);
 }

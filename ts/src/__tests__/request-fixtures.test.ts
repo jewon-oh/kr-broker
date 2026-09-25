@@ -126,7 +126,7 @@ afterEach(() => {
 
 describe.each(files)('test/static/request/%s', (file) => {
     const fixture = JSON.parse(readFileSync(path.join(FIXTURES, file), 'utf8')) as FixtureFile;
-    const Broker = BROKERS[fixture.broker];
+    const Broker = BROKERS[fixture.broker]!;
 
     it.each(fixture.cases.map((c) => [c.description, c] as const))('%s', async (_description, c) => {
         const store = new MemoryTokenStore(c.tokenStore ?? fixture.tokenStore ?? {});

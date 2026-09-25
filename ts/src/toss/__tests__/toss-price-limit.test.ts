@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 
 import { installFakeToss, jsonOk, makeToss, type FakeToss } from './support/toss-fake';
 
-const requestedQuery = (fake: FakeToss): URLSearchParams => fake.requestsTo('GET /api/v1/price-limits')[0].query;
+const requestedQuery = (fake: FakeToss): URLSearchParams => fake.requestsTo('GET /api/v1/price-limits')[0]!.query;
 
 describe('fetchPriceLimit', () => {
     it('국내 — 상·하한가를 원본 그대로 옮긴다', async () => {

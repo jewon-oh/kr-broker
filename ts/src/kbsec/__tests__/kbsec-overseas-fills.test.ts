@@ -34,7 +34,7 @@ function calledTrs(): string[] {
     return mockFetch.mock.calls
         .map(c => String(c[0]))
         .filter(u => u.includes('/api/v1/'))
-        .map(u => u.split('/api/v1/')[1]);
+        .map(u => u.split('/api/v1/')[1]!);
 }
 
 function makeService(): kbsec {
