@@ -9,7 +9,7 @@ description = "한국투자증권·토스증권 Open API 를 ccxt 방식으로 �
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
-dependencies = ["requests>=2.31"]
+dependencies = ["requests>=2.31", "aiohttp>=3.9"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
@@ -27,3 +27,5 @@ exclude = ["kr_broker/test"]
 
 [tool.pytest.ini_options]
 testpaths = ["kr_broker/test"]
+# 비동기 판에서 await 를 빠뜨리면 코루틴이 돌지 않고 경고만 남는다. 경고를 실패로 본다.
+filterwarnings = ["error::RuntimeWarning", "error::pytest.PytestUnraisableExceptionWarning"]

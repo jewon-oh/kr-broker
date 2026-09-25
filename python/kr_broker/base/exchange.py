@@ -24,7 +24,7 @@ import logging
 import re
 import time
 import types
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import requests
 
@@ -75,7 +75,9 @@ class Exchange:
     verbose = False
     userAgent: Str = None
     headers: Dict[str, str] = {}
-    session: Optional[requests.Session] = None
+    session: Any = None
+    # 동기 판이면 `True` 다. ccxt 처럼 비동기 판(`kr_broker.async_support`)은 `False` 이고 HTTP 세션을 처음 요청할 때 연다.
+    synchronous = True
 
     # ---- 선언 ----
     has: Dict[str, Any] = {}
@@ -221,7 +223,7 @@ class Exchange:
         self._throttler: Optional[Throttler] = None
         self._bucket_throttlers: Dict[str, Optional[Throttler]] = {}
         self._define_camelcase_aliases()
-        if self.session is None:
+        if self.session is None and self.synchronous:
             self.session = requests.Session()
         self.after_construct()
         if fn.safe_bool(config, 'sandbox') is True:
@@ -385,22 +387,34 @@ class Exchange:
 
     def fetch(self, url: str, method: str = 'GET', headers: Optional[Dict[str, str]] = None, body: Str = None,
               timeout_ms: Optional[float] = None) -> Any:
-        """HTTP 요청을 보낸다. 시간 상한 안에 응답을 받지 못하면 `RequestTimeout`, 연결이 끊기면 `NetworkError` 이다."""
+        """HTTP 요청을 보내고 응답을 `handle_rest_response` 로 읽는다. 시간 상한 안에 응답을 받지 못하면 `RequestTimeout`, 연결이 끊기면 `NetworkError` 이다."""
         timeout_ms = self.timeout if timeout_ms is None else timeout_ms
+        request_headers = self.prepare_request_headers(headers)
+        if self.verbose:
+            self.log(f'{self.id} {method} {url}', {'headers': request_headers, 'body': body})
+        response = self.http_request(method, url, request_headers, body, timeout_ms)
+        return self.handle_rest_response(response, url, method, request_headers, body)
+
+    def prepare_request_headers(self, headers: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+        """인스턴스 공통 헤더(`headers`)와 `userAgent` 위에 요청 헤더를 얹는다."""
         request_headers = fn.extend(self.headers, headers)
         if self.userAgent is not None:
             request_headers = fn.extend({'User-Agent': self.userAgent}, request_headers)
-        if self.verbose:
-            self.log(f'{self.id} {method} {url}', {'headers': request_headers, 'body': body})
+        return request_headers
+
+    def http_request(self, method: str, url: str, headers: Optional[Dict[str, str]] = None, body: Str = None,
+                     timeout_ms: Optional[float] = None) -> Any:
+        """HTTP 요청 하나를 그대로 보내고 응답(`status_code`·`reason`·`headers`·`encoding`·`content`)을 돌려준다.
+        오류 봉투는 보지 않는다. 시간 초과는 `RequestTimeout`, 그 밖의 전송 실패는 `NetworkError` 로 바꿔 던진다."""
+        timeout_ms = self.timeout if timeout_ms is None else timeout_ms
         session = self.session if self.session is not None else requests.Session()
         try:
-            response = session.request(method, url, headers=request_headers, data=None if body is None else body.encode('utf-8'),
-                                       timeout=timeout_ms / 1000)
+            return session.request(method, url, headers=headers, data=None if body is None else body.encode('utf-8'),
+                                   timeout=timeout_ms / 1000)
         except requests.exceptions.Timeout as e:
             raise RequestTimeout(f'{self.id} {method} {url} 요청이 {int(timeout_ms)}ms 안에 끝나지 않았다') from e
         except requests.exceptions.RequestException as e:
             raise NetworkError(f'{self.id} {method} {url} 연결에 실패했다: {e}') from e
-        return self.handle_rest_response(response, url, method, request_headers, body)
 
     def handle_rest_response(self, response: Any, url: str, method: str = 'GET', request_headers: Optional[Dict[str, str]] = None,
                              request_body: Str = None) -> Any:
@@ -542,6 +556,15 @@ class Exchange:
         if value is None:
             value = default_value
         return value, params
+
+    def spawn(self, method: Callable[..., Any], *args: Any) -> Any:
+        """`method(*args)` 를 결과를 기다리지 않는 작업으로 부른다. 동기 판은 그 자리에서 부르고, 비동기 판은 태스크로 띄운다.
+        던진 오류는 로그만 남긴다. 응답 해석처럼 동기로 도는 자리에서 저장소 정리 같은 I/O 를 부를 때 쓴다."""
+        try:
+            return method(*args)
+        except Exception:
+            logger.warning('%s 백그라운드 작업 실패: %s', self.id, getattr(method, '__name__', method), exc_info=True)
+            return None
 
     def log(self, message: str, context: Optional[Dict[str, Any]] = None) -> None:
         """`verbose` 일 때만 남기는 디버그 로그(로거 이름 `kr_broker`)."""

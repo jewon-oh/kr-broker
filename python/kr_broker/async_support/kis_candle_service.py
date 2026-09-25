@@ -1,4 +1,3 @@
-# 이 파일은 scripts/gen-python-sync.mjs 가 python/kr_broker/async_support/kis_candle_service.py 에서 만든다. 직접 고치지 않는다.
 """한국투자증권이 직접 주는 봉(OHLCV). TypeScript 판 `ts/src/kis/kis-candle-service.ts` 와 같다.
 
 `kis.fetch_ohlcv` 는 이력이 긴 야후를 먼저 쓴다. 이 모듈은 KIS 원본 봉이 필요한 경로(깊은 이력 채우기, 당일 분봉, 야후가 빈 해외 일봉)를
@@ -78,15 +77,15 @@ class KISCandleService:
     def __init__(self, exchange: Any) -> None:
         self.exchange = exchange
 
-    def fetch_daily_ohlcv(self, stock_code: str, period_code: str, limit: int) -> List[List[float]]:
+    async def fetch_daily_ohlcv(self, stock_code: str, period_code: str, limit: int) -> List[List[float]]:
         """국내 기간별(일·주·월) 봉. 오늘로 끝나는 기간을 계산해 부르므로 한 번에 100행쯤까지다."""
         now = fn.milliseconds()
         multiplier = PERIOD_DAY_MULTIPLIER.get(period_code, 1)
         start_date = _format_local_date(now - limit * multiplier * DATE_MARGIN_FACTOR * DAY_MS)
-        rows = self.fetch_daily_ohlcv_range(stock_code, period_code, start_date, _format_local_date(now))
+        rows = await self.fetch_daily_ohlcv_range(stock_code, period_code, start_date, _format_local_date(now))
         return rows[-limit:]
 
-    def fetch_daily_ohlcv_paged(self, stock_code: str, period_code: str, needed_candles: float, now_ms: Optional[int] = None,
+    async def fetch_daily_ohlcv_paged(self, stock_code: str, period_code: str, needed_candles: float, now_ms: Optional[int] = None,
                                 on_page: Optional[Callable[[int], None]] = None) -> List[List[float]]:
         """창을 과거로 옮겨 가며 여러 번 불러 깊은 이력을 모은다. 빈 창이 나오면(상장 전) 멈춘다. `needed_candles` 가 0 이하면 부르지 않는다."""
         windows = plan_windows(needed_candles, fn.milliseconds() if now_ms is None else now_ms)
@@ -94,7 +93,7 @@ class KISCandleService:
             return []
         pages: List[List[List[float]]] = []
         for i, window in enumerate(windows):
-            rows = self.fetch_daily_ohlcv_range(stock_code, period_code, window['start'], window['end'])
+            rows = await self.fetch_daily_ohlcv_range(stock_code, period_code, window['start'], window['end'])
             if len(rows) == 0:
                 logger.debug('[KISCandleService] 빈 창 — 페이지네이션 중단(상장 이전 추정) (stockCode=%s, page=%d)', stock_code, i + 1)
                 break
@@ -106,10 +105,10 @@ class KISCandleService:
                     stock_code, period_code, len(pages), len(merged))
         return merged
 
-    def fetch_daily_ohlcv_range(self, stock_code: str, period_code: str, start_date: str, end_date: str) -> List[List[float]]:
+    async def fetch_daily_ohlcv_range(self, stock_code: str, period_code: str, start_date: str, end_date: str) -> List[List[float]]:
         """기간(`YYYYMMDD`)을 정해 국내 일·주·월 봉을 받는다. 한 응답이 100행쯤이다. 실패하면 로그를 남기고 빈 목록이다."""
         try:
-            response = self.exchange.private_get_uapi_domestic_stock_v1_quotations_inquire_daily_itemchartprice({
+            response = await self.exchange.private_get_uapi_domestic_stock_v1_quotations_inquire_daily_itemchartprice({
                 'FID_COND_MRKT_DIV_CODE': 'J',
                 'FID_INPUT_ISCD': stock_code,
                 'FID_INPUT_DATE_1': start_date,
@@ -135,14 +134,14 @@ class KISCandleService:
                          end_date, exc_info=True)
             return []
 
-    def fetch_minute_ohlcv(self, stock_code: str, minute_interval: int, limit: int) -> List[List[float]]:
+    async def fetch_minute_ohlcv(self, stock_code: str, minute_interval: int, limit: int) -> List[List[float]]:
         """국내 당일 분봉. 한 번에 30건씩 이어서 `limit` 개까지 모은다. 실패는 빈 목록으로 바꾸지 않고 던진다.
         빈 목록은 휴장·거래정지로 읽히므로, 묻지 못한 것과 데이터가 없는 것을 같은 값으로 두지 않는다."""
         try:
             all_candles: List[List[float]] = []
             cursor = ''
             while len(all_candles) < limit:
-                response = self.exchange.private_get_uapi_domestic_stock_v1_quotations_inquire_time_itemchartprice({
+                response = await self.exchange.private_get_uapi_domestic_stock_v1_quotations_inquire_time_itemchartprice({
                     'FID_COND_MRKT_DIV_CODE': 'J',
                     'FID_INPUT_ISCD': stock_code,
                     'FID_INPUT_HOUR_1': cursor,
@@ -182,7 +181,7 @@ class KISCandleService:
         """1분봉을 N분봉으로 합친다. 입력은 시각 오름차순이다."""
         return resample_candles(candles, interval_minutes)
 
-    def fetch_overseas_daily_ohlcv(self, ticker: str, market: str, timeframe: str, limit: int) -> List[List[float]]:
+    async def fetch_overseas_daily_ohlcv(self, ticker: str, market: str, timeframe: str, limit: int) -> List[List[float]]:
         """해외 기간별(일·주·월) 봉(`HHDFS76240000`). 한 번에 100건이라, 더 필요하면 기준일(`BYMD`)을 앞 페이지 마지막 날의 하루 전으로
         옮겨 다시 부른다. `1d`·`1w`·`1M` 만 받는다(KIS 해외 분봉은 이 경로에 없다). 실패하면 로그를 남기고 빈 목록이다.
         `BYMD` 는 미국 거래일이라 실행 환경의 시간대가 아니라 미국 동부 날짜로 적는다."""
@@ -196,7 +195,7 @@ class KISCandleService:
             bymd = et_ymd(fn.milliseconds())
             page = 0
             while page < OVERSEAS_MAX_PAGES and len(collected) < limit:
-                response = self.exchange.private_get_uapi_overseas_price_v1_quotations_dailyprice({
+                response = await self.exchange.private_get_uapi_overseas_price_v1_quotations_dailyprice({
                     'AUTH': '',
                     'EXCD': market,
                     'SYMB': ticker.upper(),

@@ -25,7 +25,8 @@ ts/src/                  TypeScript 판
   test/static/request/   두 판이 함께 돌리는 요청 픽스처
 python/kr_broker/        Python 판
   base/  abstract/       공통 계층과 엔드포인트 표에서 만든 암묵 API 선언
-  kis.py, toss.py        증권사 클래스
+  async_support/         비동기 판. 증권사 클래스의 정본이다
+  kis.py, toss.py        동기 판 증권사 클래스(async_support/ 에서 만든다)
   test/                  Python 테스트
 examples/ts/, examples/py/
 docs/                    문서와 지원 현황 자료(docs/coverage/)
@@ -72,7 +73,10 @@ python -m venv .venv
 
 - `python/kr_broker/abstract/`는 `node scripts/gen-python-abstract.mjs`가 `ts/src/spec/*.json`에서 만드는 파일입니다. 직접 고치지 말고 엔드포인트 표를 고친 뒤 다시 만듭니다.
 - 동작은 TypeScript 판과 같아야 합니다. 두 판이 함께 돌리는 요청 픽스처(`ts/src/test/static/request/`)에 케이스를 더하고, TypeScript 판에서 먼저 통과시킨 뒤 Python 판을 맞춥니다. 형식은 [ts/src/test/static/README.md](ts/src/test/static/README.md)에 있습니다.
-- CI는 `node scripts/gen-python-abstract.mjs --check`와 `pytest`를 Python 3.10과 3.13에서 실행합니다.
+- 증권사 클래스와 I/O 가 있는 도우미는 `python/kr_broker/async_support/`의 비동기 판이 정본입니다. 동기 판(`kis.py`, `toss.py` 등 `scripts/gen-python-sync.mjs`의 `GENERATED_MODULES`)은 `node scripts/gen-python-sync.mjs`로 만듭니다. 동기 판 파일을 직접 고치면 CI가 실패합니다.
+- 비동기 판 소스는 asyncio 를 직접 쓰지 않고 `async_support/base/runtime.py`의 `sleep_seconds`, `new_lock`, `new_semaphore`, `maybe_await`를 씁니다. 생성 스크립트가 이 이름들을 동기 짝(`base/runtime.py`)으로 바꿉니다.
+- 두 판이 함께 써야 하는 전역 상태(휴장일 캘린더, 한국투자증권 앱키 슬롯)는 생성하지 않는 모듈(`market_calendar.py`, `kis_rate_limit.py`)에 둡니다. 베이스(`base/`)와 캘린더 갱신 함수는 동기 짝과 비동기 짝(`async_support/base/`, `async_support/market_calendar.py`)을 손으로 씁니다. 한쪽을 고치면 다른 쪽도 고칩니다. `test_async_support.py`가 두 짝의 인자가 같은지 봅니다.
+- CI는 `node scripts/gen-python-abstract.mjs --check`, `node scripts/gen-python-sync.mjs --check`, `pytest`를 Python 3.10과 3.13에서 실행합니다.
 
 ## 커밋과 PR
 
