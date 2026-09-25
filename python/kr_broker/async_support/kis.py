@@ -228,13 +228,25 @@ def to_number(value: Any) -> float:
     return n if math.isfinite(n) else 0
 
 
+def _non_negative(value: Str) -> str:
+    """금액 문자열이 음수면 `'0'` 이다."""
+    return '0' if value is None or Precise.string_lt(value, '0') else value
+
+
+def _signed_change(change: Str, percentage: Str, sign: Str) -> str:
+    """전일대비에 부호를 붙인다. 부호는 등락률의 부호를 쓰고, 등락률이 반올림으로 0 이면 전일대비부호(1 상한, 2 상승, 3 보합, 4 하한,
+    5 하락)로 정한다. 등락률만 보면 호가단위가 작은 고가 종목의 작은 변동이 0 이 된다."""
+    magnitude = Precise.string_abs(change if change is not None else '0') or '0'
+    direction = _js_sign(to_number(percentage))
+    if direction == 0:
+        direction = -1 if sign in ('4', '5') else 1 if sign in ('1', '2') else 0
+    if direction == 0:
+        return '0'
+    return (Precise.string_neg(magnitude) or '0') if direction < 0 else magnitude
+
+
 def _js_sign(n: float) -> int:
     return (n > 0) - (n < 0)
-
-
-def _js_max0(n: float) -> float:
-    """JavaScript 의 `Math.max(0, n)`. NaN 이면 NaN 이다."""
-    return n if math.isnan(n) else max(0, n)
 
 
 def _field(response: Any, key: str) -> Any:
@@ -1197,7 +1209,7 @@ class kis(Exchange, ImplicitAPI):
         last = self.safe_string(ticker, 'stck_prpr')
         percentage = self.safe_string(ticker, 'prdy_ctrt')
         # 전일대비(`prdy_vrss`)는 부호가 없을 수 있어 등락률의 부호로 정한다. 보합(등락률 0)이면 변동도 0이다.
-        change = self.number_to_string(abs(to_number(self.safe_string(ticker, 'prdy_vrss'))) * _js_sign(to_number(percentage)))
+        change = _signed_change(self.safe_string(ticker, 'prdy_vrss'), percentage, self.safe_string(ticker, 'prdy_vrss_sign'))
         return self.safe_ticker({
             'symbol': None if market is None else market.get('symbol'),
             'timestamp': timestamp,
@@ -1627,7 +1639,8 @@ class kis(Exchange, ImplicitAPI):
 
         `KRW` 는 `total` 이 예수금총액(`dnca_tot_amt`), `free` 가 주문가능현금(`ord_psbl_cash`), `used` 가 둘의 차이(0 밑으로 내려가지 않는다)다.
         `USD` 는 `total` 이 예수금, `free` 가 예수금에서 미결제 매수증거금을 뺀 값이고, 종목 평가금액 합계는 `info['stockValue']` 에 있다.
-        종목은 `total` 이 보유수량, `free` 가 주문가능수량(없으면 보유수량)이다.
+        종목은 `total` 이 보유수량, `free` 가 주문가능수량(없으면 보유수량)이다. 같은 종목이 매매구분이나 대출일자별로 여러 행이면 수량을
+        더하고, `info` 는 첫 행에 원문 행 전부(`rows`)를 더한 것이다.
         """
         result: Dict[str, Any] = {'info': response, 'timestamp': None, 'datetime': None}
         domestic = self.safe_dict(response, 'domestic')
@@ -1638,7 +1651,7 @@ class kis(Exchange, ImplicitAPI):
             free = None if orderable is None else self.safe_string(orderable, 'ord_psbl_cash')
             used = None
             if free is not None and total is not None:
-                used = self.number_to_string(_js_max0(fn.js_number(total) - fn.js_number(free)))
+                used = _non_negative(Precise.string_sub(total, free))
             result['KRW'] = {'free': free, 'used': used, 'total': total, 'info': {'summary': summary, 'orderable': orderable}}
             for item in rows_of(domestic.get('holdings')):
                 self._add_holding(result, item, 'pdno', 'hldg_qty')
@@ -1650,19 +1663,20 @@ class kis(Exchange, ImplicitAPI):
         if usd is not None:
             cash = next((row for row in rows_of(usd.get('currencies')) if self.safe_string(row, 'crcy_cd', '').upper() == 'USD'), None)
             cash = {} if cash is None else cash
-            deposit = to_number(self.safe_string(cash, 'frcr_dncl_amt_2'))
-            buy_margin = to_number(self.safe_string(cash, 'frcr_buy_mgn_amt'))
-            stock_value = 0
+            # 금액은 문자열로 더하고 뺀다. 부동소수로 빼면 `1000.1 - 200.2` 가 `799.9000000000001` 이 된다.
+            deposit = self.safe_string(cash, 'frcr_dncl_amt_2', '0')
+            buy_margin = self.safe_string(cash, 'frcr_buy_mgn_amt', '0')
+            stock_value = '0'
             for row in rows_of(usd.get('stocks')):
                 if self.safe_string(row, 'buy_crcy_cd', 'USD').upper() == 'USD':
-                    stock_value += to_number(self.safe_string(row, 'frcr_evlu_amt2'))
-            free_usd = max(0, deposit - buy_margin)
+                    stock_value = Precise.string_add(stock_value, self.safe_string(row, 'frcr_evlu_amt2', '0')) or stock_value
+            free_usd = _non_negative(Precise.string_sub(deposit, buy_margin))
             result['USD'] = {
-                'free': self.number_to_string(free_usd),
-                'used': self.number_to_string(max(0, deposit - free_usd)),
-                'total': self.number_to_string(deposit),
-                'info': {'deposit': deposit, 'buyMargin': buy_margin, 'stockValue': stock_value, 'currencies': usd.get('currencies'),
-                         'stocks': usd.get('stocks')},
+                'free': free_usd,
+                'used': _non_negative(Precise.string_sub(deposit, free_usd)),
+                'total': deposit,
+                'info': {'deposit': to_number(deposit), 'buyMargin': to_number(buy_margin), 'stockValue': to_number(stock_value),
+                         'currencies': usd.get('currencies'), 'stocks': usd.get('stocks')},
             }
         return self.safe_balance(result)
 
@@ -1671,7 +1685,13 @@ class kis(Exchange, ImplicitAPI):
         quantity = self.safe_string(item, quantity_key)
         if code is None or quantity is None or not fn.js_number(quantity) > 0:
             return
-        result[code] = {'free': self.safe_string(item, 'ord_psbl_qty', quantity), 'used': None, 'total': quantity, 'info': item}
+        free = self.safe_string(item, 'ord_psbl_qty', quantity)
+        current = result.get(code)
+        if current is None:
+            result[code] = {'free': free, 'used': None, 'total': quantity, 'info': self.extend(item, {'rows': [item]})}
+        else:
+            result[code] = {'free': Precise.string_add(current['free'], free), 'used': None, 'total': Precise.string_add(current['total'], quantity),
+                            'info': self.extend(current['info'], {'rows': current['info']['rows'] + [item]})}
 
     # ============ 주문 ============
 

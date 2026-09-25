@@ -2709,20 +2709,15 @@
         {
             "description": "fetchBalance 는 국내 잔고, 주문가능현금, 미국 보유 종목, 달러 예수금을 차례로 받아 통합 잔고로 옮긴다",
             "method": "fetchBalance",
-            "args": [null],
+            "args": [
+                null
+            ],
             "http": [
                 {
                     "request": {
                         "method": "GET",
                         "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/trading/inquire-balance?CANO=12345678&ACNT_PRDT_CD=01&AFHR_FLPR_YN=N&OFL_YN=&INQR_DVSN=02&UNPR_DVSN=01&FUND_STTL_ICLD_YN=N&FNCG_AMT_AUTO_RDPT_YN=N&PRCS_DVSN=01&CTX_AREA_FK100=&CTX_AREA_NK100=",
-                        "headers": {
-                            "Content-Type": "application/json; charset=UTF-8",
-                            "authorization": "Bearer tok-stored",
-                            "appkey": "kis-app-key-abcdefgh",
-                            "appsecret": "kis-app-secret",
-                            "tr_id": "TTTC8434R",
-                            "custtype": "P"
-                        },
+                        "headers": { "Content-Type": "application/json; charset=UTF-8", "authorization": "Bearer tok-stored", "appkey": "kis-app-key-abcdefgh", "appsecret": "kis-app-secret", "tr_id": "TTTC8434R", "custtype": "P" },
                         "body": null
                     },
                     "response": {
@@ -2747,7 +2742,12 @@
                                     "evlu_pfls_amt": "10000",
                                     "evlu_pfls_rt": "1.43"
                                 },
-                                { "pdno": "247540", "prdt_name": "에코프로비엠", "hldg_qty": "0", "ord_psbl_qty": "0" }
+                                {
+                                    "pdno": "247540",
+                                    "prdt_name": "에코프로비엠",
+                                    "hldg_qty": "0",
+                                    "ord_psbl_qty": "0"
+                                }
                             ],
                             "output2": [
                                 {
@@ -2765,14 +2765,7 @@
                     "request": {
                         "method": "GET",
                         "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/trading/inquire-psbl-order?CANO=12345678&ACNT_PRDT_CD=01&PDNO=005930&ORD_UNPR=0&ORD_DVSN=01&CMA_EVLU_AMT_ICLD_YN=N&OVRS_ICLD_YN=N",
-                        "headers": {
-                            "Content-Type": "application/json; charset=UTF-8",
-                            "authorization": "Bearer tok-stored",
-                            "appkey": "kis-app-key-abcdefgh",
-                            "appsecret": "kis-app-secret",
-                            "tr_id": "TTTC8908R",
-                            "custtype": "P"
-                        },
+                        "headers": { "Content-Type": "application/json; charset=UTF-8", "authorization": "Bearer tok-stored", "appkey": "kis-app-key-abcdefgh", "appsecret": "kis-app-secret", "tr_id": "TTTC8908R", "custtype": "P" },
                         "body": null
                     },
                     "response": {
@@ -2781,7 +2774,12 @@
                             "rt_cd": "0",
                             "msg_cd": "MCA00000",
                             "msg1": "정상처리 되었습니다.",
-                            "output": { "ord_psbl_cash": "850000", "nrcvb_buy_amt": "850000", "max_buy_amt": "850000", "max_buy_qty": "11" }
+                            "output": {
+                                "ord_psbl_cash": "850000",
+                                "nrcvb_buy_amt": "850000",
+                                "max_buy_amt": "850000",
+                                "max_buy_qty": "11"
+                            }
                         }
                     }
                 },
@@ -2789,14 +2787,7 @@
                     "request": {
                         "method": "GET",
                         "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/trading/inquire-balance?CANO=12345678&ACNT_PRDT_CD=01&OVRS_EXCG_CD=NASD&TR_CRCY_CD=USD&CTX_AREA_FK200=&CTX_AREA_NK200=",
-                        "headers": {
-                            "Content-Type": "application/json; charset=UTF-8",
-                            "authorization": "Bearer tok-stored",
-                            "appkey": "kis-app-key-abcdefgh",
-                            "appsecret": "kis-app-secret",
-                            "tr_id": "TTTS3012R",
-                            "custtype": "P"
-                        },
+                        "headers": { "Content-Type": "application/json; charset=UTF-8", "authorization": "Bearer tok-stored", "appkey": "kis-app-key-abcdefgh", "appsecret": "kis-app-secret", "tr_id": "TTTS3012R", "custtype": "P" },
                         "body": null
                     },
                     "response": {
@@ -2822,7 +2813,10 @@
                                     "tr_crcy_cd": "USD"
                                 }
                             ],
-                            "output2": { "frcr_pchs_amt1": "450.00", "tot_evlu_pfls_amt": "67.50" }
+                            "output2": {
+                                "frcr_pchs_amt1": "450.00",
+                                "tot_evlu_pfls_amt": "67.50"
+                            }
                         }
                     }
                 },
@@ -2830,14 +2824,7 @@
                     "request": {
                         "method": "GET",
                         "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/trading/inquire-present-balance?CANO=12345678&ACNT_PRDT_CD=01&WCRC_FRCR_DVSN_CD=02&NATN_CD=840&TR_MKET_CD=00&INQR_DVSN_CD=00",
-                        "headers": {
-                            "Content-Type": "application/json; charset=UTF-8",
-                            "authorization": "Bearer tok-stored",
-                            "appkey": "kis-app-key-abcdefgh",
-                            "appsecret": "kis-app-secret",
-                            "tr_id": "CTRP6504R",
-                            "custtype": "P"
-                        },
+                        "headers": { "Content-Type": "application/json; charset=UTF-8", "authorization": "Bearer tok-stored", "appkey": "kis-app-key-abcdefgh", "appsecret": "kis-app-secret", "tr_id": "CTRP6504R", "custtype": "P" },
                         "body": null
                     },
                     "response": {
@@ -2847,7 +2834,13 @@
                             "msg_cd": "MCA00000",
                             "msg1": "정상처리 되었습니다.",
                             "output1": [
-                                { "pdno": "AAPL", "prdt_name": "APPLE INC", "cblc_qty13": "3", "buy_crcy_cd": "USD", "frcr_evlu_amt2": "517.50" },
+                                {
+                                    "pdno": "AAPL",
+                                    "prdt_name": "APPLE INC",
+                                    "cblc_qty13": "3",
+                                    "buy_crcy_cd": "USD",
+                                    "frcr_evlu_amt2": "517.50"
+                                },
                                 {
                                     "pdno": "BRK/B",
                                     "prdt_name": "BERKSHIRE HATHAWAY INC-CL B",
@@ -2857,10 +2850,22 @@
                                 }
                             ],
                             "output2": [
-                                { "crcy_cd": "KRW", "crcy_cd_name": "원", "frcr_dncl_amt_2": "0", "frcr_buy_mgn_amt": "0" },
-                                { "crcy_cd": "USD", "crcy_cd_name": "미국 달러", "frcr_dncl_amt_2": "1000.50", "frcr_buy_mgn_amt": "200.25" }
+                                {
+                                    "crcy_cd": "KRW",
+                                    "crcy_cd_name": "원",
+                                    "frcr_dncl_amt_2": "0",
+                                    "frcr_buy_mgn_amt": "0"
+                                },
+                                {
+                                    "crcy_cd": "USD",
+                                    "crcy_cd_name": "미국 달러",
+                                    "frcr_dncl_amt_2": "1000.50",
+                                    "frcr_buy_mgn_amt": "200.25"
+                                }
                             ],
-                            "output3": { "tot_asst_amt": "2500000" }
+                            "output3": {
+                                "tot_asst_amt": "2500000"
+                            }
                         }
                     }
                 }
@@ -2882,7 +2887,12 @@
                                 "evlu_pfls_amt": "10000",
                                 "evlu_pfls_rt": "1.43"
                             },
-                            { "pdno": "247540", "prdt_name": "에코프로비엠", "hldg_qty": "0", "ord_psbl_qty": "0" }
+                            {
+                                "pdno": "247540",
+                                "prdt_name": "에코프로비엠",
+                                "hldg_qty": "0",
+                                "ord_psbl_qty": "0"
+                            }
                         ],
                         "summary": {
                             "dnca_tot_amt": "1000000",
@@ -2891,7 +2901,12 @@
                             "tot_evlu_amt": "1710000",
                             "scts_evlu_amt": "710000"
                         },
-                        "orderable": { "ord_psbl_cash": "850000", "nrcvb_buy_amt": "850000", "max_buy_amt": "850000", "max_buy_qty": "11" }
+                        "orderable": {
+                            "ord_psbl_cash": "850000",
+                            "nrcvb_buy_amt": "850000",
+                            "max_buy_amt": "850000",
+                            "max_buy_qty": "11"
+                        }
                     },
                     "overseas": {
                         "holdings": [
@@ -2912,7 +2927,13 @@
                     },
                     "usd": {
                         "stocks": [
-                            { "pdno": "AAPL", "prdt_name": "APPLE INC", "cblc_qty13": "3", "buy_crcy_cd": "USD", "frcr_evlu_amt2": "517.50" },
+                            {
+                                "pdno": "AAPL",
+                                "prdt_name": "APPLE INC",
+                                "cblc_qty13": "3",
+                                "buy_crcy_cd": "USD",
+                                "frcr_evlu_amt2": "517.50"
+                            },
                             {
                                 "pdno": "BRK/B",
                                 "prdt_name": "BERKSHIRE HATHAWAY INC-CL B",
@@ -2922,8 +2943,18 @@
                             }
                         ],
                         "currencies": [
-                            { "crcy_cd": "KRW", "crcy_cd_name": "원", "frcr_dncl_amt_2": "0", "frcr_buy_mgn_amt": "0" },
-                            { "crcy_cd": "USD", "crcy_cd_name": "미국 달러", "frcr_dncl_amt_2": "1000.50", "frcr_buy_mgn_amt": "200.25" }
+                            {
+                                "crcy_cd": "KRW",
+                                "crcy_cd_name": "원",
+                                "frcr_dncl_amt_2": "0",
+                                "frcr_buy_mgn_amt": "0"
+                            },
+                            {
+                                "crcy_cd": "USD",
+                                "crcy_cd_name": "미국 달러",
+                                "frcr_dncl_amt_2": "1000.50",
+                                "frcr_buy_mgn_amt": "200.25"
+                            }
                         ]
                     }
                 },
@@ -2939,7 +2970,12 @@
                             "tot_evlu_amt": "1710000",
                             "scts_evlu_amt": "710000"
                         },
-                        "orderable": { "ord_psbl_cash": "850000", "nrcvb_buy_amt": "850000", "max_buy_amt": "850000", "max_buy_qty": "11" }
+                        "orderable": {
+                            "ord_psbl_cash": "850000",
+                            "nrcvb_buy_amt": "850000",
+                            "max_buy_amt": "850000",
+                            "max_buy_qty": "11"
+                        }
                     }
                 },
                 "005930": {
@@ -2957,7 +2993,22 @@
                         "prpr": "71000",
                         "evlu_amt": "710000",
                         "evlu_pfls_amt": "10000",
-                        "evlu_pfls_rt": "1.43"
+                        "evlu_pfls_rt": "1.43",
+                        "rows": [
+                            {
+                                "pdno": "005930",
+                                "prdt_name": "삼성전자",
+                                "trad_dvsn_name": "현금",
+                                "hldg_qty": "10",
+                                "ord_psbl_qty": "8",
+                                "pchs_avg_pric": "70000.0000",
+                                "pchs_amt": "700000",
+                                "prpr": "71000",
+                                "evlu_amt": "710000",
+                                "evlu_pfls_amt": "10000",
+                                "evlu_pfls_rt": "1.43"
+                            }
+                        ]
                     }
                 },
                 "AAPL": {
@@ -2975,7 +3026,22 @@
                         "now_pric2": "172.500000",
                         "ovrs_stck_evlu_amt": "517.50",
                         "ovrs_excg_cd": "NASD",
-                        "tr_crcy_cd": "USD"
+                        "tr_crcy_cd": "USD",
+                        "rows": [
+                            {
+                                "cano": "12345678",
+                                "acnt_prdt_cd": "01",
+                                "ovrs_pdno": "AAPL",
+                                "ovrs_item_name": "APPLE INC",
+                                "ovrs_cblc_qty": "3",
+                                "ord_psbl_qty": "3",
+                                "pchs_avg_pric": "150.0000",
+                                "now_pric2": "172.500000",
+                                "ovrs_stck_evlu_amt": "517.50",
+                                "ovrs_excg_cd": "NASD",
+                                "tr_crcy_cd": "USD"
+                            }
+                        ]
                     }
                 },
                 "USD": {
@@ -2987,11 +3053,27 @@
                         "buyMargin": 200.25,
                         "stockValue": 927.75,
                         "currencies": [
-                            { "crcy_cd": "KRW", "crcy_cd_name": "원", "frcr_dncl_amt_2": "0", "frcr_buy_mgn_amt": "0" },
-                            { "crcy_cd": "USD", "crcy_cd_name": "미국 달러", "frcr_dncl_amt_2": "1000.50", "frcr_buy_mgn_amt": "200.25" }
+                            {
+                                "crcy_cd": "KRW",
+                                "crcy_cd_name": "원",
+                                "frcr_dncl_amt_2": "0",
+                                "frcr_buy_mgn_amt": "0"
+                            },
+                            {
+                                "crcy_cd": "USD",
+                                "crcy_cd_name": "미국 달러",
+                                "frcr_dncl_amt_2": "1000.50",
+                                "frcr_buy_mgn_amt": "200.25"
+                            }
                         ],
                         "stocks": [
-                            { "pdno": "AAPL", "prdt_name": "APPLE INC", "cblc_qty13": "3", "buy_crcy_cd": "USD", "frcr_evlu_amt2": "517.50" },
+                            {
+                                "pdno": "AAPL",
+                                "prdt_name": "APPLE INC",
+                                "cblc_qty13": "3",
+                                "buy_crcy_cd": "USD",
+                                "frcr_evlu_amt2": "517.50"
+                            },
                             {
                                 "pdno": "BRK/B",
                                 "prdt_name": "BERKSHIRE HATHAWAY INC-CL B",
@@ -3002,29 +3084,43 @@
                         ]
                     }
                 },
-                "free": { "KRW": 850000, "005930": 8, "AAPL": 3, "USD": 800.25 },
-                "used": { "KRW": 150000, "005930": 2, "AAPL": 0, "USD": 200.25 },
-                "total": { "KRW": 1000000, "005930": 10, "AAPL": 3, "USD": 1000.5 }
+                "free": {
+                    "KRW": 850000,
+                    "005930": 8,
+                    "AAPL": 3,
+                    "USD": 800.25
+                },
+                "used": {
+                    "KRW": 150000,
+                    "005930": 2,
+                    "AAPL": 0,
+                    "USD": 200.25
+                },
+                "total": {
+                    "KRW": 1000000,
+                    "005930": 10,
+                    "AAPL": 3,
+                    "USD": 1000.5
+                }
             }
         },
         {
             "description": "fetchBalance 모의투자의 미국 보유 종목은 NASD, NYSE, AMEX 를 차례로 부른다",
-            "config": { "sandbox": true },
+            "config": {
+                "sandbox": true
+            },
             "method": "fetchBalance",
-            "args": [{ "scope": "us" }],
+            "args": [
+                {
+                    "scope": "us"
+                }
+            ],
             "http": [
                 {
                     "request": {
                         "method": "GET",
                         "url": "https://openapivts.koreainvestment.com:29443/uapi/overseas-stock/v1/trading/inquire-balance?CANO=12345678&ACNT_PRDT_CD=01&OVRS_EXCG_CD=NASD&TR_CRCY_CD=USD&CTX_AREA_FK200=&CTX_AREA_NK200=",
-                        "headers": {
-                            "Content-Type": "application/json; charset=UTF-8",
-                            "authorization": "Bearer tok-stored",
-                            "appkey": "kis-app-key-abcdefgh",
-                            "appsecret": "kis-app-secret",
-                            "tr_id": "VTTS3012R",
-                            "custtype": "P"
-                        },
+                        "headers": { "Content-Type": "application/json; charset=UTF-8", "authorization": "Bearer tok-stored", "appkey": "kis-app-key-abcdefgh", "appsecret": "kis-app-secret", "tr_id": "VTTS3012R", "custtype": "P" },
                         "body": null
                     },
                     "response": {
@@ -3050,7 +3146,10 @@
                                     "tr_crcy_cd": "USD"
                                 }
                             ],
-                            "output2": { "frcr_pchs_amt1": "450.00", "tot_evlu_pfls_amt": "67.50" }
+                            "output2": {
+                                "frcr_pchs_amt1": "450.00",
+                                "tot_evlu_pfls_amt": "67.50"
+                            }
                         }
                     }
                 },
@@ -3058,35 +3157,39 @@
                     "request": {
                         "method": "GET",
                         "url": "https://openapivts.koreainvestment.com:29443/uapi/overseas-stock/v1/trading/inquire-balance?CANO=12345678&ACNT_PRDT_CD=01&OVRS_EXCG_CD=NYSE&TR_CRCY_CD=USD&CTX_AREA_FK200=&CTX_AREA_NK200=",
-                        "headers": {
-                            "Content-Type": "application/json; charset=UTF-8",
-                            "authorization": "Bearer tok-stored",
-                            "appkey": "kis-app-key-abcdefgh",
-                            "appsecret": "kis-app-secret",
-                            "tr_id": "VTTS3012R",
-                            "custtype": "P"
-                        },
+                        "headers": { "Content-Type": "application/json; charset=UTF-8", "authorization": "Bearer tok-stored", "appkey": "kis-app-key-abcdefgh", "appsecret": "kis-app-secret", "tr_id": "VTTS3012R", "custtype": "P" },
                         "body": null
                     },
-                    "response": { "status": 200, "body": { "rt_cd": "0", "msg_cd": "MCA00000", "msg1": "정상처리 되었습니다.", "output1": [] } }
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output1": []
+                        }
+                    }
                 },
                 {
                     "request": {
                         "method": "GET",
                         "url": "https://openapivts.koreainvestment.com:29443/uapi/overseas-stock/v1/trading/inquire-balance?CANO=12345678&ACNT_PRDT_CD=01&OVRS_EXCG_CD=AMEX&TR_CRCY_CD=USD&CTX_AREA_FK200=&CTX_AREA_NK200=",
-                        "headers": {
-                            "Content-Type": "application/json; charset=UTF-8",
-                            "authorization": "Bearer tok-stored",
-                            "appkey": "kis-app-key-abcdefgh",
-                            "appsecret": "kis-app-secret",
-                            "tr_id": "VTTS3012R",
-                            "custtype": "P"
-                        },
+                        "headers": { "Content-Type": "application/json; charset=UTF-8", "authorization": "Bearer tok-stored", "appkey": "kis-app-key-abcdefgh", "appsecret": "kis-app-secret", "tr_id": "VTTS3012R", "custtype": "P" },
                         "body": null
                     },
                     "response": {
                         "status": 200,
-                        "body": { "rt_cd": "0", "msg_cd": "MCA00000", "msg1": "정상처리 되었습니다.", "output1": [{ "ovrs_pdno": "BRK/B", "ovrs_cblc_qty": "1" }] }
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output1": [
+                                {
+                                    "ovrs_pdno": "BRK/B",
+                                    "ovrs_cblc_qty": "1"
+                                }
+                            ]
+                        }
                     }
                 }
             ],
@@ -3107,7 +3210,10 @@
                                 "ovrs_excg_cd": "NASD",
                                 "tr_crcy_cd": "USD"
                             },
-                            { "ovrs_pdno": "BRK/B", "ovrs_cblc_qty": "1" }
+                            {
+                                "ovrs_pdno": "BRK/B",
+                                "ovrs_cblc_qty": "1"
+                            }
                         ]
                     }
                 },
@@ -3126,32 +3232,70 @@
                         "now_pric2": "172.500000",
                         "ovrs_stck_evlu_amt": "517.50",
                         "ovrs_excg_cd": "NASD",
-                        "tr_crcy_cd": "USD"
+                        "tr_crcy_cd": "USD",
+                        "rows": [
+                            {
+                                "cano": "12345678",
+                                "acnt_prdt_cd": "01",
+                                "ovrs_pdno": "AAPL",
+                                "ovrs_item_name": "APPLE INC",
+                                "ovrs_cblc_qty": "3",
+                                "ord_psbl_qty": "3",
+                                "pchs_avg_pric": "150.0000",
+                                "now_pric2": "172.500000",
+                                "ovrs_stck_evlu_amt": "517.50",
+                                "ovrs_excg_cd": "NASD",
+                                "tr_crcy_cd": "USD"
+                            }
+                        ]
                     }
                 },
-                "BRK/B": { "free": 1, "used": 0, "total": 1, "info": { "ovrs_pdno": "BRK/B", "ovrs_cblc_qty": "1" } },
-                "free": { "AAPL": 3, "BRK/B": 1 },
-                "used": { "AAPL": 0, "BRK/B": 0 },
-                "total": { "AAPL": 3, "BRK/B": 1 }
+                "BRK/B": {
+                    "free": 1,
+                    "used": 0,
+                    "total": 1,
+                    "info": {
+                        "ovrs_pdno": "BRK/B",
+                        "ovrs_cblc_qty": "1",
+                        "rows": [
+                            {
+                                "ovrs_pdno": "BRK/B",
+                                "ovrs_cblc_qty": "1"
+                            }
+                        ]
+                    }
+                },
+                "free": {
+                    "AAPL": 3,
+                    "BRK/B": 1
+                },
+                "used": {
+                    "AAPL": 0,
+                    "BRK/B": 0
+                },
+                "total": {
+                    "AAPL": 3,
+                    "BRK/B": 1
+                }
             }
         },
         {
             "description": "fetchBalance 는 scope 목록으로 범위를 고르고 orderable 이 false 면 주문가능현금을 묻지 않는다",
             "method": "fetchBalance",
-            "args": [{ "scope": ["kr"], "orderable": false }],
+            "args": [
+                {
+                    "scope": [
+                        "kr"
+                    ],
+                    "orderable": false
+                }
+            ],
             "http": [
                 {
                     "request": {
                         "method": "GET",
                         "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/trading/inquire-balance?CANO=12345678&ACNT_PRDT_CD=01&AFHR_FLPR_YN=N&OFL_YN=&INQR_DVSN=02&UNPR_DVSN=01&FUND_STTL_ICLD_YN=N&FNCG_AMT_AUTO_RDPT_YN=N&PRCS_DVSN=01&CTX_AREA_FK100=&CTX_AREA_NK100=",
-                        "headers": {
-                            "Content-Type": "application/json; charset=UTF-8",
-                            "authorization": "Bearer tok-stored",
-                            "appkey": "kis-app-key-abcdefgh",
-                            "appsecret": "kis-app-secret",
-                            "tr_id": "TTTC8434R",
-                            "custtype": "P"
-                        },
+                        "headers": { "Content-Type": "application/json; charset=UTF-8", "authorization": "Bearer tok-stored", "appkey": "kis-app-key-abcdefgh", "appsecret": "kis-app-secret", "tr_id": "TTTC8434R", "custtype": "P" },
                         "body": null
                     },
                     "response": {
@@ -3176,7 +3320,12 @@
                                     "evlu_pfls_amt": "10000",
                                     "evlu_pfls_rt": "1.43"
                                 },
-                                { "pdno": "247540", "prdt_name": "에코프로비엠", "hldg_qty": "0", "ord_psbl_qty": "0" }
+                                {
+                                    "pdno": "247540",
+                                    "prdt_name": "에코프로비엠",
+                                    "hldg_qty": "0",
+                                    "ord_psbl_qty": "0"
+                                }
                             ],
                             "output2": [
                                 {
@@ -3208,7 +3357,12 @@
                                 "evlu_pfls_amt": "10000",
                                 "evlu_pfls_rt": "1.43"
                             },
-                            { "pdno": "247540", "prdt_name": "에코프로비엠", "hldg_qty": "0", "ord_psbl_qty": "0" }
+                            {
+                                "pdno": "247540",
+                                "prdt_name": "에코프로비엠",
+                                "hldg_qty": "0",
+                                "ord_psbl_qty": "0"
+                            }
                         ],
                         "summary": {
                             "dnca_tot_amt": "1000000",
@@ -3246,12 +3400,34 @@
                         "prpr": "71000",
                         "evlu_amt": "710000",
                         "evlu_pfls_amt": "10000",
-                        "evlu_pfls_rt": "1.43"
+                        "evlu_pfls_rt": "1.43",
+                        "rows": [
+                            {
+                                "pdno": "005930",
+                                "prdt_name": "삼성전자",
+                                "trad_dvsn_name": "현금",
+                                "hldg_qty": "10",
+                                "ord_psbl_qty": "8",
+                                "pchs_avg_pric": "70000.0000",
+                                "pchs_amt": "700000",
+                                "prpr": "71000",
+                                "evlu_amt": "710000",
+                                "evlu_pfls_amt": "10000",
+                                "evlu_pfls_rt": "1.43"
+                            }
+                        ]
                     }
                 },
-                "free": { "005930": 8 },
-                "used": { "005930": 2 },
-                "total": { "KRW": 1000000, "005930": 10 }
+                "free": {
+                    "005930": 8
+                },
+                "used": {
+                    "005930": 2
+                },
+                "total": {
+                    "KRW": 1000000,
+                    "005930": 10
+                }
             }
         },
         {

@@ -341,3 +341,33 @@ def test_sync_reads_text_without_charset_as_utf8() -> None:
     with pytest.raises(Exception):
         broker.handle_rest_response(Response(), 'https://example.com/x')
     assert broker.last_http_response == '<html>게이트웨이 오류</html>'
+
+
+def test_toss_us_fractional_sell_quantity_is_truncated_as_decimal() -> None:
+    broker = kr_broker.toss({'apiKey': 'k', 'secret': 's'})
+    broker.market = lambda symbol: {'id': 'AAPL', 'symbol': 'AAPL/USD', 'base': 'AAPL', 'quote': 'USD', 'info': {'market': 'US'}}  # type: ignore[method-assign]
+    broker._country_of = lambda market: 'US'  # type: ignore[method-assign]
+    for amount, expected in ((8.2, 8.2), (1.005, 1.005), (1.001, 1.001), (0.1234567, 0.123456)):
+        assert broker.normalize_quantity('AAPL', 'market', 'sell', amount) == expected, amount
+
+
+def test_kis_balance_merges_rows_of_the_same_holding_and_subtracts_usd_as_decimal() -> None:
+    broker = kr_broker.kis({'apiKey': 'k', 'secret': 's', 'uid': '12345678-01'})
+    balance = broker.parse_balance({
+        'domestic': {'summary': {'dnca_tot_amt': '0'}, 'holdings': [
+            {'pdno': '005930', 'trad_dvsn_name': '현금', 'hldg_qty': '10', 'ord_psbl_qty': '10'},
+            {'pdno': '005930', 'trad_dvsn_name': '자기융자', 'hldg_qty': '5', 'ord_psbl_qty': '3'},
+        ]},
+        'usd': {'currencies': [{'crcy_cd': 'USD', 'frcr_dncl_amt_2': '1000.1', 'frcr_buy_mgn_amt': '200.2'}], 'stocks': []},
+    })
+    assert (balance['005930']['free'], balance['005930']['total']) == (13, 15)
+    assert len(balance['005930']['info']['rows']) == 2 and balance['005930']['info']['trad_dvsn_name'] == '현금'
+    assert (balance['USD']['free'], balance['USD']['used'], balance['USD']['total']) == (799.9, 200.2, 1000.1)
+
+
+def test_kis_change_sign_falls_back_to_the_sign_code_when_the_rate_rounds_to_zero() -> None:
+    from kr_broker.kis import _signed_change
+    assert _signed_change('50', '0.00', '5') == '-50'
+    assert _signed_change('50', '0.00', '2') == '50'
+    assert _signed_change('500', '-0.71', '2') == '-500'
+    assert _signed_change('0', '0.00', '3') == '0'
