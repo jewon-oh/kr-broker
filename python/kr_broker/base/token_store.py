@@ -8,10 +8,11 @@ TypeScript 판의 `BrokerTokenStore`(`ts/src/options.ts`)와 `refreshTokenWithLo
 메서드는 실패하면 던진다. 호출하는 쪽이 로그와 대체 동작(새로 발급 등)을 정한다.
 """
 
+import hashlib
 import logging
 import os
 import time
-from typing import Any, Callable, Optional, Protocol, TypeVar, runtime_checkable
+from typing import Any, Callable, Dict, Optional, Protocol, TypeVar, runtime_checkable
 
 from kr_broker.base import functions as fn
 
@@ -40,6 +41,62 @@ class BrokerTokenStore(Protocol):
 
     def unlock(self, key: str, owner: str) -> None:
         """`owner` 가 잡은 락일 때만 푼다."""
+
+
+def token_store_key(prefix: str, credential_id: str) -> str:
+    """토큰 저장소 키. 자격증명의 SHA-256 앞 32자(128비트)를 쓴다. 원문이 저장소에 드러나지 않고 다른 계정과 키가 겹치지 않는다."""
+    return prefix + hashlib.sha256(credential_id.encode('utf-8')).hexdigest()[:32]
+
+
+def legacy_token_store_key(prefix: str, credential_id: str) -> str:
+    """옛 키 형식(자격증명 앞 12자). 앞 12자가 같은 두 계정이 키를 나눠 썼다. 이행 기간에만 읽고 쓴다."""
+    return prefix + credential_id[:12]
+
+
+def _legacy_lock_key(legacy_of: Dict[str, str], key: str) -> str:
+    old = legacy_of.get(key[:-len(':lock')]) if key.endswith(':lock') else None
+    return key if old is None else f'{old}:lock'
+
+
+class LegacyKeyTokenStore:
+    """키 형식을 바꾸는 판의 이행용 저장소. TypeScript 판 `withLegacyTokenKeys`(`ts/src/token-store-key.ts`)와 같다.
+
+    옛 판 프로세스와 함께 도는 동안(롤링 배포) 서로 "토큰 없음"으로 보고 새로 발급하지 않게 한다. 읽기는 새 키에 없으면 옛 키에서 읽고,
+    쓰기와 삭제는 두 키에 모두 하며, 발급 락은 옛 키로 잡는다. `legacy_of` 는 새 키 → 옛 키 대응표다. 다음 판에서 걷어낸다.
+    """
+
+    def __init__(self, store: Any, legacy_of: Dict[str, str]) -> None:
+        self.store = store
+        self.legacy_of = dict(legacy_of)
+
+    def get(self, key: str) -> Optional[str]:
+        value = self.store.get(key)
+        old = self.legacy_of.get(key)
+        return value if value is not None or old is None else self.store.get(old)
+
+    def set(self, key: str, value: str, ttl_ms: int) -> None:
+        self.store.set(key, value, ttl_ms)
+        old = self.legacy_of.get(key)
+        if old is not None:
+            self.store.set(old, value, ttl_ms)
+
+    def delete(self, key: str) -> None:
+        self.store.delete(key)
+        old = self.legacy_of.get(key)
+        if old is not None:
+            self.store.delete(old)
+
+    def delete_if_access_token_equals(self, key: str, access_token: str) -> bool:
+        current = self.store.delete_if_access_token_equals(key, access_token)
+        old = self.legacy_of.get(key)
+        previous = self.store.delete_if_access_token_equals(old, access_token) if old is not None else False
+        return bool(current or previous)
+
+    def try_lock(self, key: str, owner: str, ttl_ms: int) -> bool:
+        return self.store.try_lock(_legacy_lock_key(self.legacy_of, key), owner, ttl_ms)
+
+    def unlock(self, key: str, owner: str) -> None:
+        self.store.unlock(_legacy_lock_key(self.legacy_of, key), owner)
 
 
 def resolve_token_store(option: Any) -> Optional[BrokerTokenStore]:

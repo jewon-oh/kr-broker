@@ -41,7 +41,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from kr_broker.abstract.toss import ImplicitAPI
 from kr_broker.base.exchange import Exchange
 from kr_broker.base.runtime import maybe_await, new_lock
-from kr_broker.base.token_store import refresh_token_with_lock
+from kr_broker.base.token_store import LegacyKeyTokenStore, refresh_token_with_lock
 from kr_broker.execution_confirm import confirm_execution
 from kr_broker.extended_session_limit import build_extended_session_limit
 from kr_broker.base import functions as fn
@@ -53,7 +53,7 @@ from kr_broker.base.errors import (
     TossRateLimited, TossTokenRejected,
 )
 from kr_broker.base.precise import Precise
-from kr_broker.base.token_store import BrokerTokenStore
+from kr_broker.base.token_store import BrokerTokenStore, legacy_token_store_key, token_store_key
 from kr_broker.base.types import ApiName, Int, Num, Str, Strings
 from kr_broker.market_calendar import apply_market_calendar
 from kr_broker.toss_fee import pick_commission_rate
@@ -111,7 +111,6 @@ ORDER_TIME_IN_FORCE = ('DAY', 'CLS', 'OPG')
 
 # ---- 토큰 캐시 ----
 TOKEN_KEY_PREFIX = 'toss:token:'
-CLIENT_ID_KEY_LENGTH = 12
 TOSS_TOKEN_SAFETY_MARGIN_MS = 60_000
 TOSS_TOKEN_DEFAULT_TTL_MS = 24 * 60 * 60 * 1000
 TOKEN_FETCH_LOCK_TTL_MS = 90_000
@@ -210,13 +209,18 @@ class TossAuth:
                  store_of: Callable[[], Optional[BrokerTokenStore]] = lambda: None) -> None:
         self.client_id = client_id
         self.issue = issue
-        self.store_of = store_of
+        self.raw_store_of = store_of
         self.cached_token: Optional[Dict[str, Any]] = None
         self._lock = new_lock()
 
     @property
     def store_key(self) -> str:
-        return f'{TOKEN_KEY_PREFIX}{self.client_id[:CLIENT_ID_KEY_LENGTH]}'
+        return token_store_key(TOKEN_KEY_PREFIX, self.client_id)
+
+    def store_of(self) -> Any:
+        """저장소. 옛 키 형식(클라이언트 ID 앞 12자)을 쓰는 판과 함께 도는 동안 두 키를 함께 읽고 쓴다."""
+        store = self.raw_store_of()
+        return None if store is None else LegacyKeyTokenStore(store, {self.store_key: legacy_token_store_key(TOKEN_KEY_PREFIX, self.client_id)})
 
     def get_access_token(self) -> str:
         """유효한 액세스 토큰. 메모리 캐시, 토큰 저장소, 새 발급 순으로 찾는다. 같은 프로세스 안의 동시 갱신은 하나로 합친다."""

@@ -12,10 +12,10 @@
 import { refreshTokenWithLock } from '../token-refresh-lock';
 import { logger } from '../logger';
 import type { BrokerTokenStore } from '../options';
+import { legacyTokenStoreKey, tokenStoreKey, withLegacyTokenKeys } from '../token-store-key';
 
 /** 토큰 저장소 키의 접두사. 클라이언트 ID 앞 12자리로 구분해 전체 ID 가 저장소에 남지 않게 한다. */
 const TOKEN_KEY_PREFIX = 'toss:token:';
-const CLIENT_ID_KEY_LENGTH = 12;
 
 /** 만료 직전에 요청이 나가지 않도록 앞당기는 시간. */
 export const TOSS_TOKEN_SAFETY_MARGIN_MS = 60_000;
@@ -46,16 +46,22 @@ export class TossAuth {
     /**
      * @param clientId 저장소 키를 만드는 데 쓴다.
      * @param issue 토큰을 새로 발급받는 함수. 실패하면 던진다.
-     * @param storeOf 지금 쓸 토큰 저장소를 돌려주는 함수. 저장소가 없으면 `null` 이고, 그러면 프로세스 메모리 캐시만 쓴다.
+     * @param rawStoreOf 지금 쓸 토큰 저장소를 돌려주는 함수. 저장소가 없으면 `null` 이고, 그러면 프로세스 메모리 캐시만 쓴다.
      */
     constructor(
         private readonly clientId: string,
         private readonly issue: () => Promise<TossIssuedToken>,
-        private readonly storeOf: () => BrokerTokenStore | null = () => null,
+        private readonly rawStoreOf: () => BrokerTokenStore | null = () => null,
     ) {}
 
     private get storeKey(): string {
-        return `${TOKEN_KEY_PREFIX}${this.clientId.slice(0, CLIENT_ID_KEY_LENGTH)}`;
+        return tokenStoreKey(TOKEN_KEY_PREFIX, this.clientId);
+    }
+
+    /** 저장소. 옛 키 형식(클라이언트 ID 앞 12자)을 쓰는 판과 함께 도는 동안 두 키를 함께 읽고 쓴다. */
+    private storeOf(): BrokerTokenStore | null {
+        const store = this.rawStoreOf();
+        return store === null ? null : withLegacyTokenKeys(store, { [this.storeKey]: legacyTokenStoreKey(TOKEN_KEY_PREFIX, this.clientId) });
     }
 
     /**
@@ -145,17 +151,6 @@ export class TossAuth {
         }
     }
 
-    /** 저장소에 있는 토큰 문자열. 없거나 읽을 수 없으면 `null`. 만료 여부는 보지 않는다. */
-    private async readStoredAccessToken(store: BrokerTokenStore): Promise<string | null> {
-        const raw = await store.get(this.storeKey);
-        if (!raw) return null;
-        try {
-            return (JSON.parse(raw) as CachedToken).accessToken ?? null;
-        } catch {
-            return null;
-        }
-    }
-
     /**
      * 토큰 캐시를 비운다(메모리와 저장소).
      *
@@ -173,11 +168,9 @@ export class TossAuth {
         let storeKept = false;
         if (store !== null) {
             try {
-                if (force || await this.readStoredAccessToken(store) === failedToken) {
-                    await store.delete(this.storeKey);
-                } else {
-                    storeKept = true;
-                }
+                // 읽고 따로 지우면 그사이 다른 프로세스가 넣은 새 토큰을 지운다. 같은 토큰일 때만 지우는 원자적 삭제를 쓴다.
+                if (force) await store.delete(this.storeKey);
+                else storeKept = !await store.deleteIfAccessTokenEquals(this.storeKey, failedToken);
             } catch (err) {
                 logger.debug({ err }, '[toss] 저장소의 토큰을 지우지 못했다(메모리 캐시는 비웠다)');
             }

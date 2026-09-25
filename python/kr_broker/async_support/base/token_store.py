@@ -6,15 +6,52 @@
 
 import logging
 import os
-from typing import Any, Awaitable, Callable, Optional, TypeVar
+from typing import Any, Awaitable, Callable, Dict, Optional, TypeVar
 
 from kr_broker.async_support.base.runtime import maybe_await, sleep_seconds
 from kr_broker.base import functions as fn
-from kr_broker.base.token_store import DEFAULT_WAIT_SECONDS
+from kr_broker.base.token_store import DEFAULT_WAIT_SECONDS, _legacy_lock_key
 
 logger = logging.getLogger('kr_broker')
 
 T = TypeVar('T')
+
+
+class LegacyKeyTokenStore:
+    """`kr_broker/base/token_store.py` 의 `LegacyKeyTokenStore` 비동기 판. 감싼 저장소는 동기 구현이든 비동기 구현이든 된다."""
+
+    def __init__(self, store: Any, legacy_of: Dict[str, str]) -> None:
+        self.store = store
+        self.legacy_of = dict(legacy_of)
+
+    async def get(self, key: str) -> Optional[str]:
+        value = await maybe_await(self.store.get(key))
+        old = self.legacy_of.get(key)
+        return value if value is not None or old is None else await maybe_await(self.store.get(old))
+
+    async def set(self, key: str, value: str, ttl_ms: int) -> None:
+        await maybe_await(self.store.set(key, value, ttl_ms))
+        old = self.legacy_of.get(key)
+        if old is not None:
+            await maybe_await(self.store.set(old, value, ttl_ms))
+
+    async def delete(self, key: str) -> None:
+        await maybe_await(self.store.delete(key))
+        old = self.legacy_of.get(key)
+        if old is not None:
+            await maybe_await(self.store.delete(old))
+
+    async def delete_if_access_token_equals(self, key: str, access_token: str) -> bool:
+        current = await maybe_await(self.store.delete_if_access_token_equals(key, access_token))
+        old = self.legacy_of.get(key)
+        previous = await maybe_await(self.store.delete_if_access_token_equals(old, access_token)) if old is not None else False
+        return bool(current or previous)
+
+    async def try_lock(self, key: str, owner: str, ttl_ms: int) -> bool:
+        return await maybe_await(self.store.try_lock(_legacy_lock_key(self.legacy_of, key), owner, ttl_ms))
+
+    async def unlock(self, key: str, owner: str) -> None:
+        await maybe_await(self.store.unlock(_legacy_lock_key(self.legacy_of, key), owner))
 
 
 async def refresh_token_with_lock(label: str, store: Any, store_key: str, lock_ttl_ms: int,

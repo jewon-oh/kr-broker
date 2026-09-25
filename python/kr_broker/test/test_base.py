@@ -1,5 +1,7 @@
 """기반 계층(`kr_broker.base`) 단위 테스트. 기대값은 TypeScript 판이 도는 JavaScript 런타임(node)으로 계산한 값이다."""
 
+import hashlib
+import re
 from typing import Any, Dict, List, Optional
 
 import pytest
@@ -258,3 +260,45 @@ def test_refresh_token_with_lock_uses_other_process_token() -> None:
 
 def test_refresh_token_with_lock_without_store_issues() -> None:
     assert refresh_token_with_lock('[t]', None, 'k', 1000, lambda: None, lambda: 'new') == 'new'
+
+
+def test_token_store_key_hashes_whole_credential() -> None:
+    from kr_broker.base.token_store import legacy_token_store_key, token_store_key
+    a = token_store_key('toss:token:', 'client-shared-prefix-A')
+    b = token_store_key('toss:token:', 'client-shared-prefix-B')
+    assert a != b and re.fullmatch(r'toss:token:[0-9a-f]{32}', a) and 'client-shar' not in a
+    # TS 판(`tokenStoreKey`)과 같은 값이다. 두 판이 한 저장소를 나눠 쓴다.
+    assert token_store_key('kis:token:', 'kis-app-key-abcdefgh') == 'kis:token:' + hashlib.sha256(b'kis-app-key-abcdefgh').hexdigest()[:32]
+    assert legacy_token_store_key('toss:token:', 'client-shared-prefix-A') == 'toss:token:client-share'
+
+
+def test_legacy_key_token_store_reads_old_writes_both_and_locks_old() -> None:
+    from kr_broker.base.token_store import LegacyKeyTokenStore
+    data: Dict[str, str] = {'old': 'v-old'}
+    locks: List[str] = []
+
+    class Store:
+        def get(self, key: str) -> Optional[str]:
+            return data.get(key)
+
+        def set(self, key: str, value: str, ttl_ms: int) -> None:
+            data[key] = value
+
+        def delete(self, key: str) -> None:
+            data.pop(key, None)
+
+        def delete_if_access_token_equals(self, key: str, access_token: str) -> bool:
+            return False
+
+        def try_lock(self, key: str, owner: str, ttl_ms: int) -> bool:
+            locks.append(key)
+            return True
+
+        def unlock(self, key: str, owner: str) -> None:
+            pass
+
+    store = LegacyKeyTokenStore(Store(), {'new': 'old'})
+    assert store.get('new') == 'v-old'
+    store.set('new', 'v', 1)
+    assert data == {'old': 'v', 'new': 'v'}
+    assert store.try_lock('new:lock', 'me', 1) and locks == ['old:lock']

@@ -187,7 +187,8 @@ class FakeSession:
         self.max_active = 0
         self.lock = threading.Lock()
 
-    def request(self, method: str, url: str, headers: Optional[Dict[str, str]] = None, data: Any = None, timeout: Any = None) -> Any:
+    def request(self, method: str, url: str, headers: Optional[Dict[str, str]] = None, data: Any = None, timeout: Any = None,
+                allow_redirects: bool = True) -> Any:
         with self.lock:
             self.urls.append(url)
             self.active += 1
