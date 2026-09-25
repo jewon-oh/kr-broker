@@ -776,12 +776,16 @@ class toss(Exchange, ImplicitAPI):
 
     def fetch_market_calendar(self, market: str, params: Optional[Dict[str, Any]] = None) -> Any:
         """장 운영 캘린더(전일·당일·익일 영업일의 세션 시각) 원본. 30분 안에 받은 것은 다시 부르지 않는다(`params['refresh']` 로 강제).
-        받은 날짜별 개장 여부는 공용 휴장일 캘린더에도 넣는다."""
-        cached = self._calendars.get(market)
+        받은 날짜별 개장 여부는 공용 휴장일 캘린더에도 넣는다. `market` 은 `'KR'`·`'US'` 이고 대소문자를 가리지 않는다.
+        그 밖의 값은 요청 없이 `BadRequest` 다."""
+        country = market.upper() if isinstance(market, str) else None
+        if country not in ('KR', 'US'):
+            raise BadRequest(f"{self.id} fetchMarketCalendar() market must be 'KR' or 'US'")
+        cached = self._calendars.get(country)
         ttl = self.safe_integer(self.options, 'calendarTtl', CALENDAR_TTL_MS)
         if cached is not None and self.safe_bool(params, 'refresh', False) is not True and _now_ms() - cached['fetchedAt'] < ttl:
             return cached['value']
-        if market == 'KR':
+        if country == 'KR':
             value = self.unwrap(self.private_market_get_market_calendar_kr({}))
             self._calendars['KR'] = {'value': value, 'fetchedAt': _now_ms()}
             apply_market_calendar('KR', toss_kr_calendar_days(value))
@@ -933,19 +937,20 @@ class toss(Exchange, ImplicitAPI):
     def fetch_balance(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """잔고. 현금은 통화 키(`KRW`·`USD`)이고 값은 현금 매수 가능 금액이며, 보유 종목은 종목코드 키이고 `total` 이 보유 수량이다.
 
-        `params['symbol']` 을 주면 그 종목의 보유만, `params['currency']`(`KRW`·`USD`)를 주면 그 현금만 받는다. 달러만 받을 때
-        `options['krwIntegratedMargin']` 이 켜져 있으면 원화 예수금을 참고 환율로 환산해 더한다(전체 잔고에는 이중 계상이라 더하지 않는다).
+        `params['symbol']` 을 주면 그 종목의 보유만, `params['currency']`(`KRW`·`USD`)를 주면 그 현금만 받는다. 둘 다 주면 그 종목의 보유와
+        그 통화의 현금을 함께 받는다. 달러 현금을 받을 때 `options['krwIntegratedMargin']` 이 켜져 있으면 원화 예수금을 참고 환율로 환산해 더한다
+        (전체 잔고에는 이중 계상이라 더하지 않는다).
         """
         symbol = self.safe_string(params, 'symbol')
         currency = self.safe_string_upper(params, 'currency')
         if currency is not None and currency not in ('KRW', 'USD'):
             raise ArgumentsRequired(f"{self.id} fetchBalance() currency must be 'KRW' or 'USD'")
         holdings = None
-        if currency is None:
+        if currency is None or symbol is not None:
             query = {'symbol': self.market(symbol)['id']} if symbol is not None else {}
             holdings = self.unwrap(self.private_account_get_holdings(query))
         buying_power: Dict[str, Any] = {}
-        if symbol is None:
+        if symbol is None or currency is not None:
             for code in ([currency] if currency is not None else ['KRW', 'USD']):
                 buying_power[code] = self.unwrap(self.private_account_get_buying_power({'currency': code}))
         integrated = None
@@ -1185,12 +1190,14 @@ class toss(Exchange, ImplicitAPI):
         if self.safe_bool(params, 'confirmExecution', self.options.get('confirmExecution') is not False) is False:
             return self._build_created_order(draft, 'open')
         snapshot, last = self._confirm_order_execution(order_id, country)
+        # 마지막 조회의 `result` 가 `None` 이면 조회하지 못한 것과 같다. 주문은 이미 접수됐으므로 던지지 않고 미체결로 돌려준다.
         status = self.parse_order_status(self.safe_string(last, 'status')) if last is not None else 'open'
         return self._build_created_order(draft, status, snapshot=snapshot, raw=last)
 
     def edit_order(self, id: str, symbol: str, type: str, side: str, amount: Num = None, price: Num = None,
                    params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """주문을 정정한다. 국내는 가격과 수량을 함께(`amount` 필수), 미국은 가격만 정정한다(`amount` 를 주면 `NotSupported`).
+        미국은 고액주문 확인에 쓸 남은 수량을 정정 전에 주문 상세(`GET /orders/{orderId}`)로 읽는다.
         정정하면 새 주문번호가 나온다. `params['trigger']` 가 `True` 면 조건주문 정정이고, 조건 전체를 등록과 같은 인자로 다시 선언한다."""
         params = {} if params is None else params
         if self.safe_bool_2(params, 'trigger', 'stop', False) is True:
@@ -1213,7 +1220,11 @@ class toss(Exchange, ImplicitAPI):
             body['quantity'] = self.number_to_string(self.normalize_quantity(symbol, type, side, amount))
         if type == 'limit':
             body['price'] = self.price_to_precision(symbol, price)
-        notional = (amount if amount is not None else 0) * (price if price is not None else 0)
+        # 국내 명목가는 정정 수량 × 가격이다. 미국 정정은 수량을 받지 않으므로 주문 상세의 남은 수량 × 가격으로 본다.
+        if country == 'KR':
+            notional = (amount if amount is not None else 0) * (price if price is not None else 0)
+        else:
+            notional = self._us_edit_notional(id, price)
         if self._is_high_value(notional, country):
             body['confirmHighValueOrder'] = True
 
@@ -1236,6 +1247,21 @@ class toss(Exchange, ImplicitAPI):
             'status': 'open',
             'trades': [],
         }, market)
+
+    def _us_edit_notional(self, order_id: str, price: Num) -> float:
+        """미국 정정의 명목가. 주문 상세(`GET /orders/{orderId}`)의 남은 수량(주문 수량 − 체결 수량)에 새 가격을 곱한다.
+        가격이 없거나 조회가 실패하면 0 이라 표시 없이 정정한다. 표시가 필요한 주문이면 서버가 `confirm-high-value-required` 로 거절한다."""
+        if price is None:
+            return 0
+        try:
+            order = self.unwrap(self.private_account_get_orders_orderid({'orderId': order_id}))
+            quantity = self.safe_number(order, 'quantity')
+            filled = self.safe_number(self.safe_dict(order, 'execution'), 'filledQuantity', 0)
+            remaining = quantity - filled if quantity is not None else 0
+            return remaining * price if remaining > 0 else 0
+        except Exception:
+            logger.warning('[toss] 정정 전 주문 조회에 실패해 고액주문 표시 없이 정정한다(%s)', order_id, exc_info=True)
+            return 0
 
     def create_trigger_order(self, symbol: str, type: str, side: str, amount: float, price: Num = None, trigger_price: Num = None,
                              params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -1615,7 +1641,7 @@ class toss(Exchange, ImplicitAPI):
             'average': self.safe_string(execution, 'averageFilledPrice'),
             'cost': self.safe_string(execution, 'filledAmount'),
             'status': self.parse_order_status(self.safe_string(order, 'status')),
-            'fee': {'currency': self.safe_string(order, 'currency', market['quote']), 'cost': fee_cost} if fee_cost is not None else None,
+            'fee': {'currency': self.safe_string(order, 'currency', market['quote']), 'cost': self.parse_number(fee_cost)} if fee_cost is not None else None,
             'trades': [],
         }, market)
 

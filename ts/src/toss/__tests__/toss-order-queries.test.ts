@@ -321,6 +321,18 @@ describe('단건 조회', () => {
         await expect(exchange.fetchOrder('NOPE')).rejects.toBeInstanceOf(OrderNotFound);
     });
 
+    it('fee.cost 는 fees[0].cost 와 같은 숫자다(수수료와 세금의 합)', async () => {
+        installFakeToss({
+            'GET /api/v1/orders/O1': jsonOk(order('O1', '005930', {
+                side: 'SELL', status: 'FILLED', currency: 'KRW',
+                execution: { filledQuantity: '5', averageFilledPrice: '70100', filledAmount: '350500', commission: '52', tax: '630' },
+            })),
+        });
+        const fetched = await makeToss().fetchOrder('O1');
+        expect(fetched.fee).toEqual({ currency: 'KRW', cost: 682 });
+        expect(fetched.fee?.cost).toBe(fetched.fees?.[0]?.cost);
+    });
+
     it('trigger 는 조건주문 상세를 받는다', async () => {
         installFakeToss({
             'GET /api/v1/conditional-orders/C-1': jsonOk({ conditionalOrderId: 'C-1', symbol: '005930', type: 'SINGLE', status: 'COMPLETED', quantity: '3', first: { orderSide: 'SELL', triggerPrice: '65000' } }),

@@ -259,7 +259,7 @@ function isOrderInfoPeakWindow(now: Date = new Date()): boolean {
 }
 
 /** `execution` 을 체결 확정 폴링이 쓰는 스냅샷으로 옮긴다. 체결이 0 이면 `null`(기록할 사실이 없다). */
-function toExecutionSnapshot(order: TossOrder | undefined, country: TossMarketCountry): ExecutionSnapshot | null {
+function toExecutionSnapshot(order: TossOrder | null | undefined, country: TossMarketCountry): ExecutionSnapshot | null {
     const filled = Number(order?.execution?.filledQuantity) || 0;
     if (!(filled > 0)) return null;
 
@@ -1057,13 +1057,15 @@ export class toss extends Exchange {
 
     /**
      * 장 운영 캘린더(전일·당일·익일 영업일의 세션 시각)를 받아 온다. 30분 안에 받은 것은 다시 부르지 않는다(`params.refresh` 로 강제).
-     * 받은 날짜별 개장 여부는 공용 휴장일 캘린더에도 넣는다.
+     * 받은 날짜별 개장 여부는 공용 휴장일 캘린더에도 넣는다. `market` 은 `'KR'`·`'US'` 이고 대소문자를 가리지 않는다. 그 밖의 값은 요청 없이 `BadRequest` 다.
      */
-    async fetchMarketCalendar(market: TossMarketCountry, params: Dict = {}): Promise<TossKrMarketCalendar | TossUsMarketCalendar> {
-        const cached = this.calendars[market];
+    async fetchMarketCalendar(market: TossMarketCountry | Lowercase<TossMarketCountry>, params: Dict = {}): Promise<TossKrMarketCalendar | TossUsMarketCalendar> {
+        const country = String(market).toUpperCase();
+        if (country !== 'KR' && country !== 'US') throw new BadRequest(`${this.id} fetchMarketCalendar() market must be 'KR' or 'US'`);
+        const cached = this.calendars[country];
         const ttl = this.safeInteger(this.options, 'calendarTtl', CALENDAR_TTL_MS) as number;
         if (cached !== undefined && this.safeBool(params, 'refresh', false) !== true && Date.now() - cached.fetchedAt < ttl) return cached.value;
-        if (market === 'KR') {
+        if (country === 'KR') {
             const value = this.unwrap<TossKrMarketCalendar>(await this.privateMarketGetMarketCalendarKR({}));
             this.calendars.KR = { value, fetchedAt: Date.now() };
             applyMarketCalendar('KR', tossKrCalendarDays(value));
@@ -1262,8 +1264,9 @@ export class toss extends Exchange {
      * 종목의 평균단가·평가금액·종목명은 `balances[code].info` 에 있다. 조회에 실패하면 던진다.
      *
      * `params` 로 범위를 좁힐 수 있다.
-     * - `symbol`: 그 종목의 보유만 받는다(현금은 받지 않는다).
-     * - `currency`: `'KRW'` 또는 `'USD'` 현금만 받는다(보유 종목은 받지 않는다).
+     * - `symbol`: 그 종목의 보유만 받는다(`currency` 가 없으면 현금은 받지 않는다).
+     * - `currency`: `'KRW'` 또는 `'USD'` 현금만 받는다(`symbol` 이 없으면 보유 종목은 받지 않는다).
+     * - 둘 다 주면 그 종목의 보유와 그 통화의 현금을 함께 받는다.
      *
      * `currency: 'USD'` 로 달러만 받을 때, 통합증거금 옵션(`options.krwIntegratedMargin`)이 켜져 있으면 원화 예수금을 참고 환율로 환산해 달러 금액에 더한다.
      * 원화만 가진 계좌도 미국 주식을 살 수 있기 때문이다. 전체 잔고에는 원화와 달러가 이미 각각 실려 있으므로 합산하지 않는다(이중 계상이 된다).
@@ -1275,12 +1278,12 @@ export class toss extends Exchange {
             throw new ArgumentsRequired(`${this.id} fetchBalance() currency must be 'KRW' or 'USD'`);
         }
         let holdings: TossHoldingsOverview | undefined;
-        if (currency === undefined) {
+        if (currency === undefined || symbol !== undefined) {
             const query = symbol !== undefined ? { symbol: this.market(symbol).id } : {};
             holdings = this.unwrap<TossHoldingsOverview>(await this.privateAccountGetHoldings(query));
         }
         const buyingPower: Dictionary<TossBuyingPower> = {};
-        if (symbol === undefined) {
+        if (symbol === undefined || currency !== undefined) {
             for (const code of currency !== undefined ? [currency] : ['KRW', 'USD']) {
                 buyingPower[code] = this.unwrap<TossBuyingPower>(await this.privateAccountGetBuyingPower({ currency: code }));
             }
@@ -1574,11 +1577,13 @@ export class toss extends Exchange {
             return this.buildCreatedOrder({ ...draft, status: 'open' });
         }
         const { snapshot, last } = await this.confirmOrderExecution(orderId, country);
-        return this.buildCreatedOrder({ ...draft, snapshot, raw: last, status: last !== undefined ? this.parseOrderStatus(last.status) : 'open' });
+        // 마지막 조회의 `result` 가 `null` 이면 조회하지 못한 것과 같다. 주문은 이미 접수됐으므로 던지지 않고 미체결로 돌려준다.
+        return this.buildCreatedOrder({ ...draft, snapshot, raw: last ?? undefined, status: last != null ? this.parseOrderStatus(last.status) : 'open' });
     }
 
     /**
      * 주문을 정정한다. 국내는 가격과 수량을 함께 정정한다(`amount` 필수). 미국은 가격만 정정한다(`amount` 를 주면 `NotSupported` 다).
+     * 미국은 고액주문 확인에 쓸 남은 수량을 정정 전에 주문 상세(`GET /orders/{orderId}`)로 읽는다.
      * 정정하면 새 `orderId` 가 발급된다 — 반환한 `Order.id` 를 써야 한다.
      *
      * `params.trigger: true` 는 조건주문 정정이다(`modifyConditionalOrder` 로 넘긴다). 조건주문은 등록과 같은 인자
@@ -1606,7 +1611,8 @@ export class toss extends Exchange {
         if (country === 'KR') body.quantity = this.numberToString(this.normalizeQuantity(symbol, type, side, amount as number));
         if (type === 'limit') body.price = this.priceToPrecision(symbol, price);
 
-        const notional = (amount ?? 0) * (price ?? 0);
+        // 국내 명목가는 정정 수량 × 가격이다. 미국 정정은 수량을 받지 않으므로 주문 상세의 남은 수량 × 가격으로 본다.
+        const notional = country === 'KR' ? (amount ?? 0) * (price ?? 0) : await this.usEditNotional(id, price);
         if (await this.isHighValue(notional, country)) body.confirmHighValueOrder = true;
 
         const response = this.unwrap<TossOrderCreateResponse>(await this.privateAccountPostOrdersOrderIdModify(body));
@@ -1629,6 +1635,24 @@ export class toss extends Exchange {
             status: 'open',
             trades: [],
         }, market);
+    }
+
+    /**
+     * 미국 정정의 명목가. 주문 상세(`GET /orders/{orderId}`)의 남은 수량(주문 수량 − 체결 수량)에 새 가격을 곱한다.
+     * 가격이 없거나 조회가 실패하면 0 이라 표시 없이 정정한다. 표시가 필요한 주문이면 서버가 `confirm-high-value-required` 로 거절한다.
+     */
+    private async usEditNotional(orderId: string, price: Num): Promise<number> {
+        if (price === undefined) return 0;
+        try {
+            const order = this.unwrap<TossOrder | null>(await this.privateAccountGetOrdersOrderId({ orderId }));
+            const quantity = this.safeNumber(order, 'quantity');
+            const filled = this.safeNumber(this.safeDict(order, 'execution'), 'filledQuantity', 0) as number;
+            const remaining = quantity !== undefined ? quantity - filled : 0;
+            return remaining > 0 ? remaining * price : 0;
+        } catch (err) {
+            logger.warn({ err, orderId }, '[toss] 정정 전 주문 조회에 실패해 고액주문 표시 없이 정정한다');
+            return 0;
+        }
     }
 
     /**
@@ -1742,15 +1766,15 @@ export class toss extends Exchange {
     }
 
     /** 접수한 주문의 체결을 확정한다. 주문 상세를 예산 안에서 조회하고, 마지막으로 본 주문 원본도 함께 돌려준다. */
-    private async confirmOrderExecution(orderId: string, country: TossMarketCountry): Promise<{ snapshot: ExecutionSnapshot | null; last: TossOrder | undefined }> {
-        let last: TossOrder | undefined;
+    private async confirmOrderExecution(orderId: string, country: TossMarketCountry): Promise<{ snapshot: ExecutionSnapshot | null; last: TossOrder | null | undefined }> {
+        let last: TossOrder | null | undefined;
         const snapshot = await confirmExecution({
             label: '[toss]',
             orderId,
             exchange: 'toss',
             budget: this.getConfirmBudget(),
             probe: async () => {
-                const raw = this.unwrap<TossOrder>(await this.privateAccountGetOrdersOrderId({ orderId }));
+                const raw = this.unwrap<TossOrder | null>(await this.privateAccountGetOrdersOrderId({ orderId }));
                 last = raw;
                 return {
                     snapshot: toExecutionSnapshot(raw, country),
@@ -2096,7 +2120,7 @@ export class toss extends Exchange {
             average: this.safeString(execution, 'averageFilledPrice'),
             cost: this.safeString(execution, 'filledAmount'),
             status: this.parseOrderStatus(this.safeString(order, 'status')),
-            fee: feeCost !== undefined ? { currency: this.safeString(order, 'currency', market.quote), cost: feeCost } : undefined,
+            fee: feeCost !== undefined ? { currency: this.safeString(order, 'currency', market.quote), cost: this.parseNumber(feeCost) } : undefined,
             trades: [],
         }, market);
     }

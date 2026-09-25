@@ -22,7 +22,6 @@ KR_SESSION_ORDER = ('regularMarket', 'preMarket', 'afterMarket')
 FRACTIONAL_ORDER_CUTOFF_MS = 60 * 60 * 1000
 
 _BUSINESS_DAY_KEYS = ('previousBusinessDay', 'today', 'nextBusinessDay')
-_MISSING = object()
 
 
 def _now(now_ms: Optional[int]) -> int:
@@ -149,16 +148,16 @@ def _to_ymd(date: Any) -> str:
 
 
 def toss_us_calendar_days(calendar: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """미국 캘린더를 날짜별 개장 여부로 바꾼다. 네 세션 가운데 하나라도 있는 날이 열린 날이다."""
+    """미국 캘린더를 날짜별 개장 여부로 바꾼다. 네 세션 가운데 하나라도 있는 날이 열린 날이다.
+    세션이 `None` 이거나 키가 아예 없으면 그 세션은 없다. 날짜가 없는 항목은 건너뛴다."""
     if not calendar:
         return []
     opened: List[str] = []
     closed: List[str] = []
     for day in _days(calendar):
-        if not isinstance(day, dict):
+        if not isinstance(day, dict) or not isinstance(day.get('date'), str) or day.get('date') == '':
             continue
-        # TypeScript 판은 `!== null` 로 본다. 키가 아예 없는 세션은 있는 것으로 센다.
-        has_session = any(day.get(key, _MISSING) is not None for key in ('dayMarket', 'preMarket', 'regularMarket', 'afterMarket'))
+        has_session = any(day.get(key) is not None for key in ('dayMarket', 'preMarket', 'regularMarket', 'afterMarket'))
         (opened if has_session else closed).append(_to_ymd(day.get('date')))
     return expand_business_days(opened, closed)
 

@@ -47,6 +47,14 @@ def test_normalize_commission_rate_rejects_implausible(raw: str) -> None:
     assert normalize_commission_rate(raw) is None
 
 
+def test_normalize_commission_rate_null_is_unknown() -> None:
+    # 수수료율이 null 로 오면 무료(0%)가 아니라 모르는 값이다. 호출하는 쪽이 기본 요율을 쓴다.
+    assert normalize_commission_rate(None) is None
+    unknown = {'marketCountry': 'KR', 'commissionRate': None, 'startDate': '2026-08-01', 'endDate': None}
+    known = {'marketCountry': 'KR', 'commissionRate': '0.00025', 'startDate': None, 'endDate': None}
+    assert pick_commission_rate([unknown, known], 'KR', '2026-08-03') is None
+
+
 def test_pick_commission_rate() -> None:
     rows = [
         {'marketCountry': 'KR', 'commissionRate': '0', 'startDate': '2026-01-01', 'endDate': '2026-03-31'},
@@ -175,6 +183,18 @@ def test_toss_calendar_days() -> None:
                                 'nextBusinessDay': us_day('2026-12-28', '2026-12-29')})
     assert open_of(us, '20261225') is False and open_of(us, '20261224') is True and open_of(us, '20261228') is True
     assert toss_us_calendar_days(None) == []
+
+
+def test_toss_us_calendar_days_missing_session_keys_and_date() -> None:
+    # 세션 키가 아예 없는 날도 세션이 없는 날(닫힌 날)이다.
+    missing = toss_us_calendar_days({'previousBusinessDay': us_day('2026-12-24', '2026-12-25'), 'today': {'date': '2026-12-25'},
+                                     'nextBusinessDay': us_day('2026-12-28', '2026-12-29')})
+    assert open_of(missing, '20261225') is False and open_of(missing, '20261224') is True and open_of(missing, '20261228') is True
+    # 날짜가 없는 항목은 건너뛴다.
+    skipped = toss_us_calendar_days({'previousBusinessDay': {}, 'today': us_day('2026-12-24', '2026-12-25'),
+                                     'nextBusinessDay': us_day('2026-12-28', '2026-12-29')})
+    assert open_of(skipped, '20261224') is True and open_of(skipped, '20261228') is True
+    assert all(len(day['date']) == 8 and day['date'].isdigit() for day in skipped)
 
 
 # ============ 체결 확정 ============

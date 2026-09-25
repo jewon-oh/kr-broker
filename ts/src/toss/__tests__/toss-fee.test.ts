@@ -28,6 +28,11 @@ describe('normalizeCommissionRate', () => {
     it('숫자도 받는다', () => {
         expect(normalizeCommissionRate(0.00015)).toBe(0.00015);
     });
+
+    it('null·undefined 는 무료(0%)가 아니라 모르는 값(null)이다', () => {
+        expect(normalizeCommissionRate(null)).toBeNull();
+        expect(normalizeCommissionRate(undefined)).toBeNull();
+    });
 });
 
 describe('pickCommissionRate', () => {
@@ -53,6 +58,11 @@ describe('pickCommissionRate', () => {
     it('유효한 행이 없으면 null 이다', () => {
         expect(pickCommissionRate([rows[0]], 'KR', '2026-08-03')).toBeNull();
         expect(pickCommissionRate(rows, 'US', '2026-08-03')).toBe(0.001);
+    });
+
+    it('고른 행의 수수료율이 null 이면 0 이 아니라 null 이다(호출하는 쪽이 기본 요율을 쓴다)', () => {
+        const unknown = { marketCountry: 'KR' as const, commissionRate: null as unknown as string, startDate: '2026-08-01', endDate: null };
+        expect(pickCommissionRate([unknown, rows[1]], 'KR', '2026-08-03')).toBeNull();
     });
 });
 

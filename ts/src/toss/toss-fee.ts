@@ -19,11 +19,12 @@ const inBand = (rate: number): boolean => rate >= PLAUSIBLE_FEE_RATE.MIN && rate
  * 수수료율 응답을 소수 비율로 바꾼다.
  *
  * 값을 그대로 소수 비율로 읽어 범위에 들면 그것을 쓰고(공식 문서의 형식), 아니면 백분율로 보고 100으로 나눈 값이 범위에 드는지 본다.
- * 둘 다 범위 밖이면 `null` 이다. 0 은 무료 이벤트라 유효한 값이다.
+ * 둘 다 범위 밖이면 `null` 이다. 0 은 무료 이벤트라 유효한 값이다. 값이 없으면(`null`·`undefined`·빈 문자열) 무료가 아니라 모르는 값이라 `null` 이다.
  *
  * 두 해석이 모두 범위에 드는 값(0.1%~1% 사이의 소수 비율, 곧 `0.001`~`0.01`)은 문서 형식대로 소수 비율로 읽는다.
  */
-export function normalizeCommissionRate(raw: string | number): number | null {
+export function normalizeCommissionRate(raw: string | number | null | undefined): number | null {
+    if (raw === null || raw === undefined) return null;
     if (typeof raw === 'string' && raw.trim() === '') return null;
     const value = Number(raw);
     if (!Number.isFinite(value) || value < 0) return null;
@@ -49,7 +50,7 @@ export function pickCommissionRate(rows: readonly TossCommission[], country: Tos
     if (picked === undefined) return null;
     const rate = normalizeCommissionRate(picked.commissionRate);
     if (rate === null) {
-        logger.warn({ country, raw: picked.commissionRate }, '[toss] 수수료율이 있을 수 있는 범위 밖이라 기본 요율을 유지한다');
+        logger.warn({ country, raw: picked.commissionRate }, '[toss] 수수료율이 비었거나 있을 수 있는 범위 밖이라 기본 요율을 유지한다');
     }
     return rate;
 }
