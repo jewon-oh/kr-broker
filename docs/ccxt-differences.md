@@ -12,7 +12,7 @@
 | `has` | 메서드 이름을 키로 하고 값은 `true`, `false`, `'emulated'` 중 하나입니다 |
 | 메서드 이름 | `loadMarkets`, `fetchMarkets`, `fetchTicker`, `fetchTickers`, `fetchOrderBook`, `fetchOHLCV`, `fetchBalance`, `createOrder`, `cancelOrder`, `cancelAllOrders`, `fetchOrder`, `fetchOrders`, `fetchOpenOrders`, `fetchClosedOrders`, `fetchMyTrades`, `fetchTradingFee`, `setSandboxMode` |
 | 인자 순서 | `createOrder(symbol, type, side, amount, price, params)`, `fetchOHLCV(symbol, timeframe, since, limit, params)`, `fetchMyTrades(symbol, since, limit, params)`, `cancelOrder(id, symbol, params)` |
-| 기간 인자 | 기간 시작은 `since`(ms), 개수는 `limit`, 기간 끝은 `params.until`(ms)로 줍니다. 증권사 고유 조회도 이 규칙을 따릅니다 |
+| 기간 인자 | 기간 시작은 `since`(ms), 개수는 `limit`, 기간 끝은 `params.until`(ms)로 줍니다. 증권사 고유 조회도 이 규칙을 따릅니다. 예외는 README의 [기간 조회](../README.md#기간-조회)에 적었습니다 |
 | 자료 구조 | `Market`, `Ticker`, `OrderBook`, `Order`, `Trade`, `Balances`, `OHLCV` |
 | 실시간 | `watchTicker`, `watchTrades`, `watchOrderBook`, `watchOrders`는 호출할 때마다 다음 갱신을 돌려줍니다. 다 쓰면 `close()`로 연결을 닫고, 기다리던 `watch*`는 `ExchangeClosedByUser`로 끝납니다. `close()`는 실시간 연결이 없는 증권사에도 있습니다 |
 | 오류 계층 | `BaseError` 아래에 `ExchangeError`와 `OperationFailed` 두 갈래가 있고 클래스 이름이 같습니다 |
@@ -30,6 +30,7 @@ ccxt에 있는 오류 클래스 중 주식 거래에 필요한 것만 옮겼습�
 |---|---|---|
 | 주문 재시도 | `maxRetriesOnFailure`로 재시도 횟수를 정합니다. 주문을 재시도에서 빼는 규칙이 있는지는 확인 불가입니다 | 주문 요청은 시간 초과나 연결 끊김 뒤에 `maxRetriesOnFailure`와 관계없이 다시 보내지 않습니다. 증권사가 처리 전에 거절한 두 경우만 예외입니다 |
 | 체결 내역(`fetchMyTrades`) | 체결 한 건이 거래 하나입니다 | 한국투자증권과 토스증권은 체결 단위 조회가 없어 주문 하나를 거래 하나로 돌려줍니다. 수량과 가격은 그 주문의 누적 체결 수량과 평균가이고, id 는 주문 단위라 체결이 늘면 같은 id 가 더 큰 수량으로 다시 나옵니다. 거래를 쌓을 때는 id 로 덮어씁니다. 한국투자증권 거래의 시각은 주문 시각이고 `since`는 조회 시작일로만 씁니다 |
+| `fetchOHLCV`의 기본 인자 | `timeframe`을 주지 않으면 `'1m'`입니다 | 증권사마다 다릅니다. `timeframe`을 주지 않으면 한국투자증권과 KB증권은 일봉(`'1d'`)을, 토스증권은 1분봉(`'1m'`)을 돌려줍니다. `limit`을 주지 않으면 세 증권사 모두 최대 100개입니다. 여러 증권사를 같은 코드로 부를 때는 두 값을 직접 줍니다 |
 | `editOrder`의 `amount` | 정정 뒤 주문의 수량입니다 | 증권사마다 뜻이 다릅니다. 한국투자증권 국내는 `amount`만큼만 새 가격으로 옮기는 일부정정을 보냅니다(나머지 수량이 원래 가격에 남는다는 것은 공식 예제 설명에 기댄 추정입니다). KB증권 국내는 `params.partial: true`일 때만 일부정정하고, 없으면 `amount`를 무시하고 잔량 전체의 가격만 바꿉니다. 토스증권 국내는 `amount`를 정정 수량으로 보냅니다. 미국 정정은 KB증권과 토스증권이 가격만 바꿉니다 |
 | 접수 여부를 모르는 주문 | 대응하는 오류 클래스가 없습니다 | `OrderOutcomeUnknown`을 던집니다. `RequestTimeout`의 하위 클래스이고 `retryable`이 `false`입니다 |
 | 심볼 형식 | 대부분 암호화폐 쌍(`BTC/USDT`)입니다 | 국내는 `005930/KRW`, 미국은 `AAPL/USD`입니다. `BASE`는 종목코드나 티커입니다 |

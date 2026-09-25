@@ -37,6 +37,20 @@ export function kbsecChartParams(timeframe: string): { chrt_clsf: string; minute
     throw new NotSupported(`kbsec 이 지원하지 않는 timeframe 이다: ${timeframe}`);
 }
 
+/** 통합차트 조회건수(`inq_cnt`, 4자리)의 상한. */
+export const KBSEC_CHART_MAX = 9999;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** 봉 하나가 덮는 시간(ms)의 하한. 기간을 덮을 봉 수를 넉넉히 셀 때 쓰므로 월봉은 가장 짧은 달(28일)로 잡는다. */
+export function kbsecBarMs(timeframe: string): number {
+    const { chrt_clsf, minute } = kbsecChartParams(timeframe);
+    if (chrt_clsf === KBSEC_CHART_KIND.MINUTE) return Math.max(1, Number(minute)) * 60 * 1000;
+    if (chrt_clsf === KBSEC_CHART_KIND.WEEK) return 7 * DAY_MS;
+    if (chrt_clsf === KBSEC_CHART_KIND.MONTH) return 28 * DAY_MS;
+    return DAY_MS;
+}
+
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 /**

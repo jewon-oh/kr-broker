@@ -14,7 +14,7 @@ import { logger } from '../logger';
 import { etYmd } from '../us-market-hours';
 import { resampleCandles } from './candle-resample';
 import type { Exchange } from '../base';
-import { planWindows, mergeCandles } from './kis-candle-pagination';
+import { planWindows, mergeCandles, sliceCandleWindow, toKisDate } from './kis-candle-pagination';
 import type { KISDailyCandle, KISOverseasDailyCandle } from './kis-types';
 import type { OverseasMarket } from './kis-overseas-master';
 
@@ -50,6 +50,19 @@ const PERIOD_DAY_MULTIPLIER: Record<string, number> = {
 /** 날짜 마진 계수 (공휴일/주말 고려) */
 const DATE_MARGIN_FACTOR = 1.5;
 
+/** 해외 일/주/월봉 한 개가 차지하는 달력일 수. `since` 에서 `limit` 개를 덮는 기준일을 어림할 때 쓴다. */
+const OVERSEAS_PERIOD_DAYS: Record<string, number> = {
+    '1d': 1,
+    '1w': 7,
+    '1W': 7,
+    '1M': 31,
+};
+
+/** 기준일 어림에 더하는 달력일. `limit` 이 작아도 연휴를 덮는다. */
+const OVERSEAS_END_PAD_DAYS = 7;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 // ============ 서비스 ============
 
 export class KISCandleService {
@@ -58,21 +71,17 @@ export class KISCandleService {
 
     /**
      * 기간별(일/주/월) 캔들 조회
-     * KIS inquire-daily-itemchartprice 사용
+     * KIS inquire-daily-itemchartprice 사용. 조회 기간은 실행 환경의 시간대가 아니라 한국 날짜로 적는다.
      */
     async fetchDailyOHLCV(
         stockCode: string,
         periodCode: string,
         limit: number,
     ): Promise<number[][]> {
-        const today = new Date();
+        const now = this.exchange.milliseconds();
         const dayMultiplier = PERIOD_DAY_MULTIPLIER[periodCode] ?? 1;
-        const startDate = this.formatDate(
-            new Date(today.getTime() - limit * dayMultiplier * DATE_MARGIN_FACTOR * 24 * 60 * 60 * 1000)
-        );
-        const rows = await this.fetchDailyOHLCVRange(
-            stockCode, periodCode, startDate, this.formatDate(today),
-        );
+        const startDate = toKisDate(new Date(now - limit * dayMultiplier * DATE_MARGIN_FACTOR * DAY_MS));
+        const rows = await this.fetchDailyOHLCVRange(stockCode, periodCode, startDate, toKisDate(new Date(now)));
         return rows.slice(-limit);
     }
 
@@ -92,7 +101,7 @@ export class KISCandleService {
         neededCandles: number,
         opts: { nowMs?: number; onPage?: (i: number) => Promise<void> } = {},
     ): Promise<number[][]> {
-        const windows = planWindows(neededCandles, opts.nowMs ?? Date.now());
+        const windows = planWindows(neededCandles, opts.nowMs ?? this.exchange.milliseconds());
         if (windows.length === 0) return [];
 
         const pages: number[][][] = [];
@@ -180,10 +189,11 @@ export class KISCandleService {
         limit: number,
     ): Promise<number[][]> {
         try {
-            const allCandles: number[][] = [];
+            // 연속조회는 커서 시각의 봉을 다음 쪽에 다시 줄 수 있어, 시각마다 한 봉만 담는다.
+            const byTimestamp = new Map<number, number[]>();
             let cursor = '';
 
-            while (allCandles.length < limit) {
+            while (byTimestamp.size < limit) {
                 const response = await this.exchange.privateGetUapiDomesticStockV1QuotationsInquireTimeItemchartprice({
                     FID_COND_MRKT_DIV_CODE: 'J',
                     FID_INPUT_ISCD: stockCode,
@@ -206,7 +216,7 @@ export class KISCandleService {
                         `T${timeStr.slice(0, 2)}:${timeStr.slice(2, 4)}:${timeStr.slice(4, 6)}+09:00`
                     ).getTime();
 
-                    allCandles.push([
+                    byTimestamp.set(timestamp, [
                         timestamp,
                         Number(item.stck_oprc),
                         Number(item.stck_hgpr),
@@ -224,10 +234,10 @@ export class KISCandleService {
             }
 
             logger.info({
-                stockCode, minuteInterval, count: allCandles.length,
+                stockCode, minuteInterval, count: byTimestamp.size,
             }, '[KISCandleService] fetchMinuteOHLCV 완료');
 
-            const sorted = allCandles.sort((a, b) => a[0] - b[0]);
+            const sorted = [...byTimestamp.values()].sort((a, b) => a[0] - b[0]);
             if (minuteInterval <= 1) return sorted.slice(-limit);
 
             return this.resampleMinuteCandles(sorted, minuteInterval).slice(-limit);
@@ -252,12 +262,15 @@ export class KISCandleService {
      * KIS 한 번 호출당 100건 반환 — 더 필요하면 BYMD 를 이전 페이지 마지막 일자로 갱신해
      * 반복 호출. timeframe 은 1d/1w/1M 만 지원 (해외 분봉은 `kis.fetchOverseasMinuteOHLCV` 가 준다).
      * BYMD 는 미국 거래일이라 실행 환경의 시간대가 아니라 미국 동부 날짜로 적는다.
+     * `since <= 시각 <= until` 인 봉을 ccxt 규칙대로 `limit` 개 돌려준다. `since` 가 있으면 그 시각에 닿을 때까지 넘긴다.
      */
     async fetchOverseasDailyOHLCV(
         ticker: string,
         market: OverseasMarket,
         timeframe: string,
         limit: number,
+        since?: number,
+        until?: number,
     ): Promise<number[][]> {
         const gubn = OVERSEAS_GUBN_MAP[timeframe];
         if (!gubn) {
@@ -268,11 +281,18 @@ export class KISCandleService {
 
         try {
             const all: number[][] = [];
-            let bymd = etYmd(Date.now());
+            // `since` 가 있으면 첫 기준일을 `since` 에서 `limit` 개를 덮는 날로 당긴다.
+            let end = until ?? this.exchange.milliseconds();
+            if (since !== undefined) {
+                end = Math.min(end, since + (limit * OVERSEAS_PERIOD_DAYS[timeframe] * DATE_MARGIN_FACTOR + OVERSEAS_END_PAD_DAYS) * DAY_MS);
+            }
+            let bymd = etYmd(end);
+            let reachedSince = false;
+            let exhausted = false;
             const PAGE_SIZE = 100;
             const MAX_PAGES = 10;
 
-            for (let page = 0; page < MAX_PAGES && all.length < limit; page++) {
+            for (let page = 0; page < MAX_PAGES && (since === undefined ? all.length < limit : !reachedSince); page++) {
                 const response = await this.exchange.privateGetUapiOverseasPriceV1QuotationsDailyprice({
                     AUTH: '',
                     EXCD: market,
@@ -284,7 +304,10 @@ export class KISCandleService {
                 });
                 const data = response.output2 as KISOverseasDailyCandle[] | undefined;
 
-                if (!Array.isArray(data) || data.length === 0) break;
+                if (!Array.isArray(data) || data.length === 0) {
+                    exhausted = true;
+                    break;
+                }
 
                 for (const c of data) {
                     if (!c.xymd) continue;
@@ -292,6 +315,7 @@ export class KISCandleService {
                     const ts = new Date(
                         `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}T00:00:00Z`,
                     ).getTime();
+                    if (since !== undefined && ts <= since) reachedSince = true;
                     all.push([
                         ts,
                         Number(c.open),
@@ -302,10 +326,12 @@ export class KISCandleService {
                     ]);
                 }
 
-                if (data.length < PAGE_SIZE) break;
-                // 다음 페이지: 마지막 일자보다 하루 전을 BYMD 로
                 const lastXymd = data[data.length - 1].xymd;
-                if (!lastXymd) break;
+                if (data.length < PAGE_SIZE || !lastXymd) {
+                    exhausted = true;
+                    break;
+                }
+                // 다음 페이지: 마지막 일자보다 하루 전을 BYMD 로
                 const lastDate = new Date(
                     `${lastXymd.slice(0, 4)}-${lastXymd.slice(4, 6)}-${lastXymd.slice(6, 8)}T00:00:00Z`,
                 );
@@ -313,23 +339,19 @@ export class KISCandleService {
                 bymd = this.formatUtcDate(lastDate);
             }
 
+            if (since !== undefined && !reachedSince && !exhausted) {
+                logger.warn({ ticker, market, timeframe, since, pages: MAX_PAGES },
+                    '[KISCandleService] 페이지 상한에 걸려 since 까지 거슬러 가지 못했다');
+            }
             const sorted = all.sort((a, b) => a[0] - b[0]);
             logger.info({ ticker, market, timeframe, count: sorted.length },
                 '[KISCandleService] fetchOverseasDailyOHLCV 완료');
-            return sorted.slice(-limit);
+            return sliceCandleWindow(sorted, since, until, limit);
         } catch (err) {
             logger.error({ err, ticker, market, timeframe },
                 '[KISCandleService] 해외 기간별 캔들 조회 실패');
             throw err;
         }
-    }
-
-    /** 날짜를 YYYYMMDD 형식으로 변환 */
-    private formatDate(date: Date): string {
-        const y = date.getFullYear();
-        const m = String(date.getMonth() + 1).padStart(2, '0');
-        const d = String(date.getDate()).padStart(2, '0');
-        return `${y}${m}${d}`;
     }
 
     /** 날짜를 UTC 달력 기준 YYYYMMDD 로 변환 */

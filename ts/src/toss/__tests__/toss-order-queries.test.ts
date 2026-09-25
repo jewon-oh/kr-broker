@@ -272,6 +272,27 @@ describe('체결 완료 주문과 체결 내역', () => {
         expect(orders.map((o) => o.id)).toEqual(['NEW']);
     });
 
+    it('until 은 한국 날짜로 보내고, 같은 날 until 뒤에 낸 주문은 뺀다', async () => {
+        const fake = installFakeToss({
+            'GET /api/v1/orders': jsonOk({
+                orders: [
+                    closed('BEFORE', { orderedAt: '2026-07-16T02:00:00Z' }),
+                    closed('AT', { orderedAt: '2026-07-16T03:00:00Z' }),
+                    closed('AFTER', { orderedAt: '2026-07-16T05:00:00Z' }),
+                    closed('CANCELED', { orderedAt: '2026-07-16T05:00:00Z', status: 'CANCELED' }),
+                ],
+                hasNext: false,
+            }),
+        });
+        const until = Date.parse('2026-07-16T03:00:00Z');
+        const exchange = makeToss();
+        expect((await exchange.fetchClosedOrders('005930', undefined, undefined, { until })).map((o) => o.id)).toEqual(['BEFORE', 'AT']);
+        expect(fake.requestsTo('GET /api/v1/orders')[0].query.get('to')).toBe('2026-07-16');
+        expect(fake.requestsTo('GET /api/v1/orders')[0].query.has('until')).toBe(false);
+        // 같은 조회를 쓰는 취소 주문도 until 뒤를 뺀다.
+        expect(await exchange.fetchCanceledOrders('005930', undefined, undefined, { until })).toEqual([]);
+    });
+
     it('페이지 상한을 넘으면 거기서 자른다', async () => {
         const fake = installFakeToss({ 'GET /api/v1/orders': jsonOk({ orders: [closed('X')], hasNext: true, nextCursor: 'MORE' }) });
         await makeToss().fetchClosedOrders();

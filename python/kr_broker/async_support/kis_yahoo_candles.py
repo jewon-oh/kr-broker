@@ -17,6 +17,7 @@ from kr_broker.base import functions as fn
 from kr_broker.base.errors import BadSymbol, BaseError, ExchangeNotAvailable, NetworkError, NotSupported, RateLimitExceeded, RequestTimeout
 from kr_broker.broker_krx_code import is_krx_domestic_code
 from kr_broker.broker_time import timeframe_to_ms
+from kr_broker.kis_candle_pagination import slice_candle_window
 from kr_broker.kis_candle_resample import resample_candles
 
 logger = logging.getLogger('kr_broker')
@@ -105,28 +106,17 @@ def dedupe_by_timestamp_keep_last(candles: List[List[float]]) -> None:
     candles[:] = kept
 
 
-def to_yahoo_range(window_ms: float) -> str:
-    """요청 기간(ms)을 덮는 가장 작은 야후 `range` 값."""
-    days = window_ms / _DAY_MS
-    if days <= 1:
-        return '1d'
-    if days <= 5:
-        return '5d'
-    if days <= 30:
-        return '1mo'
-    if days <= 90:
-        return '3mo'
-    if days <= 180:
-        return '6mo'
-    if days <= 366:
-        return '1y'
-    if days <= 731:
-        return '2y'
-    if days <= 1826:
-        return '5y'
-    if days <= 3651:
-        return '10y'
-    return 'max'
+# 표준 야후 `range` 값과 그 달력일 수.
+YAHOO_RANGE_BUCKETS = [(1, '1d'), (5, '5d'), (30, '1mo'), (90, '3mo'), (180, '6mo'), (366, '1y'), (731, '2y'), (1826, '5y'), (3651, '10y')]
+
+
+def to_yahoo_range(window_ms: float, max_range_ms: Optional[float] = None) -> str:
+    """요청 기간(ms)을 덮는 가장 작은 야후 `range` 값. 그 값이 조회 폭 상한(`max_range_ms`)을 넘으면 야후가 422 로 거절하므로
+    일수(`59d`)로 적는다."""
+    bucket = next((b for b in YAHOO_RANGE_BUCKETS if window_ms <= b[0] * _DAY_MS), None)
+    if max_range_ms is not None and (bucket is None or bucket[0] * _DAY_MS > max_range_ms):
+        return f'{math.ceil(min(window_ms, max_range_ms) / _DAY_MS)}d'
+    return 'max' if bucket is None else bucket[1]
 
 
 def to_yahoo_ticker(stock_code: str, kr_market: Optional[str] = None) -> str:
@@ -148,11 +138,13 @@ async def _backoff(attempt: int) -> None:
 
 async def fetch_yahoo_candles(stock_code: str, timeframe: str = '1d', limit: int = 500, since: Optional[int] = None,
                               until: Optional[int] = None, kr_market: Optional[str] = None, exchange: Any = None) -> List[List[float]]:
-    """야후에서 봉 `[[시각(ms), 시가, 고가, 저가, 종가, 거래량], ...]` 을 받는다. 최신 `limit` 개를 돌려준다.
+    """야후에서 봉 `[[시각(ms), 시가, 고가, 저가, 종가, 거래량], ...]` 을 받는다. `since <= 시각 <= until` 인 봉을 ccxt 규칙대로
+    `limit` 개 돌려준다(`since` 가 있으면 가장 이른 것부터, 없으면 가장 최근 것부터).
 
     조회에 성공했는데 봉이 없을 때만 빈 목록이다. 없는 심볼은 `BadSymbol`, 재시도를 다 쓴 실패는 `ExchangeNotAvailable`·`RateLimitExceeded`·
     `NetworkError` 를 던진다. 지원하지 않는 타임프레임은 `NotSupported` 를 던진다.
-    `since` 가 있으면 `until`(없으면 지금)까지의 기간을 덮는 `range` 로, 없으면 타임프레임별 기본 `range` 로 조회한다.
+    `range` 는 지금에서 거슬러 센 기간이라 `since` 가 있으면 `since` 부터 지금까지를 덮는 값으로, 없으면 타임프레임별 기본값으로 조회한다.
+    분봉은 `since` 가 조회 폭 상한(`YAHOO_MAX_RANGE_MS`)보다 오래되면 상한 안의 봉만 받고 경고를 남긴다.
     요청은 `exchange.http_request` 로 보낸다(증권사 인스턴스).
     """
     yahoo_symbol = to_yahoo_ticker(stock_code, kr_market)
@@ -162,11 +154,14 @@ async def fetch_yahoo_candles(stock_code: str, timeframe: str = '1d', limit: int
         raise NotSupported(f"[YahooFinance] 미지원 타임프레임 '{timeframe}'. 지원: {', '.join(YAHOO_INTERVAL_MAP)}.")
     # period1·period2 는 Node 의 fetch 에서 400 이 나서 두 판 모두 range 로만 조회한다.
     max_range_ms = YAHOO_MAX_RANGE_MS.get(timeframe)
-    if since:
-        window_ms = (fn.milliseconds() if until is None else until) - since
-        if max_range_ms:
-            window_ms = min(window_ms, max_range_ms)
-        query = {'interval': interval, 'range': to_yahoo_range(window_ms)}
+    if since is not None:
+        now = fn.milliseconds()
+        window_ms = now - since
+        if max_range_ms is not None and window_ms > max_range_ms:
+            logger.warning('[YahooFinance] since 가 조회 폭 상한보다 오래돼 상한 안의 봉만 받는다 (symbol=%s, timeframe=%s, since=%s, earliest=%s)',
+                           yahoo_symbol, timeframe, since, now - max_range_ms)
+            window_ms = max_range_ms
+        query = {'interval': interval, 'range': to_yahoo_range(window_ms, max_range_ms)}
     else:
         query = {'interval': interval, 'range': YAHOO_DEFAULT_RANGE.get(timeframe, '1y')}
     url = f'{YAHOO_CHART_BASE_URL}/{yahoo_symbol}?{fn.form_urlencode(query)}'
@@ -234,7 +229,7 @@ async def fetch_yahoo_candles(stock_code: str, timeframe: str = '1d', limit: int
                 logger.debug('[YahooFinance] 캔들 조회 완료 (symbol=%s, timeframe=%s, raw=%d, valid=%d)', yahoo_symbol, timeframe,
                              len(timestamps), len(candles))
                 final = resample_candles(candles, 4 * 60) if needs_resample else candles
-                return final if limit is None else final[-limit:]
+                return slice_candle_window(final, since, until, limit)
             except Exception as err:
                 # 위에서 일부러 던진 오류는 그대로 올린다. 전송 실패(`NetworkError`·`RequestTimeout` 그 자체)와 해석 실패만 다시 보낸다.
                 if isinstance(err, BaseError) and type(err) not in (NetworkError, RequestTimeout):

@@ -1,10 +1,14 @@
-"""토스증권 도우미(수수료율, 시장 판정, 세션 판정, 체결 확정, 확장세션 지정가). 기대값은 TypeScript 판의 같은 테스트에서 가져왔다."""
+"""토스증권 도우미(수수료율, 시장 판정, 세션 판정, 체결 확정, 확장세션 지정가)와 봉 조회. 기대값은 TypeScript 판의 같은 테스트에서 가져왔다."""
 
 import calendar
+import logging
+import time
 from typing import Any, Dict, Iterator, List, Optional
 
 import pytest
 
+import kr_broker
+from kr_broker.base import functions as fn
 from kr_broker.execution_confirm import confirm_execution, fill_deviation_bps, resolve_confirm_budget, trade_list_probe
 from kr_broker.extended_session_limit import build_extended_session_limit
 from kr_broker.krx_sell_tax import krx_sell_tax_rate
@@ -279,3 +283,43 @@ def test_build_extended_session_limit() -> None:
     assert '기준가' in build_extended_session_limit(Source(ticker=None), order, '[T]')['error']
     assert '기준가' in build_extended_session_limit(Source(ticker=RuntimeError('boom')), order, '[T]')['error']
     assert '기준가' in build_extended_session_limit(Source(ticker=0), order, '[T]')['error']
+
+
+# ============ 봉 ============
+
+def _daily_pages(per_page: int) -> Any:
+    """`before`(없으면 07-21 0시) 전날부터 거꾸로 하루 한 봉씩, 쪽마다 `per_page` 봉을 준다. 종가는 그날의 일(日)이다."""
+    def candles(params: Dict[str, Any]) -> Dict[str, Any]:
+        before = params.get('before')
+        end = fn.parse8601(before) if before is not None else kst('2026-07-21T00:00:00')
+        rows = []
+        for i in range(per_page):
+            day = time.gmtime((end - (i + 1) * 86_400_000 + 9 * 3_600_000) // 1000)
+            stamp = f'{day.tm_year:04d}-{day.tm_mon:02d}-{day.tm_mday:02d}T00:00:00+09:00'
+            price = str(day.tm_mday)
+            rows.append({'timestamp': stamp, 'openPrice': price, 'highPrice': price, 'lowPrice': price, 'closePrice': price, 'volume': '100'})
+        return {'result': {'candles': rows, 'nextBefore': rows[-1]['timestamp']}}
+
+    return candles
+
+
+def test_fetch_ohlcv_since_reads_back_from_since() -> None:
+    broker = kr_broker.toss({'apiKey': 'k', 'secret': 's'})
+    seen: List[Dict[str, Any]] = []
+    pages = _daily_pages(3)
+    broker.private_market_get_candles = lambda params: seen.append(params) or pages(params)
+    rows = broker.fetch_ohlcv('005930', '1d', kst('2026-07-11T00:00:00'), 3)
+    assert [row[4] for row in rows] == [11, 12, 13]
+    assert [params['count'] for params in seen] == [200, 200, 200, 200]
+
+
+def test_fetch_ohlcv_warns_when_page_cap_stops_before_since(caplog: pytest.LogCaptureFixture) -> None:
+    broker = kr_broker.toss({'apiKey': 'k', 'secret': 's'})
+    seen: List[Dict[str, Any]] = []
+    pages = _daily_pages(1)
+    broker.private_market_get_candles = lambda params: seen.append(params) or pages(params)
+    with caplog.at_level(logging.WARNING, logger='kr_broker'):
+        rows = broker.fetch_ohlcv('005930', '1d', kst('2026-01-01T00:00:00'), 2)
+    assert len(seen) == 10
+    assert [row[4] for row in rows] == [11, 12]
+    assert any('since 까지 받지 못했다' in record.getMessage() for record in caplog.records)

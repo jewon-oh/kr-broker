@@ -627,14 +627,14 @@
             ]
         },
         {
-            "description": "fetchOHLCV 1분봉은 종료 시각을 시작 시각으로 바꾸고, since 이전 봉은 버리며 until 은 before 로 보낸다",
+            "description": "fetchOHLCV 1분봉은 종료 시각을 시작 시각으로 바꾸고 until 은 before 로 보낸다. since 가 있으면 200봉씩 받다가 since 에 닿은 쪽에서 멈춘다",
             "method": "fetchOHLCV",
             "args": ["005930", "1m", 1774400400000, 10, { "until": 1774400580000 }],
             "http": [
                 {
                     "request": {
                         "method": "GET",
-                        "url": "https://openapi.tossinvest.com/api/v1/candles?symbol=005930&interval=1m&count=10&before=2026-03-25T01%3A03%3A00.000Z&adjusted=true",
+                        "url": "https://openapi.tossinvest.com/api/v1/candles?symbol=005930&interval=1m&count=200&before=2026-03-25T01%3A03%3A00.000Z&adjusted=true",
                         "headers": { "Authorization": "Bearer tok-stored" },
                         "body": null
                     },
@@ -680,11 +680,23 @@
                             }
                         }
                     }
-                },
+                }
+            ],
+            "output": [
+                [1774400400000, 70100, 70100, 70100, 70100, 10],
+                [1774400460000, 70200, 70200, 70200, 70200, 11],
+                [1774400520000, 70300, 70300, 70300, 70300, 12]
+            ]
+        },
+        {
+            "description": "fetchOHLCV 에 먼 과거 since 를 주면 since 에 닿을 때까지 거슬러 받고 since 부터 limit 개를 돌려준다(최근 limit 개가 아니다)",
+            "method": "fetchOHLCV",
+            "args": ["005930", "1d", 1773759600000, 2],
+            "http": [
                 {
                     "request": {
                         "method": "GET",
-                        "url": "https://openapi.tossinvest.com/api/v1/candles?symbol=005930&interval=1m&count=7&before=2026-03-25T10%3A00%3A00%2B09%3A00&adjusted=true",
+                        "url": "https://openapi.tossinvest.com/api/v1/candles?symbol=005930&interval=1d&count=200&adjusted=true",
                         "headers": { "Authorization": "Bearer tok-stored" },
                         "body": null
                     },
@@ -694,32 +706,81 @@
                             "result": {
                                 "candles": [
                                     {
-                                        "timestamp": "2026-03-25T09:59:00+09:00",
-                                        "openPrice": "69900",
-                                        "highPrice": "69900",
-                                        "lowPrice": "69900",
-                                        "closePrice": "69900",
+                                        "timestamp": "2026-03-24T00:00:00+09:00",
+                                        "openPrice": "70500",
+                                        "highPrice": "70500",
+                                        "lowPrice": "70500",
+                                        "closePrice": "70500",
                                         "volume": "100"
                                     },
                                     {
-                                        "timestamp": "2026-03-25T09:58:00+09:00",
-                                        "openPrice": "69800",
-                                        "highPrice": "69800",
-                                        "lowPrice": "69800",
-                                        "closePrice": "69800",
+                                        "timestamp": "2026-03-23T00:00:00+09:00",
+                                        "openPrice": "69500",
+                                        "highPrice": "69500",
+                                        "lowPrice": "69500",
+                                        "closePrice": "69500",
                                         "volume": "100"
                                     }
                                 ],
-                                "nextBefore": "2026-03-25T09:58:00+09:00"
+                                "nextBefore": "2026-03-23T00:00:00+09:00"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/candles?symbol=005930&interval=1d&count=200&before=2026-03-23T00%3A00%3A00%2B09%3A00&adjusted=true",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "candles": [
+                                    {
+                                        "timestamp": "2026-03-20T00:00:00+09:00",
+                                        "openPrice": "68500",
+                                        "highPrice": "68500",
+                                        "lowPrice": "68500",
+                                        "closePrice": "68500",
+                                        "volume": "100"
+                                    },
+                                    {
+                                        "timestamp": "2026-03-19T00:00:00+09:00",
+                                        "openPrice": "68000",
+                                        "highPrice": "68000",
+                                        "lowPrice": "68000",
+                                        "closePrice": "68000",
+                                        "volume": "100"
+                                    },
+                                    {
+                                        "timestamp": "2026-03-18T00:00:00+09:00",
+                                        "openPrice": "67500",
+                                        "highPrice": "67500",
+                                        "lowPrice": "67500",
+                                        "closePrice": "67500",
+                                        "volume": "100"
+                                    },
+                                    {
+                                        "timestamp": "2026-03-17T00:00:00+09:00",
+                                        "openPrice": "67000",
+                                        "highPrice": "67000",
+                                        "lowPrice": "67000",
+                                        "closePrice": "67000",
+                                        "volume": "100"
+                                    }
+                                ],
+                                "nextBefore": "2026-03-17T00:00:00+09:00"
                             }
                         }
                     }
                 }
             ],
             "output": [
-                [1774400400000, 70100, 70100, 70100, 70100, 10],
-                [1774400460000, 70200, 70200, 70200, 70200, 11],
-                [1774400520000, 70300, 70300, 70300, 70300, 12]
+                [1773759600000, 67500, 67500, 67500, 67500, 100],
+                [1773846000000, 68000, 68000, 68000, 68000, 100]
             ]
         },
         {
@@ -4159,6 +4220,127 @@
                     "timestamp": 1774407600000,
                     "datetime": "2026-03-25T03:00:00.000Z",
                     "lastTradeTimestamp": 1774407602000,
+                    "symbol": "005930/KRW",
+                    "type": "limit",
+                    "timeInForce": "DAY",
+                    "side": "buy",
+                    "price": 70000,
+                    "amount": 5,
+                    "filled": 5,
+                    "average": 70000,
+                    "cost": 350000,
+                    "status": "closed",
+                    "trades": [],
+                    "fees": [],
+                    "remaining": 0,
+                    "postOnly": false
+                }
+            ]
+        },
+        {
+            "description": "fetchClosedOrders 는 until 을 한국 날짜로 보내고, 같은 날 until 뒤에 낸 주문은 빼며 뺀 주문을 limit 에 세지 않는다",
+            "method": "fetchClosedOrders",
+            "args": [null, null, 1, { "until": 1774407600000 }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders?status=CLOSED&limit=100&to=2026-03-25",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "orders": [
+                                    {
+                                        "orderId": "ORD-0041",
+                                        "symbol": "005930",
+                                        "side": "BUY",
+                                        "orderType": "LIMIT",
+                                        "timeInForce": "DAY",
+                                        "status": "FILLED",
+                                        "price": "70000",
+                                        "quantity": "5",
+                                        "currency": "KRW",
+                                        "orderedAt": "2026-03-25T05:00:00Z",
+                                        "execution": {
+                                            "filledQuantity": "5",
+                                            "averageFilledPrice": "70000",
+                                            "filledAmount": "350000",
+                                            "filledAt": "2026-03-25T05:00:01Z"
+                                        }
+                                    }
+                                ],
+                                "hasNext": true,
+                                "nextCursor": "cur-9"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders?status=CLOSED&limit=100&to=2026-03-25&cursor=cur-9",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "orders": [
+                                    {
+                                        "orderId": "ORD-0040",
+                                        "symbol": "005930",
+                                        "side": "BUY",
+                                        "orderType": "LIMIT",
+                                        "timeInForce": "DAY",
+                                        "status": "FILLED",
+                                        "price": "70000",
+                                        "quantity": "5",
+                                        "currency": "KRW",
+                                        "orderedAt": "2026-03-25T02:30:00Z",
+                                        "execution": {
+                                            "filledQuantity": "5",
+                                            "averageFilledPrice": "70000",
+                                            "filledAmount": "350000",
+                                            "filledAt": "2026-03-25T02:30:01Z"
+                                        }
+                                    }
+                                ],
+                                "hasNext": false,
+                                "nextCursor": null
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "info": {
+                        "orderId": "ORD-0040",
+                        "symbol": "005930",
+                        "side": "BUY",
+                        "orderType": "LIMIT",
+                        "timeInForce": "DAY",
+                        "status": "FILLED",
+                        "price": "70000",
+                        "quantity": "5",
+                        "currency": "KRW",
+                        "orderedAt": "2026-03-25T02:30:00Z",
+                        "execution": {
+                            "filledQuantity": "5",
+                            "averageFilledPrice": "70000",
+                            "filledAmount": "350000",
+                            "filledAt": "2026-03-25T02:30:01Z"
+                        }
+                    },
+                    "id": "ORD-0040",
+                    "timestamp": 1774405800000,
+                    "datetime": "2026-03-25T02:30:00.000Z",
+                    "lastTradeTimestamp": 1774405801000,
                     "symbol": "005930/KRW",
                     "type": "limit",
                     "timeInForce": "DAY",

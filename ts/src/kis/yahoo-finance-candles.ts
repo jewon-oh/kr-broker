@@ -15,6 +15,7 @@ import { logger } from '../logger';
 import { resampleCandles } from './candle-resample';
 import { timeframeToMs } from '../broker-time';
 import { isKrxDomesticCode } from './kis-types';
+import { sliceCandleWindow } from './kis-candle-pagination';
 
 // ============ 상수 ============
 
@@ -192,7 +193,9 @@ export function dedupeByTimestampKeepLast(candles: number[][]): void {
  * @param since 시작 시간 (ms timestamp, 선택)
  * @param until 종료 시간 (ms timestamp, 선택)
  * @param krMarket KOSPI/KOSDAQ 구분 — 미전달 시 .KS 기본값 (KOSDAQ 종목은 .KQ 필요)
- * @returns CCXT 호환 OHLCV: [[timestamp, open, high, low, close, volume], ...]
+ * @returns CCXT 호환 OHLCV: [[timestamp, open, high, low, close, volume], ...]. `since <= 시각 <= until` 인 봉을
+ *   ccxt 규칙대로 `limit` 개 준다(`since` 가 있으면 가장 이른 것부터, 없으면 가장 최근 것부터).
+ *   분봉은 `since` 가 조회 폭 상한(`YAHOO_MAX_RANGE_MS`)보다 오래되면 상한 안의 봉만 받고 경고를 남긴다.
  * @throws NotSupported 야후가 주지 않는 타임프레임
  */
 export async function fetchYahooCandles(
@@ -221,12 +224,17 @@ export async function fetchYahooCandles(
 
     // 요청 윈도 → Yahoo `range` 버킷 매핑.
     // undici(Node fetch)는 period1/period2 intraday 요청에 HTTP 400 을 받으므로 항상 range 로 조회한다.
-    // range 는 "지금까지"를 반환하고, 끝에서 최근 limit개만 남긴다.
+    // range 는 지금에서 거슬러 센 기간이라 since 부터 지금까지를 덮게 고르고, 받은 봉을 since·until 로 거른다.
     const maxRangeMs = YAHOO_MAX_RANGE_MS[timeframe];
-    if (since) {
-        let windowMs = (until ?? Date.now()) - since;
-        if (maxRangeMs) windowMs = Math.min(windowMs, maxRangeMs);
-        params.set('range', toYahooRange(windowMs));
+    if (since !== undefined) {
+        const now = Date.now();
+        let windowMs = now - since;
+        if (maxRangeMs !== undefined && windowMs > maxRangeMs) {
+            logger.warn({ yahooSymbol, timeframe, since, earliest: now - maxRangeMs },
+                '[YahooFinance] since 가 조회 폭 상한보다 오래돼 상한 안의 봉만 받는다');
+            windowMs = maxRangeMs;
+        }
+        params.set('range', toYahooRange(windowMs, maxRangeMs));
     } else {
         params.set('range', YAHOO_DEFAULT_RANGE[timeframe] ?? '1y');
     }
@@ -325,8 +333,7 @@ export async function fetchYahooCandles(
                     ? resampleCandles(candles, 4 * 60)
                     : candles;
 
-                // 최신 limit개만 반환
-                return finalCandles.slice(-limit);
+                return sliceCandleWindow(finalCandles, since, until, limit);
             } catch (err) {
                 if (err instanceof BaseError) throw err;
                 // 네트워크/타임아웃 = 일시적 → 재시도.
@@ -348,23 +355,25 @@ export async function fetchYahooCandles(
 
 // ============ 내부 유틸 ============
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** 표준 Yahoo range 값과 그 달력일 수. */
+const YAHOO_RANGE_BUCKETS: ReadonlyArray<[number, string]> = [
+    [1, '1d'], [5, '5d'], [30, '1mo'], [90, '3mo'], [180, '6mo'], [366, '1y'], [731, '2y'], [1826, '5y'], [3651, '10y'],
+];
+
 /**
  * 요청 윈도(ms) → Yahoo `range` 버킷.
  * undici 가 period1/period2 를 400 처리하므로 range 로만 조회한다. 표준 Yahoo range 값 중
- * 요청 윈도를 덮는 최소 버킷을 고른다(약간 넘치면 호출부가 limit 슬라이스로 정리).
+ * 요청 윈도를 덮는 최소 버킷을 고른다(넘친 봉은 받은 뒤 since·until 로 거른다).
+ * 그 버킷이 조회 폭 상한(`maxRangeMs`)을 넘으면 야후가 422 로 거절하므로 일수(`59d`)로 적는다.
  */
-function toYahooRange(windowMs: number): string {
-    const days = windowMs / (24 * 60 * 60 * 1000);
-    if (days <= 1) return '1d';
-    if (days <= 5) return '5d';
-    if (days <= 30) return '1mo';
-    if (days <= 90) return '3mo';
-    if (days <= 180) return '6mo';
-    if (days <= 366) return '1y';
-    if (days <= 731) return '2y';
-    if (days <= 1826) return '5y';
-    if (days <= 3651) return '10y';
-    return 'max';
+function toYahooRange(windowMs: number, maxRangeMs?: number): string {
+    const bucket = YAHOO_RANGE_BUCKETS.find(([days]) => windowMs <= days * DAY_MS);
+    if (maxRangeMs !== undefined && (bucket === undefined || bucket[0] * DAY_MS > maxRangeMs)) {
+        return `${Math.ceil(Math.min(windowMs, maxRangeMs) / DAY_MS)}d`;
+    }
+    return bucket?.[1] ?? 'max';
 }
 
 /**
