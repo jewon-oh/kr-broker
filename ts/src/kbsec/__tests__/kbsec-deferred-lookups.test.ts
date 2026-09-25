@@ -130,6 +130,21 @@ describe('fetchOverseasCandles', () => {
         expect(kbsecUsCandleTimestamp('20260230', '')).toBeUndefined();
     });
 
+    it('범위를 넘는 시각(240000, 093060)은 다음 날이나 다음 분으로 넘기지 않고 버린다', () => {
+        expect(kbsecUsCandleTimestamp('20260922', '240000')).toBeUndefined();
+        expect(kbsecUsCandleTimestamp('20260922', '093060')).toBeUndefined();
+        expect(kbsecUsCandleTimestamp('20260922', '93000')).toBe(Date.UTC(2026, 8, 22, 13, 30, 0));
+    });
+
+    it('해외 봉에서 읽을 수 없는 시각(240000)의 행은 버린다', async () => {
+        const row = (tm: string, close: string) => ({ dt: '20260922', tm, opn_prc_p4: '178', hgh_prc_p4: '181', lw_prc_p4: '177.5', cls_prc_p4: close, vlm: '10', dl_tw_amt: '1800' });
+        routeTr(mockFetch, { [KBSEC_TR.QUOTE_US]: quoteOnNys, [KBSEC_TR.CHART_US]: { Record1: [row('240000', '181'), row('093000', '180.5')] } });
+
+        const chart = await newExchange().fetchOverseasCandles('AAPL/USD', 'minute');
+
+        expect(chart.candles.map((c) => [c.timestamp, c.close])).toEqual([[Date.UTC(2026, 8, 22, 13, 30, 0), 180.5]]);
+    });
+
     it('국내 봉 시각은 한국 시각으로 읽고, 달력에 없는 날짜나 읽을 수 없는 시각의 봉은 버린다', () => {
         expect(kbsecCandleTimestamp('20260922', '93000')).toBe(Date.UTC(2026, 8, 22, 0, 30, 0));
         expect(kbsecCandleTimestamp('20260922', '')).toBe(Date.UTC(2026, 8, 21, 15, 0, 0));

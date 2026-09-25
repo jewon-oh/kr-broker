@@ -3,7 +3,7 @@
  */
 
 import { NotSupported } from '../base/errors';
-import { kstTimestampOf, strictKstTimestampOf } from '../base/Exchange';
+import { strictKstTimestampOf } from '../base/Exchange';
 import { etWallClockToUtcMs } from '../us-market-hours';
 import { KBSEC_CHART_KIND } from './kbsec-types';
 
@@ -64,13 +64,13 @@ export function kbsecCandleTimestamp(dt: string, tm: string): number | undefined
 /**
  * 해외 차트(`GSC10060`) 봉의 `dt`와 `tm` → UTC 밀리초. 두 값은 미국 동부 현지 시각이다(조회시간 `inq_tm`만 한국 시각이다).
  * 서머타임은 `etWallClockToUtcMs`가 반영한다. 일봉은 시각이 비어 현지 자정이 된다.
- * 일자를 읽을 수 없거나 달력에 없는 날짜면 `undefined` 다.
+ * 일자나 시각을 읽을 수 없거나 달력에 없는 날짜면 `undefined` 다.
  */
 export function kbsecUsCandleTimestamp(dt: string, tm: string): number | undefined {
+    // 달력에 없는 날짜와 범위를 넘는 시각(`240000`)은 `etWallClockToUtcMs` 가 다른 날이나 시각으로 넘기므로 버린다(검증만 `strictKstTimestampOf` 에 맡긴다).
+    if (strictKstTimestampOf(dt.trim(), tm.trim()) === undefined) return undefined;
     const date = /^(\d{4})(\d{2})(\d{2})$/.exec(dt.trim());
-    // 달력에 없는 날짜는 `etWallClockToUtcMs` 가 다른 날로 넘기므로 버린다(검증만 `kstTimestampOf` 에 맡긴다).
-    if (!date || kstTimestampOf(dt.trim()) === undefined) return undefined;
     const time = /^(\d{2})(\d{2})(\d{2})$/.exec(tm.trim() === '' ? '000000' : tm.trim().padStart(6, '0'));
-    if (!time) return undefined;
+    if (!date || !time) return undefined;
     return etWallClockToUtcMs(Number(date[1]), Number(date[2]), Number(date[3]), Number(time[1]), Number(time[2])) + Number(time[3]) * 1000;
 }
