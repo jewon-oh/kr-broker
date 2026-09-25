@@ -64,6 +64,17 @@ const broker = new kis({ apiKey, secret, uid, sandbox: true });
 | `createDaytimeOrder`, `createDerivativeOrder`, `createBondOrder`, `createOverseasDerivativeOrder` | 없음. 이 시장들의 시간표는 라이브러리에 없습니다 |
 | 예약주문(`createReservedOrder`, `createOverseasReservedOrder`) | 없음. 장 밖에 내는 주문입니다 |
 
+## cancelAllOrders는 항목의 status로 확인합니다
+
+`cancelAllOrders()`는 미체결 주문을 조회해 하나씩 취소합니다. 일부를 취소하지 못해도 던지지 않습니다. 세 증권사 모두 미체결 조회로 받은 주문을 항목으로 반환합니다.
+
+- 취소된 주문은 `status`가 `canceled`이고, 취소 응답 원문이 `info.cancelResponse`에 있습니다.
+- 취소하지 못한 주문은 원래 상태(`open`)로 남습니다. 오류 메시지는 `info.cancelError`에, 오류의 `detail`은 `info.cancelErrorDetail`에 있습니다.
+- 토스증권은 취소하려는 사이에 끝난 주문을 원인 코드대로 `closed`, `canceled`, `rejected`로 옮깁니다.
+- 미체결 조회가 실패하거나 쪽 상한에서 잘리면 하나도 취소하지 않고 던집니다.
+
+반환값을 보지 않으면 취소되지 않은 주문을 놓칩니다. `status`가 `open`인 항목이 남았는지 확인하십시오.
+
 ## OrderOutcomeUnknown이 나오면 재주문하지 않습니다
 
 `OrderOutcomeUnknown`은 주문 요청이 시간 초과나 연결 끊김으로 끝났거나, 증권사 오류 코드 없는 5xx 나 해석할 수 없는 응답을 받았다는 뜻입니다. 증권사가 주문을 접수했는지 알 수 없습니다.

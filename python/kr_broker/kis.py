@@ -2102,20 +2102,21 @@ class kis(Exchange, ImplicitAPI):
         }, self._market_of(instrument))
 
     def cancel_all_orders(self, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        """미체결 주문을 모두 취소한다. 종목을 주면 그 종목만이다. 하나라도 취소하지 못하면 나머지를 다 시도한 뒤 첫 실패를 던진다.
-        살아 있을 수 있는 주문을 성공으로 돌려주지 않기 위해서다. TypeScript 판은 동시에 보내고 이 판은 같은 순서로 차례로 보낸다.
+        """미체결 주문을 모두 취소한다. 종목을 주면 그 종목만이다. 취소를 시도한 주문마다 미체결 조회로 받은 주문을 항목으로 돌려준다.
+        취소된 항목은 `status: 'canceled'` 이고 취소 응답 원문이 `info['cancelResponse']` 에 있다. 취소하지 못한 항목은 원래 상태(`open`)이고
+        `info['cancelError']`(메시지)와 `info['cancelErrorDetail']`(오류의 `detail`)이 있다. 일부가 실패해도 던지지 않으므로 항목의 `status` 를 확인한다.
+        미체결 조회가 실패하거나 잘리면 하나도 취소하지 않고 던진다. TypeScript 판은 동시에 보내고 이 판은 같은 순서로 차례로 보낸다.
         국내 취소에는 공식 예제처럼 미체결 행의 주문채번지점번호(`ord_gno_brno`)를 원주문 조직번호로 싣는다."""
         open_orders = self.fetch_open_orders(symbol, None, None, params)
         results: List[Dict[str, Any]] = []
-        first_error: Optional[BaseException] = None
         for order in open_orders:
             try:
-                results.append(self.cancel_order(order['id'], order.get('symbol'), self._cancel_params_of(order)))
+                canceled = self.cancel_order(order['id'], order.get('symbol'), self._cancel_params_of(order))
+                results.append(self.extend(order, {'status': 'canceled', 'info': self.extend(order.get('info'), {'cancelResponse': canceled.get('info')})}))
             except Exception as error:
-                if first_error is None:
-                    first_error = error
-        if first_error is not None:
-            raise first_error
+                logger.warning('[kis] 주문 취소 실패(%s): %s', order.get('id'), error)
+                info = self.extend(order.get('info'), {'cancelError': str(error), 'cancelErrorDetail': getattr(error, 'detail', None)})
+                results.append(self.extend(order, {'info': info}))
         return results
 
     def _cancel_params_of(self, order: Dict[str, Any]) -> Dict[str, Any]:

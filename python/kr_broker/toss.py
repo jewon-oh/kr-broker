@@ -1939,8 +1939,9 @@ class toss(Exchange, ImplicitAPI):
 
     def cancel_all_orders(self, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """미체결 주문을 모두 취소한다(토스에는 전체 취소가 없어 조회한 주문을 하나씩 취소한다). `params['includeTrigger']` 면 조건주문도 취소한다.
-        돌려주는 목록은 대상 주문 전부다. 취소된 것은 `status: 'canceled'`, 취소하지 못한 것은 원래 상태에 `info['cancelError']` 가 실린다.
-        취소하려는 사이에 끝난 주문은 원인 코드(`info['cancelErrorDetail']`)대로 옮긴다(`already-filled` 는 `closed`, `already-canceled` 는
+        돌려주는 목록은 대상 주문 전부이고, 항목은 미체결 조회로 받은 주문이다. 취소된 것은 `status: 'canceled'` 이고 취소 응답 원문이
+        `info['cancelResponse']` 에 있다. 취소하지 못한 것은 원래 상태에 `info['cancelError']`(메시지)와 `info['cancelErrorDetail']`(오류의 `detail`)이
+        실린다. 일부가 실패해도 던지지 않는다. 취소하려는 사이에 끝난 주문은 원인 코드(`info['cancelErrorDetail']`)대로 옮긴다(`already-filled` 는 `closed`, `already-canceled` 는
         `canceled`, `already-rejected` 는 `rejected`). 정정으로 대체된 주문과 원인을 모르는 경우는 새 주문이 살아 있을 수 있어 원래 상태로 둔다."""
         include_trigger = self.safe_bool(params, 'includeTrigger', False) is True
         orders = self.fetch_open_orders(symbol, None, None, {'includeTrigger': True} if include_trigger else {})
@@ -1948,8 +1949,8 @@ class toss(Exchange, ImplicitAPI):
         for order in orders:
             trigger = self.safe_string(order.get('info'), 'conditionalOrderId') is not None
             try:
-                self.cancel_order(order['id'], order.get('symbol'), {'trigger': trigger})
-                results.append(self.extend(order, {'status': 'canceled'}))
+                canceled = self.cancel_order(order['id'], order.get('symbol'), {'trigger': trigger})
+                results.append(self.extend(order, {'status': 'canceled', 'info': self.extend(order.get('info'), {'cancelResponse': canceled.get('info')})}))
             except OrderNotFound as error:
                 detail = getattr(error, 'detail', None)
                 info = self.extend(order.get('info'), {'alreadyGone': True, 'cancelError': str(error), 'cancelErrorDetail': detail})
@@ -1963,6 +1964,7 @@ class toss(Exchange, ImplicitAPI):
                 else:
                     results.append(self.extend(order, {'info': info}))
             except Exception as error:
-                results.append(self.extend(order, {'info': self.extend(order.get('info'), {'cancelError': str(error)})}))
+                info = self.extend(order.get('info'), {'cancelError': str(error), 'cancelErrorDetail': getattr(error, 'detail', None)})
+                results.append(self.extend(order, {'info': info}))
         logger.info('[toss] 미체결 주문을 취소했다(%d건 중 %d건)', len(orders), sum(1 for order in results if order.get('status') == 'canceled'))
         return results

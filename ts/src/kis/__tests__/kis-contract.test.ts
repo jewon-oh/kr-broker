@@ -78,6 +78,25 @@ const harness: BrokerContractHarness = {
     setMarketOpen: (open) => { tradable.value = open; },
     orderRequestsSent: () => state.orderRequests,
     wireBalanceFailure: () => { state.balanceFails = true; },
+    cancelAllTargets: { canceled: 'A', rejected: 'B' },
+    async cancelAllWithOneRejected() {
+        mockFetch.mockImplementation(async (url: string, init?: { body?: string }) => {
+            const u = String(url);
+            if (u.includes('/oauth2/tokenP')) return tokenOk('t');
+            if (u.includes('inquire-psbl-rvsecncl')) {
+                return dataOk({ output: [
+                    { odno: 'A', pdno: '005930', sll_buy_dvsn_cd: '02', ord_qty: '1', psbl_qty: '1', ord_unpr: '70000' },
+                    { odno: 'B', pdno: '005930', sll_buy_dvsn_cd: '02', ord_qty: '1', psbl_qty: '1', ord_unpr: '70000' },
+                ] });
+            }
+            if (u.includes('order-rvsecncl')) {
+                if (JSON.parse(init?.body ?? '{}').ORGN_ODNO === 'B') return businessError('APBK1683', '정정/취소할 수량이 없습니다.');
+                return dataOk({ output: { ODNO: 'X' } });
+            }
+            return dataOk({ output: {} });
+        });
+        return newKis().cancelAllOrders('005930/KRW');
+    },
 };
 
 defineBrokerContractSuite(harness);

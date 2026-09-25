@@ -391,7 +391,7 @@ describe('취소', () => {
         expect(canceled.map((o) => o.id)).toEqual(['A']);
     });
 
-    it('★취소를 하나라도 못 하면 나머지를 시도한 뒤 던진다 — 살아 있을 수 있는 주문을 성공으로 돌려주지 않는다', async () => {
+    it('★일부를 취소하지 못해도 던지지 않는다 — 실패한 주문은 원래 상태(open)와 사유로 돌려주고 나머지도 시도한다', async () => {
         mockFetch.mockImplementation(async (url: string, init?: { body?: string }) => {
             const u = String(url);
             if (u.includes('/oauth2/')) return tokenOk();
@@ -405,8 +405,12 @@ describe('취소', () => {
             return dataOk({ output: { ODNO: 'X' } });
         });
 
-        await expect(newKis().cancelAllOrders()).rejects.toThrow(ExchangeError);
+        const results = await newKis().cancelAllOrders();
 
+        // 살아 있을 수 있는 주문을 canceled 로 적지 않는다.
+        expect(results.map((o) => [o.id, o.status])).toEqual([['A', 'open'], ['B', 'canceled']]);
+        expect(results[0]!.info).toMatchObject({ cancelErrorDetail: 'APBK0001' });
+        expect((results[0]!.info as { cancelError: string }).cancelError).toContain('취소 불가');
         // B 도 시도했다.
         const attempted = mockFetch.mock.calls.filter((c) => String(c[0]).includes('order-rvsecncl')).map((c) => JSON.parse((c[1] as { body: string }).body).ORGN_ODNO);
         expect(attempted.sort()).toEqual(['A', 'B']);

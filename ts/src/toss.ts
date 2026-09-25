@@ -61,6 +61,7 @@ import {
     BadRequest,
     BadResponse,
     BadSymbol,
+    BaseError,
     DuplicateOrderId,
     ExchangeError,
     ExchangeClosedByUser,
@@ -2348,7 +2349,8 @@ export class toss extends Exchange {
      * 미체결 주문을 모두 취소한다(토스에는 전체 취소가 없어 조회한 주문을 하나씩 취소한다). `symbol` 을 주면 그 종목만 취소한다.
      * 일반 주문만 대상이며, `params.includeTrigger: true` 면 조건주문도 취소한다.
      *
-     * 돌려주는 목록은 대상이 된 주문 전부다. 취소된 것은 `status: 'canceled'` 이고, 취소하지 못한 것은 원래 상태(`open`)에 `info.cancelError` 가 실린다.
+     * 돌려주는 목록은 대상이 된 주문 전부이고, 항목은 미체결 조회로 받은 주문이다. 취소된 것은 `status: 'canceled'` 이고 취소 응답 원문이 `info.cancelResponse` 에 있다.
+     * 취소하지 못한 것은 원래 상태(`open`)에 `info.cancelError`(메시지)와 `info.cancelErrorDetail`(오류의 `detail`)이 실린다. 일부가 실패해도 던지지 않는다.
      * 취소하려는 사이에 끝난 주문은 브로커 원인 코드(`info.cancelErrorDetail`)대로 옮긴다. `already-filled` 는 `closed`, `already-canceled` 는 `canceled`,
      * `already-rejected` 는 `rejected` 다. 정정으로 대체된 주문(`already-modified`)과 원인을 모르는 경우는 새 주문이 살아 있을 수 있어 원래 상태로 둔다.
      */
@@ -2361,9 +2363,12 @@ export class toss extends Exchange {
         }));
         const results = settled.map((outcome, index): Order => {
             const order = orders[index]!;
-            if (outcome.status === 'fulfilled') return { ...order, status: 'canceled' };
+            if (outcome.status === 'fulfilled') return { ...order, status: 'canceled', info: { ...order.info, cancelResponse: outcome.value.info } };
             const message = outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason);
-            if (!(outcome.reason instanceof OrderNotFound)) return { ...order, info: { ...order.info, cancelError: message } };
+            if (!(outcome.reason instanceof OrderNotFound)) {
+                const detail = outcome.reason instanceof BaseError ? outcome.reason.detail : undefined;
+                return { ...order, info: { ...order.info, cancelError: message, cancelErrorDetail: detail } };
+            }
             const detail = outcome.reason.detail;
             const info = { ...order.info, alreadyGone: true, cancelError: message, cancelErrorDetail: detail };
             if (detail === 'already-filled') return { ...order, status: 'closed', filled: order.amount, remaining: 0, cost: undefined, average: undefined, info };

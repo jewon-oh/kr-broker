@@ -80,6 +80,25 @@ const harness: BrokerContractHarness = {
     setMarketOpen: (open) => { vi.setSystemTime(open ? OPEN : CLOSED); },
     orderRequestsSent: () => state.orderRequests,
     wireBalanceFailure: () => { state.balanceFails = true; },
+    cancelAllTargets: { canceled: 'O1', rejected: 'O2' },
+    async cancelAllWithOneRejected() {
+        const rows = [
+            { ordr_no: 'O1', stnd_is_no: 'A005930', trd_dl_ccd_nm: '현금매수', ordr_q: '1', nccls_q: '1', sor_ordr_ccd: 'K' },
+            { ordr_no: 'O2', stnd_is_no: 'A005930', trd_dl_ccd_nm: '현금매수', ordr_q: '1', nccls_q: '1', sor_ordr_ccd: 'K' },
+        ];
+        mockFetch.mockImplementation(async (url: string, init?: { body?: string }) => {
+            const u = String(url);
+            if (u.includes('/oauth2/token')) return tokenOk();
+            const tr = u.split('/api/v1/')[1] ?? '';
+            if (tr === KBSEC_TR.TRADES_KR.toLowerCase()) return jsonOk({ Record1: rows });
+            if (tr === KBSEC_TR.CANCEL_KR.toLowerCase()) {
+                const target = (JSON.parse(init?.body ?? '{}') as { dataBody?: { orgn_ordr_no?: string } }).dataBody?.orgn_ordr_no;
+                return target === 'O2' ? bizError('취소할 수 없는 주문입니다') : jsonOk({ ordr_no: 'C1' });
+            }
+            return jsonOk({});
+        });
+        return newExchange().cancelAllOrders('005930/KRW');
+    },
 };
 
 beforeEach(() => {

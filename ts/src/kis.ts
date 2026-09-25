@@ -45,6 +45,7 @@
 import {
     Exchange,
     ArgumentsRequired,
+    BaseError,
     AuthenticationError,
     BadRequest,
     BadResponse,
@@ -10064,16 +10065,29 @@ export class kis extends Exchange {
     }
 
     /**
-     * 미체결 주문을 모두 취소한다. 종목을 주면 그 종목만이다. 하나라도 취소하지 못하면 나머지를 다 시도한 뒤 첫 실패를 던진다.
-     * 살아 있을 수 있는 주문을 성공으로 돌려주지 않기 위해서다. 국내 취소에는 공식 예제처럼 미체결 행의 주문채번지점번호(`ord_gno_brno`)를
+     * 미체결 주문을 모두 취소한다. 종목을 주면 그 종목만이다. 취소를 시도한 주문마다 미체결 조회로 받은 주문을 항목으로 돌려준다.
+     * 취소된 항목은 `status: 'canceled'` 이고 취소 응답 원문이 `info.cancelResponse` 에 있다. 취소하지 못한 항목은 원래 상태(`open`)이고
+     * `info.cancelError`(메시지)와 `info.cancelErrorDetail`(오류의 `detail`)이 있다. 일부가 실패해도 던지지 않으므로 항목의 `status` 를 확인한다.
+     * 미체결 조회가 실패하거나 잘리면 하나도 취소하지 않고 던진다. 국내 취소에는 공식 예제처럼 미체결 행의 주문채번지점번호(`ord_gno_brno`)를
      * 원주문 조직번호로 싣는다.
      */
     override async cancelAllOrders(symbol: Str = undefined, params: Dict = {}): Promise<Order[]> {
         const open = await this.fetchOpenOrders(symbol, undefined, undefined, params);
         const results = await Promise.allSettled(open.map((order) => this.cancelOrder(order.id as string, order.symbol, this.cancelParamsOf(order))));
-        const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
-        if (failed !== undefined) throw failed.reason;
-        return results.map((r) => (r as PromiseFulfilledResult<Order>).value);
+        return results.map((result, index): Order => {
+            const order = open[index]!;
+            if (result.status === 'fulfilled') return { ...order, status: 'canceled', info: { ...order.info, cancelResponse: result.value.info } };
+            const err: unknown = result.reason;
+            logger.warn({ err, orderId: order.id }, '[kis] 주문 취소 실패');
+            return {
+                ...order,
+                info: {
+                    ...order.info,
+                    cancelError: err instanceof Error ? err.message : String(err),
+                    cancelErrorDetail: err instanceof BaseError ? err.detail : undefined,
+                },
+            };
+        });
     }
 
     /** `cancelAllOrders` 가 미체결 주문 하나를 취소할 때의 `params`. 해외 취소 요청에는 조직번호가 없어 아무것도 싣지 않는다. */

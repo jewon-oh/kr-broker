@@ -4763,8 +4763,9 @@ export class kbsec extends Exchange {
     }
 
     /**
-     * 미체결 주문을 모두 취소한다(심볼을 주면 그 종목만). 취소를 시도한 주문마다 항목을 돌려준다. 취소된 항목은 `status: 'canceled'`,
-     * 실패한 항목은 `status: 'open'` 이고 `info.cancelError` 에 사유가 있다.
+     * 미체결 주문을 모두 취소한다(심볼을 주면 그 종목만). 취소를 시도한 주문마다 미체결 조회로 받은 주문을 항목으로 돌려준다.
+     * 취소된 항목은 `status: 'canceled'` 이고 취소 응답 원문이 `info.cancelResponse` 에 있다. 실패한 항목은 `status: 'open'` 이고
+     * `info.cancelError`(메시지)와 `info.cancelErrorDetail`(오류의 `detail`)이 있다. 일부가 실패해도 던지지 않는다.
      */
     override async cancelAllOrders(symbol: Str = undefined, params: Dict = {}): Promise<Order[]> {
         const open = await this.fetchOpenOrders(symbol, undefined, undefined, params);
@@ -4773,10 +4774,18 @@ export class kbsec extends Exchange {
             try {
                 // 목록 행의 라우팅을 넘겨 주문마다 미체결 목록을 다시 조회하지 않는다.
                 const sor = pickStr((order.info ?? {}) as Dict, 'sor_ordr_ccd');
-                results.push(await this.cancelOrder(order.id as string, order.symbol, sor !== '' ? { sor_ordr_ccd: sor } : {}));
+                const canceled = await this.cancelOrder(order.id as string, order.symbol, sor !== '' ? { sor_ordr_ccd: sor } : {});
+                results.push({ ...order, status: 'canceled', info: { ...order.info, cancelResponse: canceled.info } });
             } catch (err) {
                 logger.warn({ err, orderId: order.id }, '[kbsec] 주문 취소 실패');
-                results.push({ ...order, info: { ...order.info, cancelError: err instanceof Error ? err.message : String(err) } });
+                results.push({
+                    ...order,
+                    info: {
+                        ...order.info,
+                        cancelError: err instanceof Error ? err.message : String(err),
+                        cancelErrorDetail: err instanceof BaseError ? err.detail : undefined,
+                    },
+                });
             }
         }
         return results;

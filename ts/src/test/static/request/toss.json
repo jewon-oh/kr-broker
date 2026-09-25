@@ -3655,9 +3655,8 @@
                         "quantity": "5",
                         "currency": "KRW",
                         "orderedAt": "2026-03-25T01:00:00Z",
-                        "execution": {
-                            "filledQuantity": "0"
-                        }
+                        "execution": { "filledQuantity": "0" },
+                        "cancelResponse": { "orderId": "ORD-0019" }
                     },
                     "id": "ORD-0016",
                     "timestamp": 1774400400000,
@@ -3688,9 +3687,7 @@
                         "quantity": "5",
                         "currency": "KRW",
                         "orderedAt": "2026-03-25T01:01:00Z",
-                        "execution": {
-                            "filledQuantity": "0"
-                        },
+                        "execution": { "filledQuantity": "0" },
                         "alreadyGone": true,
                         "cancelError": "토스 API 오류: 409 {\"error\":{\"code\":\"already-filled\",\"message\":\"이미 체결\"}}",
                         "cancelErrorDetail": "already-filled"
@@ -3723,10 +3720,9 @@
                         "quantity": "5",
                         "currency": "KRW",
                         "orderedAt": "2026-03-25T01:02:00Z",
-                        "execution": {
-                            "filledQuantity": "0"
-                        },
-                        "cancelError": "토스 API 오류: 422 {\"error\":{\"code\":\"cancel-restricted\",\"message\":\"취소 불가\"}}"
+                        "execution": { "filledQuantity": "0" },
+                        "cancelError": "토스 API 오류: 422 {\"error\":{\"code\":\"cancel-restricted\",\"message\":\"취소 불가\"}}",
+                        "cancelErrorDetail": "cancel-restricted"
                     },
                     "id": "ORD-0018",
                     "timestamp": 1774400520000,
@@ -3842,7 +3838,8 @@
                         "quantity": "2",
                         "orderType": "MARKET",
                         "createdAt": "2026-03-25T00:40:00Z",
-                        "first": { "orderSide": "SELL", "triggerPrice": "65000" }
+                        "first": { "orderSide": "SELL", "triggerPrice": "65000" },
+                        "cancelResponse": {}
                     },
                     "id": "COND-0012",
                     "timestamp": 1774399200000,
@@ -3872,7 +3869,8 @@
                         "quantity": "5",
                         "currency": "KRW",
                         "orderedAt": "2026-03-25T01:05:00Z",
-                        "execution": { "filledQuantity": "0" }
+                        "execution": { "filledQuantity": "0" },
+                        "cancelResponse": { "orderId": "ORD-0032" }
                     },
                     "id": "ORD-0031",
                     "timestamp": 1774400700000,

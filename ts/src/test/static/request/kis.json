@@ -7554,30 +7554,84 @@
             ],
             "output": [
                 {
-                    "id": "ORD-0021",
-                    "symbol": "005930/KRW",
-                    "status": "canceled",
                     "info": {
-                        "rt_cd": "0",
-                        "msg_cd": "APBK0013",
-                        "msg1": "취소 주문 전송 완료",
-                        "output": { "KRX_FWDG_ORD_ORGNO": "91252", "ODNO": "ORD-0012", "ORD_TMD": "102000" }
+                        "ord_gno_brno": "91252",
+                        "odno": "ORD-0021",
+                        "orgn_odno": "",
+                        "ord_dvsn_name": "지정가",
+                        "pdno": "005930",
+                        "prdt_name": "삼성전자",
+                        "rvse_cncl_dvsn_name": "",
+                        "ord_qty": "10",
+                        "ord_unpr": "70000",
+                        "ord_tmd": "093000",
+                        "tot_ccld_qty": "3",
+                        "tot_ccld_amt": "210000",
+                        "psbl_qty": "7",
+                        "sll_buy_dvsn_cd": "02",
+                        "ord_dvsn_cd": "00",
+                        "excg_id_dvsn_cd": "KRX",
+                        "cancelResponse": {
+                            "rt_cd": "0",
+                            "msg_cd": "APBK0013",
+                            "msg1": "취소 주문 전송 완료",
+                            "output": { "KRX_FWDG_ORD_ORGNO": "91252", "ODNO": "ORD-0012", "ORD_TMD": "102000" }
+                        }
                     },
-                    "fees": [],
-                    "trades": []
+                    "id": "ORD-0021",
+                    "timestamp": 1774398600000,
+                    "datetime": "2026-03-25T00:30:00.000Z",
+                    "symbol": "005930/KRW",
+                    "type": "limit",
+                    "side": "buy",
+                    "price": 70000,
+                    "average": 70000,
+                    "amount": 10,
+                    "filled": 3,
+                    "remaining": 7,
+                    "cost": 210000,
+                    "status": "canceled",
+                    "trades": [],
+                    "fees": []
                 },
                 {
-                    "id": "ORD-0022",
-                    "symbol": "005930/KRW",
-                    "status": "canceled",
                     "info": {
-                        "rt_cd": "0",
-                        "msg_cd": "APBK0013",
-                        "msg1": "취소 주문 전송 완료",
-                        "output": { "KRX_FWDG_ORD_ORGNO": "91252", "ODNO": "ORD-0012", "ORD_TMD": "102000" }
+                        "ord_gno_brno": "01790",
+                        "odno": "ORD-0022",
+                        "orgn_odno": "",
+                        "ord_dvsn_name": "시장가",
+                        "pdno": "005930",
+                        "prdt_name": "삼성전자",
+                        "ord_qty": "5",
+                        "ord_unpr": "0",
+                        "ord_tmd": "094500",
+                        "tot_ccld_qty": "0",
+                        "tot_ccld_amt": "0",
+                        "psbl_qty": "5",
+                        "sll_buy_dvsn_cd": "01",
+                        "ord_dvsn_cd": "01",
+                        "excg_id_dvsn_cd": "KRX",
+                        "cancelResponse": {
+                            "rt_cd": "0",
+                            "msg_cd": "APBK0013",
+                            "msg1": "취소 주문 전송 완료",
+                            "output": { "KRX_FWDG_ORD_ORGNO": "91252", "ODNO": "ORD-0012", "ORD_TMD": "102000" }
+                        }
                     },
+                    "id": "ORD-0022",
+                    "timestamp": 1774399500000,
+                    "datetime": "2026-03-25T00:45:00.000Z",
+                    "symbol": "005930/KRW",
+                    "type": "market",
+                    "side": "sell",
+                    "amount": 5,
+                    "filled": 0,
+                    "remaining": 5,
+                    "cost": 0,
+                    "status": "canceled",
+                    "trades": [],
                     "fees": [],
-                    "trades": []
+                    "timeInForce": "IOC"
                 }
             ]
         },
@@ -7738,38 +7792,84 @@
             ],
             "output": [
                 {
-                    "id": "ORD-0021",
-                    "symbol": "005930/KRW",
-                    "status": "canceled",
                     "info": {
-                        "rt_cd": "0",
-                        "msg_cd": "APBK0013",
-                        "msg1": "취소 주문 전송 완료",
-                        "output": {
-                            "KRX_FWDG_ORD_ORGNO": "91252",
-                            "ODNO": "ORD-0012",
-                            "ORD_TMD": "102000"
+                        "ord_gno_brno": "91252",
+                        "odno": "ORD-0021",
+                        "orgn_odno": "",
+                        "ord_dvsn_name": "지정가",
+                        "pdno": "005930",
+                        "prdt_name": "삼성전자",
+                        "rvse_cncl_dvsn_name": "",
+                        "ord_qty": "10",
+                        "ord_unpr": "70000",
+                        "ord_tmd": "093000",
+                        "tot_ccld_qty": "3",
+                        "tot_ccld_amt": "210000",
+                        "psbl_qty": "7",
+                        "sll_buy_dvsn_cd": "02",
+                        "ord_dvsn_cd": "00",
+                        "excg_id_dvsn_cd": "KRX",
+                        "cancelResponse": {
+                            "rt_cd": "0",
+                            "msg_cd": "APBK0013",
+                            "msg1": "취소 주문 전송 완료",
+                            "output": { "KRX_FWDG_ORD_ORGNO": "91252", "ODNO": "ORD-0012", "ORD_TMD": "102000" }
                         }
                     },
-                    "fees": [],
-                    "trades": []
+                    "id": "ORD-0021",
+                    "timestamp": 1774398600000,
+                    "datetime": "2026-03-25T00:30:00.000Z",
+                    "symbol": "005930/KRW",
+                    "type": "limit",
+                    "side": "buy",
+                    "price": 70000,
+                    "average": 70000,
+                    "amount": 10,
+                    "filled": 3,
+                    "remaining": 7,
+                    "cost": 210000,
+                    "status": "canceled",
+                    "trades": [],
+                    "fees": []
                 },
                 {
-                    "id": "ORD-0022",
-                    "symbol": "005930/KRW",
-                    "status": "canceled",
                     "info": {
-                        "rt_cd": "0",
-                        "msg_cd": "APBK0013",
-                        "msg1": "취소 주문 전송 완료",
-                        "output": {
-                            "KRX_FWDG_ORD_ORGNO": "91252",
-                            "ODNO": "ORD-0012",
-                            "ORD_TMD": "102000"
+                        "ord_gno_brno": "01790",
+                        "odno": "ORD-0022",
+                        "orgn_odno": "",
+                        "ord_dvsn_name": "시장가",
+                        "pdno": "005930",
+                        "prdt_name": "삼성전자",
+                        "ord_qty": "5",
+                        "ord_unpr": "0",
+                        "ord_tmd": "094500",
+                        "tot_ccld_qty": "0",
+                        "tot_ccld_amt": "0",
+                        "psbl_qty": "5",
+                        "sll_buy_dvsn_cd": "01",
+                        "ord_dvsn_cd": "01",
+                        "excg_id_dvsn_cd": "KRX",
+                        "cancelResponse": {
+                            "rt_cd": "0",
+                            "msg_cd": "APBK0013",
+                            "msg1": "취소 주문 전송 완료",
+                            "output": { "KRX_FWDG_ORD_ORGNO": "91252", "ODNO": "ORD-0012", "ORD_TMD": "102000" }
                         }
                     },
+                    "id": "ORD-0022",
+                    "timestamp": 1774399500000,
+                    "datetime": "2026-03-25T00:45:00.000Z",
+                    "symbol": "005930/KRW",
+                    "type": "market",
+                    "side": "sell",
+                    "amount": 5,
+                    "filled": 0,
+                    "remaining": 5,
+                    "cost": 0,
+                    "status": "canceled",
+                    "trades": [],
                     "fees": [],
-                    "trades": []
+                    "timeInForce": "IOC"
                 }
             ]
         },
@@ -8252,7 +8352,7 @@
             "error": { "class": "BadResponse" }
         },
         {
-            "description": "cancelAllOrders 는 하나라도 취소하지 못하면 나머지를 다 시도한 뒤 첫 실패를 던진다",
+            "description": "cancelAllOrders 는 일부를 취소하지 못해도 던지지 않고, 그 주문을 원래 상태(open)와 실패 사유(cancelError·cancelErrorDetail)로 돌려준다",
             "now": 1774400400000,
             "method": "cancelAllOrders",
             "args": ["005930/KRW"],
@@ -8360,7 +8460,84 @@
                     }
                 }
             ],
-            "error": { "class": "ExchangeError", "detail": "APBK1683" }
+            "output": [
+                {
+                    "info": {
+                        "ord_gno_brno": "91252",
+                        "odno": "ORD-0021",
+                        "orgn_odno": "",
+                        "ord_dvsn_name": "지정가",
+                        "pdno": "005930",
+                        "prdt_name": "삼성전자",
+                        "rvse_cncl_dvsn_name": "",
+                        "ord_qty": "10",
+                        "ord_unpr": "70000",
+                        "ord_tmd": "093000",
+                        "tot_ccld_qty": "3",
+                        "tot_ccld_amt": "210000",
+                        "psbl_qty": "7",
+                        "sll_buy_dvsn_cd": "02",
+                        "ord_dvsn_cd": "00",
+                        "excg_id_dvsn_cd": "KRX",
+                        "cancelError": "KIS API 비즈니스 오류 [APBK1683]: 정정/취소할 수량이 없습니다.",
+                        "cancelErrorDetail": "APBK1683"
+                    },
+                    "id": "ORD-0021",
+                    "timestamp": 1774398600000,
+                    "datetime": "2026-03-25T00:30:00.000Z",
+                    "symbol": "005930/KRW",
+                    "type": "limit",
+                    "side": "buy",
+                    "price": 70000,
+                    "average": 70000,
+                    "amount": 10,
+                    "filled": 3,
+                    "remaining": 7,
+                    "cost": 210000,
+                    "status": "open",
+                    "trades": [],
+                    "fees": []
+                },
+                {
+                    "info": {
+                        "ord_gno_brno": "91252",
+                        "odno": "ORD-0022",
+                        "orgn_odno": "",
+                        "ord_dvsn_name": "시장가",
+                        "pdno": "005930",
+                        "prdt_name": "삼성전자",
+                        "ord_qty": "5",
+                        "ord_unpr": "0",
+                        "ord_tmd": "094500",
+                        "tot_ccld_qty": "0",
+                        "tot_ccld_amt": "0",
+                        "psbl_qty": "5",
+                        "sll_buy_dvsn_cd": "01",
+                        "ord_dvsn_cd": "01",
+                        "excg_id_dvsn_cd": "KRX",
+                        "cancelResponse": {
+                            "rt_cd": "0",
+                            "msg_cd": "APBK0013",
+                            "msg1": "취소 주문 전송 완료",
+                            "output": { "KRX_FWDG_ORD_ORGNO": "91252", "ODNO": "ORD-0012", "ORD_TMD": "102000" }
+                        }
+                    },
+                    "id": "ORD-0022",
+                    "timestamp": 1774399500000,
+                    "datetime": "2026-03-25T00:45:00.000Z",
+                    "symbol": "005930/KRW",
+                    "type": "market",
+                    "side": "sell",
+                    "amount": 5,
+                    "filled": 0,
+                    "remaining": 5,
+                    "cost": 0,
+                    "status": "canceled",
+                    "trades": [],
+                    "fees": [],
+                    "timeInForce": "IOC"
+                }
+            ]
         },
         {
             "description": "cancelAllOrders 는 미체결이 없으면 빈 목록이다",
@@ -8459,17 +8636,40 @@
             ],
             "output": [
                 {
-                    "id": "ORD-0021",
-                    "symbol": "005930/KRW",
-                    "status": "canceled",
                     "info": {
-                        "rt_cd": "0",
-                        "msg_cd": "APBK0013",
-                        "msg1": "취소 주문 전송 완료",
-                        "output": { "KRX_FWDG_ORD_ORGNO": "91252", "ODNO": "ORD-0012", "ORD_TMD": "102000" }
+                        "odno": "ORD-0021",
+                        "orgn_odno": "",
+                        "pdno": "005930",
+                        "prdt_name": "삼성전자",
+                        "ord_qty": "10",
+                        "ord_unpr": "70000",
+                        "ord_tmd": "093000",
+                        "tot_ccld_qty": "0",
+                        "tot_ccld_amt": "0",
+                        "psbl_qty": "10",
+                        "sll_buy_dvsn_cd": "02",
+                        "ord_dvsn_cd": "00",
+                        "cancelResponse": {
+                            "rt_cd": "0",
+                            "msg_cd": "APBK0013",
+                            "msg1": "취소 주문 전송 완료",
+                            "output": { "KRX_FWDG_ORD_ORGNO": "91252", "ODNO": "ORD-0012", "ORD_TMD": "102000" }
+                        }
                     },
-                    "fees": [],
-                    "trades": []
+                    "id": "ORD-0021",
+                    "timestamp": 1774398600000,
+                    "datetime": "2026-03-25T00:30:00.000Z",
+                    "symbol": "005930/KRW",
+                    "type": "limit",
+                    "side": "buy",
+                    "price": 70000,
+                    "amount": 10,
+                    "filled": 0,
+                    "remaining": 10,
+                    "cost": 0,
+                    "status": "canceled",
+                    "trades": [],
+                    "fees": []
                 }
             ]
         },
@@ -8594,17 +8794,45 @@
             ],
             "output": [
                 {
-                    "id": "ORD-0101",
-                    "symbol": "AAPL/USD",
-                    "status": "canceled",
                     "info": {
-                        "rt_cd": "0",
-                        "msg_cd": "APBK0013",
-                        "msg1": "정정 주문 전송 완료",
-                        "output": { "KRX_FWDG_ORD_ORGNO": "01790", "ODNO": "ORD-0102", "ORD_TMD": "003000" }
+                        "ord_dt": "20260325",
+                        "ord_gno_brno": "01790",
+                        "odno": "ORD-0101",
+                        "orgn_odno": "",
+                        "pdno": "AAPL",
+                        "prdt_name": "APPLE INC",
+                        "sll_buy_dvsn_cd": "02",
+                        "ft_ord_qty": "5",
+                        "ft_ord_unpr3": "170.50000000",
+                        "ord_tmd": "103000",
+                        "ft_ccld_qty": "1",
+                        "ft_ccld_unpr3": "170.50000000",
+                        "ft_ccld_amt3": "170.50000",
+                        "nccs_qty": "4",
+                        "ovrs_excg_cd": "NASD",
+                        "dmst_ord_dt": "20260325",
+                        "thco_ord_tmd": "233000",
+                        "cancelResponse": {
+                            "rt_cd": "0",
+                            "msg_cd": "APBK0013",
+                            "msg1": "정정 주문 전송 완료",
+                            "output": { "KRX_FWDG_ORD_ORGNO": "01790", "ODNO": "ORD-0102", "ORD_TMD": "003000" }
+                        }
                     },
-                    "fees": [],
-                    "trades": []
+                    "id": "ORD-0101",
+                    "timestamp": 1774449000000,
+                    "datetime": "2026-03-25T14:30:00.000Z",
+                    "symbol": "AAPL/USD",
+                    "side": "buy",
+                    "price": 170.5,
+                    "average": 170.5,
+                    "amount": 5,
+                    "filled": 1,
+                    "remaining": 4,
+                    "cost": 170.5,
+                    "status": "canceled",
+                    "trades": [],
+                    "fees": []
                 }
             ]
         },
