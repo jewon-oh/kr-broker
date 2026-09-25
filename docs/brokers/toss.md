@@ -145,8 +145,8 @@
 
 | API 이름 | 엔드포인트 | 시장 | 상태 | 메서드 | 검증 | 제안 | 명세 | 비고 |
 |---|---|---|---|---|---|---|---|---|
-| 주문 생성 | `POST /api/v1/orders` | 국내, 미국 | 통합 | `createOrder` | `spec-only` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1orders/post) | 금액 주문(소수점 매수)은 미국 시장가 전용이며 `createMarketBuyOrderWithCost`가 부릅니다. 국내는 정수 주만 됩니다. |
-| 주문 정정 | `POST /api/v1/orders/{orderId}/modify` | 국내, 미국 | 통합 | `editOrder` | `spec-only` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1orders~1{orderId}~1modify/post) | 국내는 수량과 가격을 함께(`amount` 필수), 미국은 가격만(`amount`를 주면 `NotSupported`) 정정합니다. 미국 정정은 고액주문 확인 표시를 붙일지 정하려고 정정 전에 주문 상세로 남은 수량을 읽습니다. 정정하면 새 `orderId`가 발급됩니다. 조건주문 정정(`params.trigger`)은 아직 안 씁니다. |
+| 주문 생성 | `POST /api/v1/orders` | 국내, 미국 | 통합 | `createOrder` | `spec-only` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1orders/post) | 금액 주문(소수점 매수)은 미국 시장가 전용이며 `createMarketBuyOrderWithCost`가 부릅니다. 국내는 정수 주만 됩니다. `params`에서 읽지 않은 키는 본문 끝에 합칩니다. 라이브러리가 채우는 본문 필드를 `params`로 주면 요청 없이 `BadRequest`입니다. |
+| 주문 정정 | `POST /api/v1/orders/{orderId}/modify` | 국내, 미국 | 통합 | `editOrder` | `spec-only` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1orders~1{orderId}~1modify/post) | 잔량 전부를 새 가격으로 정정합니다. 정정 전에 주문 상세로 체결 수량과 잔량을 읽어, 국내는 잔량을 수량으로 싣고 미국은 가격만 보냅니다. `amount`는 정정 뒤 총수량이고 다르면 `NotSupported`입니다. 명세의 `quantity`가 총수량인지 옮길 수량인지 정해지지 않아 일부 체결된 국내 주문은 정정하지 않습니다. 정정하면 새 `orderId`가 발급됩니다. 조건주문 정정(`params.trigger`)은 아직 안 씁니다. |
 | 주문 취소 | `POST /api/v1/orders/{orderId}/cancel` | 국내, 미국 | 통합 | `cancelOrder` | `spec-only` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1orders~1{orderId}~1cancel/post) | `cancelAllOrders`는 미체결을 조회해 하나씩 취소하는 emulated 다. 토스는 취소마다 새 주문번호를 발급합니다. |
 
 ### Conditional Order
@@ -169,7 +169,7 @@
 | API 이름 | 엔드포인트 | 시장 | 상태 | 메서드 | 검증 | 제안 | 명세 | 비고 |
 |---|---|---|---|---|---|---|---|---|
 | 주문 목록 | `GET /api/v1/orders` | 국내, 미국 | 통합 | `fetchOpenOrders` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1orders/get) | `fetchClosedOrders`(전량 체결만), `fetchCanceledOrders`, `fetchMyTrades`(일부 체결된 미체결 포함)도 같은 API 다. OPEN은 서버가 전량을 주고 CLOSED는 100건씩 최대 10쪽을 받습니다. |
-| 주문 상세 | `GET /api/v1/orders/{orderId}` | 국내, 미국 | 통합 | `fetchOrder` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1orders~1{orderId}/get) | 주문 접수 뒤 체결 확인 폴링도 이 API를 씁니다. 미국 `editOrder`도 정정 전에 이 API로 남은 수량을 읽습니다. |
+| 주문 상세 | `GET /api/v1/orders/{orderId}` | 국내, 미국 | 통합 | `fetchOrder` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1orders~1{orderId}/get) | 주문 접수 뒤 체결 확인 폴링도 이 API를 씁니다. `editOrder`도 정정 전에 이 API로 체결 수량과 잔량을 읽습니다. 상태 `CANCEL_REJECTED`와 `REPLACE_REJECTED`는 `rejected`로 옮깁니다. 명세는 두 상태를 거절된 취소나 정정 요청을 기록한 별도 레코드로 정의하고, 원주문은 이전 상태로 돌아간다고 적습니다. |
 
 ### Order Info
 
@@ -212,7 +212,7 @@ ccxt의 통합 메서드로 표현하기 어려운 증권사 고유 기능입니
 | 통합증거금 | 부분 | 2개 | `krwIntegratedMargin` 옵션이 원화 예수금의 달러 환산분을 합산합니다. 토스증권이 USD 매수 가능 금액에 원화 환산분을 넣는지는 문서에 없어 확인 불가입니다. |
 | 클라이언트당 토큰 1개 | 지원 | 1개 | 재발급하면 이전 토큰이 무효가 됩니다. 저장소 잠금(`tokenStore`)과 401 응답 뒤 1회 재시도로 대응합니다. |
 | 실시간 체결, 호가, 본인 주문 웹소켓 | 부분 | 3개 | 체결, 호가, 본인 주문 이벤트를 모두 createPriceStream으로 지원합니다. 호가 구독 초기 스냅샷은 없어 REST로 먼저 조회해야 합니다. |
-| 주문 정정(국내 수량과 가격, 미국 가격만) | 지원 | 1개 | `editOrder`로 냅니다. 조건주문 정정(`params.trigger`)은 아직 안 씁니다. |
+| 주문 정정(잔량 전부, 미국은 가격만) | 지원 | 1개 | `editOrder`로 냅니다. 조건주문 정정(`params.trigger`)은 아직 안 씁니다. |
 
 ## 알려진 한계
 
@@ -225,7 +225,7 @@ ccxt의 통합 메서드로 표현하기 어려운 증권사 고유 기능입니
 - `fetchBalance`는 계좌 합산 손익과 종목별 손익을 반환하지 않습니다. 종목 행 원본은 `info`에 있습니다.
 - 웹소켓이 없어서 체결 확인은 주문 조회를 6회, 350ms 간격으로 반복합니다.
 - 통합증거금 환산에서 토스증권이 USD 매수 가능 금액에 원화 환산분을 넣는지는 문서에 없어 확인 불가입니다.
-- 국내 호가단위는 가격대별이라 ccxt의 단일 `precision.price`로 표현하지 못합니다.
+- 국내 호가단위는 가격대별이라 ccxt의 단일 `precision.price`로 표현하지 못합니다. `priceToPrecision`은 KRX 호가 단위 표로 반올림하고, 주문은 가격을 바꾸지 않습니다.
 
 ## 미구현 API
 
