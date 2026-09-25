@@ -3,7 +3,6 @@
 import decimal
 import numbers
 import itertools
-import re
 
 __all__ = [
     'TRUNCATE',
