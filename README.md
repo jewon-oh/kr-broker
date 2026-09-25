@@ -1,11 +1,12 @@
 <h1 align="center">kr-broker</h1>
 
-<p align="center"><strong>한국 증권사 API를 ccxt처럼 쓰는 TypeScript 라이브러리</strong></p>
+<p align="center"><strong>한국 증권사 API를 ccxt처럼 쓰는 TypeScript와 Python 라이브러리</strong></p>
 
 <p align="center">
 
 [![CI](https://github.com/jewon-oh/kr-broker/actions/workflows/ci.yaml/badge.svg)](https://github.com/jewon-oh/kr-broker/actions/workflows/ci.yaml)
 ![Node](https://img.shields.io/badge/node-%3E%3D22-brightgreen)
+![Python](https://img.shields.io/badge/python-%3E%3D3.10-blue)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 [![증권사](https://img.shields.io/badge/증권사-3-blue)](#지원-증권사)
 
@@ -13,11 +14,13 @@
 
 <p align="center">
 
-[설치](#설치) · [빠른 시작](#빠른-시작) · [지원 증권사](#지원-증권사) · [사용법](#사용법) · [알려진 한계](#알려진-한계) · [기여](CONTRIBUTING.md) · [면책](#면책)
+[설치](#설치) · [빠른 시작](#빠른-시작) · [지원 증권사](#지원-증권사) · [사용법](#사용법) · [Python](#python) · [알려진 한계](#알려진-한계) · [기여](CONTRIBUTING.md) · [면책](#면책)
 
 </p>
 
 한국투자증권(KIS), 토스증권, KB증권의 Open API를 같은 메서드와 같은 자료 구조로 사용합니다. 사용법은 [ccxt](https://github.com/ccxt/ccxt)를 따릅니다. `loadMarkets()`, `fetchTicker()`, `fetchBalance()`, `createOrder()`를 안다면 따로 배울 것이 거의 없습니다.
+
+TypeScript 판과 Python 판이 있습니다. Python 판은 ccxt처럼 동기(`kr_broker`), 비동기(`kr_broker.async_support`), 실시간(`kr_broker.pro`) 세 모듈로 부르고, 지금은 한국투자증권과 토스증권을 지원합니다. [Python](#python) 절을 보십시오.
 
 > [!IMPORTANT]
 > 이 프로젝트는 증권사와 관계가 없는 비공식 라이브러리입니다. 투자 조언이 아니며, 사용해서 생긴 손실은 작성자가 책임지지 않습니다. 각 증권사의 약관은 [약관과 시세 데이터](#약관과-시세-데이터) 절에 정리했습니다.
@@ -31,7 +34,7 @@
 - 🛑 **접수 여부를 모르는 주문은 재시도하지 않습니다**: 조회 재시도 횟수는 `maxRetriesOnFailure` 옵션으로 정합니다. 주문 요청이 시간 초과나 연결 끊김으로 끝나면 재시도하지 않고 `OrderOutcomeUnknown`을 던집니다. 재시도하면 중복 주문이 되기 때문입니다. 증권사가 요청을 처리하기 전에 거절한 경우(토큰 무효, NXT 미상장)에만 다시 보냅니다.
 - 📅 **휴장일은 증권사 API로 받습니다**: 직접 작성한 휴장일 표가 없습니다.
 - 🔒 **토큰과 호출 한도**: 토큰 발급에는 잠금을 걸고, 요청은 증권사별 호출 한도에 맞춰 보냅니다.
-- 📦 **의존성**: 실시간 시세용 `ws` 하나입니다.
+- 📦 **의존성**: TypeScript 판은 실시간 시세용 `ws` 하나입니다. Python 판은 `requests`, `aiohttp`, `cryptography`입니다.
 
 ## 지원 증권사
 
@@ -118,6 +121,12 @@ pnpm은 의존성의 빌드 스크립트를 기본으로 막습니다. pnpm 10�
 
 Node.js 22 이상이 필요합니다.
 
+Python 판도 PyPI 대신 GitHub 주소로 설치합니다. Python 3.10 이상이 필요합니다.
+
+```bash
+pip install "kr-broker @ git+https://github.com/jewon-oh/kr-broker.git#subdirectory=python"
+```
+
 ## 빠른 시작
 
 ```ts
@@ -157,6 +166,8 @@ main().catch(console.error);
 ### 잔고
 
 `fetchBalance()`는 ccxt의 `Balances`를 반환합니다. 현금은 통화(`KRW`, `USD`)를 키로 하고, 보유 종목은 종목코드를 키로 합니다. `total`은 수량입니다. 평균단가와 평가금액 같은 증권사 고유 값은 각 항목의 `info`에 있습니다. 조회에 실패하면 빈 잔고가 아니라 오류를 던집니다.
+
+KB증권은 보유를 일부만 읽었으면 던지지 않고 `info.readStatus`가 `PARTIAL`이며, 읽지 못한 시장(`KR`, `US`)이 `info.unreadMarkets`에 있습니다. 이때 그 시장에서 목록에 없는 종목은 미보유가 아니라 미확인입니다. 다 읽었으면 `readStatus`가 `COMPLETE`입니다.
 
 ### 주문
 
@@ -311,7 +322,7 @@ await broker.close();
 `python/`에 같은 라이브러리의 Python 판이 있습니다. ccxt Python 판처럼 증권사 클래스에 설정 사전을 넘기고, 메서드는 snake_case 이름과 camelCase 이름으로 모두 부를 수 있습니다.
 
 ```bash
-pip install ./python
+pip install "kr-broker @ git+https://github.com/jewon-oh/kr-broker.git#subdirectory=python"
 ```
 
 ```python
@@ -326,16 +337,31 @@ kis = kr_broker.kis({
     'sandbox': True,  # 모의투자. 실전은 생략한다.
 })
 
-price = kis.private_get_uapi_domestic_stock_v1_quotations_inquire_price({
-    'tr_id': 'FHKST01010100', 'FID_COND_MRKT_DIV_CODE': 'J', 'FID_INPUT_ISCD': '005930',
-})
-print(price['output']['stck_prpr'])
+ticker = kis.fetch_ticker('005930/KRW')
+print(ticker['last'])
 ```
 
-- 지금은 한국투자증권과 토스증권의 인증, 서명, 오류 처리, 호출 간격 조절이 있고, 모든 엔드포인트를 암묵 메서드로 부를 수 있습니다. 두 증권사의 통합 메서드(`fetch_ticker`, `create_order` 등)도 옮겼습니다. 실시간(`watch_*`)은 ccxt Pro처럼 `kr_broker.pro`에 있습니다. KB증권은 아직 없습니다.
+비동기 판과 실시간 판은 ccxt의 `ccxt.async_support`, `ccxt.pro`와 같은 구조입니다. 요청을 보내는 메서드가 코루틴입니다.
+
+```python
+import asyncio
+
+import kr_broker.pro as kr_broker   # 실시간이 필요 없으면 kr_broker.async_support
+
+
+async def main():
+    async with kr_broker.kis({'apiKey': APP_KEY, 'secret': APP_SECRET, 'uid': '12345678-01'}) as kis:
+        print(await kis.fetch_balance())
+        for _ in range(5):
+            ticker = await kis.watch_ticker('005930/KRW')   # 부를 때마다 다음 갱신을 돌려준다
+            print(ticker['last'])
+
+asyncio.run(main())
+```
+
+- 한국투자증권과 토스증권의 통합 메서드(`fetch_ticker`, `fetch_balance`, `create_order` 등)와 실시간 메서드(`watch_*`)를 TypeScript 판과 같게 옮겼습니다. 모든 엔드포인트는 암묵 메서드로도 부를 수 있습니다. KB증권은 아직 없습니다.
 - 두 판은 같은 엔드포인트 표(`ts/src/spec/`)와 요청 픽스처(`ts/src/test/static/request/`)를 씁니다. CI가 두 판에서 같은 픽스처를 돌려 같은 요청을 만들고 같은 오류를 던지는지 확인합니다.
-- 비동기 판은 `kr_broker.async_support`에 있습니다. ccxt의 `ccxt.async_support`와 같은 구조이고, 요청을 보내는 메서드가 코루틴이라는 것만 다릅니다.
-- Python 3.10 이상이 필요하고 의존성은 `requests`, `aiohttp`, `cryptography`입니다. PyPI에는 아직 게시하지 않았습니다.
+- 자세한 사용법은 [python/README.md](python/README.md)에 있습니다. PyPI에는 아직 게시하지 않았습니다.
 
 ## 알려진 한계
 
