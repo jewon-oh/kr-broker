@@ -409,7 +409,7 @@
       "suggested": null,
       "proposal": null,
       "verified": "spec-only",
-      "note": "금액 주문(소수점 매수)은 미국 시장가 전용이며 `createMarketBuyOrderWithCost`가 부릅니다. 국내는 정수 주만 됩니다.",
+      "note": "금액 주문(소수점 매수)은 미국 시장가 전용이며 `createMarketBuyOrderWithCost`가 부릅니다. 국내는 정수 주만 됩니다. `params`에서 읽지 않은 키는 본문 끝에 합칩니다. 라이브러리가 채우는 본문 필드를 `params`로 주면 요청 없이 `BadRequest`입니다.",
       "spec": "https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1orders/post"
     },
     {

@@ -32,6 +32,10 @@
  * | `expireDate` | 조건주문 만료일(`YYYY-MM-DD`, 한국 시각). 조건주문에는 필요하다 |
  * | `confirmExecution` | `false` 면 접수 뒤 체결 조회를 하지 않는다(기본은 체결이 확정될 때까지 짧게 조회한다) |
  *
+ * 일반 주문은 위 키를 뺀 나머지를 요청 본문 끝에 합친다(ccxt 와 같다). 라이브러리가 인자로 채우는 필드(`symbol`·`side`·`orderType`·`quantity`·
+ * `orderAmount`·`price`·`confirmHighValueOrder`)를 `params` 로 주면 요청 없이 `BadRequest` 다. ccxt 조건 인자(`stopPrice` 등)는 요청 없이 `NotSupported` 다.
+ * `editOrder` 의 일반 정정도 같은 규칙이다.
+ *
  * 접수 응답에는 체결 정보가 없다. 그래서 `createOrder` 는 접수 뒤 주문 상세를 짧게 조회해 체결 수량·평균가·수수료를 확정하고, 확정하지 못하면
  * `filled` 를 비워 둔다(요청값으로 추정해 채우지 않는다). 확정한 값은 `order.info.execution` 에도 있다.
  *
@@ -248,6 +252,21 @@ const TAX_EXEMPT_SECURITY_TYPES: ReadonlySet<string> = new Set(['ETF', 'ETN']);
 const TERMINAL_ORDER_STATUSES: ReadonlySet<TossOrderStatus> = new Set<TossOrderStatus>([
     'FILLED', 'CANCELED', 'REJECTED', 'CANCEL_REJECTED', 'REPLACE_REJECTED', 'REPLACED',
 ]);
+
+/** ccxt 조건 인자. 조건주문은 `triggerPrice` 로만 내므로, 이 키를 버리고 일반 주문을 내지 않게 요청 전에 막는다. */
+const UNSUPPORTED_CONDITIONAL_PARAMS = ['stopPrice', 'stopLossPrice', 'takeProfitPrice', 'stopLoss', 'takeProfit'] as const;
+
+/** 일반 주문 경로가 `params` 에서 읽는 키. 본문에 합치지 않는다. */
+const ORDER_HANDLED_PARAMS = ['triggerPrice', 'cost', 'clientOrderId', 'timeInForce', 'confirmExecution'];
+
+/** 라이브러리가 인자로 채우는 주문 본문 필드. `params` 로 덮으면 돌려주는 주문과 실제 요청이 어긋나므로 받지 않는다. */
+const ORDER_COMPUTED_FIELDS = ['symbol', 'side', 'orderType', 'quantity', 'orderAmount', 'price', 'confirmHighValueOrder'] as const;
+
+/** 일반 정정 경로가 `params` 에서 읽는 키. 본문에 합치지 않는다. */
+const EDIT_HANDLED_PARAMS = ['trigger', 'stop'];
+
+/** 라이브러리가 인자로 채우는 정정 본문 필드(`orderId` 는 경로에 실린다). */
+const EDIT_COMPUTED_FIELDS = ['orderId', 'orderType', 'quantity', 'price', 'confirmHighValueOrder'] as const;
 
 /** 미국 소수점 수량의 최대 자릿수. */
 const US_FRACTION_DIGITS = 6;
@@ -1471,18 +1490,14 @@ export class toss extends Exchange {
     ): Promise<Order> {
         if (side !== 'buy' && side !== 'sell') throw new InvalidOrder(`${this.id} createOrder() side must be 'buy' or 'sell'`);
         if (type !== 'limit' && type !== 'market') throw new InvalidOrder(`${this.id} createOrder() type must be 'limit' or 'market'`);
-        // 조건주문은 `triggerPrice` 로만 낸다. 다른 ccxt 조건 인자를 버리면 조건 없는 일반 주문이 바로 나가므로 요청 전에 막는다.
-        for (const key of ['stopPrice', 'stopLossPrice', 'takeProfitPrice', 'stopLoss', 'takeProfit']) {
-            if (this.safeValue(params, key) !== undefined) {
-                throw new NotSupported(`${this.id} createOrder() 는 조건 인자 ${key} 를 받지 않는다. 조건주문은 params.triggerPrice 나 createTriggerOrder() 로 낸다`);
-            }
-        }
+        this.assertNoConditionalParams('createOrder', params);
         const market = this.market(symbol);
         const country = this.countryOf(market);
 
         if (this.safeValue(params, 'triggerPrice') !== undefined) {
             return this.createConditionalOrder(market, type, side, amount, price, params);
         }
+        this.assertNoComputedParams('createOrder', params, ORDER_COMPUTED_FIELDS);
 
         const isMarket = type === 'market';
         const cost = this.safeNumber(params, 'cost');
@@ -1543,7 +1558,7 @@ export class toss extends Exchange {
             logger.warn({ symbol, notional, country }, '[toss] 고액주문이라 confirmHighValueOrder 를 켠다');
         }
 
-        const response = this.unwrap<TossOrderCreateResponse>(await this.privateAccountPostOrders(body));
+        const response = this.unwrap<TossOrderCreateResponse>(await this.privateAccountPostOrders(this.extend(body, this.omit(params, ORDER_HANDLED_PARAMS))));
         const orderId = this.safeString(response, 'orderId');
         if (orderId === undefined) {
             throw new OrderOutcomeUnknown(`${this.id} 주문 접수 응답에 orderId 가 없다. 접수 여부를 주문 조회로 확인해야 한다`);
@@ -1585,6 +1600,8 @@ export class toss extends Exchange {
             return this.modifyConditionalOrder(id, this.market(symbol), type, side, amount, price, params);
         }
         if (type !== 'limit' && type !== 'market') throw new InvalidOrder(`${this.id} editOrder() type must be 'limit' or 'market'`);
+        this.assertNoConditionalParams('editOrder', params);
+        this.assertNoComputedParams('editOrder', params, EDIT_COMPUTED_FIELDS);
         const market = this.market(symbol);
         const country = this.countryOf(market);
         if (type === 'limit' && price === undefined) throw new ArgumentsRequired(`${this.id} editOrder() requires a price argument for a limit order`);
@@ -1603,7 +1620,7 @@ export class toss extends Exchange {
         const notional = country === 'KR' ? (amount ?? 0) * (price ?? 0) : await this.usEditNotional(id, price);
         if (await this.isHighValue(notional, country)) body.confirmHighValueOrder = true;
 
-        const response = this.unwrap<TossOrderCreateResponse>(await this.privateAccountPostOrdersOrderIdModify(body));
+        const response = this.unwrap<TossOrderCreateResponse>(await this.privateAccountPostOrdersOrderIdModify(this.extend(body, this.omit(params, EDIT_HANDLED_PARAMS))));
         const newOrderId = this.safeString(response, 'orderId');
         if (newOrderId === undefined) {
             throw new OrderOutcomeUnknown(`${this.id} 정정 응답에 orderId 가 없다. 정정 여부를 주문 조회로 확인해야 한다`);
@@ -1668,6 +1685,24 @@ export class toss extends Exchange {
             throw new NotSupported(`${this.id} createMarketBuyOrderWithCost() 는 미국 종목만 지원한다: ${symbol}`);
         }
         return this.createOrder(symbol, 'market', 'buy', 0, undefined, this.extend(params, { cost }));
+    }
+
+    /** ccxt 조건 인자가 있으면 요청 전에 `NotSupported` 다. 본문에 합치거나 버리면 조건 없는 주문이 나간다. */
+    private assertNoConditionalParams(method: string, params: Dict): void {
+        for (const key of UNSUPPORTED_CONDITIONAL_PARAMS) {
+            if (this.safeValue(params, key) !== undefined) {
+                throw new NotSupported(`${this.id} ${method}() 는 조건 인자 ${key} 를 받지 않는다. 조건주문은 params.triggerPrice 나 createTriggerOrder() 로 낸다`);
+            }
+        }
+    }
+
+    /** 라이브러리가 인자로 채우는 본문 필드가 `params` 에 있으면 요청 전에 `BadRequest` 다. 나머지 키는 본문에 합친다. */
+    private assertNoComputedParams(method: string, params: Dict, fields: readonly string[]): void {
+        for (const key of fields) {
+            if (key in params) {
+                throw new BadRequest(`${this.id} ${method}() 의 params.${key} 는 받지 않는다. 인자로 정하는 필드다`);
+            }
+        }
     }
 
     /** `params.timeInForce` 를 토스의 값(`DAY`·`CLS`·`OPG`)으로 확인한다. 없으면 `undefined`(서버 기본 `DAY`). */

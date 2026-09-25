@@ -22,6 +22,9 @@ ccxt 와 같은 모양으로 다룬다. 실시간(`watch_*`)은 이 클래스를
     `timeInForce`(`DAY`·`CLS`·`OPG`), `triggerPrice`(있으면 조건주문), `conditionalType`(`SINGLE`·`OCO`·`OTO`), `second`(둘째 조건),
     `expireDate`(조건주문 만료일), `confirmExecution`(`False` 면 체결 조회를 하지 않는다)를 읽는다. 접수 뒤에는 주문 상세를 짧게 조회해
     체결 수량·평균가·수수료를 확정하고, 확정하지 못하면 `filled` 를 비워 둔다. 확정한 값은 `order['info']['execution']` 에도 있다.
+    일반 주문은 이 키를 뺀 나머지를 요청 본문 끝에 합친다(ccxt 와 같다). 라이브러리가 인자로 채우는 필드(`symbol`·`side`·`orderType`·
+    `quantity`·`orderAmount`·`price`·`confirmHighValueOrder`)를 `params` 로 주면 요청 없이 `BadRequest` 다. ccxt 조건 인자(`stopPrice` 등)는
+    요청 없이 `NotSupported` 다. `edit_order` 의 일반 정정도 같은 규칙이다.
 
 옵션
     `tokenStore`(토큰 저장소), `nxtRouting`(국내 확장세션 주문), `usExtendedLimit`(미국 확장세션 시장가를 지정가로),
@@ -95,6 +98,16 @@ LISTED_MARKETS = ['KOSPI', 'KOSDAQ', 'KR_ETC', 'NYSE', 'NASDAQ', 'AMEX', 'US_ETC
 KR_LISTED_MARKETS = frozenset(['KOSPI', 'KOSDAQ', 'KR_ETC'])
 # 더 이상 체결이 늘지 않는 주문 상태. `REPLACED` 는 체결 정보가 대체 주문으로 옮겨 간다.
 TERMINAL_ORDER_STATUSES = frozenset(['FILLED', 'CANCELED', 'REJECTED', 'CANCEL_REJECTED', 'REPLACE_REJECTED', 'REPLACED'])
+# ccxt 조건 인자. 조건주문은 `triggerPrice` 로만 내므로, 이 키를 버리고 일반 주문을 내지 않게 요청 전에 막는다.
+UNSUPPORTED_CONDITIONAL_PARAMS = ('stopPrice', 'stopLossPrice', 'takeProfitPrice', 'stopLoss', 'takeProfit')
+# 일반 주문 경로가 `params` 에서 읽는 키. 본문에 합치지 않는다.
+ORDER_HANDLED_PARAMS = ['triggerPrice', 'cost', 'clientOrderId', 'timeInForce', 'confirmExecution']
+# 라이브러리가 인자로 채우는 주문 본문 필드. `params` 로 덮으면 돌려주는 주문과 실제 요청이 어긋나므로 받지 않는다.
+ORDER_COMPUTED_FIELDS = ('symbol', 'side', 'orderType', 'quantity', 'orderAmount', 'price', 'confirmHighValueOrder')
+# 일반 정정 경로가 `params` 에서 읽는 키. 본문에 합치지 않는다.
+EDIT_HANDLED_PARAMS = ['trigger', 'stop']
+# 라이브러리가 인자로 채우는 정정 본문 필드(`orderId` 는 경로에 실린다).
+EDIT_COMPUTED_FIELDS = ('orderId', 'orderType', 'quantity', 'price', 'confirmHighValueOrder')
 # 미국 소수점 수량의 최대 자릿수.
 US_FRACTION_DIGITS = 6
 US_FRACTION_SCALE = 10 ** US_FRACTION_DIGITS
@@ -1141,14 +1154,12 @@ class toss(Exchange, ImplicitAPI):
             raise InvalidOrder(f"{self.id} createOrder() side must be 'buy' or 'sell'")
         if type not in ('limit', 'market'):
             raise InvalidOrder(f"{self.id} createOrder() type must be 'limit' or 'market'")
-        # 조건주문은 `triggerPrice` 로만 낸다. 다른 ccxt 조건 인자를 버리면 조건 없는 일반 주문이 바로 나가므로 요청 전에 막는다.
-        for key in ('stopPrice', 'stopLossPrice', 'takeProfitPrice', 'stopLoss', 'takeProfit'):
-            if self.safe_value(params, key) is not None:
-                raise NotSupported(f'{self.id} createOrder() 는 조건 인자 {key} 를 받지 않는다. 조건주문은 params.triggerPrice 나 createTriggerOrder() 로 낸다')
+        self._assert_no_conditional_params('createOrder', params)
         market = self.market(symbol)
         country = self._country_of(market)
         if self.safe_value(params, 'triggerPrice') is not None:
             return self._create_conditional_order(market, type, side, amount, price, params)
+        self._assert_no_computed_params('createOrder', params, ORDER_COMPUTED_FIELDS)
 
         is_market = type == 'market'
         cost = self.safe_number(params, 'cost')
@@ -1211,7 +1222,7 @@ class toss(Exchange, ImplicitAPI):
             body['confirmHighValueOrder'] = True
             logger.warning('[toss] 고액주문이라 confirmHighValueOrder 를 켠다(%s %s %s)', symbol, notional, country)
 
-        response = self.unwrap(self.private_account_post_orders(body))
+        response = self.unwrap(self.private_account_post_orders(self.extend(body, self.omit(params, ORDER_HANDLED_PARAMS))))
         order_id = self.safe_string(response, 'orderId')
         if order_id is None:
             raise OrderOutcomeUnknown(f'{self.id} 주문 접수 응답에 orderId 가 없다. 접수 여부를 주문 조회로 확인해야 한다')
@@ -1253,6 +1264,8 @@ class toss(Exchange, ImplicitAPI):
             return self._modify_conditional_order(id, self.market(symbol), type, side, amount, price, params)
         if type not in ('limit', 'market'):
             raise InvalidOrder(f"{self.id} editOrder() type must be 'limit' or 'market'")
+        self._assert_no_conditional_params('editOrder', params)
+        self._assert_no_computed_params('editOrder', params, EDIT_COMPUTED_FIELDS)
         market = self.market(symbol)
         country = self._country_of(market)
         if type == 'limit' and price is None:
@@ -1275,7 +1288,7 @@ class toss(Exchange, ImplicitAPI):
         if self._is_high_value(notional, country):
             body['confirmHighValueOrder'] = True
 
-        response = self.unwrap(self.private_account_post_orders_orderid_modify(body))
+        response = self.unwrap(self.private_account_post_orders_orderid_modify(self.extend(body, self.omit(params, EDIT_HANDLED_PARAMS))))
         new_order_id = self.safe_string(response, 'orderId')
         if new_order_id is None:
             raise OrderOutcomeUnknown(f'{self.id} 정정 응답에 orderId 가 없다. 정정 여부를 주문 조회로 확인해야 한다')
@@ -1322,6 +1335,18 @@ class toss(Exchange, ImplicitAPI):
         if self._country_of(self.market(symbol)) != 'US':
             raise NotSupported(f'{self.id} createMarketBuyOrderWithCost() 는 미국 종목만 지원한다: {symbol}')
         return self.create_order(symbol, 'market', 'buy', 0, None, self.extend(params, {'cost': cost}))
+
+    def _assert_no_conditional_params(self, method: str, params: Dict[str, Any]) -> None:
+        """ccxt 조건 인자가 있으면 요청 전에 `NotSupported` 다. 본문에 합치거나 버리면 조건 없는 주문이 나간다."""
+        for key in UNSUPPORTED_CONDITIONAL_PARAMS:
+            if self.safe_value(params, key) is not None:
+                raise NotSupported(f'{self.id} {method}() 는 조건 인자 {key} 를 받지 않는다. 조건주문은 params.triggerPrice 나 createTriggerOrder() 로 낸다')
+
+    def _assert_no_computed_params(self, method: str, params: Dict[str, Any], fields: Tuple[str, ...]) -> None:
+        """라이브러리가 인자로 채우는 본문 필드가 `params` 에 있으면 요청 전에 `BadRequest` 다. 나머지 키는 본문에 합친다."""
+        for key in fields:
+            if key in params:
+                raise BadRequest(f'{self.id} {method}() 의 params.{key} 는 받지 않는다. 인자로 정하는 필드다')
 
     def _parse_time_in_force(self, params: Dict[str, Any]) -> Str:
         """`params['timeInForce']` 를 토스의 값(`DAY`·`CLS`·`OPG`)으로 확인한다. 없으면 `None`(서버 기본 `DAY`)."""
