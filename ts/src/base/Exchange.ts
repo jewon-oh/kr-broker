@@ -609,6 +609,28 @@ export class Exchange {
         body: string | undefined = undefined,
         timeoutMs: number = this.timeout,
     ): Promise<any> {
+        const { response, requestHeaders } = await this.sendHttpRequest(url, method, headers, body, timeoutMs);
+        return this.handleRestResponse(response, url, method, requestHeaders, body);
+    }
+
+    /**
+     * HTTP 요청 하나를 보내고 응답을 본문까지 읽어 돌려준다. 응답 해석과 오류 분류(`handleErrors`)는 하지 않는다. Python 판의 `http_request` 와 같다.
+     * 증권사 API 가 아닌 곳(야후 캔들 등)에 보낼 때 쓴다. 주소 검사, 인스턴스 헤더와 `userAgent`, `verbose` 로그, 시간 상한은 `fetch` 와 같다.
+     * 시간 상한이면 `RequestTimeout`, 연결 실패면 `NetworkError` 를 던진다.
+     */
+    async httpRequest(
+        url: string,
+        method = 'GET',
+        headers: Dictionary<string> | undefined = undefined,
+        body: string | undefined = undefined,
+        timeoutMs: number = this.timeout,
+    ): Promise<HttpResponseLike> {
+        return (await this.sendHttpRequest(url, method, headers, body, timeoutMs)).response;
+    }
+
+    private async sendHttpRequest(
+        url: string, method: string, headers: Dictionary<string> | undefined, body: string | undefined, timeoutMs: number,
+    ): Promise<{ response: HttpResponseLike; requestHeaders: Dictionary<string> }> {
         assertSecureUrl(this.id, url, this.options.allowInsecureUrl === true);
         let requestHeaders: Dictionary<string> = extend(this.headers, headers);
         if (this.userAgent !== undefined) requestHeaders = extend({ 'User-Agent': this.userAgent }, requestHeaders);
@@ -644,7 +666,7 @@ export class Exchange {
         } finally {
             clearTimeout(timer);
         }
-        return this.handleRestResponse(response, url, method, requestHeaders, body);
+        return { response, requestHeaders };
     }
 
     /** 응답 본문을 JSON 으로 읽고 `handleErrors` → `handleHttpStatusCode` 순으로 오류를 가린다. 오류가 없으면 파싱한 본문(JSON 이 아니면 원문)을 돌려준다. */

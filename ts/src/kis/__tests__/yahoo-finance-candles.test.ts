@@ -29,11 +29,14 @@ describe('fetchYahooCandles — 미지원 timeframe', () => {
 
 type OHLCV = [number, number, number, number, number, number];
 
+/** `fetch` 가 돌려주는 응답 모양. 본문은 `text()` 로 읽힌다. */
+function fakeResponse(status: number, body: unknown): Response {
+    return { ok: status >= 200 && status < 300, status, statusText: '', headers: new Headers(), text: async () => JSON.stringify(body), json: async () => body } as unknown as Response;
+}
+
 /** Yahoo chart API 정상 응답 mock (candles: [tsMs, o, h, l, c, v][]). */
 function yahooOk(candles: OHLCV[]): Response {
-    return {
-        ok: true,
-        json: async () => ({
+    return fakeResponse(200, {
             chart: {
                 result: [{
                     timestamp: candles.map(c => Math.floor(c[0] / 1000)), // ms → s (코드가 다시 *1000)
@@ -49,21 +52,20 @@ function yahooOk(candles: OHLCV[]): Response {
                 }],
                 error: null,
             },
-        }),
-    } as unknown as Response;
+        });
 }
 
 /** result:null — 버스트 스로틀 신호(재시도 대상). */
 const yahooEmpty = (): Response =>
-    ({ ok: true, json: async () => ({ chart: { result: null, error: null } }) } as unknown as Response);
+    fakeResponse(200, { chart: { result: null, error: null } });
 
 /** chart.error — 존재하지 않는 심볼(재시도 무의미). */
 const yahooChartError = (): Response =>
-    ({ ok: true, json: async () => ({ chart: { result: null, error: { code: 'Not Found', description: 'No data' } } }) } as unknown as Response);
+    fakeResponse(200, { chart: { result: null, error: { code: 'Not Found', description: 'No data' } } });
 
 /** 429 Too Many Requests — 일시적(재시도 대상). */
 const yahoo429 = (): Response =>
-    ({ ok: false, status: 429, json: async () => ({}) } as unknown as Response);
+    fakeResponse(429, {});
 
 describe('fetchYahooCandles — 재시도 (버스트 스로틀 회복)', () => {
     afterEach(() => vi.restoreAllMocks());
@@ -92,14 +94,14 @@ describe('fetchYahooCandles — 재시도 (버스트 스로틀 회복)', () => {
     });
 
     it('결과는 왔는데 시각이 없으면 그 구간에 봉이 없는 것이라 재시도 없이 빈 배열이다', async () => {
-        const noBars = { ok: true, json: async () => ({ chart: { result: [{ meta: { symbol: 'AAPL' }, indicators: { quote: [{}] } }], error: null } }) } as unknown as Response;
+        const noBars = fakeResponse(200, { chart: { result: [{ meta: { symbol: 'AAPL' }, indicators: { quote: [{}] } }], error: null } });
         const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(noBars);
         expect(await fetchYahooCandles('AAPL', '5m', 10)).toEqual([]);
         expect(spy).toHaveBeenCalledTimes(1);
     });
 
     it('404 는 BadSymbol, 재시도를 다 쓴 5xx 는 ExchangeNotAvailable, 연결 실패는 NetworkError 다', async () => {
-        const status = (code: number): Response => ({ ok: false, status: code, json: async () => ({}) } as unknown as Response);
+        const status = (code: number): Response => fakeResponse(code, {});
         vi.spyOn(globalThis, 'fetch').mockResolvedValue(status(404));
         await expect(fetchYahooCandles('005930', '1d', 10)).rejects.toBeInstanceOf(BadSymbol);
         vi.spyOn(globalThis, 'fetch').mockResolvedValue(status(503));
@@ -191,7 +193,8 @@ describe('fetchYahooCandles — since·until', () => {
     it('since 없이 until 만 주면 until 이전의 최근 limit 개다', async () => {
         const out = await fetchYahooCandles('AAPL', '1d', 2, undefined, Date.UTC(2024, 0, 6));
 
-        expect(out.map((c) => c[0])).toEqual([Date.parse('2024-01-04T14:30:00Z'), Date.parse('2024-01-05T14:30:00Z')]);
+        // 야후는 미국 일봉을 개장 시각(09:30 ET)에 두지만, 일봉은 거래일의 00:00 UTC 로 옮긴다.
+        expect(out.map((c) => c[0])).toEqual([Date.parse('2024-01-04T00:00:00Z'), Date.parse('2024-01-05T00:00:00Z')]);
     });
 
     it('★분봉의 조회 폭이 range 값보다 좁으면 일수로 적는다 — 3mo·1mo 는 야후가 422 로 거절한다', async () => {
@@ -229,5 +232,53 @@ describe('fetchYahooCandles — 동시성 상한 (버스트 스로틀 회피)', 
         await Promise.all(Array.from({ length: 20 }, () => fetchYahooCandles('005930', '1d', 10)));
         expect(maxConcurrent).toBeLessThanOrEqual(6);
         expect(maxConcurrent).toBeGreaterThan(1); // 병렬성은 유지(완전 직렬 아님)
+    });
+});
+
+describe('fetchYahooCandles — 일·주·월봉 시각', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it('국내 일봉(09:00 KST)은 그대로 거래일의 00:00 UTC 이고, 미국 일봉(09:30 ET)은 거래일의 00:00 UTC 로 옮긴다', async () => {
+        const bar = (ms: number): OHLCV => [ms, 1, 1, 1, 1, 1];
+        vi.spyOn(globalThis, 'fetch')
+            .mockResolvedValueOnce(yahooOk([bar(Date.parse('2026-09-22T00:00:00Z')), bar(Date.parse('2026-09-23T00:00:00Z'))]))
+            .mockResolvedValueOnce(yahooOk([bar(Date.parse('2026-09-22T13:30:00Z')), bar(Date.parse('2026-09-23T13:30:00Z'))]));
+
+        const kr = await fetchYahooCandles('005930', '1d', 10);
+        const us = await fetchYahooCandles('AAPL', '1d', 10);
+
+        expect(kr.map((c) => c[0])).toEqual([Date.parse('2026-09-22T00:00:00Z'), Date.parse('2026-09-23T00:00:00Z')]);
+        expect(us.map((c) => c[0])).toEqual([Date.parse('2026-09-22T00:00:00Z'), Date.parse('2026-09-23T00:00:00Z')]);
+    });
+
+    it('주봉은 월요일의 00:00 UTC 이고, 끝에 붙는 하루치 시세 봉은 같은 주의 기간 봉을 남기고 버린다', async () => {
+        vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(yahooOk([
+            [Date.parse('2026-09-13T15:00:00Z'), 250, 270, 245, 264, 1000],   // 09-14(월) 00:00 KST
+            [Date.parse('2026-09-20T15:00:00Z'), 264, 285, 263, 285, 900],    // 09-21(월) 00:00 KST
+            [Date.parse('2026-09-23T06:30:00Z'), 284, 285, 281, 285, 200],    // 09-23 15:30 KST, 오늘 하루치
+        ]));
+
+        const out = await fetchYahooCandles('005930', '1w', 10);
+
+        expect(out).toEqual([
+            [Date.parse('2026-09-14T00:00:00Z'), 250, 270, 245, 264, 1000],
+            [Date.parse('2026-09-21T00:00:00Z'), 264, 285, 263, 285, 900],
+        ]);
+    });
+});
+
+describe('fetchYahooCandles — 전송', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it('넘겨받은 전송(증권사 인스턴스의 httpRequest)으로 보내고 전역 fetch 는 부르지 않는다', async () => {
+        const global = vi.spyOn(globalThis, 'fetch');
+        const body = await yahooOk([[Date.parse('2026-09-23T00:00:00Z'), 1, 1, 1, 1, 1]]).text();
+        const httpRequest = vi.fn(async () => ({ status: 200, statusText: '', headers: {}, text: async () => body }));
+
+        const out = await fetchYahooCandles('005930', '1d', 10, undefined, undefined, undefined, { httpRequest });
+
+        expect(out).toHaveLength(1);
+        expect(global).not.toHaveBeenCalled();
+        expect(httpRequest).toHaveBeenCalledWith(expect.stringContaining('/005930.KS?'), 'GET', expect.objectContaining({ 'User-Agent': expect.any(String) }), undefined, 10_000);
     });
 });

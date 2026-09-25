@@ -10,12 +10,38 @@
  * 종목코드 변환: KIS '005930' → Yahoo '005930.KS'
  */
 
-import { BadRequest, BadSymbol, BaseError, ExchangeNotAvailable, NetworkError, NotSupported, RateLimitExceeded } from '../base/errors';
+import { BadRequest, BadSymbol, BaseError, ExchangeNotAvailable, NetworkError, NotSupported, RateLimitExceeded, RequestTimeout } from '../base/errors';
+import type { HttpResponseLike } from '../base/Exchange';
 import { logger } from '../logger';
 import { resampleCandles } from './candle-resample';
-import { timeframeToMs } from '../broker-time';
+import { candlePeriodUtcMs, isDailyOrLongerTimeframe, timeframeToMs } from '../broker-time';
 import { isKrxDomesticCode } from './kis-types';
 import { sliceCandleWindow } from './kis-candle-pagination';
+
+// ============ 전송 ============
+
+/**
+ * 야후 요청을 보내는 곳. 증권사 인스턴스(`Exchange.httpRequest`)를 넘기면 인스턴스의 헤더와 `verbose` 로그, 주소 검사, 전송 오류 분류를 그대로 쓴다.
+ * Python 판이 `exchange.http_request` 로 보내는 것과 같다. 넘기지 않으면 전역 `fetch` 로 보낸다.
+ */
+export interface YahooTransport {
+    httpRequest(url: string, method?: string, headers?: Record<string, string>, body?: string, timeoutMs?: number): Promise<HttpResponseLike>;
+}
+
+/** 전역 `fetch` 로 보내는 기본 전송. 시간 상한이면 `RequestTimeout`, 연결 실패면 `NetworkError` 를 던진다. */
+const GLOBAL_FETCH_TRANSPORT: YahooTransport = {
+    async httpRequest(url, method = 'GET', headers = {}, _body, timeoutMs = YAHOO_REQUEST_TIMEOUT_MS) {
+        try {
+            const res = await fetch(url, { method, headers, signal: AbortSignal.timeout(timeoutMs) });
+            const text = await res.text();
+            return { status: res.status, statusText: res.statusText, headers: res.headers, text: async () => text };
+        } catch (err) {
+            const name = err instanceof Error ? err.name : undefined;
+            if (name === 'TimeoutError' || name === 'AbortError') throw new RequestTimeout(`야후 GET ${url} 요청이 ${timeoutMs}ms 안에 끝나지 않았다`, { cause: err });
+            throw new NetworkError(`야후 GET ${url} 연결에 실패했다: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
+        }
+    },
+};
 
 // ============ 상수 ============
 
@@ -175,6 +201,16 @@ export function alignTailToSeriesGrid(candles: number[][], timeframe: string): v
     last[0] = prev[0]! + Math.floor(delta / tfMs) * tfMs;
 }
 
+/** 같은 타임스탬프가 여러 개면 앞엣것만 남긴다. 제자리 수정, 시간순 유지. 주·월봉 끝에 붙는 하루치 시세 봉을 버릴 때 쓴다. */
+export function dedupeByTimestampKeepFirst(candles: number[][]): void {
+    let write = 0;
+    for (let read = 0; read < candles.length; read++) {
+        if (write > 0 && candles[write - 1]![0] === candles[read]![0]) continue;
+        candles[write++] = candles[read]!;
+    }
+    candles.length = write;
+}
+
 /** 같은 타임스탬프가 여러 개면 뒤엣것(더 최신 체결)만 남긴다. 제자리 수정, 시간순 유지. */
 export function dedupeByTimestampKeepLast(candles: number[][]): void {
     const lastIndexByTs = new Map<number, number>();
@@ -205,6 +241,7 @@ export async function fetchYahooCandles(
     since?: number,
     until?: number,
     krMarket?: 'KOSPI' | 'KOSDAQ',
+    exchange: YahooTransport = GLOBAL_FETCH_TRANSPORT,
 ): Promise<number[][]> {
     // Yahoo 티커 변환 (숫자 코드 → .KS/.KQ 접미사)
     const yahooSymbol = toYahooTicker(stockCode, krMarket);
@@ -251,12 +288,9 @@ export async function fetchYahooCandles(
             const backoff = (): Promise<void> =>
                 yahooSleep(YAHOO_RETRY_BASE_MS * attempt + Math.floor(Math.random() * 250));
             try {
-                const response = await fetch(url, {
-                    headers: { 'User-Agent': YAHOO_USER_AGENT },
-                    signal: AbortSignal.timeout(YAHOO_REQUEST_TIMEOUT_MS),
-                });
+                const response = await exchange.httpRequest(url, 'GET', { 'User-Agent': YAHOO_USER_AGENT }, undefined, YAHOO_REQUEST_TIMEOUT_MS);
 
-                if (!response.ok) {
+                if (response.status < 200 || response.status >= 300) {
                     // 429/5xx = 일시적 스로틀 → 재시도. 그 외 4xx = 즉시 포기. 실패는 빈 배열이 아니라 오류다.
                     const retryable = response.status === 429 || response.status >= 500;
                     logger.warn({ status: response.status, yahooSymbol, attempt, retryable },
@@ -270,7 +304,7 @@ export async function fetchYahooCandles(
                     throw new ExchangeNotAvailable(message);
                 }
 
-                const data = await response.json() as YahooChartResponse;
+                const data = JSON.parse(await response.text()) as YahooChartResponse;
 
                 if (data.chart.error) {
                     // 존재하지 않는 심볼 등 — 재시도 무의미.
@@ -317,6 +351,14 @@ export async function fetchYahooCandles(
                     ]);
                 }
 
+                // 일·주·월봉은 기간 첫날의 00:00 UTC 로 옮긴다(`candlePeriodUtcMs`). 야후는 일봉을 개장 시각에, 주·월봉을 현지 자정에 둔다.
+                // 주·월봉 끝에는 오늘 하루치 시세 봉이 한 번 더 붙는다. 같은 기간의 앞 봉이 오늘까지 담은 기간 봉이라 뒤엣것을 버린다.
+                if (isDailyOrLongerTimeframe(timeframe)) {
+                    const market = /\.(KS|KQ)$/.test(yahooSymbol) ? 'KR' : 'US';
+                    for (const candle of candles) candle[0] = candlePeriodUtcMs(candle[0]!, timeframe, market);
+                    if (!timeframe.endsWith('d')) dedupeByTimestampKeepFirst(candles);
+                }
+
                 // 진행 중 마지막 봉만 그리드에 스냅해 부를 때마다 시각이 바뀌지 않게 한다. 4h 는 받은 1h 봉의 격자로 맞춘 뒤 합친다.
                 const needsResample = timeframe === '4h';
                 alignTailToSeriesGrid(candles, needsResample ? '1h' : timeframe);
@@ -337,8 +379,8 @@ export async function fetchYahooCandles(
 
                 return sliceCandleWindow(finalCandles, since, until, limit);
             } catch (err) {
-                if (err instanceof BaseError) throw err;
-                // 네트워크/타임아웃 = 일시적 → 재시도.
+                // 위에서 일부러 던진 오류는 그대로 올린다. 전송 실패(`NetworkError`·`RequestTimeout` 그 자체)와 해석 실패만 다시 보낸다.
+                if (err instanceof BaseError && err.constructor !== NetworkError && err.constructor !== RequestTimeout) throw err;
                 if (canRetry) {
                     logger.debug({ err, yahooSymbol, attempt }, '[YahooFinance] 요청 실패 — 재시도');
                     await backoff();
@@ -346,6 +388,7 @@ export async function fetchYahooCandles(
                 }
                 logger.warn({ err, stockCode, yahooSymbol: toYahooTicker(stockCode), timeframe },
                     '[YahooFinance] 캔들 조회 실패 (재시도 소진)');
+                if (err instanceof NetworkError) throw err;
                 throw new NetworkError(`야후 캔들 조회 실패(${yahooSymbol} ${timeframe}): ${err instanceof Error ? err.message : String(err)}`, { cause: err });
             }
         }

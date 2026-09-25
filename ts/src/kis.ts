@@ -4843,7 +4843,7 @@ export class kis extends Exchange {
         let yahoo: OHLCV[] = [];
         let yahooError: unknown;
         try {
-            yahoo = await fetchYahooCandles(instrument.symbol, timeframe, limit, since, until, krMarket) as OHLCV[];
+            yahoo = await fetchYahooCandles(instrument.symbol, timeframe, limit, since, until, krMarket, this) as OHLCV[];
         } catch (e) {
             if (fallbackExchange === undefined) throw e;
             yahooError = e;

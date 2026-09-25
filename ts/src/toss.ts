@@ -103,6 +103,7 @@ import {
 } from './base';
 import { confirmExecution, type ExecutionSnapshot } from './execution-confirm';
 import { buildExtendedSessionLimit } from './extended-session-limit';
+import { candlePeriodUtcMs, isDailyOrLongerTimeframe } from './broker-time';
 import { logger } from './logger';
 import type { UsdKrwRateOption } from './options';
 import { applyMarketCalendar } from './market-calendar';
@@ -1228,6 +1229,8 @@ export class toss extends Exchange {
         const until = this.safeInteger(params, 'until');
         const query = this.omit(params, 'until');
         const barStartShift = timeframe === '1m' ? this.parseTimeframe('1m') * 1000 : 0;
+        // 일봉은 거래일의 00:00 UTC 로 옮긴다(`candlePeriodUtcMs`). 토스는 현지 자정(국내 00:00 KST, 미국 00:00 ET)으로 준다.
+        const dailyMarket = isDailyOrLongerTimeframe(timeframe) ? this.countryOf(market) : undefined;
         let before: string | undefined = until !== undefined ? this.iso8601(until) : undefined;
         const rows: OHLCV[] = [];
         let reachedSince = false;
@@ -1246,7 +1249,7 @@ export class toss extends Exchange {
                 const row = this.parseOHLCV(candle, market);
                 const start = row[0];
                 if (start === undefined) continue;
-                const shifted = start - barStartShift;
+                const shifted = dailyMarket !== undefined ? candlePeriodUtcMs(start, timeframe, dailyMarket) : start - barStartShift;
                 if (since !== undefined && shifted <= since) reachedSince = true;
                 if (since !== undefined && shifted < since) continue;
                 rows.push([shifted, row[1], row[2], row[3], row[4], row[5]]);

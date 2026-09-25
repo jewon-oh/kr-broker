@@ -168,7 +168,7 @@ describe('fetchOHLCV — 야후 우선, 미국 일봉은 KIS 폴백', () => {
         const candles = await newKis().fetchOHLCV('005930/KRW', '1h', 5, 100, { until: 1_800_000_000_000 });
 
         expect(candles).toEqual(daily);
-        expect(mockYahoo).toHaveBeenCalledWith('005930/KRW', '1h', 100, 5, 1_800_000_000_000, 'KOSPI'); // 마스터가 KOSPI 로 알려 준 시장 구분이 야후 티커 접미사(.KS)가 된다
+        expect(mockYahoo).toHaveBeenCalledWith('005930/KRW', '1h', 100, 5, 1_800_000_000_000, 'KOSPI', expect.anything()); // 마스터가 KOSPI 로 알려 준 시장 구분이 야후 티커 접미사(.KS)가 된다
         expect(mockFetch).not.toHaveBeenCalled();
     });
 

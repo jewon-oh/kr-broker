@@ -207,12 +207,12 @@ describe('fetchOHLCV — 국내(명세 기준, 실계좌 미검증)', () => {
         expect(bodies.map(b => b.mkt_clsf)).toEqual(['0', '1']);
     });
 
-    it('일봉 — 시각이 없어도 자정(KST)으로 읽는다', async () => {
+    it('일봉 — 시각이 없어도 거래일의 00:00 UTC 로 읽는다', async () => {
         routeTr(mockFetch, { [KBSEC_TR.CHART_KR]: { Record1: [{ dt: '20260819', tm: '0', cls_prc_p2: '70200.00' }] } });
 
         const [candle] = await newExchange().fetchOHLCV('005930/KRW', '1d');
 
-        expect(candle[0]).toBe(Date.UTC(2026, 7, 18, 15, 0, 0)); // 08-19 00:00 KST
+        expect(candle[0]).toBe(Date.UTC(2026, 7, 19)); // 거래일 08-19 의 00:00 UTC
     });
 
     it('limit 은 최근 봉부터 자르고 since 는 그 시각 이후만 남긴다', async () => {
@@ -264,7 +264,8 @@ describe('fetchOHLCV — 국내(명세 기준, 실계좌 미검증)', () => {
         it('until 뒤의 봉은 빼고 그 앞의 최근 limit 개를 돌려준다. until 은 TR 입력으로 보내지 않는다', async () => {
             routeTr(mockFetch, { [KBSEC_TR.CHART_KR]: recentBars(DAY, TODAY) });
 
-            const candles = await newExchange().fetchOHLCV('005930/KRW', '1d', undefined, 2, { until: TODAY - 4 * DAY });
+            // 일봉은 거래일의 00:00 UTC 다. 08-15 봉까지 받는다.
+            const candles = await newExchange().fetchOHLCV('005930/KRW', '1d', undefined, 2, { until: Date.UTC(2026, 7, 15) });
 
             expect(candles.map(c => c[4])).toEqual([14, 15]);
             const sent = trBody(mockFetch, KBSEC_TR.CHART_KR).dataBody;
