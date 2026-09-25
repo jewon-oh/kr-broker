@@ -11,6 +11,7 @@
  */
 
 import { logger } from '../logger';
+import { etYmd } from '../us-market-hours';
 import { resampleCandles } from './candle-resample';
 import type { Exchange } from '../base';
 import { planWindows, mergeCandles } from './kis-candle-pagination';
@@ -265,6 +266,7 @@ export class KISCandleService {
      *
      * KIS 한 번 호출당 100건 반환 — 더 필요하면 BYMD 를 이전 페이지 마지막 일자로 갱신해
      * 반복 호출. timeframe 은 1d/1w/1M 만 지원 (KIS 해외 분봉 미지원).
+     * BYMD 는 미국 거래일이라 실행 환경의 시간대가 아니라 미국 동부 날짜로 적는다.
      */
     async fetchOverseasDailyOHLCV(
         ticker: string,
@@ -281,7 +283,7 @@ export class KISCandleService {
 
         try {
             const all: number[][] = [];
-            let bymd = this.formatDate(new Date());
+            let bymd = etYmd(Date.now());
             const PAGE_SIZE = 100;
             const MAX_PAGES = 10;
 
@@ -323,7 +325,7 @@ export class KISCandleService {
                     `${lastXymd.slice(0, 4)}-${lastXymd.slice(4, 6)}-${lastXymd.slice(6, 8)}T00:00:00Z`,
                 );
                 lastDate.setUTCDate(lastDate.getUTCDate() - 1);
-                bymd = this.formatDate(lastDate);
+                bymd = this.formatUtcDate(lastDate);
             }
 
             const sorted = all.sort((a, b) => a[0] - b[0]);
@@ -342,6 +344,14 @@ export class KISCandleService {
         const y = date.getFullYear();
         const m = String(date.getMonth() + 1).padStart(2, '0');
         const d = String(date.getDate()).padStart(2, '0');
+        return `${y}${m}${d}`;
+    }
+
+    /** 날짜를 UTC 달력 기준 YYYYMMDD 로 변환 */
+    private formatUtcDate(date: Date): string {
+        const y = date.getUTCFullYear();
+        const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+        const d = String(date.getUTCDate()).padStart(2, '0');
         return `${y}${m}${d}`;
     }
 }

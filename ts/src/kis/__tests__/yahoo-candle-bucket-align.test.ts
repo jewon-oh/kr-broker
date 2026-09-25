@@ -80,6 +80,15 @@ describe('alignTailToSeriesGrid', () => {
         }
     });
 
+    it('★월봉(1M)과 대문자 주봉(1W)도 대상이 아니다 — 5분 격자로 내리지 않는다', () => {
+        for (const tf of ['1M', '1W']) {
+            const candles = [bar(ts('2026-07-31T15:00:00Z')), bar(ts('2026-09-24T06:20:17Z'))];
+            const before = JSON.parse(JSON.stringify(candles));
+            alignTailToSeriesGrid(candles, tf);
+            expect(candles, tf).toEqual(before);
+        }
+    });
+
     it('봉이 하나뿐이면 그리드를 추론할 수 없어 그대로 둔다', () => {
         const candles = [bar(ts('2026-08-06T02:30:18Z'))];
         alignTailToSeriesGrid(candles, '1h');

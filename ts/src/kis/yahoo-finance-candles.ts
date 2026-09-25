@@ -10,6 +10,7 @@
  * 종목코드 변환: KIS '005930' → Yahoo '005930.KS'
  */
 
+import { NotSupported } from '../base/errors';
 import { logger } from '../logger';
 import { resampleCandles } from './candle-resample';
 import { timeframeToMs } from '../broker-time';
@@ -170,10 +171,10 @@ interface YahooChartResponse {
  * (KIS 해외 1h 의 99.2% 가 여기 해당). 그래서 절대 격자가 아니라 **직전 완성봉에서
  * tf 배수만큼** 떨어진 지점으로 스냅해 세션 위상을 보존한다.
  *
- * 일봉·주봉은 대상이 아니다 — 진행 중 봉 문제가 없고, 키를 바꾸면 기존 적재분과 어긋난다.
+ * 일봉·주봉·월봉(`d`, `w`, `W`, `M`)은 대상이 아니다 — 진행 중 봉 문제가 없고, 키를 바꾸면 기존 적재분과 어긋난다.
  */
 export function alignTailToSeriesGrid(candles: number[][], timeframe: string): void {
-    if (timeframe.endsWith('d') || timeframe.endsWith('w')) return;
+    if (/[dwWM]$/.test(timeframe)) return;
     if (candles.length < 2) return;
 
     const tfMs = timeframeToMs(timeframe);
@@ -207,6 +208,7 @@ export function dedupeByTimestampKeepLast(candles: number[][]): void {
  * @param until 종료 시간 (ms timestamp, 선택)
  * @param krMarket KOSPI/KOSDAQ 구분 — 미전달 시 .KS 기본값 (KOSDAQ 종목은 .KQ 필요)
  * @returns CCXT 호환 OHLCV: [[timestamp, open, high, low, close, volume], ...]
+ * @throws NotSupported 야후가 주지 않는 타임프레임
  */
 export async function fetchYahooCandles(
     stockCode: string,
@@ -223,14 +225,12 @@ export async function fetchYahooCandles(
     // 호출 측에서 명시적 timeframe 사용을 강제하기 위해 에러 throw 로 전환.
     const interval = YAHOO_INTERVAL_MAP[timeframe];
     if (!interval) {
-        const err = new Error(
+        logger.error({ timeframe, stockCode }, '[YahooFinance] ❌ 미지원 timeframe — silent 폴백 차단');
+        throw new NotSupported(
             `[YahooFinance] 미지원 타임프레임 '${timeframe}'. `
             + `지원: ${Object.keys(YAHOO_INTERVAL_MAP).join(', ')}. `
             + `이전 동작(1d silent 폴백)은 지표 오계산 사고로 폐기.`,
         );
-        err.name = 'UnsupportedTimeframeError';
-        logger.error({ timeframe, stockCode }, '[YahooFinance] ❌ 미지원 timeframe — silent 폴백 차단');
-        throw err;
     }
 
     // URL 구성 (재시도 간 불변 — 루프 밖에서 1회 계산)
@@ -321,8 +321,9 @@ export async function fetchYahooCandles(
                     ]);
                 }
 
-                // 진행 중 마지막 봉만 그리드에 스냅 → 폴링마다 새 행이 쌓이지 않는다.
-                alignTailToSeriesGrid(candles, timeframe);
+                // 진행 중 마지막 봉만 그리드에 스냅 → 폴링마다 새 행이 쌓이지 않는다. 4h 는 받은 1h 봉의 격자로 맞춘 뒤 합친다.
+                const needsResample = timeframe === '4h';
+                alignTailToSeriesGrid(candles, needsResample ? '1h' : timeframe);
                 dedupeByTimestampKeepLast(candles);
 
                 // 종목당 1줄 → 유니버스 스캔에서 분당 수백 줄.
@@ -334,7 +335,6 @@ export async function fetchYahooCandles(
                 }, '[YahooFinance] 캔들 조회 완료');
 
                 // 4h = 1h 데이터를 4시간 단위로 리샘플링
-                const needsResample = timeframe === '4h';
                 const finalCandles = needsResample
                     ? resampleCandles(candles, 4 * 60)
                     : candles;
@@ -383,7 +383,7 @@ function toYahooRange(windowMs: number): string {
 /**
  * 종목코드 → Yahoo Finance 티커 변환
  * - 한국 주식: 005930 → 005930.KS (KOSPI), KOSDAQ 종목은 058470 → 058470.KQ
- * - 미국 주식: AAPL → AAPL (접미사 없음)
+ * - 미국 주식: AAPL → AAPL (접미사 없음). 클래스 주식의 점은 야후 표기인 하이픈으로 바꾼다(BRK.B → BRK-B)
  * - 프론트에서 'stock:AAPL' 또는 '005930/KRW' 형태로 올 수 있으므로 처리
  */
 function toYahooTicker(stockCode: string, krMarket?: 'KOSPI' | 'KOSDAQ'): string {
@@ -399,5 +399,5 @@ function toYahooTicker(stockCode: string, krMarket?: 'KOSPI' | 'KOSDAQ'): string
         return `${code}${suffix}`;
     }
     // 영문 티커 → 미국 주식 (접미사 없음)
-    return code;
+    return code.replaceAll('.', '-');
 }

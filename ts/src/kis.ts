@@ -92,6 +92,7 @@ import { KIS_EXCEPTIONS_EXACT } from './kis/kis-error-codes';
 import { acquireKisSlot } from './kis/kis-rate-limiter';
 import { checkKRXTradingHours, getKrxMarketPhase, isNxtExtendedTradable } from './kis/kis-trading-hours';
 import { getUsMarketPhase, formatEtWallClock } from './kis/us-market-hours';
+import { etWallClockToUtcMs, etYmd } from './us-market-hours';
 import {
     KIS_API_DOMAINS,
     KIS_BROKERAGE_FEE,
@@ -3507,19 +3508,22 @@ function kstHms(ms: number): string {
     return new Date(ms + KST_OFFSET_MS).toISOString().slice(11, 19).replace(/:/g, '');
 }
 
-/** 미국 동부(ET) 달력 날짜 `YYYYMMDD`. 해외 체결 조회의 일자는 현지 시각 기준이다. */
-function etYmd(ms: number): string {
-    return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' })
-        .format(new Date(ms))
-        .replace(/-/g, '');
-}
-
 /** `YYYYMMDD` + `HHMMSS`(KST) → 밀리초. 날짜를 못 읽으면 `undefined`, 시각을 못 읽으면 그날 0시다. */
 function kstTimestamp(ymd: Str, hms: Str): Int {
     if (ymd === undefined || !/^\d{8}$/.test(ymd)) return undefined;
     const time = hms !== undefined && /^\d{6}$/.test(hms) ? hms : '000000';
     const parsed = Date.parse(`${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6, 8)}T${time.slice(0, 2)}:${time.slice(2, 4)}:${time.slice(4, 6)}+09:00`);
     return Number.isNaN(parsed) ? undefined : parsed;
+}
+
+/** `YYYYMMDD` + `HHMMSS`(미국 동부 시각, 서머타임 반영) → 밀리초. 읽는 규칙은 `kstTimestamp` 와 같다. */
+function etTimestamp(ymd: Str, hms: Str): Int {
+    const kst = kstTimestamp(ymd, hms);
+    if (kst === undefined) return undefined;
+    // 한국 시각으로 읽은 값에 9시간을 더하면 같은 벽시계 시각을 UTC 로 읽은 값이 된다.
+    const wall = new Date(kst + KST_OFFSET_MS);
+    return etWallClockToUtcMs(wall.getUTCFullYear(), wall.getUTCMonth() + 1, wall.getUTCDate(), wall.getUTCHours(), wall.getUTCMinutes())
+        + wall.getUTCSeconds() * 1000;
 }
 
 /** 업종 기간별 시세의 기간 구분(`FID_PERIOD_DIV_CODE`)과, `since`가 없을 때 조회 구간을 잡는 데 쓰는 봉 하나의 일수. */
@@ -9817,7 +9821,10 @@ export class kis extends Exchange {
         const f = spec.fields ?? {};
         return rowsOf(this.safeValue(response, spec.rowsKey ?? 'output')).map((row) => ({
             rank: this.safeNumber(row, f.rank ?? 'data_rank'),
-            symbol: `${this.safeString(row, spec.symbolKey, '')}/${spec.overseas ? KIS_OVERSEAS_RANKING_EXCHANGES[prepared.EXCD as string] : 'KRW'}`,
+            // 해외 슬래시 티커(`BRK/B`)는 다른 메서드처럼 점 심볼(`BRK.B/USD`)로 옮긴다.
+            symbol: spec.overseas
+                ? `${this.safeString(row, spec.symbolKey, '').replace('/', '.')}/${KIS_OVERSEAS_RANKING_EXCHANGES[prepared.EXCD as string]}`
+                : `${this.safeString(row, spec.symbolKey, '')}/KRW`,
             name: this.safeString(row, f.name ?? 'hts_kor_isnm') || undefined,
             last: this.safeNumber(row, f.price ?? 'stck_prpr'),
             change: this.safeNumber(row, f.change ?? 'prdy_vrss'),
@@ -10125,14 +10132,22 @@ export class kis extends Exchange {
 
     /**
      * 미체결 주문을 모두 취소한다. 종목을 주면 그 종목만이다. 하나라도 취소하지 못하면 나머지를 다 시도한 뒤 첫 실패를 던진다.
-     * 살아 있을 수 있는 주문을 성공으로 돌려주지 않기 위해서다.
+     * 살아 있을 수 있는 주문을 성공으로 돌려주지 않기 위해서다. 국내 취소에는 공식 예제처럼 미체결 행의 주문채번지점번호(`ord_gno_brno`)를
+     * 원주문 조직번호로 싣는다.
      */
     override async cancelAllOrders(symbol: Str = undefined, params: Dict = {}): Promise<Order[]> {
         const open = await this.fetchOpenOrders(symbol, undefined, undefined, params);
-        const results = await Promise.allSettled(open.map((order) => this.cancelOrder(order.id as string, order.symbol, {})));
+        const results = await Promise.allSettled(open.map((order) => this.cancelOrder(order.id as string, order.symbol, this.cancelParamsOf(order))));
         const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
         if (failed !== undefined) throw failed.reason;
         return results.map((r) => (r as PromiseFulfilledResult<Order>).value);
+    }
+
+    /** `cancelAllOrders` 가 미체결 주문 하나를 취소할 때의 `params`. 해외 취소 요청에는 조직번호가 없어 아무것도 싣지 않는다. */
+    private cancelParamsOf(order: Order): Dict {
+        const orgNo = this.safeString(order.info, 'ord_gno_brno');
+        const overseas = order.symbol !== undefined && this.instrumentOf(order.symbol).overseas;
+        return orgNo === undefined || overseas ? {} : { orderOrgNo: orgNo };
     }
 
     // ============ 주문·체결 조회 ============
@@ -10312,8 +10327,9 @@ export class kis extends Exchange {
             price = this.safeString(order, 'ft_ord_unpr3');
             average = this.safeString(order, 'ft_ccld_unpr3');
             cost = this.safeString(order, 'ft_ccld_amt3');
+            // 국내 주문일시(`dmst_ord_dt`, `thco_ord_tmd`)는 한국 시각, 현지 주문일시(`ord_dt`, `ord_tmd`)는 미국 동부 시각이다.
             timestamp = kstTimestamp(this.safeString(order, 'dmst_ord_dt'), this.safeString(order, 'thco_ord_tmd'))
-                ?? kstTimestamp(this.safeString(order, 'ord_dt'), this.safeString(order, 'ord_tmd'));
+                ?? etTimestamp(this.safeString(order, 'ord_dt'), this.safeString(order, 'ord_tmd'));
             status = this.orderStatusOf(filled, remaining, undefined);
         } else {
             amount = this.safeString(order, 'ord_qty');
@@ -10367,7 +10383,7 @@ export class kis extends Exchange {
             ? (this.safeString2(trade, 'ord_dt', 'dmst_ord_dt') ?? '')
             : (this.safeString(trade, 'ord_dt') ?? '');
         const timestamp = overseas
-            ? (kstTimestamp(this.safeString(trade, 'dmst_ord_dt'), this.safeString(trade, 'thco_ord_tmd')) ?? kstTimestamp(orderDate, this.safeString(trade, 'ord_tmd')))
+            ? (kstTimestamp(this.safeString(trade, 'dmst_ord_dt'), this.safeString(trade, 'thco_ord_tmd')) ?? etTimestamp(orderDate, this.safeString(trade, 'ord_tmd')))
             : kstTimestamp(orderDate, this.safeString(trade, 'ord_tmd'));
         const sideCode = this.safeString(trade, 'sll_buy_dvsn_cd');
         const suffix = overseas ? `:${this.safeString(trade, 'ovrs_excg_cd', '')}` : '';

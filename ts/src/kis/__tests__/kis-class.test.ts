@@ -9,7 +9,9 @@ vi.mock('../yahoo-finance-candles', () => ({ fetchYahooCandles: mockYahoo }));
 global.fetch = mockFetch as unknown as typeof fetch;
 
 import { kis } from '../../kis';
+import type { Exchange } from '../../base';
 import { NotSupported } from '../../base/errors';
+import { KISCandleService } from '../kis-candle-service';
 import { krxSellTaxRate } from '../../krx-sell-tax';
 import { KIS_MASTER_FIXTURE } from '../../__tests__/support/kis-master-fixture';
 import { dataOk, newKis as newKisBase, tokenOk } from './support/kis-test-utils';
@@ -184,6 +186,31 @@ describe('candles() — KIS 원본 캔들', () => {
         const candles = await newKis().candles().fetchOverseasDailyOHLCV('AAPL', 'NAS', '1d', 10);
 
         expect(candles).toHaveLength(3);
+    });
+
+    it('★해외 일봉의 기준일(BYMD)은 미국 동부 날짜이고 다음 페이지는 마지막 일자의 하루 전이다 — 실행 환경의 시간대와 무관하다', async () => {
+        // 동부 3/24 22:00(EDT). UTC·KST·UTC+14 로는 3/25 이고, UTC-7(로스앤젤레스)로는 다음 페이지 기준일이 이틀 전으로 밀리던 시각이다.
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(Date.parse('2026-03-25T02:00:00Z'));
+        try {
+            const ymd = (daysBefore: number) => new Date(Date.UTC(2026, 2, 24 - daysBefore)).toISOString().slice(0, 10).replace(/-/g, '');
+            const row = (xymd: string) => ({ xymd, open: '1', high: '2', low: '0.5', clos: '1.5', tvol: '10' });
+            const pages = [{ output2: Array.from({ length: 100 }, (_, i) => row(ymd(i))) }, { output2: [row(ymd(100))] }];
+            const bymds: unknown[] = [];
+            const fake = {
+                privateGetUapiOverseasPriceV1QuotationsDailyprice: async (params: Record<string, unknown>) => {
+                    bymds.push(params.BYMD);
+                    return pages.shift();
+                },
+            };
+
+            const candles = await new KISCandleService(fake as unknown as Exchange).fetchOverseasDailyOHLCV('AAPL', 'NAS', '1d', 150);
+
+            expect(bymds).toEqual(['20260324', '20251214']);
+            expect(candles).toHaveLength(101);
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it('국내 일봉을 오래된 순으로 돌려준다', async () => {
