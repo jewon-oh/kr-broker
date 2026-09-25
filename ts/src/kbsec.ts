@@ -1903,18 +1903,18 @@ export class kbsec extends Exchange {
     ): Promise<any> {
         const trCode = path.toUpperCase();
         // 차단기가 열려 있으면 KB 를 부르지 않는다. 근거는 `kbsec-token-breaker.ts`.
-        throwIfTokenBreakerOpen(trCode);
+        throwIfTokenBreakerOpen((this.apiKey as string), trCode);
         // 요청마다 새 헤더 객체를 쓴다. `authenticate` 가 여기에 토큰을 싣고, 실패했을 때 어느 토큰이었는지 여기서 읽는다.
         const requestHeaders: Dictionary<string> = { ...headers };
         try {
             const response = await super.fetch2(path, api, method, params, requestHeaders, body, config);
-            recordKbsecCallOk();
+            recordKbsecCallOk((this.apiKey as string));
             return response;
         } catch (error) {
             const tokenFailed = error instanceof AuthenticationError && error.detail === KBSEC_ERROR_DETAIL.TOKEN_INVALID;
             if (!tokenFailed) {
                 // 응답을 읽고 던진 오류(업무 거절)는 토큰이 통했다는 뜻이므로 차단기를 푼다. 전송 실패는 아무것도 알려 주지 않는다.
-                if (error instanceof ExchangeError) recordKbsecCallOk();
+                if (error instanceof ExchangeError) recordKbsecCallOk((this.apiKey as string));
                 throw error;
             }
             const failedToken = String(requestHeaders['Authorization'] ?? '').replace(/^bearer /i, '');
@@ -1926,7 +1926,7 @@ export class kbsec extends Exchange {
                 return this.fetchWithTokenRecovery(path, api, method, params, headers, body, config, false);
             }
             // 폐기·회전까지 하고도 토큰 실패면 우리 쪽에서 쓸 수단이 다 떨어진 상태다.
-            recordTokenFailure(trCode, KBSEC_ERROR_DETAIL.TOKEN_INVALID);
+            recordTokenFailure((this.apiKey as string), trCode, KBSEC_ERROR_DETAIL.TOKEN_INVALID);
             throw error;
         }
     }

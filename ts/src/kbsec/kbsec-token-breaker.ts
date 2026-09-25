@@ -11,8 +11,8 @@
  * 429 를 세는 레이트리밋으로는 막을 수 없다. KB 는 이 오류를 HTTP 500 과 봉투 안의 processCode 로 주기 때문에, 상태 코드에 가려진 업무
  * 오류는 제동 장치를 그대로 통과한다.
  *
- * 프로세스 안 상태다. 프로세스마다 독립적으로 멈추면 충분하고, 정상 응답이 한 번 오면 즉시 닫힌다. 인스턴스를 다시 만들어도 상태가
- * 유지되도록 모듈 수준에 둔다.
+ * 프로세스 안 상태이고 앱키마다 따로 센다. 한 계정의 실패가 같은 프로세스의 다른 계정을 막지 않는다. 정상 응답이 한 번 오면 그 앱키의
+ * 차단기는 즉시 닫힌다. 인스턴스를 다시 만들어도 상태가 유지되도록 모듈 수준의 `Map` 에 둔다.
  */
 
 import { logger } from '../logger';
@@ -25,13 +25,22 @@ const TOKEN_BREAKER = {
     OPEN_MS: 10 * 60 * 1000,
 } as const;
 
-let tokenFailureStreak = 0;
-let breakerOpenUntil = 0;
+/** 앱키별 상태. 한 프로세스가 KB 계정 여럿을 쓰면 한 계정의 실패가 다른 계정을 막지 않아야 한다. */
+const states = new Map<string, { streak: number; openUntil: number }>();
 
-/** 차단기가 열려 있으면 KB 를 부르지 않고 즉시 실패시킨다. */
-export function throwIfTokenBreakerOpen(trCode: string): void {
-    if (breakerOpenUntil <= Date.now()) return;
-    const leftSec = Math.ceil((breakerOpenUntil - Date.now()) / 1000);
+function stateOf(appKey: string): { streak: number; openUntil: number } {
+    let state = states.get(appKey);
+    if (state === undefined) {
+        state = { streak: 0, openUntil: 0 };
+        states.set(appKey, state);
+    }
+    return state;
+}
+
+export function throwIfTokenBreakerOpen(appKey: string, trCode: string): void {
+    const state = states.get(appKey);
+    if (state === undefined || state.openUntil <= Date.now()) return;
+    const leftSec = Math.ceil((state.openUntil - Date.now()) / 1000);
     throw new ExchangeNotAvailable(
         `KB증권 토큰 실패가 연속 ${TOKEN_BREAKER.THRESHOLD}회 이어져 호출을 중단했다 `
         + `(${trCode}, ${leftSec}초 후 재시도). 폐기·회전으로도 낫지 않는 상태이며 `
@@ -40,35 +49,34 @@ export function throwIfTokenBreakerOpen(trCode: string): void {
     );
 }
 
-/** 회전 뒤에도 실패한 토큰 오류 1건을 센다. 임계를 넘으면 차단기를 연다. */
-export function recordTokenFailure(trCode: string, processCode: string): void {
-    tokenFailureStreak++;
-    if (tokenFailureStreak < TOKEN_BREAKER.THRESHOLD || breakerOpenUntil > Date.now()) return;
-    breakerOpenUntil = Date.now() + TOKEN_BREAKER.OPEN_MS;
+export function recordTokenFailure(appKey: string, trCode: string, processCode: string): void {
+    const state = stateOf(appKey);
+    state.streak++;
+    if (state.streak < TOKEN_BREAKER.THRESHOLD || state.openUntil > Date.now()) return;
+    state.openUntil = Date.now() + TOKEN_BREAKER.OPEN_MS;
     logger.error(
-        { trCode, processCode, streak: tokenFailureStreak, openMs: TOKEN_BREAKER.OPEN_MS },
+        { trCode, processCode, streak: state.streak, openMs: TOKEN_BREAKER.OPEN_MS },
         '[kbsec] 토큰 실패가 연속 임계를 넘어 KB 호출을 중단한다 — 폐기·회전으로도 낫지 않는 상태다. '
         + 'KB 개발자포털에서 앱키 상태를 확인할 것(반복 실패는 KB 가 명시한 계정 제한 사유)',
     );
 }
 
-/** 토큰이 정상 동작한 호출 1건. 연속 카운터와 차단기를 즉시 초기화한다. */
-export function recordKbsecCallOk(): void {
-    if (tokenFailureStreak === 0 && breakerOpenUntil === 0) return;
-    if (breakerOpenUntil > 0) {
+export function recordKbsecCallOk(appKey: string): void {
+    const state = states.get(appKey);
+    if (state === undefined || (state.streak === 0 && state.openUntil === 0)) return;
+    if (state.openUntil > 0) {
         logger.info({}, '[kbsec] 토큰 정상 응답 — 차단기 해제');
     }
-    tokenFailureStreak = 0;
-    breakerOpenUntil = 0;
+    state.streak = 0;
+    state.openUntil = 0;
 }
 
-/** 테스트 전용. 차단기 상태를 초기화한다. */
+/** 테스트용. 모든 앱키의 상태를 지운다. */
 export function __resetKbsecTokenBreaker(): void {
-    tokenFailureStreak = 0;
-    breakerOpenUntil = 0;
+    states.clear();
 }
 
-/** 테스트·진단용. 현재 차단기 상태. */
-export function kbsecTokenBreakerState(): { streak: number; openUntil: number } {
-    return { streak: tokenFailureStreak, openUntil: breakerOpenUntil };
+export function kbsecTokenBreakerState(appKey: string): { streak: number; openUntil: number } {
+    const state = states.get(appKey);
+    return { streak: state?.streak ?? 0, openUntil: state?.openUntil ?? 0 };
 }

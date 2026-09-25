@@ -205,7 +205,8 @@ export class KBSecAuth {
      * KIS·Toss 어댑터는 이미 `async invalidate()` 로 await 한다 — kbsec 만 달랐다.
      */
     async invalidate(failedToken?: string): Promise<void> {
-        this.cachedToken = null;
+        // 실패한 토큰이 캐시에 그대로 있을 때만 비운다. 동시 요청 가운데 먼저 끝난 쪽이 새 토큰을 받아 뒀으면 그것을 지우지 않는다.
+        if (failedToken === undefined || this.cachedToken?.accessToken === failedToken) this.cachedToken = null;
         const store = this.storeOf();
         if (store) {
             try {
@@ -413,7 +414,10 @@ export class KBSecAuth {
         const ttlMs = typeof payload.expires_in === 'number' && payload.expires_in > 0
             ? payload.expires_in * 1000
             : KBSEC_TOKEN_DEFAULT_TTL_MS;
-        const expiresAt = Date.now() + Math.max(0, ttlMs - KBSEC_TOKEN_SAFETY_MARGIN_MS);
+        // 수명이 안전 여유의 두 배보다 짧으면(KB 는 만료 직전에 3초, 1초를 준다) 여유를 수명의 절반으로 줄인다. 여유를 다 빼면 만료 시각이
+        // 지금이 되어 TR 마다 새로 발급한다.
+        const shortLived = ttlMs <= KBSEC_TOKEN_SAFETY_MARGIN_MS * 2;
+        const expiresAt = Date.now() + (shortLived ? Math.floor(ttlMs / 2) : ttlMs - KBSEC_TOKEN_SAFETY_MARGIN_MS);
 
         this.cachedToken = { accessToken, expiresAt };
 
@@ -421,7 +425,7 @@ export class KBSecAuth {
         // 보장되지 않아 **더 오래된 토큰이 캐시에 남을 수 있다**. KIS·Toss 와 동일.
         const store = this.storeOf();
         const ttlSec = Math.floor((expiresAt - Date.now()) / 1000);
-        if (store && ttlSec > 0) {
+        if (store && ttlSec > 0 && !shortLived) {
             // 남은 수명이 0 이하면 쓰지 않는다 — KB 가 `expires_in` 을 3초·1초로 주는 응답이
             // 실제로 관측됐다. 그걸 최소 1초로 끌어올려 저장하면 다른 파드가
             // 곧바로 만료될 토큰을 가져다 쓴다. 캐시 미스가 재발급보다 싸다.
