@@ -57,6 +57,7 @@ from kr_broker.base.errors import (
 from kr_broker.base.precise import Precise
 from kr_broker.base.token_store import BrokerTokenStore, legacy_token_store_key, token_store_key
 from kr_broker.base.types import ApiName, Int, Num, Str, Strings
+from kr_broker.broker_time import candle_period_utc_ms, is_daily_or_longer_timeframe
 from kr_broker.market_calendar import apply_market_calendar
 from kr_broker.toss_fee import pick_commission_rate
 from kr_broker.toss_trading_hours import (
@@ -906,6 +907,8 @@ class toss(Exchange, ImplicitAPI):
         until = self.safe_integer(params, 'until')
         query = self.omit(params, 'until')
         bar_start_shift = int(self.parse_timeframe('1m') * 1000) if timeframe == '1m' else 0
+        # 일봉은 거래일의 00:00 UTC 로 옮긴다(`candle_period_utc_ms`). 토스는 현지 자정(국내 00:00 KST, 미국 00:00 ET)으로 준다.
+        daily_market = self._country_of(market) if is_daily_or_longer_timeframe(timeframe) else None
         before = self.iso8601(until) if until is not None else None
         rows: List[List[Any]] = []
         reached_since = False
@@ -924,7 +927,7 @@ class toss(Exchange, ImplicitAPI):
                 start = row[0]
                 if start is None:
                     continue
-                shifted = start - bar_start_shift
+                shifted = candle_period_utc_ms(start, timeframe, daily_market) if daily_market is not None else start - bar_start_shift
                 if since is not None and shifted <= since:
                     reached_since = True
                 if since is not None and shifted < since:

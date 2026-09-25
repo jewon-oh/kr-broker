@@ -580,7 +580,7 @@ def test_async_confirm_execution_and_extended_session_limit() -> None:
 
 def test_async_yahoo_caps_concurrent_requests() -> None:
     payload = json.dumps({'chart': {'result': [{
-        'timestamp': [1_700_000_000], 'indicators': {'quote': [{'open': [1], 'high': [2], 'low': [0.5], 'close': [1.5], 'volume': [100]}]},
+        'timestamp': [1_699_920_000], 'indicators': {'quote': [{'open': [1], 'high': [2], 'low': [0.5], 'close': [1.5], 'volume': [100]}]},
     }], 'error': None}}).encode('utf-8')
 
     class SlowHttp:
@@ -600,7 +600,7 @@ def test_async_yahoo_caps_concurrent_requests() -> None:
         return await asyncio.gather(*(async_yahoo.fetch_yahoo_candles('005930', '1d', 10, exchange=http) for _ in range(20)))
 
     results = asyncio.run(main())
-    assert all(r == [[1_700_000_000_000, 1, 2, 0.5, 1.5, 100]] for r in results)
+    assert all(r == [[1_699_920_000_000, 1, 2, 0.5, 1.5, 100]] for r in results)
     assert 1 < SlowHttp.max_active <= async_yahoo.YAHOO_MAX_CONCURRENT
 
 

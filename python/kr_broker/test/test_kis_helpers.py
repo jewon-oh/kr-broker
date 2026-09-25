@@ -241,7 +241,8 @@ def yahoo_ok(candles: List[List[float]]) -> FakeResponse:
 YAHOO_EMPTY = FakeResponse(200, {'chart': {'result': None, 'error': None}})
 YAHOO_CHART_ERROR = FakeResponse(200, {'chart': {'result': None, 'error': {'code': 'Not Found', 'description': 'No data'}}})
 YAHOO_429 = FakeResponse(429, {})
-ONE = [[1_700_000_000_000, 1, 2, 0.5, 1.5, 100]]
+# 봉 시각은 규칙(거래일의 00:00 UTC)에 맞는 값을 쓴다. 재시도 테스트라 시각을 옮기지 않게 한다.
+ONE = [[1_699_920_000_000, 1, 2, 0.5, 1.5, 100]]
 
 
 @pytest.fixture
@@ -261,7 +262,7 @@ def test_yahoo_retries_empty_then_succeeds(no_backoff: None) -> None:
     session = FakeSession([YAHOO_EMPTY, yahoo_ok(ONE)])
     out = fetch_yahoo_candles('005930', '1d', 10, exchange=Exchange({'session': session}))
     assert len(session.urls) == 2
-    assert out == [[1_700_000_000_000, 1, 2, 0.5, 1.5, 100]]
+    assert out == ONE
 
 
 def test_yahoo_chart_error_does_not_retry(no_backoff: None) -> None:
@@ -312,11 +313,12 @@ def test_yahoo_since_until_takes_first_limit_from_since(no_backoff: None, monkey
     session = FakeSession([yahoo_ok(US_DAILY)])
     exchange = Exchange({'session': session})
     out = fetch_yahoo_candles('AAPL', '1d', 3, utc('2024-01-01T00:00:00'), utc('2024-01-06T00:00:00'), exchange=exchange)
-    assert [c[0] for c in out] == [utc('2024-01-02T14:30:00'), utc('2024-01-03T14:30:00'), utc('2024-01-04T14:30:00')]
+    # 야후는 미국 일봉을 개장 시각(09:30 ET)에 두지만, 일봉은 거래일의 00:00 UTC 로 옮긴다.
+    assert [c[0] for c in out] == [utc('2024-01-02T00:00:00'), utc('2024-01-03T00:00:00'), utc('2024-01-04T00:00:00')]
     # range 는 지금에서 거슬러 세므로 until 이 아니라 since 부터 지금까지를 덮는다(814일 → 5y).
     assert 'range=5y' in session.urls[0]
     out = fetch_yahoo_candles('AAPL', '1d', 2, None, utc('2024-01-06T00:00:00'), exchange=exchange)
-    assert [c[0] for c in out] == [utc('2024-01-04T14:30:00'), utc('2024-01-05T14:30:00')]
+    assert [c[0] for c in out] == [utc('2024-01-04T00:00:00'), utc('2024-01-05T00:00:00')]
 
 
 def test_yahoo_minute_since_beyond_cap_warns(no_backoff: None, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
@@ -579,3 +581,16 @@ def test_order_status_of() -> None:
     assert broker._order_status_of('3', '7', 'N') == 'open'
     assert broker._order_status_of('10', '0', None) == 'closed'
     assert broker._order_status_of('0', '0', None) is None
+
+
+def test_candle_period_utc_ms_uses_utc_midnight_of_the_local_period_start() -> None:
+    from kr_broker.broker_time import candle_period_utc_ms, is_daily_or_longer_timeframe
+    assert candle_period_utc_ms(utc('2026-09-23T00:00:00'), '1d', 'KR') == utc('2026-09-23T00:00:00')
+    assert candle_period_utc_ms(utc('2026-09-22T15:00:00'), '1d', 'KR') == utc('2026-09-23T00:00:00')
+    assert candle_period_utc_ms(utc('2026-09-24T13:30:00'), '1d', 'US') == utc('2026-09-24T00:00:00')
+    assert candle_period_utc_ms(utc('2026-01-15T05:00:00'), '1d', 'US') == utc('2026-01-15T00:00:00')
+    assert candle_period_utc_ms(utc('2026-09-23T06:30:00'), '1w', 'KR') == utc('2026-09-21T00:00:00')
+    assert candle_period_utc_ms(utc('2026-03-08T05:00:00'), '1w', 'US') == utc('2026-03-02T00:00:00')
+    assert candle_period_utc_ms(utc('2026-09-24T20:00:00'), '1M', 'US') == utc('2026-09-01T00:00:00')
+    assert candle_period_utc_ms(utc('2026-09-24T20:00:00'), '1y', 'US') == utc('2026-01-01T00:00:00')
+    assert [is_daily_or_longer_timeframe(t) for t in ('1d', '1w', '1W', '1M', '1y', '1m', '4h')] == [True] * 5 + [False] * 2

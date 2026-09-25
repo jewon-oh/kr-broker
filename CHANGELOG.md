@@ -6,6 +6,7 @@
 
 ### 바뀜(호환되지 않음)
 
+- 일봉, 주봉, 월봉의 `timestamp`를 세 증권사 모두 그 기간 첫날(그 시장의 현지 날짜)의 00:00 UTC로 맞춥니다. 주봉은 월요일, 월봉은 1일입니다. ccxt의 일봉 관례와 같습니다. 바뀌는 곳은 한국투자증권 미국 일봉(야후의 09:30 ET), 야후 주봉과 월봉(현지 자정), 토스 일봉(현지 자정), KB증권 국내 봉과 `fetchOverseasCandles`의 일, 주, 월, 연봉(현지 자정)입니다. 한국투자증권 국내 일봉(09:00 KST = 00:00 UTC)은 그대로입니다. Python 판도 같습니다.
 - KB증권 토큰 발급이 연결 실패나 시간 초과, 업무 코드 없는 5xx, 429로 끝나면 `AuthenticationError` 대신 `NetworkError` 계열(`NetworkError`, `RequestTimeout`, `ExchangeNotAvailable`, `RateLimitExceeded`)을 던집니다. 예전에는 일시 장애도 자격증명 오류처럼 보였습니다. 이때는 다른 본문 형태로 다시 보내지 않습니다. 봉투에 업무 코드가 있는 실패(E021 등)는 그대로 `AuthenticationError`입니다.
 - 한국투자증권 캔들의 야후 조회가 404 가 아닌 4xx(조회 폭 초과 422 등)로 끝나면 `BadRequest`를 던집니다. 예전에는 일시 장애처럼 보이는 `ExchangeNotAvailable`이었습니다. 5xx 와 재시도를 다 쓴 실패는 그대로 `ExchangeNotAvailable`입니다.
 - 요청 주소가 `https`가 아니면 보내기 전에 `BadRequest`를 던집니다. 루프백 주소는 예외입니다. 프록시 시험 등으로 평문 주소가 필요하면 `options.allowInsecureUrl`을 켭니다.
@@ -41,6 +42,7 @@
 
 ### 추가
 
+- `Exchange.httpRequest(url, method, headers, body, timeoutMs)`: 응답 해석 없이 HTTP 요청 하나를 보내고 응답을 돌려줍니다. Python 판의 `http_request`와 같습니다. `fetchYahooCandles`는 마지막 인자로 이 메서드를 가진 전송을 받고, 한국투자증권은 자기 인스턴스를 넘깁니다. 그래서 야후 요청도 인스턴스의 헤더와 `verbose` 로그, 주소 검사를 따릅니다. 인자 없이 부르면 예전처럼 전역 `fetch`로 보냅니다.
 - KB증권 `options.hostAddr`(`{ ipAddr, macAddr }`)로 TR 본문에 싣는 호스트 주소를 정할 수 있습니다. 주지 않으면 예전처럼 이 호스트에서 모읍니다.
 - `watch*`가 `params.signal`(`AbortSignal`)을 받습니다. 신호가 오면 기다리던 호출만 `AbortError`로 끝나고, 쌓인 갱신은 다음 호출이 받습니다.
 - 한국투자증권 `createPriceStream`과 Python `create_price_stream`이 구독 거부 콜백 `onSubscribeError`(`on_subscribe_error`)를 받습니다.
@@ -67,6 +69,7 @@
 
 ### 고침
 
+- 야후 주봉과 월봉 끝에 붙어 오는 하루치 시세 봉이 같은 기간의 봉과 함께 결과에 두 번 들어가던 것을 고쳤습니다. 이제 오늘까지 담은 기간 봉만 남깁니다(Python 판도 같습니다).
 - 토스증권의 미체결 조건주문과 종료된 주문 조회가, 서버가 이미 요청한 커서를 다음 커서로 다시 주면 같은 쪽을 쪽 수 상한까지 되풀이해 받고 같은 주문을 여러 번 담던 것을 고쳤습니다. 이제 되풀이된 커서에서 멈추고, 이미 담은 주문번호는 건너뜁니다(Python 판도 같습니다).
 - KB증권이 조회 기준 영업일(`ordr_dt`)을 정할 때 받아 둔 KRX 휴장일 캘린더도 건너뜁니다. 예전에는 주말만 건너뛰어, 공휴일마다 KB가 거절할 조회(2854)를 먼저 보냈습니다. 캘린더에 없는 휴장일은 예전처럼 2854를 받고 하루씩 되감습니다.
 - 한국투자증권의 주문, 체결, 잔고 시각과 KB증권 캔들 시각을 `kstStamp`와 같은 규칙으로 읽습니다. 예전에는 달력에 없는 날짜(`20260230`)를 다른 날로 넘겼고, 한국투자증권은 앞의 0이 빠진 시각(`93000`)을 그날 0시로 읽었습니다. 이제 달력에 없는 날짜는 `undefined`이고, 빠진 0은 채워 읽습니다. 범위를 넘는 시각(`250000`)은 다음 시각으로 넘기지 않고 그날 0시로 읽습니다(Python 판도 같습니다).

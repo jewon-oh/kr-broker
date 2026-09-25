@@ -373,6 +373,7 @@ asyncio.run(main())
 - 토스증권의 캔들과 조건 주문은 국내 종목 테스트로만 확인했습니다. 미국 종목은 확인하지 못했습니다.
 - 토스증권 미체결 조건 주문은 100건씩 최대 10쪽(1,000건)까지 받습니다. 넘으면 로그를 남기고 나머지는 자릅니다. `fetchOpenOrders`와 `includeTrigger`를 켠 `cancelAllOrders`가 이 범위를 대상으로 합니다.
 - 한국투자증권 캔들은 증권사 API가 아니라 야후 파이낸스에서 받습니다. 미국 일봉, 주봉, 월봉이 비어 있으면 한국투자증권 API로 다시 받습니다.
+- 일봉, 주봉, 월봉의 `timestamp`는 세 증권사 모두 그 기간 첫날(그 시장의 현지 날짜)의 00:00 UTC입니다. 주봉은 월요일, 월봉은 1일입니다. ccxt의 일봉 관례와 같습니다.
 - KB증권 캔들은 코스피를 기본으로 조회합니다. 코스닥 종목은 `params.mkt_clsf = '1'`을 전달합니다.
 - KB증권 `createOrder`는 조건 인자(`triggerPrice`, `stopPrice`, `stopLossPrice`, `takeProfitPrice`)를 받지 않고 요청 전에 `NotSupported`를 던집니다. 스탑지정가는 `createTriggerOrder`로 냅니다.
 - KB증권 미체결 행에는 주문 시각이 없어서 `fetchOpenOrders`는 `since`를 적용하지 않습니다. `since`를 전달해도 미체결 전체를 반환합니다.

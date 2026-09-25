@@ -16,7 +16,7 @@ from kr_broker.async_support.base.runtime import new_semaphore, sleep_seconds
 from kr_broker.base import functions as fn
 from kr_broker.base.errors import BadRequest, BadSymbol, BaseError, ExchangeNotAvailable, NetworkError, NotSupported, RateLimitExceeded, RequestTimeout
 from kr_broker.broker_krx_code import is_krx_domestic_code
-from kr_broker.broker_time import timeframe_to_ms
+from kr_broker.broker_time import candle_period_utc_ms, is_daily_or_longer_timeframe, timeframe_to_ms
 from kr_broker.kis_candle_pagination import slice_candle_window
 from kr_broker.kis_candle_resample import resample_candles
 
@@ -97,6 +97,16 @@ def align_tail_to_series_grid(candles: List[List[float]], timeframe: str) -> Non
     if delta <= 0 or delta % tf_ms == 0:
         return
     last[0] = prev[0] + math.floor(delta / tf_ms) * tf_ms
+
+
+def dedupe_by_timestamp_keep_first(candles: List[List[float]]) -> None:
+    """같은 시각의 봉이 여러 개면 앞엣것만 남긴다(제자리 수정, 시간순 유지). 주·월봉 끝에 붙는 하루치 시세 봉을 버릴 때 쓴다."""
+    kept: List[List[float]] = []
+    for candle in candles:
+        if kept and kept[-1][0] == candle[0]:
+            continue
+        kept.append(candle)
+    candles[:] = kept
 
 
 def dedupe_by_timestamp_keep_last(candles: List[List[float]]) -> None:
@@ -225,6 +235,14 @@ async def fetch_yahoo_candles(stock_code: str, timeframe: str = '1d', limit: int
                         continue
                     ts = timestamps[i]
                     candles.append([0 if ts is None else ts * 1000, open_, high, low, close, 0 if volume is None else volume])
+                # 일·주·월봉은 기간 첫날의 00:00 UTC 로 옮긴다(`candle_period_utc_ms`). 야후는 일봉을 개장 시각에, 주·월봉을 현지 자정에 둔다.
+                # 주·월봉 끝에는 오늘 하루치 시세 봉이 한 번 더 붙는다. 같은 기간의 앞 봉이 오늘까지 담은 기간 봉이라 뒤엣것을 버린다.
+                if is_daily_or_longer_timeframe(timeframe):
+                    market = 'KR' if yahoo_symbol.endswith(('.KS', '.KQ')) else 'US'
+                    for candle in candles:
+                        candle[0] = candle_period_utc_ms(candle[0], timeframe, market)
+                    if not timeframe.endswith('d'):
+                        dedupe_by_timestamp_keep_first(candles)
                 # 4h 는 받은 1h 봉의 격자로 맞춘 뒤 합친다.
                 needs_resample = timeframe == '4h'
                 align_tail_to_series_grid(candles, '1h' if needs_resample else timeframe)

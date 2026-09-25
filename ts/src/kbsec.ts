@@ -39,6 +39,7 @@
  * - KB 는 "잘못된 조회의 과도한 반복"을 계정 제한 사유로 든다. 영구 실패(권한 없음 등)한 조회는 이 인스턴스에서 다시 부르지 않는다.
  */
 
+import { candlePeriodUtcMs, isDailyOrLongerTimeframe } from './broker-time';
 import { logger } from './logger';
 import type { UsdKrwRateOption } from './options';
 import { masterDataOf } from './kis/kis-master-data';
@@ -1269,6 +1270,8 @@ function kbsecSectorIndex(row: Dict): KbsecSectorIndex {
 export type KbsecOverseasChartType = 'tick' | 'minute' | 'day' | 'week' | 'month' | 'year';
 
 const KBSEC_OVERSEAS_CHART_CODE: Record<KbsecOverseasChartType, string> = { tick: '1', minute: '2', day: '3', week: '4', month: '5', year: '6' };
+/** 해외 차트 종류 가운데 기간 봉의 타임프레임. 틱과 분봉은 없다. */
+const KBSEC_OVERSEAS_CHART_PERIOD: Partial<Record<KbsecOverseasChartType, string>> = { day: '1d', week: '1w', month: '1M', year: '1y' };
 
 /** 해외 차트 레코드수 상한(명세의 최대요청개수) */
 const KBSEC_OVERSEAS_CHART_MAX = 5000;
@@ -2709,7 +2712,11 @@ export class kbsec extends Exchange {
         });
         const received = pickArray(body);
         const rows = received.filter(row => kbsecCandleTimestamp(pickStr(row, 'dt'), pickStr(row, 'tm')) !== undefined);
-        const candles = this.parseOHLCVs(rows, market, timeframe).filter((candle) => until === undefined || (candle[0] as number) <= until);
+        // 일·주·월봉은 KB 가 현지 자정(00:00 KST)으로 주므로 기간 첫날의 00:00 UTC 로 옮긴다(`candlePeriodUtcMs`).
+        const daily = isDailyOrLongerTimeframe(timeframe);
+        const candles = this.parseOHLCVs(rows, market, timeframe)
+            .map((candle) => (daily ? [candlePeriodUtcMs(candle[0] as number, timeframe, 'KR'), ...candle.slice(1)] as OHLCV : candle))
+            .filter((candle) => until === undefined || (candle[0] as number) <= until);
         const oldest = candles[0]?.[0];
         if (since !== undefined && received.length >= count && oldest !== undefined && oldest > since) {
             logger.warn({ symbol: market.symbol, timeframe, since, oldest, count }, '[kbsec] 봉 조회건수 상한에 닿아 since 까지 받지 못했다. 받은 가장 오래된 봉부터 돌려준다');
@@ -2752,10 +2759,16 @@ export class kbsec extends Exchange {
             clsf: '',
             ...params,
         });
+        // 일·주·월·연봉은 KB 가 현지 자정(00:00 ET)으로 주므로 기간 첫날의 00:00 UTC 로 옮긴다(`candlePeriodUtcMs`).
+        const period = KBSEC_OVERSEAS_CHART_PERIOD[chartType];
+        const stamp = (row: Dict): number | undefined => {
+            const ms = kbsecUsCandleTimestamp(pickStr(row, 'dt'), pickStr(row, 'tm'));
+            return ms !== undefined && period !== undefined ? candlePeriodUtcMs(ms, period, 'US') : ms;
+        };
         return {
             fields: kbsecRawResponse(body).fields,
             candles: pickArray(body).map((row) => ({
-                ...this.msStamp(kbsecUsCandleTimestamp(pickStr(row, 'dt'), pickStr(row, 'tm'))),
+                ...this.msStamp(stamp(row)),
                 date: pickStr(row, 'dt'),
                 time: pickStr(row, 'tm'),
                 open: pickNum(row, 'opn_prc_p4'),

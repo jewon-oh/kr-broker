@@ -88,7 +88,7 @@ describe('fetchSectorRanking', () => {
 describe('fetchOverseasCandles', () => {
     const quoteOnNys = (body: Record<string, unknown>) => (body.krx_cd === 'NYS' ? { now_prc_p4: '180.5' } : { now_prc_p4: '0' });
 
-    it('현재가 조회로 거래소코드를 찾고 전체 입력을 보낸다. 봉 시각은 미국 동부 시각을 UTC 로 바꾸고 원문도 둔다', async () => {
+    it('현재가 조회로 거래소코드를 찾고 전체 입력을 보낸다. 일봉 시각은 거래일의 00:00 UTC 이고 원문 날짜와 시각도 둔다', async () => {
         routeTr(mockFetch, {
             [KBSEC_TR.QUOTE_US]: quoteOnNys,
             [KBSEC_TR.CHART_US]: {
@@ -103,10 +103,10 @@ describe('fetchOverseasCandles', () => {
             krx_cd: 'NYS', is_cd: 'AAPL', chrt_clsf: '3', bndl: '', mdfy_stk_prc_use_f: '', rcrd_c: '100', srch_strt_dy: '', clsf: '',
         });
         expect(chart.fields).toMatchObject({ hngl_is_nm: '애플', mrkt_prc_clsf: '지연' });
-        // 봉 시각은 미국 동부 현지 시각이다(실계좌 확인). 2026-09-22 16:00 EDT = 20:00Z.
+        // KB 가 주는 봉 시각은 미국 동부 현지 시각이다(실계좌 확인). 일봉은 거래일의 00:00 UTC 로 옮기고, 원문은 date·time 에 남긴다.
         expect(chart.candles).toEqual([{
-            timestamp: Date.UTC(2026, 8, 22, 20, 0, 0),
-            datetime: '2026-09-22T20:00:00.000Z',
+            timestamp: Date.UTC(2026, 8, 22),
+            datetime: '2026-09-22T00:00:00.000Z',
             date: '20260922', time: '160000', open: 178, high: 181, low: 177.5, close: 180.5, volume: 5000, tradingValue: 900000,
             info: expect.objectContaining({ dt: '20260922' }),
         }]);
