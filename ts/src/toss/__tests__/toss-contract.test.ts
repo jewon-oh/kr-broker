@@ -78,6 +78,8 @@ const harness: BrokerContractHarness = {
         state.server = installFakeToss({
             'GET /api/v1/orders': jsonOk({ orders: [open('OID-A'), open('OID-B')] }),
             'POST /api/v1/orders/OID-A/cancel': jsonOk({ orderId: 'OID-C' }),
+            // 취소를 접수한 원주문은 상세 조회로 확정한다.
+            'GET /api/v1/orders/OID-A': jsonOk({ ...open('OID-A'), status: 'CANCELED' }),
             'POST /api/v1/orders/OID-B/cancel': errorReply(422, 'something-new', '취소 거절'),
         });
         return makeToss().cancelAllOrders();
