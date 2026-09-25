@@ -17,6 +17,7 @@ vi.mock('../kis-trading-hours', () => ({
     checkKRXTradingHours: () => mockTradable(),
     getKrxMarketPhase: () => mockPhase(),
     isNxtExtendedTradable: () => mockExtended(),
+    getNxtSession: () => (mockExtended() ? 'after-market' : 'closed'),
 }));
 vi.mock('../us-market-hours', () => ({
     getUsMarketPhase: () => mockUsPhase(),

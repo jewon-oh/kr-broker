@@ -90,7 +90,7 @@ import { krxSellTaxRate } from './krx-sell-tax';
 import { KISAuth } from './kis/kis-auth';
 import { KIS_EXCEPTIONS_EXACT } from './kis/kis-error-codes';
 import { acquireKisSlot } from './kis/kis-rate-limiter';
-import { checkKRXTradingHours, getKrxMarketPhase, isNxtExtendedTradable } from './kis/kis-trading-hours';
+import { checkKRXTradingHours, getKrxMarketPhase, getNxtSession, isNxtExtendedTradable } from './kis/kis-trading-hours';
 import { getUsMarketPhase, formatEtWallClock } from './kis/us-market-hours';
 import { etWallClockToUtcMs, etYmd } from './us-market-hours';
 import {
@@ -4893,8 +4893,9 @@ export class kis extends Exchange {
      * 주문. 수량은 정수 주로 내린다(소수점 매수는 지원하지 않는다). 거래시간 밖은 주문을 보내지 않고 `MarketClosed` 를 던진다.
      *
      * `params`:
-     * - `session`: `'regular'` 이나 `'nxt'`. 생략하면 `options.nxtRouting` 과 NXT 확장세션 시각으로 자동 판정한다(국내).
- *   확장세션이면 종목이 NXT 에서 거래되는지 먼저 확인하고, 아니면 `MarketClosed` 를 던진다(실전만).
+     * - `session`: `'regular'` 이나 `'nxt'`. 다른 값은 `BadRequest` 다. 생략하면 `options.nxtRouting` 과 NXT 확장세션 시각으로 자동 판정한다(국내).
+     *   `'nxt'` 는 NXT 프리마켓(08:00~08:50), 메인마켓(09:00~15:20), 애프터마켓(15:30~20:00)에만 낸다. 그 밖의 시각과 휴장일은 `MarketClosed` 다.
+     *   확장세션이면 종목이 NXT 에서 거래되는지 먼저 확인하고, 아니면 `MarketClosed` 를 던진다(실전만).
      * - 그 밖의 키는 요청 본문에 그대로 합친다.
      *
      * 국내 시장가는 `ORD_DVSN=01`, 지정가는 `00` 이다. 미국은 지정가만 낼 수 있고, 실전에서 `market` 을 주면 장마감지정가(LOC)로 낸다.
@@ -4935,11 +4936,17 @@ export class kis extends Exchange {
 
     private async createDomesticOrder(instrument: KisInstrument, type: OrderType, side: OrderSide, quantity: number, price: Num, params: Dict): Promise<Order> {
         const session = this.safeString(params, 'session');
+        if (session !== undefined && session !== 'regular' && session !== 'nxt') {
+            throw new BadRequest(`${this.id} createOrder() 의 params.session 은 'regular' 이나 'nxt' 여야 한다: ${session}`);
+        }
         params = this.omit(params, 'session');
-        // 확장세션(NXT 프리 08:00~08:50, 애프터 15:30~20:00)은 정규장 게이트를 우회하고 SOR 로 낸다. `nxtRouting` 옵션이 꺼져 있으면 정규장 규칙이다.
+        // 확장세션(NXT 프리 08:00~08:50, 애프터 15:30~20:00)은 정규장 게이트 대신 NXT 게이트를 거쳐 SOR 로 낸다. `nxtRouting` 옵션이 꺼져 있으면 정규장 규칙이다.
         const extended = session === 'nxt'
             || (session === undefined && (await this.isOptionEnabled('nxtRouting')) && isNxtExtendedTradable());
-        if (extended) await this.assertNxtTradable(instrument);
+        if (extended) {
+            await this.assertNxtSessionOpen();
+            await this.assertNxtTradable(instrument);
+        }
         let limitPrice = type === 'limit' ? price : undefined;
         if (!extended) {
             await this.assertDomesticSessionOpen(side);
@@ -7205,6 +7212,7 @@ export class kis extends Exchange {
      * 주식 신용주문(`order-credit`, 매수 TR `TTTC0052U`, 매도 `TTTC0051U`). 신용유형(`creditType`)은 방향별로 설명에 적힌 코드만 받는다(매수 21, 23, 26, 28,
      * 매도 22, 24, 25, 27). 대출일자는 신용매수면 오늘(한국 날짜)이 기본이고, 신용매도는 매도할 종목의 대출일자(`loanDate`, `YYYYMMDD`)가 필수다.
      * 지정가는 주문구분 `00`에 가격을, 시장가는 `01`에 가격 `0`을 보낸다. 설명 없는 선택 입력은 예제처럼 보내지 않는다.
+     * `createOrder` 와 같은 정규장 게이트를 거친다(장 시간 밖과 종가 동시호가의 신규 매수는 `MarketClosed`).
      */
     async createCreditOrder(
         symbol: string, type: OrderType, side: OrderSide, amount: number, price: Num, creditType: string, loanDate: Str = undefined, params: Dict = {},
@@ -7217,9 +7225,12 @@ export class kis extends Exchange {
         if (!buy && loanDate === undefined) throw new ArgumentsRequired(`${this.id} ${method}() 의 신용매도에는 loanDate(대출일자 YYYYMMDD)가 필요하다`);
         const limit = type === 'limit';
         if (!limit && type !== 'market') throw new BadRequest(`${this.id} ${method}() 의 type 은 limit 이나 market 이어야 한다: ${type}`);
+        const quantity = this.integerQuantity(amount, method);
+        const unitPrice = limit ? this.positivePrice(price, method) : '0';
+        await this.assertDomesticSessionOpen(side);
         const response = await this.privatePostUapiDomesticStockV1TradingOrderCredit(this.extend({
             ...this.accountParams(), PDNO: code, CRDT_TYPE: creditType, LOAN_DT: this.ymdOrToday(loanDate, method),
-            ORD_DVSN: limit ? KIS_ORDER_TYPE.LIMIT : KIS_ORDER_TYPE.MARKET, ORD_QTY: this.integerQuantity(amount, method), ORD_UNPR: limit ? this.positivePrice(price, method) : '0',
+            ORD_DVSN: limit ? KIS_ORDER_TYPE.LIMIT : KIS_ORDER_TYPE.MARKET, ORD_QTY: quantity, ORD_UNPR: unitPrice,
             tr_id: buy ? 'TTTC0052U' : 'TTTC0051U',
         }, params));
         return this.orderAck(response, method, 'odno');
@@ -9959,6 +9970,38 @@ export class kis extends Exchange {
         }
     }
 
+    /**
+     * NXT 확장세션 게이트. 프리마켓, 메인마켓, 애프터마켓에만 낸다. 휴장일과 새벽, NXT 가 멈추는 시간(08:50~09:00, KRX 종가 동시호가 15:20~15:30)은 막는다.
+     * 휴장일은 KIS 캘린더로 알아야 하므로 먼저 받는다.
+     */
+    private async assertNxtSessionOpen(): Promise<void> {
+        await this.refreshMarketCalendar();
+        const phase = getNxtSession();
+        if (phase !== 'pre-market' && phase !== 'main' && phase !== 'after-market') {
+            throw new MarketClosed(`NXT 거래시간 외 (session=${phase})`);
+        }
+    }
+
+    /**
+     * 국내 정정 게이트. KRX 정규장과 NXT 확장세션이 모두 닫혀 있으면 막는다. 정정은 신규 진입이 아니라서 동시호가의 매수 제한은 걸지 않는다.
+     * 원주문이 어느 시장에 걸려 있는지는 정정 요청에 없으므로 둘 중 하나라도 열려 있으면 보낸다.
+     */
+    private async assertDomesticEditOpen(): Promise<void> {
+        await this.refreshMarketCalendar();
+        const { tradable, reason } = checkKRXTradingHours();
+        if (tradable) return;
+        const phase = getNxtSession();
+        if (phase === 'pre-market' || phase === 'main' || phase === 'after-market') return;
+        throw new MarketClosed(`거래시간 외: ${reason} (NXT session=${phase})`);
+    }
+
+    /** 미국 정정 게이트. 주문과 같이 완전 마감(`closed`)만 막는다. 홍콩·일본·베트남은 대상이 아니다. */
+    private assertUsEditOpen(exchange: string): void {
+        if (US_ORDER_EXCHANGES.has(exchange) && getUsMarketPhase() === 'closed') {
+            throw new MarketClosed(`미국장 정규장 외 (${formatEtWallClock()}, phase=closed)`);
+        }
+    }
+
     /** 국내 정규장 게이트. 휴장일은 KIS 캘린더로 알아야 하므로 먼저 받는다. 종가 동시호가(15:20~15:30)의 신규 매수는 막는다. */
     private async assertDomesticSessionOpen(side: OrderSide): Promise<void> {
         await this.refreshMarketCalendar();
@@ -10092,7 +10135,7 @@ export class kis extends Exchange {
      * 정정. 취소와 같은 엔드포인트(`order-rvsecncl`)를 `RVSE_CNCL_DVSN_CD`로 나눈다(공식 예제: `01`=정정, `02`=취소).
      * `price`가 필수다(정정은 단가를 바꾸는 주문이라 빼면 KB증권과 같은 이유로 위험하다). `amount`를 주면 그 수량으로
      * 일부정정(`QTY_ALL_ORD_YN: 'N'`)하고, 안 주면 국내는 전량(`'Y'`)을 그대로 정정한다. 공식 예제는 정정 가능 수량이
-     * 원주문 수량을 넘지 못한다고 적었다.
+     * 원주문 수량을 넘지 못한다고 적었다. 국내는 KRX 정규장과 NXT 확장세션이 모두 닫혀 있으면, 미국은 완전 마감이면 `MarketClosed` 다.
      */
     override async editOrder(
         id: string, symbol: string, _type: OrderType, _side: OrderSide, amount: Num = undefined, price: Num = undefined, params: Dict = {},
@@ -10102,6 +10145,7 @@ export class kis extends Exchange {
         }
         const instrument = this.instrumentOf(symbol);
         if (instrument.overseas) return this.editOverseasOrder(id, instrument, price, amount, params);
+        await this.assertDomesticEditOpen();
         const response = await this.privatePostUapiDomesticStockV1TradingOrderRvsecncl(this.extend({
             ...this.accountParams(),
             KRX_FWDG_ORD_ORGNO: this.safeString(params, 'orderOrgNo', ''),
@@ -10128,8 +10172,11 @@ export class kis extends Exchange {
         const exchange = instrument.orderExchange;
         if (exchange === undefined) throw new BadSymbol(`해외 마스터에 없는 ticker: ${instrument.symbol}`);
         let quantity = this.safeString(params, 'amount') ?? (amount === undefined ? undefined : numberToString(amount));
+        if (quantity === undefined && this.isSandboxModeEnabled) {
+            throw new ArgumentsRequired(`${this.id} 모의투자의 해외 주문 정정에는 amount나 params.amount(정정 수량)가 필요하다`);
+        }
+        this.assertUsEditOpen(exchange);
         if (quantity === undefined) {
-            if (this.isSandboxModeEnabled) throw new ArgumentsRequired(`${this.id} 모의투자의 해외 주문 정정에는 amount나 params.amount(정정 수량)가 필요하다`);
             const open = (await this.fetchOpenOrders(instrument.symbol)).find((order) => order.id === id);
             if (open === undefined) throw new OrderNotFound(`${this.id} 미체결 해외 주문을 찾지 못했다: ${id}`);
             quantity = numberToString(open.remaining ?? open.amount ?? 0);

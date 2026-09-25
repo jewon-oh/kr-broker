@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 global.fetch = mockFetch as unknown as typeof fetch;
 
-import { ArgumentsRequired, BadRequest, BadSymbol, InvalidOrder, NotSupported } from '../../base/errors';
+import { ArgumentsRequired, BadRequest, BadSymbol, InvalidOrder, MarketClosed, NotSupported } from '../../base/errors';
 import { bodyOf, dataOk, headersOf, newKis as newKisBase, tokenOk } from './support/kis-test-utils';
 import { KIS_MASTER_FIXTURE } from '../../__tests__/support/kis-master-fixture';
 import type { kis } from '../../kis';
@@ -291,7 +291,12 @@ const ORDER_CASES: OrderCase[] = [
 describe('확장 주문', () => {
     it.each(ORDER_CASES)('$name 는 $path 에 TR $tr 로 본문을 보내고 접수 결과를 돌려준다', async (c) => {
         fixKst();
-        mockFetch.mockResolvedValueOnce(tokenOk()).mockResolvedValueOnce(dataOk({ output: { ODNO: '0000117057', ORD_TMD: '101530', RSVN_ORD_SEQ: '88794', OVRS_RSVN_ODNO: '0030008245', ORD_DT: '20260922' } }));
+        // 신용주문은 정규장 게이트가 휴장일 캘린더를 먼저 받는다.
+        mockFetch.mockImplementation(async (url: string) => {
+            if (String(url).includes('/oauth2/')) return tokenOk();
+            if (String(url).includes('/chk-holiday')) return dataOk({ output: [] });
+            return dataOk({ output: { ODNO: '0000117057', ORD_TMD: '101530', RSVN_ORD_SEQ: '88794', OVRS_RSVN_ODNO: '0030008245', ORD_DT: '20260922' } });
+        });
 
         const ack = await c.call(newKis()) as { orderId: string };
 
@@ -348,6 +353,15 @@ describe('확장 주문', () => {
             'domestic-bond/v1/trading/sell', 'domestic-bond/v1/trading/order-rvsecncl',
         ];
         for (const path of paths) expect(post[`uapi/${path}`]?.order, path).toBe(true);
+    });
+
+    it('★신용주문은 createOrder 와 같은 정규장 게이트를 거친다. 장 밖이면 주문 요청 없이 MarketClosed 다', async () => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date('2026-09-23T12:00:00Z')); // 21:00 KST
+        mockFetch.mockImplementation(async (url: string) => (String(url).includes('/oauth2/') ? tokenOk() : dataOk({ output: [] })));
+
+        await expect(newKis().createCreditOrder('005930/KRW', 'limit', 'buy', 3, 70000, '21')).rejects.toThrow(MarketClosed);
+        expect(find('/order-credit')).toBe(-1);
     });
 
     it('주문 입력이 틀리면 보내기 전에 거절한다', async () => {

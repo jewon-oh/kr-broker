@@ -78,7 +78,7 @@ from kr_broker.kis_types import (
     KIS_OVERSEAS_ORD_DVSN, KIS_PRESENT_BALANCE_PARAMS, KIS_WS_DOMAINS, get_tick_size,
 )
 from kr_broker.krx_sell_tax import krx_sell_tax_rate
-from kr_broker.krx_trading_hours import check_krx_trading_hours, get_krx_market_phase, is_nxt_extended_tradable
+from kr_broker.krx_trading_hours import check_krx_trading_hours, get_krx_market_phase, get_nxt_session, is_nxt_extended_tradable
 from kr_broker.us_market_hours import et_wall_clock_to_utc_ms, et_ymd, format_et_wall_clock, get_us_market_phase
 
 logger = logging.getLogger('kr_broker')
@@ -1704,10 +1704,13 @@ class kis(Exchange, ImplicitAPI):
     async def _create_domestic_order(self, instrument: KisInstrument, type: str, side: str, quantity: int, price: Num,
                                params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         session = self.safe_string(params, 'session')
+        if session is not None and session not in ('regular', 'nxt'):
+            raise BadRequest(f"{self.id} createOrder() 의 params.session 은 'regular' 이나 'nxt' 여야 한다: {session}")
         params = self.omit(params, 'session')
-        # 확장세션(NXT 프리 08:00~08:50, 애프터 15:30~20:00)은 정규장 게이트를 건너뛰고 SOR 로 낸다. `nxtRouting` 이 꺼져 있으면 정규장 규칙이다.
+        # 확장세션(NXT 프리 08:00~08:50, 애프터 15:30~20:00)은 정규장 게이트 대신 NXT 게이트를 거쳐 SOR 로 낸다. `nxtRouting` 이 꺼져 있으면 정규장 규칙이다.
         extended = session == 'nxt' or (session is None and self.is_option_enabled('nxtRouting') and is_nxt_extended_tradable())
         if extended:
+            await self._assert_nxt_session_open()
             await self._assert_nxt_tradable(instrument)
         limit_price = price if type == 'limit' else None
         if not extended:
@@ -1793,6 +1796,31 @@ class kis(Exchange, ImplicitAPI):
             self._nxt_eligibility[instrument.code] = entry
         if entry['blockedReason'] is not None:
             raise MarketClosed(f"NXT 확장시간 주문 불가: {entry['blockedReason']} ({instrument.symbol})")
+
+    async def _assert_nxt_session_open(self) -> None:
+        """NXT 확장세션 게이트. 프리마켓, 메인마켓, 애프터마켓에만 낸다. 휴장일과 새벽, NXT 가 멈추는 시간(08:50~09:00, KRX 종가 동시호가
+        15:20~15:30)은 막는다. 휴장일은 KIS 캘린더로 알아야 해서 먼저 받는다."""
+        await self.refresh_market_calendar()
+        phase = get_nxt_session()
+        if phase not in ('pre-market', 'main', 'after-market'):
+            raise MarketClosed(f'NXT 거래시간 외 (session={phase})')
+
+    async def _assert_domestic_edit_open(self) -> None:
+        """국내 정정 게이트. KRX 정규장과 NXT 확장세션이 모두 닫혀 있으면 막는다. 정정은 신규 진입이 아니라서 동시호가의 매수 제한은 걸지 않는다.
+        원주문이 어느 시장에 걸려 있는지는 정정 요청에 없으므로 둘 중 하나라도 열려 있으면 보낸다."""
+        await self.refresh_market_calendar()
+        hours = check_krx_trading_hours()
+        if hours['tradable']:
+            return
+        phase = get_nxt_session()
+        if phase in ('pre-market', 'main', 'after-market'):
+            return
+        raise MarketClosed(f"거래시간 외: {_tpl(hours.get('reason'))} (NXT session={phase})")
+
+    def _assert_us_edit_open(self, exchange: str) -> None:
+        """미국 정정 게이트. 주문과 같이 완전 마감(`closed`)만 막는다. 홍콩·일본·베트남은 대상이 아니다."""
+        if exchange in US_ORDER_EXCHANGES and get_us_market_phase() == 'closed':
+            raise MarketClosed(f'미국장 정규장 외 ({format_et_wall_clock()}, phase=closed)')
 
     async def _assert_domestic_session_open(self, side: str) -> None:
         """국내 정규장 게이트. 휴장일은 KIS 캘린더로 알아야 해서 먼저 받는다. 종가 동시호가(15:20~15:30)의 신규 매수는 막는다."""
@@ -1924,12 +1952,14 @@ class kis(Exchange, ImplicitAPI):
     async def edit_order(self, id: str, symbol: str, type: str, side: str, amount: Num = None, price: Num = None,
                    params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """정정. 취소와 같은 엔드포인트(`order-rvsecncl`)를 `RVSE_CNCL_DVSN_CD` 로 나눈다(`01` 정정, `02` 취소). `price` 가 필요하다.
-        `amount` 를 주면 그 수량으로 일부 정정(`QTY_ALL_ORD_YN: 'N'`)하고, 주지 않으면 국내는 전량(`'Y'`)을 정정한다."""
+        `amount` 를 주면 그 수량으로 일부 정정(`QTY_ALL_ORD_YN: 'N'`)하고, 주지 않으면 국내는 전량(`'Y'`)을 정정한다.
+        국내는 KRX 정규장과 NXT 확장세션이 모두 닫혀 있으면, 미국은 완전 마감이면 `MarketClosed` 다."""
         if price is None:
             raise ArgumentsRequired(f'{self.id} editOrder() requires a price argument')
         instrument = self._instrument_of(symbol)
         if instrument.overseas:
             return await self._edit_overseas_order(id, instrument, price, amount, params)
+        await self._assert_domestic_edit_open()
         response = await self.private_post_uapi_domestic_stock_v1_trading_order_rvsecncl(self.extend(self.extend(self._account_params(), {
             'KRX_FWDG_ORD_ORGNO': self.safe_string(params, 'orderOrgNo', ''),
             'ORGN_ODNO': id,
@@ -1956,9 +1986,10 @@ class kis(Exchange, ImplicitAPI):
         quantity = self.safe_string(params, 'amount')
         if quantity is None and amount is not None:
             quantity = self.number_to_string(amount)
+        if quantity is None and self.isSandboxModeEnabled:
+            raise ArgumentsRequired(f'{self.id} 모의투자의 해외 주문 정정에는 amount나 params.amount(정정 수량)가 필요하다')
+        self._assert_us_edit_open(exchange)
         if quantity is None:
-            if self.isSandboxModeEnabled:
-                raise ArgumentsRequired(f'{self.id} 모의투자의 해외 주문 정정에는 amount나 params.amount(정정 수량)가 필요하다')
             quantity = await self._open_quantity(id, instrument)
         response = await self.private_post_uapi_overseas_stock_v1_trading_order_rvsecncl(self.extend(self.extend(self._account_params(), {
             'OVRS_EXCG_CD': exchange,
