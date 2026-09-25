@@ -61,6 +61,16 @@ describe('scripts/gen-ts-abstract.mjs', () => {
         expect(text.split('\n').filter((line) => line.endsWith(': ImplicitApiMethod;')).length).toBe(Object.keys(tossSpec.endpoints).length);
     });
 
+    it('경로 유니언 타입은 쓰는 곳이 있는 kis 에만 만들고, 표의 private GET 경로를 모두 담는다', () => {
+        const text = generator.renderTsAbstract(kisSpec as BrokerSpec);
+        const paths = Object.values((kisSpec as BrokerSpec).endpoints).filter((ep) => ep.api.join('.') === 'private' && ep.method === 'GET').map((ep) => ep.path);
+
+        expect(text).toContain('export type KisPrivateGetPath =');
+        expect(text.split('\n').filter((line) => line.startsWith('    | ')).map((line) => line.replace(/^    \| '(.*)';?$/, '$1'))).toEqual(paths);
+        expect(generator.renderTsAbstract(tossSpec as BrokerSpec)).not.toContain('export type');
+        expect(generator.renderTsAbstract(kbsecSpec as BrokerSpec)).not.toContain('export type');
+    });
+
     it('커밋된 TypeScript 선언이 표와 같다(--check)', () => {
         const result = spawnSync(process.execPath, [GENERATOR, '--check'], { cwd: ROOT, encoding: 'utf8' });
 

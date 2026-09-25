@@ -86,7 +86,7 @@ import {
     type Market,
 } from './base';
 import { implicitMethodName, kstTimestampOf } from './base/Exchange';
-import { KIS_API_TREE, type KisImplicitApi } from './abstract/kis';
+import { KIS_API_TREE, type KisImplicitApi, type KisPrivateGetPath } from './abstract/kis';
 import { logger } from './logger';
 import { buildExtendedSessionLimit } from './extended-session-limit';
 import { refreshMarketCalendar as refreshSharedMarketCalendar } from './market-calendar';
@@ -2986,6 +2986,9 @@ export type KisRankingType =
     | 'ELW_SENSITIVITY'
     | 'ELW_QUICK_CHANGE';
 
+/** `private` GET 경로 가운데 `Prefix`로 시작하는 것에서 `Prefix`를 뗀 나머지. 표가 경로 끝만 적는 곳의 타입이다. */
+type KisPrivateGetPathUnder<Prefix extends string, Path = KisPrivateGetPath> = Path extends `${Prefix}${infer Rest}` ? Rest : never;
+
 /**
  * 표로 정의하는 순위 한 종류. `path`는 API 트리에 등록한 경로이고 암묵 메서드 이름이 여기서 나온다.
  * `params`는 공식 예제(`examples_llm/domestic_stock/<이름>`)의 요청 키를 그대로 쓴다.
@@ -2993,7 +2996,7 @@ export type KisRankingType =
  * 조회 방식을 고르는 필수 입력(정렬 등)은 예제값이 기본이고 `params`로 바꿀 수 있다.
  */
 interface KisRankingSpec {
-    path: string;
+    path: KisPrivateGetPath;
     trId: string;
     /** 종목코드 필드. 순위마다 `stck_shrn_iscd`나 `mksc_shrn_iscd` 중 하나를 쓴다 */
     symbolKey: string;
@@ -3107,7 +3110,7 @@ function kisNewHighLowParams(params: Dict): Dict {
 const KIS_OVERSEAS_RANKING_COMMON: Dict = { EXCD: '', VOL_RANG: '0', KEYB: '', AUTH: '' };
 
 /** 해외 순위 표 항목. 행은 `output2`, 종목코드는 `symb`다. 종목명 필드는 순위마다 `name`이나 `knam`이다. */
-function kisOverseasRanking(path: string, trId: string, params: Dict, name = 'name'): KisRankingSpec {
+function kisOverseasRanking(path: KisPrivateGetPathUnder<'uapi/overseas-stock/v1/ranking/'>, trId: string, params: Dict, name = 'name'): KisRankingSpec {
     return {
         path: `uapi/overseas-stock/v1/ranking/${path}`, trId, symbolKey: 'symb', rowsKey: 'output2', overseas: true,
         fields: { rank: 'rank', name, price: 'last', change: 'diff', rate: 'rate', volume: 'tvol' },
@@ -3137,7 +3140,7 @@ const KIS_RANKING_COMMON: Dict = {
  * 종류별 입력을 더한다. 예제 필드 목록에 순위 필드가 없어서 `data_rank`가 오지 않으면 `rank`가 비고, 그때는 행 순서가 순위다.
  * 종목코드는 ELW 단축코드(`elw_shrn_iscd`)다.
  */
-function kisElwRanking(path: string, trId: string, nameKey: string, extra: Dict): KisRankingSpec {
+function kisElwRanking(path: KisPrivateGetPathUnder<'uapi/elw/v1/ranking/'>, trId: string, nameKey: string, extra: Dict): KisRankingSpec {
     return {
         path: `uapi/elw/v1/ranking/${path}`,
         trId,
@@ -3401,7 +3404,7 @@ const KIS_RANKING_SPECS: Readonly<Record<Exclude<KisRankingType, 'FLUCTUATION' |
  * 응답 필드는 예제에 목록이 없어 포털 명세를 옮긴 `kgcrom/cluefin` 타입으로 확인했다.
  */
 interface KisFinancialSpec {
-    path: string;
+    path: KisPrivateGetPath;
     trId: string;
     divKey: 'FID_DIV_CLS_CODE' | 'fid_div_cls_code';
     fields: Readonly<Record<string, string>>;
@@ -3460,7 +3463,7 @@ const KIS_FINANCIAL_SPECS: Readonly<Record<KisFinancialStatement, KisFinancialSp
  * `params`는 종류마다 더 보내는 입력이다. 배당(`GB1`)과 액면교체(`MARKET_GB`)는 설명의 전체 값을, 유상증자(`GB1`)는 조회 기준을 고르는
  * 입력이라 예제값(청약일별 `1`)을 보낸다. 응답 필드는 예제에 목록이 없어 포털 명세를 옮긴 `kgcrom/cluefin` 타입으로 확인했다.
  */
-const KIS_CORPORATE_SCHEDULE_SPECS: Readonly<Record<KisCorporateScheduleType, { path: string; trId: string; params: Dict; nameKey?: string; dateKey?: string }>> = {
+const KIS_CORPORATE_SCHEDULE_SPECS: Readonly<Record<KisCorporateScheduleType, { path: KisPrivateGetPath; trId: string; params: Dict; nameKey?: string; dateKey?: string }>> = {
     RIGHTS_ISSUE: { path: 'uapi/domestic-stock/v1/ksdinfo/paidin-capin', trId: 'HHKDB669100C0', params: { GB1: '1' } },
     BONUS_ISSUE: { path: 'uapi/domestic-stock/v1/ksdinfo/bonus-issue', trId: 'HHKDB669101C0', params: {} },
     DIVIDEND: { path: 'uapi/domestic-stock/v1/ksdinfo/dividend', trId: 'HHKDB669102C0', params: { GB1: '0', HIGH_GB: '' } },
@@ -3557,11 +3560,14 @@ const KIS_ETF_NAV_MINUTE_SECONDS: Readonly<Record<string, string>> = { '1m': '60
  */
 const KIS_ELW_MINUTE_SECONDS: Readonly<Record<string, string>> = { '1m': '60', '3m': '180', '5m': '300', '10m': '600', '30m': '1800', '1h': '3600' };
 
-/** ELW 추이 조회의 경로 이름과 TR. 체결(`tick`), 일별(`1d`), 분별 순이다. 민감도 추이는 분별 API가 없다. */
-const KIS_ELW_TRENDS: Readonly<Record<'indicator' | 'sensitivity' | 'volatility', { tick: string; daily: string; minute?: string }>> = {
-    indicator: { tick: 'FHPEW02740100', daily: 'FHPEW02740200', minute: 'FHPEW02740300' },
-    sensitivity: { tick: 'FHPEW02830100', daily: 'FHPEW02830200' },
-    volatility: { tick: 'FHPEW02840100', daily: 'FHPEW02840200', minute: 'FHPEW02840300' },
+/** ELW 추이 조회 하나의 경로 끝(`uapi/elw/v1/quotations/` 뒤)과 TR. */
+type KisElwTrend = readonly [KisPrivateGetPathUnder<'uapi/elw/v1/quotations/'>, string];
+
+/** ELW 추이 조회의 경로와 TR. 체결(`tick`), 일별(`1d`), 분별 순이다. 민감도 추이는 분별 API가 없다. */
+const KIS_ELW_TRENDS: Readonly<Record<'indicator' | 'sensitivity' | 'volatility', { tick: KisElwTrend; daily: KisElwTrend; minute?: KisElwTrend }>> = {
+    indicator: { tick: ['indicator-trend-ccnl', 'FHPEW02740100'], daily: ['indicator-trend-daily', 'FHPEW02740200'], minute: ['indicator-trend-minute', 'FHPEW02740300'] },
+    sensitivity: { tick: ['sensitivity-trend-ccnl', 'FHPEW02830100'], daily: ['sensitivity-trend-daily', 'FHPEW02830200'] },
+    volatility: { tick: ['volatility-trend-ccnl', 'FHPEW02840100'], daily: ['volatility-trend-daily', 'FHPEW02840200'], minute: ['volatility-trend-minute', 'FHPEW02840300'] },
 };
 
 /** 선물옵션기간별시세의 기간분류코드(`FID_PERIOD_DIV_CODE`). 설명의 예는 `D`, `W`이고, 월과 년(`M`, `Y`)은 API 이름("일/주/월/년")을 따른다. */
@@ -3570,8 +3576,11 @@ const KIS_DERIVATIVE_PERIODS: Readonly<Record<string, string>> = { '1d': 'D', '1
 /** 선물옵션 분봉의 시간구분(`FID_HOUR_CLS_CODE`, 초). 설명에 적힌 값(30초, 1분)만 둔다. */
 const KIS_DERIVATIVE_MINUTE_SECONDS: Readonly<Record<string, string>> = { '30s': '30', '1m': '60' };
 
+/** 해외선물옵션 체결추이 하나의 경로 끝(`uapi/overseas-futureoption/v1/quotations/` 뒤)과 TR. */
+type KisOverseasDerivativeTrend = readonly [KisPrivateGetPathUnder<'uapi/overseas-futureoption/v1/quotations/'>, string];
+
 /** 해외선물옵션 체결추이의 경로와 TR. 틱, 일간, 주간, 월간 순이다. 해외옵션 분봉은 예제가 일간과 같은 TR 을 적어 넣지 않았다. */
-const KIS_OVERSEAS_DERIVATIVE_TRENDS: Readonly<Record<'futures' | 'option', Readonly<Record<string, readonly [string, string]>>>> = {
+const KIS_OVERSEAS_DERIVATIVE_TRENDS: Readonly<Record<'futures' | 'option', Readonly<Record<string, KisOverseasDerivativeTrend>>>> = {
     futures: { tick: ['tick-ccnl', 'HHDFC55020200'], '1d': ['daily-ccnl', 'HHDFC55020100'], '1w': ['weekly-ccnl', 'HHDFC55020000'], '1M': ['monthly-ccnl', 'HHDFC55020300'] },
     option: { tick: ['opt-tick-ccnl', 'HHDFO55020200'], '1d': ['opt-daily-ccnl', 'HHDFO55020100'], '1w': ['opt-weekly-ccnl', 'HHDFO55020000'], '1M': ['opt-monthly-ccnl', 'HHDFO55020300'] },
 };
@@ -3859,8 +3868,8 @@ export class kis extends Exchange {
         return { url, method, headers: this.extend(requestHeaders, headers), body };
     }
 
-    /** `private` GET 엔드포인트를 경로로 부른다. 표로 정의한 조회처럼 경로를 실행 중에 정하는 곳이 쓴다. */
-    private async callPrivateGet(path: string, request: Dict): Promise<unknown> {
+    /** `private` GET 엔드포인트를 경로로 부른다. 표로 정의한 조회처럼 경로를 실행 중에 정하는 곳이 쓴다. 경로는 엔드포인트 표의 것만 받는다(`KisPrivateGetPath`). */
+    private async callPrivateGet(path: KisPrivateGetPath, request: Dict): Promise<unknown> {
         const call = this.implicitApiMethod(implicitMethodName(['private'], 'GET', path));
         if (call === undefined) throw new NotSupported(`${this.id} 에 없는 엔드포인트다: GET ${path}`);
         return call(request);
@@ -5734,25 +5743,24 @@ export class kis extends Exchange {
         const trs = KIS_ELW_TRENDS[family];
         const request: Dict = { FID_COND_MRKT_DIV_CODE: 'W', FID_INPUT_ISCD: this.elwCode(code, method) };
         const seconds = trs.minute === undefined ? undefined : KIS_ELW_MINUTE_SECONDS[timeframe];
-        let kind: string;
-        let trId: string;
+        let trend: KisElwTrend;
+        let minute = false;
         if (timeframe === 'tick') {
-            kind = 'ccnl';
-            trId = trs.tick;
+            trend = trs.tick;
         } else if (timeframe === '1d') {
-            kind = 'daily';
-            trId = trs.daily;
+            trend = trs.daily;
         } else if (seconds !== undefined && trs.minute !== undefined) {
-            kind = 'minute';
-            trId = trs.minute;
+            trend = trs.minute;
+            minute = true;
             request.FID_HOUR_CLS_CODE = seconds;
             request.FID_PW_DATA_INCU_YN = 'N';
         } else {
             const supported = ['tick', '1d', ...(trs.minute === undefined ? [] : Object.keys(KIS_ELW_MINUTE_SECONDS))].join(', ');
             throw new NotSupported(`${this.id} ${method}() 는 ${supported} 만 지원한다: ${timeframe}`);
         }
-        const response = await this.callPrivateGet(`uapi/elw/v1/quotations/${family}-trend-${kind}`, this.extend({ ...request, tr_id: trId }, params));
-        return { rows: rowsOf(this.safeValue(response, 'output')), minute: kind === 'minute' };
+        const [path, trId] = trend;
+        const response = await this.callPrivateGet(`uapi/elw/v1/quotations/${path}`, this.extend({ ...request, tr_id: trId }, params));
+        return { rows: rowsOf(this.safeValue(response, 'output')), minute };
     }
 
     /** ELW 투자지표추이(체결 `tick`, 일별 `1d`, 분별 `1m`~`1h`). TR 은 차례로 `FHPEW02740100`, `FHPEW02740200`, `FHPEW02740300`이다. */
@@ -6240,7 +6248,7 @@ export class kis extends Exchange {
         const minutes = /^(\d+)m$/.exec(interval);
         const spec = KIS_OVERSEAS_DERIVATIVE_TRENDS.futures[interval];
         if (spec === undefined && minutes === null) throw new NotSupported(`${this.id} fetchOverseasFuturesTrend() 는 tick, 1d, 1w, 1M, 분(예: 5m)만 지원한다: ${interval}`);
-        const [path, trId] = spec ?? ['inquire-time-futurechartprice', 'HHDFC55020400'];
+        const [path, trId]: KisOverseasDerivativeTrend = spec ?? ['inquire-time-futurechartprice', 'HHDFC55020400'];
         const response = await this.callPrivateGet(`uapi/overseas-futureoption/v1/quotations/${path}`, this.extend({
             SRS_CD: srs,
             EXCH_CD: exch,
