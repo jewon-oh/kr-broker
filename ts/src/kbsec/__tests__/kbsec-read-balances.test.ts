@@ -18,6 +18,7 @@ global.fetch = mockFetch as unknown as typeof fetch;
 
 import { kbsec } from '../../kbsec';
 import { KBSEC_TR } from '../kbsec-types';
+import { BadResponse } from '../../base/errors';
 import type { Balances } from '../../base/types';
 
 const CREDS = { appKey: 'kb-app-key-123456', appSecret: 'kb-secret' };
@@ -51,6 +52,8 @@ const tokenOk = () => {
 type UsMode = 'ok' | 'empty' | 'timeout' | 'business';
 let usMode: UsMode = 'ok';
 let depositFails = false;
+/** 예수금 TR 이 성공 플래그로 오지만 주문가능현금 필드가 없다. */
+let depositMissingFields = false;
 /** 국내 1순위 계좌자산평가(SSQM2952). ok=삼성전자 10주, alnum=삼성전자와 신형 영숫자 코드 ETF, empty=성공했지만 행 없음, timeout=연결 타임아웃 */
 type AssetEvalMode = 'ok' | 'alnum' | 'empty' | 'timeout';
 let assetEvalMode: AssetEvalMode = 'ok';
@@ -78,7 +81,7 @@ function route() {
             if (depositFails) {
                 throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'UND_ERR_CONNECT_TIMEOUT' } });
             }
-            return jsonOk({ ordr_psbl_csh: '5000000' });
+            return jsonOk(depositMissingFields ? {} : { ordr_psbl_csh: '5000000' });
         }
         if (tr === KBSEC_TR.ASSET_EVAL.toLowerCase()) {
             if (assetEvalMode === 'timeout') throw connectTimeout();
@@ -110,6 +113,7 @@ beforeEach(() => {
     mockFetch.mockReset();
     usMode = 'ok';
     depositFails = false;
+    depositMissingFields = false;
     assetEvalMode = 'ok';
     holdingRowsMode = 'none';
     holdingPage = 0;
@@ -197,6 +201,12 @@ describe('KB fetchBalance — 완전성 상태', () => {
         depositFails = true;
 
         await expect(makeService().fetchBalance()).rejects.toThrow();
+    });
+
+    it('★예수금 응답에 주문가능현금 필드가 없으면 원화 0 과 COMPLETE 가 아니라 BadResponse 로 던진다', async () => {
+        depositMissingFields = true;
+
+        await expect(makeService().fetchBalance()).rejects.toBeInstanceOf(BadResponse);
     });
 });
 

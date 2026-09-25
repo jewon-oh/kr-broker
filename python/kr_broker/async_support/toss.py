@@ -46,7 +46,7 @@ from kr_broker.async_support.extended_session_limit import build_extended_sessio
 from kr_broker.base import functions as fn
 from kr_broker.base.decimal_to_precision import TICK_SIZE
 from kr_broker.base.errors import (
-    AccountNotEnabled, ArgumentsRequired, AuthenticationError, BadRequest, BadSymbol, DuplicateOrderId, ExchangeError,
+    AccountNotEnabled, ArgumentsRequired, AuthenticationError, BadRequest, BadResponse, BadSymbol, DuplicateOrderId, ExchangeError,
     ExchangeNotAvailable, InsufficientFunds, InvalidOrder, ManualInteractionNeeded, MarketClosed, NotSupported, NullResponse,
     OnMaintenance, OperationRejected, OrderNotFound, OrderNotSent, OrderOutcomeUnknown, PermissionDenied, RateLimitExceeded,
     TossRateLimited, TossTokenRejected,
@@ -949,6 +949,9 @@ class toss(Exchange, ImplicitAPI):
         if currency is None or symbol is not None:
             query = {'symbol': self.market(symbol)['id']} if symbol is not None else {}
             holdings = self.unwrap(await self.private_account_get_holdings(query))
+            # 보유 목록이 없으면 "보유 없음"이 아니라 모르는 것이다.
+            if not isinstance(holdings, dict) or not isinstance(holdings.get('items'), list):
+                raise BadResponse(f'{self.id} 보유 조회 응답에 items 목록이 없다: {str(holdings)[:200]}')
         buying_power: Dict[str, Any] = {}
         if symbol is None or currency is not None:
             for code in ([currency] if currency is not None else ['KRW', 'USD']):
@@ -968,11 +971,13 @@ class toss(Exchange, ImplicitAPI):
             return None
         return {'krw': krw, 'usdKrw': usd_krw, 'krwAsUsd': krw / usd_krw}
 
-    @staticmethod
-    def _parse_cash(buying_power: Any) -> float:
+    def _parse_cash(self, buying_power: Any) -> float:
+        """매수 가능 금액. 필드가 없거나 숫자가 아니면 0 이 아니라 모르는 것이므로 던진다. 음수(미수)는 0 으로 둔다(원값은 `info`)."""
         raw = buying_power.get('cashBuyingPower') if isinstance(buying_power, dict) else None
-        cash = fn.js_number(0 if raw is None else raw)
-        return cash if math.isfinite(cash) and cash > 0 else 0
+        cash = float('nan') if raw is None or str(raw).strip() == '' else fn.js_number(raw)
+        if not math.isfinite(cash):
+            raise BadResponse(f'{self.id} 매수 가능 금액 응답에 cashBuyingPower 가 없거나 숫자가 아니다: {buying_power!r}')
+        return cash if cash > 0 else 0
 
     def parse_balance(self, response: Any) -> Dict[str, Any]:
         """`fetch_balance` 가 모은 응답(`{'holdings', 'buyingPower', 'integrated'}`)을 잔고 구조로 옮긴다."""

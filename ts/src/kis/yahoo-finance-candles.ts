@@ -10,7 +10,7 @@
  * 종목코드 변환: KIS '005930' → Yahoo '005930.KS'
  */
 
-import { NotSupported } from '../base/errors';
+import { BadSymbol, BaseError, ExchangeNotAvailable, NetworkError, NotSupported, RateLimitExceeded } from '../base/errors';
 import { logger } from '../logger';
 import { resampleCandles } from './candle-resample';
 import { timeframeToMs } from '../broker-time';
@@ -268,12 +268,15 @@ export async function fetchYahooCandles(
                 });
 
                 if (!response.ok) {
-                    // 429/5xx = 일시적 스로틀 → 재시도. 그 외 4xx = 즉시 포기.
+                    // 429/5xx = 일시적 스로틀 → 재시도. 그 외 4xx = 즉시 포기. 실패는 빈 배열이 아니라 오류다.
                     const retryable = response.status === 429 || response.status >= 500;
                     logger.warn({ status: response.status, yahooSymbol, attempt, retryable },
                         '[YahooFinance] API 응답 에러');
                     if (retryable && canRetry) { await backoff(); continue; }
-                    return [];
+                    const message = `야후 캔들 조회 실패(${yahooSymbol} ${timeframe}): HTTP ${response.status}`;
+                    if (response.status === 404) throw new BadSymbol(message);
+                    if (response.status === 429) throw new RateLimitExceeded(message);
+                    throw new ExchangeNotAvailable(message);
                 }
 
                 const data = await response.json() as YahooChartResponse;
@@ -281,11 +284,11 @@ export async function fetchYahooCandles(
                 if (data.chart.error) {
                     // 존재하지 않는 심볼 등 — 재시도 무의미.
                     logger.warn({ error: data.chart.error, yahooSymbol }, '[YahooFinance] 차트 에러');
-                    return [];
+                    throw new BadSymbol(`야후 캔들 조회 실패(${yahooSymbol} ${timeframe}): ${JSON.stringify(data.chart.error)}`);
                 }
 
                 const result = data.chart.result?.[0];
-                if (!result?.timestamp || !result?.indicators?.quote?.[0]) {
+                if (!result) {
                     // result:null = 버스트 스로틀 신호(개별 요청은 정상) → 백오프 재시도.
                     if (canRetry) {
                         logger.debug({ yahooSymbol, attempt }, '[YahooFinance] 빈 응답 — 재시도');
@@ -293,8 +296,10 @@ export async function fetchYahooCandles(
                         continue;
                     }
                     logger.warn({ yahooSymbol, attempts: YAHOO_MAX_ATTEMPTS }, '[YahooFinance] 빈 응답 (재시도 소진)');
-                    return [];
+                    throw new ExchangeNotAvailable(`야후 캔들 조회 실패(${yahooSymbol} ${timeframe}): ${YAHOO_MAX_ATTEMPTS}번 모두 빈 응답`);
                 }
+                // 결과는 왔는데 시각이 없으면 그 구간에 봉이 없는 것이다.
+                if (!result.timestamp || !result.indicators?.quote?.[0]) return [];
 
                 const { timestamp: timestamps } = result;
                 const quote = result.indicators.quote[0];
@@ -342,6 +347,7 @@ export async function fetchYahooCandles(
                 // 최신 limit개만 반환
                 return finalCandles.slice(-limit);
             } catch (err) {
+                if (err instanceof BaseError) throw err;
                 // 네트워크/타임아웃 = 일시적 → 재시도.
                 if (canRetry) {
                     logger.debug({ err, yahooSymbol, attempt }, '[YahooFinance] 요청 실패 — 재시도');
@@ -350,10 +356,10 @@ export async function fetchYahooCandles(
                 }
                 logger.warn({ err, stockCode, yahooSymbol: toYahooTicker(stockCode), timeframe },
                     '[YahooFinance] 캔들 조회 실패 (재시도 소진)');
-                return [];
+                throw new NetworkError(`야후 캔들 조회 실패(${yahooSymbol} ${timeframe}): ${err instanceof Error ? err.message : String(err)}`, { cause: err });
             }
         }
-        return [];
+        throw new ExchangeNotAvailable(`야후 캔들 조회 실패(${yahooSymbol} ${timeframe})`);
     } finally {
         releaseYahooSlot();
     }

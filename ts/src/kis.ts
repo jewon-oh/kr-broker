@@ -4705,21 +4705,29 @@ export class kis extends Exchange {
 
     /**
      * 캔들. 국내는 항상 야후 파이낸스로 받는다(KIS 는 분봉이 당일뿐이고 일봉도 100행이라 과거 이력이 모자란다). 미국 일봉·주봉·월봉은 야후를
-     * 먼저 부르고, 야후가 비면 KIS 로 다시 받는다. `params.until` 로 끝 시각을 정한다.
+     * 먼저 부르고, 야후가 비거나 실패하면 KIS 로 다시 받는다. 둘 다 실패하면 던진다. `params.until` 로 끝 시각을 정한다.
      */
     override async fetchOHLCV(symbol: string, timeframe = '1d', since: Int = undefined, limit: Int = 100, params: Dict = {}): Promise<OHLCV[]> {
         const instrument = this.instrumentOf(symbol);
         const until = this.safeInteger(params, 'until');
         // KOSPI/KOSDAQ 구분으로 야후 티커의 접미사(.KS/.KQ)를 정확히 붙인다.
         const krMarket = await resolveKrMarket(symbol, { stockDirectory: this.options.stockDirectory, masterData: this.master() });
-        const yahoo = await fetchYahooCandles(symbol, timeframe, limit, since, until, krMarket);
         const dailyLike = ['1d', '1w', '1W', '1M'].includes(timeframe);
-        if (yahoo.length > 0 || !instrument.overseas || !dailyLike) return yahoo as OHLCV[];
-        // 자격증명이 없으면 KIS 로 폴백할 수 없다(야후 결과를 그대로 돌려준다).
-        if (instrument.quoteExchange === undefined || !this.checkRequiredCredentials(false)) return yahoo as OHLCV[];
-        logger.info({ symbol, timeframe }, '[kis] 야후가 비어 KIS 해외 일봉으로 폴백한다');
-        const native = await this.candles().fetchOverseasDailyOHLCV(instrument.code, instrument.quoteExchange, timeframe, limit ?? 100);
-        return (native.length > 0 ? native : yahoo) as OHLCV[];
+        // 폴백할 거래소. 자격증명이 없으면 KIS 로 폴백할 수 없다.
+        const fallbackExchange = instrument.overseas && dailyLike && this.checkRequiredCredentials(false) ? instrument.quoteExchange : undefined;
+        let yahoo: OHLCV[] = [];
+        let yahooError: unknown;
+        try {
+            yahoo = await fetchYahooCandles(symbol, timeframe, limit, since, until, krMarket) as OHLCV[];
+        } catch (e) {
+            if (fallbackExchange === undefined) throw e;
+            yahooError = e;
+        }
+        if (yahoo.length > 0 || fallbackExchange === undefined) return yahoo;
+        logger.info({ symbol, timeframe, yahooError: yahooError === undefined ? undefined : String(yahooError) }, '[kis] 야후가 비거나 실패해 KIS 해외 일봉으로 폴백한다');
+        const native = await this.candles().fetchOverseasDailyOHLCV(instrument.code, fallbackExchange, timeframe, limit ?? 100);
+        if (native.length === 0 && yahooError !== undefined) throw yahooError;
+        return native as OHLCV[];
     }
 
     /** KIS 가 직접 주는 캔들(일봉·당일 분봉·해외 일봉)과 심층 이력 페이지네이션. `fetchOHLCV` 가 쓰지 않는 원본 경로다. */
@@ -4744,7 +4752,12 @@ export class kis extends Exchange {
      */
     override async fetchBalance(params: Dict = {}): Promise<Balances> {
         const scope = this.safeValue(params, 'scope', 'all');
-        const wants = (name: string): boolean => scope === 'all' || scope === name || (Array.isArray(scope) && scope.includes(name));
+        // 모르는 범위를 조용히 건너뛰면 요청 없이 빈 잔고가 나온다.
+        const scopes = Array.isArray(scope) ? scope : [scope];
+        if (scopes.length === 0 || scopes.some((name) => !['all', 'kr', 'us', 'usd'].includes(name))) {
+            throw new BadRequest(`${this.id} fetchBalance() params.scope 는 'all', 'kr', 'us', 'usd' 또는 그 배열이다: ${JSON.stringify(scope)}`);
+        }
+        const wants = (name: string): boolean => scopes.includes('all') || scopes.includes(name);
         const orderable = this.safeBool(params, 'orderable', true);
         const raw: Dict = {};
         if (wants('kr')) raw.domestic = await this.fetchDomesticBalanceRaw(orderable);
@@ -10464,7 +10477,8 @@ export class kis extends Exchange {
      * 휴장일 캘린더를 공용 캘린더(`market-calendar.ts`)에 넣는다. 장 시간 판정이 이 값을 읽는다. 12시간 안에 성공한 호출은 다시 하지 않는다.
      * 국내 실주문 직전에 자동으로 부른다. 장 시간 판정을 주문 밖에서 쓰는 호출하는 쪽은 시작할 때 한 번 직접 부른다.
      *
-     * @returns 신선한 캘린더가 있으면 `true`. 자격증명이 없거나 모의투자면 부르지 않고 `false`, 호출에 실패해도 던지지 않고 `false` 다.
+     * @returns 한 번이라도 받은 캘린더가 있으면 `true` 다(이번 호출이 실패했으면 낡았을 수 있다). 자격증명이 없거나 모의투자면 부르지 않고
+     * `false` 다. 호출에 실패해도 던지지 않는다.
      */
     async refreshMarketCalendar(): Promise<boolean> {
         if (this.isSandboxModeEnabled || !this.checkRequiredCredentials(false)) return false;

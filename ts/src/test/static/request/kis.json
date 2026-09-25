@@ -1565,10 +1565,28 @@
                         "headers": { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
                         "body": null
                     },
-                    "response": { "status": 404, "body": { "chart": { "result": null, "error": { "code": "Not Found", "description": "not found" } } } }
+                    "response": { "status": 200, "body": { "chart": { "result": [{ "meta": { "symbol": "AAPL" }, "indicators": { "quote": [{}] } }], "error": null } } }
                 }
             ],
             "output": []
+        },
+        {
+            "description": "fetchOHLCV 는 야후가 모르는 심볼(404)이면 빈 배열이 아니라 BadSymbol 이다",
+            "now": 1774440000000,
+            "method": "fetchOHLCV",
+            "args": ["AAPL/USD", "5m"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=5m&range=60d",
+                        "headers": { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+                        "body": null
+                    },
+                    "response": { "status": 404, "body": { "chart": { "result": null, "error": { "code": "Not Found", "description": "not found" } } } }
+                }
+            ],
+            "error": { "class": "BadSymbol" }
         },
         {
             "description": "fetchOHLCV 는 야후가 주지 않는 타임프레임이면 요청 없이 NotSupported 다",

@@ -1028,6 +1028,40 @@
             "error": { "class": "ExchangeNotAvailable" }
         },
         {
+            "description": "fetchBalance 는 보유 응답에 items 목록이 없으면 보유 없음이 아니라 BadResponse 로 던진다",
+            "method": "fetchBalance",
+            "args": [],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/holdings",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": { "status": 200, "body": { "result": {} } }
+                }
+            ],
+            "error": { "class": "BadResponse" }
+        },
+        {
+            "description": "fetchBalance 는 매수 가능 금액 응답에 cashBuyingPower 가 없으면 0 이 아니라 BadResponse 로 던진다",
+            "method": "fetchBalance",
+            "args": [{ "currency": "KRW" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/buying-power?currency=KRW",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": { "status": 200, "body": { "result": { "currency": "KRW" } } }
+                }
+            ],
+            "error": { "class": "BadResponse" }
+        },
+        {
             "description": "fetchTradingFee 는 오늘 유효한 행 가운데 가장 늦게 시작한 요율을 쓰고 백분율 응답은 소수 비율로 바꾼다",
             "now": 1774400400000,
             "method": "fetchTradingFee",

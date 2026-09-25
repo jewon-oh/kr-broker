@@ -53,6 +53,7 @@ import {
     ArgumentsRequired,
     AuthenticationError,
     BadRequest,
+    BadResponse,
     BadSymbol,
     DuplicateOrderId,
     ExchangeError,
@@ -1281,6 +1282,10 @@ export class toss extends Exchange {
         if (currency === undefined || symbol !== undefined) {
             const query = symbol !== undefined ? { symbol: this.market(symbol).id } : {};
             holdings = this.unwrap<TossHoldingsOverview>(await this.privateAccountGetHoldings(query));
+            // 보유 목록이 없으면 "보유 없음"이 아니라 모르는 것이다.
+            if (!Array.isArray(holdings?.items)) {
+                throw new BadResponse(`${this.id} 보유 조회 응답에 items 목록이 없다: ${String(JSON.stringify(holdings)).slice(0, 200)}`);
+            }
         }
         const buyingPower: Dictionary<TossBuyingPower> = {};
         if (symbol === undefined || currency !== undefined) {
@@ -1304,9 +1309,12 @@ export class toss extends Exchange {
         return { krw, usdKrw, krwAsUsd: krw / usdKrw };
     }
 
+    /** 매수 가능 금액. 필드가 없거나 숫자가 아니면 0 이 아니라 모르는 것이므로 던진다. 음수(미수)는 0 으로 둔다(원값은 `info`). */
     private parseCash(buyingPower: TossBuyingPower | undefined): number {
-        const cash = Number(buyingPower?.cashBuyingPower ?? 0);
-        return Number.isFinite(cash) && cash > 0 ? cash : 0;
+        const raw = buyingPower?.cashBuyingPower;
+        const cash = raw === undefined || raw === null || String(raw).trim() === '' ? NaN : Number(raw);
+        if (!Number.isFinite(cash)) throw new BadResponse(`${this.id} 매수 가능 금액 응답에 cashBuyingPower 가 없거나 숫자가 아니다: ${JSON.stringify(buyingPower)}`);
+        return cash > 0 ? cash : 0;
     }
 
     /** `fetchBalance` 가 모은 응답(`{ holdings, buyingPower, integrated }`)을 `Balances` 로 옮긴다. */

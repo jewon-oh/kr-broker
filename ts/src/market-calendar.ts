@@ -145,12 +145,12 @@ export function marketCalendarStatus(market: CalendarMarket): MarketCalendarStat
 }
 
 /**
- * 캘린더를 API 로 갱신한다. 아직 신선하면 호출하지 않고, 실패하면 결과를 `false` 로 알린다(던지지 않는다).
+ * 캘린더를 API 로 갱신한다. 아직 신선하면 호출하지 않고, 실패해도 던지지 않는다.
  *
  * @param fetchDays API 를 호출해 날짜별 개장 여부를 돌려주는 함수. 던지면 실패로 센다.
  * @param opts.ttlMs 성공한 갱신을 신선하게 보는 시간.
  * @param opts.nowMs 지금 시각(테스트용).
- * @returns 신선한 캘린더가 있으면 `true`.
+ * @returns 한 번이라도 받은 캘린더가 있으면 `true` 다(이번 호출이 실패했으면 낡았을 수 있다). 신선도는 `marketCalendarStatus().refreshedAtMs` 로 본다.
  */
 export function refreshMarketCalendar(
     market: CalendarMarket,

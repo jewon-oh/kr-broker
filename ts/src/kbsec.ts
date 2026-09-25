@@ -54,7 +54,6 @@ import {
     NotSupported,
     NullResponse,
     OrderNotFound,
-    RequestTimeout,
     omit,
     safeDict,
     safeString,
@@ -1705,6 +1704,8 @@ export class kbsec extends Exchange {
     private overseasFillsUnavailable = false;
     /** 원마켓 증거금(SPQM3390) 영구 실패. 미신청 계좌는 다시 물어도 답이 같다. */
     private oneMarketUnavailable = false;
+    /** 일시 오류 뒤 원마켓 증거금을 다시 부르기 전까지 기다리는 시각(epoch ms). 0 이면 대기 없음. */
+    private oneMarketRetryAt = 0;
     private oneMarketNoticeLogged = false;
 
     // ============ 선언 ============
@@ -2816,7 +2817,12 @@ export class kbsec extends Exchange {
         // 여러 TR 을 부르지만 `params` 는 기준이 되는 예수금 조회에만 합친다.
         const deposit = await this.callTr(KBSEC_TR.DEPOSIT, { ...params });
         // 실측 필드: ordr_psbl_csh(주문가능현금) · ordr_std_dpstn_csh(주문기준예수금)
-        const krw = pickNum(deposit, 'ordr_psbl_csh', 'ordr_std_dpstn_csh', 'do_psbl_csh');
+        const krwFields = ['ordr_psbl_csh', 'ordr_std_dpstn_csh', 'do_psbl_csh'];
+        // 후보 필드가 모두 없으면 0 이 아니라 모르는 것이다. 0 으로 두면 "예수금 없음"과 섞인다.
+        if (!krwFields.some((k) => k in deposit)) {
+            throw new BadResponse(`${this.id} fetchBalance() 예수금 응답에 주문가능현금 필드가 없다 (${KBSEC_TR.DEPOSIT})`);
+        }
+        const krw = pickNum(deposit, ...krwFields);
 
         // 원마켓(통합증거금) 계좌는 달러 예수금이 0 이어도 원화로 미국 주식을 산다. `krwIntegratedMargin` 옵션이 켜져 있으면 원화환산 외화 예수금을 **USD 로 환산해**
         // 라벨과 값의 축을 맞춘다. 원화 값을 USD 라벨에 그대로 담으면 사이징이 ~1,450배로 읽는다.
@@ -3060,9 +3066,7 @@ export class kbsec extends Exchange {
             this.overseasHoldingsRetryAt = 0;
             return { rows: out, usdCash, read: this.overseasGridSeen };
         } catch (err) {
-            // 영구 실패만 래치한다. 긍정형 판정이다. KB 가 영구 오류를 알리는 통로는 응답을 읽고 던지는 `ExchangeError`(권한 없음 I446 등)뿐이고,
-            // 연결 타임아웃·5xx 같은 일시 오류는 냉각 뒤 다시 시도한다.
-            const permanent = err instanceof ExchangeError;
+            const permanent = this.isPermanentFailure(err);
             if (permanent) {
                 this.overseasHoldingsUnavailable = true;
             } else {
@@ -3246,6 +3250,14 @@ export class kbsec extends Exchange {
         }
     }
 
+    /**
+     * 이 인스턴스에서 다시 불러도 답이 같은 영구 실패인가. KB 가 응답으로 거절한 업무 오류(권한 없음 I446, 미신청 H049 등)만 해당한다.
+     * 연결 끊김, 시간 초과, 5xx, 토큰 차단기, 토큰 무효(I445, 재발급으로 풀린다)는 냉각 뒤 다시 부른다.
+     */
+    private isPermanentFailure(err: unknown): boolean {
+        return err instanceof ExchangeError && !(err instanceof AuthenticationError && err.detail === KBSEC_ERROR_DETAIL.TOKEN_INVALID);
+    }
+
     /** 1달러당 원화. `options.usdKrwRate` 가 없으면 환율을 알 수 없어 던진다. 조회가 실패해도 던진다. */
     private usdKrwRate(): Promise<number> {
         const source = this.options.usdKrwRate as UsdKrwRateOption | undefined;
@@ -3260,7 +3272,7 @@ export class kbsec extends Exchange {
      * 부르지 않는다. 잔고 조회가 종목마다 불릴 수 있어 래치가 없으면 실패가 종목 수만큼 곱해지고, 미신청 계좌는 다시 물어도 답이 같다.
      */
     async fetchOneMarketMargin(): Promise<KbsecOneMarketMargin | undefined> {
-        if (this.oneMarketUnavailable) return undefined;
+        if (this.oneMarketUnavailable || Date.now() < this.oneMarketRetryAt) return undefined;
         try {
             const body = await this.callTr(KBSEC_TR.ONEMARKET_MARGIN, {});
             return {
@@ -3271,9 +3283,10 @@ export class kbsec extends Exchange {
                 withdrawable: pickNum(body, 'do_psbl_amt'),
             };
         } catch (err) {
-            // 시간 초과는 래치하지 않는다. 일시적 무응답이다.
-            if (!(err instanceof RequestTimeout)) this.oneMarketUnavailable = true;
-            logger.warn({ err, latched: !(err instanceof RequestTimeout) },
+            const permanent = this.isPermanentFailure(err);
+            if (permanent) this.oneMarketUnavailable = true;
+            else this.oneMarketRetryAt = Date.now() + (this.options.transientRetryCooldown as number);
+            logger.warn({ err, latched: permanent },
                 '[kbsec] 원마켓 증거금 조회 실패 — 영구 실패면 이 인스턴스에서 재시도하지 않는다(반복 실패는 계정 제한 사유)');
             return undefined;
         }
@@ -4908,7 +4921,7 @@ export class kbsec extends Exchange {
      * 해외 체결내역 — `SPQM2103`. 응답 필드는 공식 스펙 이름(`ccls_q_p6`·`frgn_ccls_prc_p6`·`dl_clsf_nm`)이 1순위이고 국내 이름은 폴백이다.
      * 체결구분은 비우면 거부되므로 명시한다.
      *
-     * 영구 실패면 이 인스턴스에서는 다시 부르지 않는다(반복 실패는 계정 제한 사유). 시간 초과는 래치하지 않는다. 해외 체결 확정이 실패해도 주문
+     * 영구 실패(`isPermanentFailure`)면 이 인스턴스에서는 다시 부르지 않는다(반복 실패는 계정 제한 사유). 해외 체결 확정이 실패해도 주문
      * 자체는 접수된 상태다.
      */
     private async fetchOverseasTrades(market: MarketInterface, date: Str, limit: Int): Promise<Trade[]> {
@@ -4930,8 +4943,9 @@ export class kbsec extends Exchange {
             }
             return trades;
         } catch (err) {
-            if (!(err instanceof RequestTimeout)) this.overseasFillsUnavailable = true;
-            logger.warn({ err, symbol: market.symbol, trCode: KBSEC_TR.ORDERS_US, latched: !(err instanceof RequestTimeout) },
+            const permanent = this.isPermanentFailure(err);
+            if (permanent) this.overseasFillsUnavailable = true;
+            logger.warn({ err, symbol: market.symbol, trCode: KBSEC_TR.ORDERS_US, latched: permanent },
                 '[kbsec] 해외 체결 조회 실패 — 영구 실패면 이 인스턴스에서 재시도하지 않는다(반복 실패는 계정 제한 사유)');
             throw err;
         }

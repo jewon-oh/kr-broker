@@ -130,9 +130,10 @@ class KISCandleService:
                                 _number(candle, 'stck_clpr'), _number(candle, 'acml_vol')])
             return sorted(candles, key=lambda c: c[0])
         except Exception:
+            # 실패를 빈 목록으로 바꾸지 않는다(분봉과 같다). 빈 창은 페이지네이션이 "상장 이전"으로 읽는다.
             logger.error('[KISCandleService] 기간별 캔들 조회 실패 (stockCode=%s, periodCode=%s, %s~%s)', stock_code, period_code, start_date,
                          end_date, exc_info=True)
-            return []
+            raise
 
     async def fetch_minute_ohlcv(self, stock_code: str, minute_interval: int, limit: int) -> List[List[float]]:
         """국내 당일 분봉. 한 번에 30건씩 이어서 `limit` 개까지 모은다. 실패는 빈 목록으로 바꾸지 않고 던진다.
@@ -229,4 +230,4 @@ class KISCandleService:
         except Exception:
             logger.error('[KISCandleService] 해외 기간별 캔들 조회 실패 (ticker=%s, market=%s, timeframe=%s)', ticker, market, timeframe,
                          exc_info=True)
-            return []
+            raise

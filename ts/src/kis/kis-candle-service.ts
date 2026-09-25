@@ -168,9 +168,10 @@ export class KISCandleService {
                 })
                 .sort((a, b) => a[0] - b[0]);
         } catch (err) {
+            // 실패를 `[]` 로 바꾸지 않는다(분봉과 같다). 빈 창은 페이지네이션이 "상장 이전"으로 읽는다.
             logger.error({ err, stockCode, periodCode, startDate, endDate },
                 '[KISCandleService] 기간별 캔들 조회 실패');
-            return [];
+            throw err;
         }
     }
 
@@ -335,7 +336,7 @@ export class KISCandleService {
         } catch (err) {
             logger.error({ err, ticker, market, timeframe },
                 '[KISCandleService] 해외 기간별 캔들 조회 실패');
-            return [];
+            throw err;
         }
     }
 
