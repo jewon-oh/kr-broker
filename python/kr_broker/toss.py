@@ -1056,7 +1056,7 @@ class toss(Exchange, ImplicitAPI):
         fallback = self.options.get('usdKrwRate')
         if rate <= 0 and fallback is not None:
             try:
-                rate = fallback()
+                rate = maybe_await(fallback())
             except Exception:
                 rate = 0
         if _is_finite_number(rate) and rate > 0:

@@ -579,3 +579,92 @@ def test_async_throttle_rejects_unknown_bucket() -> None:
     ex = async_exchange_module.Exchange({'rateLimit': 10})
     with pytest.raises(ExchangeError):
         asyncio.run(ex.throttle(1, 'no-such-bucket'))
+
+
+def test_async_option_callbacks_may_be_coroutine_functions() -> None:
+    # 비동기 판은 코루틴 함수 옵션을 기다린다. 예전에는 코루틴 객체가 그대로 쓰여 옵션이 꺼진 것으로 읽혔다.
+    async def on() -> bool:
+        return True
+
+    ex = kr_broker.async_support.kis({'options': {'nxtRouting': on}})
+    assert asyncio.run(ex.is_option_enabled('nxtRouting')) is True
+    assert kr_broker.kis({'options': {'nxtRouting': lambda: True}}).is_option_enabled('nxtRouting') is True
+
+
+def test_async_usd_krw_rate_awaits_a_coroutine_fallback() -> None:
+    async def rate() -> float:
+        return 1400.0
+
+    ex = kr_broker.async_support.toss({'apiKey': 'k', 'secret': 's', 'options': {'usdKrwRate': rate}})
+
+    async def fail(*_: Any, **__: Any) -> Any:
+        raise NetworkError('down')
+
+    ex.private_market_get_exchange_rate = fail  # type: ignore[method-assign]
+    assert asyncio.run(ex._usd_krw_rate()) == 1400.0
+
+
+def test_async_stock_directory_may_return_a_coroutine() -> None:
+    class Directory:
+        async def find_kr_market(self, code: str) -> Optional[str]:
+            return 'KOSDAQ'
+
+    class Broken:
+        async def find_kr_market(self, code: str) -> Optional[str]:
+            raise NetworkError('down')
+
+    assert asyncio.run(kr_broker.async_support.kis({'options': {'stockDirectory': Directory()}})._resolve_kr_market('247540')) == 'KOSDAQ'
+    assert asyncio.run(kr_broker.async_support.kis({'options': {'stockDirectory': Broken()}})._resolve_kr_market('247540')) is None
+
+
+def test_token_store_factory_must_not_return_a_coroutine() -> None:
+    from kr_broker.base.errors import NotSupported
+
+    async def factory() -> Any:
+        return None
+
+    with pytest.raises(NotSupported):
+        sync_token_store.resolve_token_store(factory)
+
+
+def test_async_load_markets_shares_the_in_flight_fetch_and_retries_after_failure() -> None:
+    calls: List[int] = []
+
+    class Broker(AsyncExchange):
+        fail = True
+
+        async def fetch_markets(self, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:  # type: ignore[override]
+            calls.append(1)
+            await asyncio.sleep(0.01)
+            if Broker.fail:
+                Broker.fail = False
+                raise NetworkError('down')
+            return [{'id': 'A', 'symbol': 'A/KRW', 'base': 'A', 'quote': 'KRW'}]
+
+    ex = Broker({})
+
+    async def main() -> Any:
+        first = await asyncio.gather(*(ex.load_markets() for _ in range(3)), return_exceptions=True)
+        assert all(isinstance(r, NetworkError) for r in first)
+        assert len(calls) == 1          # ★동시에 부른 세 번이 조회 하나를 함께 기다린다
+        second = await asyncio.gather(*(ex.load_markets() for _ in range(3)))
+        assert len(calls) == 2          # 실패한 뒤에는 다시 부른다
+        return second
+
+    assert all('A/KRW' in markets for markets in asyncio.run(main()))
+
+
+def test_async_close_does_not_wait_forever_for_background_tasks(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(async_exchange_module, 'CLOSE_WAIT_SECONDS', 0.05)
+    ex = AsyncExchange({})
+
+    async def hang() -> None:
+        await asyncio.sleep(3600)
+
+    async def main() -> 'asyncio.Task[Any]':
+        task = ex.spawn(hang)
+        await asyncio.wait_for(ex.close(), timeout=2)
+        return task
+
+    task = asyncio.run(main())
+    assert task.cancelled()

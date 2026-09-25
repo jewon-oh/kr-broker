@@ -103,13 +103,17 @@ except kr_broker.InsufficientFunds as e:
 
 주문 요청은 재시도하지 않습니다. 시간 초과나 연결 끊김, 증권사 오류 코드 없는 5xx, 해석할 수 없는 응답으로 끝나면 `OrderOutcomeUnknown`입니다.
 
+동기 판의 시간 상한(`timeout`, `orderTimeout`)은 `requests`의 상한이라 연결 한 번과 소켓 읽기 한 번에 따로 걸립니다. 응답이 조금씩 오래 흘러오면 상한을 넘겨도 `RequestTimeout`이 나지 않습니다. 비동기 판과 TypeScript 판은 요청 전체에 상한을 겁니다.
+
+동기 판은 `~/.netrc`와 환경 변수 프록시(`HTTPS_PROXY` 등)를 따르지 않습니다. `.netrc`의 Basic 인증이 `Authorization` 헤더를 덮어쓰지 않게 하려는 것입니다. 따르게 하려면 클래스 속성 `requests_trust_env`를 `True`로 둡니다. 비동기 판의 `aiohttp_trust_env`와 같습니다.
+
 비동기 판에서 주문 호출을 `asyncio.wait_for`로 끊으면 `OrderOutcomeUnknown`이 아니라 `TimeoutError`가 나옵니다. 요청이 이미 나갔을 수 있으므로 이때도 다시 보내지 마십시오. 주문의 시간 상한은 `orderTimeout`으로 정합니다.
 
 ### 토큰 저장소
 
 증권사 토큰은 발급 횟수에 제한이 있고, 토스는 클라이언트당 유효 토큰이 하나뿐입니다. 여러 프로세스가 같은 키를 쓰면
 `options['tokenStore']`에 `kr_broker.BrokerTokenStore` 계약(`get`, `set`, `delete`, `delete_if_access_token_equals`, `try_lock`, `unlock`)을
-따르는 저장소를 넘깁니다. 넘기지 않으면 프로세스 메모리에만 둡니다.
+따르는 저장소를 넘깁니다. 넘기지 않으면 프로세스 메모리에만 둡니다. 저장소 대신 저장소를 돌려주는 함수를 넘길 수도 있는데, 이 함수는 저장소를 바로 돌려줘야 합니다. 코루틴을 돌려주면 `NotSupported`입니다.
 
 ### 비동기 판
 
@@ -129,7 +133,9 @@ async def main():
 asyncio.run(main())
 ```
 
-- `async with` 를 쓰지 않으면 다 쓴 뒤 `await kis.close()` 로 HTTP 세션을 닫습니다. 설정에 `session` 으로 넘긴 aiohttp 세션은 닫지 않습니다.
+- `async with` 를 쓰지 않으면 다 쓴 뒤 `await kis.close()` 로 HTTP 세션을 닫습니다. 설정에 `session` 으로 넘긴 세션은 닫지 않습니다(동기 판도 같습니다). `close()` 는 기다리지 않고 띄운 작업(토큰 저장소 정리 등)을 5초까지 기다리고, 그때까지 안 끝난 작업은 취소합니다.
+- 켜고 끄는 옵션(`nxtRouting`, `krwIntegratedMargin`, `usExtendedLimit`)과 `usdKrwRate`, `stockDirectory.find_kr_market` 에는 비동기 판에서 코루틴 함수도 넘길 수 있습니다.
+- 여러 코루틴이 동시에 `load_markets()` 를 부르면 조회는 한 번만 나가고 결과를 함께 씁니다.
 - 동기 판은 비동기 판 소스에서 만들므로 요청과 응답 해석이 같습니다. 요청 픽스처를 두 판으로 모두 돌립니다.
 - 토큰 저장소는 메서드가 값을 돌려주는 동기 구현과 코루틴을 돌려주는 비동기 구현(예: `redis.asyncio`)을 모두 받습니다.
 - 한국투자증권이 토큰 만료로 응답하면 두 판 모두 메모리의 토큰을 바로 비웁니다. 저장소의 토큰은 동기 판이 그 자리에서 지우고, 비동기 판은 기다리지 않는 작업으로 지웁니다(TypeScript 판과 같습니다).

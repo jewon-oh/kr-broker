@@ -1528,6 +1528,12 @@ export class Exchange {
     kstStamp(ymd: Str, hms: Str = undefined): KrTimestamped {
         const date = /^(\d{4})(\d{2})(\d{2})$/.exec(ymd ?? '');
         if (date === null) return { timestamp: undefined, datetime: undefined };
+        // 달력에 없는 날짜(`00000000`, 달 `13`, `0230`)는 `Date.UTC` 가 다른 날로 넘기므로 비운다. Python 판과 같다.
+        const [year, month, day] = [Number(date[1]), Number(date[2]), Number(date[3])];
+        const probe = new Date(Date.UTC(year, month - 1, day));
+        if (year < 1 || probe.getUTCFullYear() !== year || probe.getUTCMonth() !== month - 1 || probe.getUTCDate() !== day) {
+            return { timestamp: undefined, datetime: undefined };
+        }
         const time = /^(\d{2})(\d{2})(\d{2})$/.exec(hms !== undefined && hms !== '' ? hms.padStart(6, '0') : '000000') ?? [];
         const timestamp = Date.UTC(Number(date[1]), Number(date[2]) - 1, Number(date[3]), Number(time[1] ?? 0), Number(time[2] ?? 0), Number(time[3] ?? 0)) - KST_OFFSET_MS;
         return { timestamp, datetime: iso8601(timestamp) };

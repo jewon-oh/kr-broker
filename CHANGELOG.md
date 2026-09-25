@@ -53,6 +53,10 @@
 
 ### 고침
 
+- Python 비동기 판이 코루틴 함수 옵션(`nxtRouting`, `krwIntegratedMargin`, `usExtendedLimit`, `usdKrwRate`, `stockDirectory.find_kr_market`)을 기다립니다. 예전에는 코루틴 객체를 그대로 써서 옵션이 꺼진 것으로 읽혔습니다. `tokenStore`에 코루틴을 돌려주는 함수를 넘기면 `NotSupported`입니다.
+- Python 비동기 판은 동시에 부른 `load_markets()`가 조회 하나를 함께 기다리고, `close()`는 띄운 작업을 5초까지만 기다립니다.
+- Python 동기 판은 `~/.netrc`와 환경 변수 프록시를 따르지 않고(`requests_trust_env`로 켤 수 있습니다), `close()`가 사용자가 넘긴 세션을 닫지 않습니다. charset 없는 `text/*` 응답은 UTF-8 로 읽어 한글 오류 원문이 깨지지 않습니다.
+- 달력에 없는 날짜(`00000000`, 달 `13`)의 `kstStamp`가 Python 판에서 `ValueError`를 던지고 TypeScript 판에서 다른 날로 넘기던 것을 고쳤습니다. 두 판 모두 `timestamp`와 `datetime`을 비웁니다.
 - 보안: verbose 로그에서 JSON 이나 폼으로 읽지 못한 본문은 원문 대신 길이만 남깁니다. 예전에는 원문을 그대로 남겨, 깨진 JSON 에 섞인 비밀 필드가 가려지지 않았습니다.
 - 토스증권 조건주문의 `triggerPrice`(둘째 조건 포함)가 없거나 숫자가 아니면 `ArgumentsRequired`, 0 이하면 `InvalidOrder`를 요청 전에 던집니다. 예전에는 트리거 가격이 빠진 조건을 보냈고, 고액주문 확인 플래그도 붙지 않았습니다.
 - 보안: verbose 로그에서 비밀 헤더(`authorization`, `appkey`, `appsecret`)와 본문 필드(`appsecret`, `secretkey`, `client_secret`, `access_token`, `approval_key`, `refresh_token`)를 가립니다. 한국투자증권 체결통보 TR 은 암호화되지 않은 프레임을 버립니다. 실시간 주소는 `urls.ws`와 `urls.wsTest`를 따릅니다. 토스 `TossTokenRejected.failedToken`은 열거되지 않습니다.

@@ -15,6 +15,7 @@ from typing import Any, Callable, Dict, List, Optional, Set
 
 import aiohttp
 
+from kr_broker.async_support.base.runtime import maybe_await
 from kr_broker.async_support.base.throttler import Throttler
 from kr_broker.base import functions as fn
 from kr_broker.base.errors import (
@@ -24,6 +25,9 @@ from kr_broker.base.exchange import Exchange as BaseExchange, redact_body_for_lo
 from kr_broker.base.types import ApiName, Int, Num, Str, Strings
 
 logger = logging.getLogger('kr_broker')
+
+# `close()` 가 `spawn` 으로 띄운 작업(토큰 저장소 정리 등)을 기다리는 상한(초). 저장소가 응답하지 않아도 세션은 닫힌다.
+CLOSE_WAIT_SECONDS = 5.0
 
 
 class HttpResponse:
@@ -43,8 +47,8 @@ class Exchange(BaseExchange):
     aiohttp_trust_env = False
 
     def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
-        # 사용자가 넣은 세션은 사용자가 닫는다.
-        self.own_session = not (isinstance(config, dict) and config.get('session') is not None)
+        # `load_markets` 가 진행 중이면 그 태스크. 동시에 부른 쪽이 함께 기다린다.
+        self._markets_loading: Optional['asyncio.Task[Dict[str, Any]]'] = None
         # `spawn` 으로 띄운 태스크. 참조를 쥐고 있어야 끝나기 전에 가비지 컬렉션으로 사라지지 않는다.
         self._background_tasks: Set['asyncio.Task[Any]'] = set()
         super().__init__(config)
@@ -62,9 +66,19 @@ class Exchange(BaseExchange):
             self.own_session = True
 
     async def close(self) -> None:  # type: ignore[override]
-        """`spawn` 으로 띄운 작업이 끝나기를 기다린 뒤 이 인스턴스가 연 HTTP 세션을 닫는다."""
+        """`spawn` 으로 띄운 작업을 `CLOSE_WAIT_SECONDS` 까지 기다린 뒤 이 인스턴스가 연 HTTP 세션을 닫는다. 그때까지 안 끝난 작업은 취소한다."""
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + CLOSE_WAIT_SECONDS
         while self._background_tasks:
-            await asyncio.gather(*list(self._background_tasks), return_exceptions=True)
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                pending = list(self._background_tasks)
+                logger.warning('%s close(): 끝나지 않은 백그라운드 작업 %d개를 취소한다', self.id, len(pending))
+                for task in pending:
+                    task.cancel()
+                await asyncio.gather(*pending, return_exceptions=True)
+                break
+            await asyncio.wait(list(self._background_tasks), timeout=remaining)
         if self.session is not None and self.own_session:
             await self.session.close()
             self.session = None
@@ -191,7 +205,28 @@ class Exchange(BaseExchange):
 
     # ============ 종목 ============
 
+    async def is_option_enabled(self, name: str) -> bool:  # type: ignore[override]
+        """켜고 끄는 옵션(`nxtRouting` 등)이 켜져 있는가. 불리언이나 불리언을 돌려주는 함수를 받고, 비동기 판은 코루틴 함수도 받는다."""
+        option = self.options.get(name)
+        if callable(option):
+            option = await maybe_await(option())
+        return option is True
+
     async def load_markets(self, reload: bool = False, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:  # type: ignore[override]
+        """종목 목록을 받는다. 진행 중인 조회가 있으면 새로 부르지 않고 그 결과를 함께 기다린다(`reload` 는 새 조회를 띄운다).
+        조회가 실패하면 진행 중 표시를 지워 다음 호출이 다시 부르게 한다."""
+        task = self._markets_loading
+        if task is None or (reload and task.done()):
+            task = asyncio.ensure_future(self._load_markets_helper(reload, params))
+            self._markets_loading = task
+        try:
+            return await asyncio.shield(task)
+        except BaseException:
+            if self._markets_loading is task and task.done():
+                self._markets_loading = None
+            raise
+
+    async def _load_markets_helper(self, reload: bool, params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         if not reload and self.markets is not None:
             if self.markets_by_id is None:
                 return self.set_markets(self.markets)

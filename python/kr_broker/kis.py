@@ -1133,6 +1133,14 @@ class kis(Exchange, ImplicitAPI):
         """이 인스턴스의 종목 마스터 데이터(`options['masterData']`). 넘기지 않았으면 빈 데이터다."""
         return master_data_of(self.options)
 
+    def _resolve_kr_market(self, symbol: str) -> Optional[str]:
+        """국내 종목의 코스피·코스닥 구분. 비동기 판의 `stockDirectory.find_kr_market` 은 코루틴을 돌려줘도 된다. 조회에 실패하면 `None` 이다."""
+        try:
+            return maybe_await(resolve_kr_market(symbol, self.options.get('stockDirectory'), self._master()))
+        except Exception as err:
+            logger.warning('[KrMarket] 종목 디렉터리 조회 실패 — 기본값(.KS/KOSPI) 사용 (symbol=%s, err=%s)', symbol, err)
+            return None
+
     def _quote_market_division(self) -> str:
         """국내 시세 조회의 상품구분. `nxtRouting` 옵션이 켜져 있고 NXT 확장세션이면 통합(`UN`)으로 애프터마켓 시세를 받는다."""
         return 'UN' if is_nxt_extended_tradable() and self.is_option_enabled('nxtRouting') else 'J'
@@ -1283,7 +1291,7 @@ class kis(Exchange, ImplicitAPI):
         instrument = self._instrument_of(symbol)
         until = self.safe_integer(params, 'until')
         # 코스피·코스닥 구분으로 야후 티커의 접미사(.KS·.KQ)를 맞게 붙인다.
-        kr_market = resolve_kr_market(symbol, self.options.get('stockDirectory'), self._master())
+        kr_market = self._resolve_kr_market(symbol)
         daily_like = timeframe in ('1d', '1w', '1W', '1M')
         # 폴백할 거래소. 자격증명이 없으면 KIS 로 폴백할 수 없다.
         fallback_exchange = (instrument.quote_exchange if instrument.overseas and daily_like and self.check_required_credentials(False)
