@@ -11,6 +11,7 @@ import {
     isKrxDomesticCode,
 } from '../broker-krx-code';
 import { krxSellTaxRate } from '../krx-sell-tax';
+import { getKrxTickSize } from '../krx-tick-size';
 
 // ============ 상수 ============
 
@@ -132,16 +133,8 @@ export const KIS_ORDER_TYPE = {
 
 // ============ 호가 단위 ============
 
-/** 가격대별 호가 단위 (KRX 규정) */
-export function getTickSize(price: number): number {
-    if (price < 2000) return 1;
-    if (price < 5000) return 5;
-    if (price < 20000) return 10;
-    if (price < 50000) return 50;
-    if (price < 200000) return 100;
-    if (price < 500000) return 500;
-    return 1000;
-}
+/** @deprecated 호가 단위 표는 세 증권사 공용인 `kr-broker/krx-tick-size` 로 옮겼다. `getKrxTickSize` 를 쓴다. 다음 판에서 지운다. */
+export const getTickSize = getKrxTickSize;
 
 // ============ 해외주식 ============
 

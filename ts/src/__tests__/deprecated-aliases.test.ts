@@ -49,6 +49,8 @@ import type {
     KisOverseasDailyCandle,
     KISOverseasDailyCandle,
 } from '../kis/kis-types';
+import { getTickSize } from '../kis/kis-types';
+import { getKrxTickSize } from '../krx-tick-size';
 import type { CalendarMarket } from '../market-calendar';
 import type { TossMarketCountry } from '../toss/toss-types';
 
@@ -60,6 +62,7 @@ describe('옛 이름 별칭', () => {
         expect(isKBSecOrderTr).toBe(isKbsecOrderTr);
         expect(isKBSecTokenFailure).toBe(isKbsecTokenFailure);
         expect(isKBSecBusinessError).toBe(isKbsecBusinessError);
+        expect(getTickSize).toBe(getKrxTickSize);
     });
 
     it('옛 클래스 이름으로 만든 인스턴스는 새 클래스의 인스턴스다', () => {

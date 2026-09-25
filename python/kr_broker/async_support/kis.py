@@ -76,9 +76,10 @@ from kr_broker.kis_overseas_master import (
 from kr_broker.kis_stock_master import get_krx_stock_by_code, get_stock_master_count, search_krx_stocks
 from kr_broker.kis_types import (
     KIS_API_DOMAINS, KIS_BROKERAGE_FEE, KIS_CUSTOMER_TYPE, KIS_DEFAULT_ACCOUNT_SUFFIX, KIS_ORDER_TYPE, KIS_OVERSEAS_DEFAULT_FEE_RATE,
-    KIS_OVERSEAS_ORD_DVSN, KIS_PRESENT_BALANCE_PARAMS, KIS_WS_DOMAINS, get_tick_size,
+    KIS_OVERSEAS_ORD_DVSN, KIS_PRESENT_BALANCE_PARAMS, KIS_WS_DOMAINS,
 )
 from kr_broker.krx_sell_tax import krx_sell_tax_rate
+from kr_broker.krx_tick_size import KRX_TICK_INVALID_DETAIL, get_krx_tick_size, krx_tick_violation
 from kr_broker.krx_trading_hours import check_krx_trading_hours, get_krx_market_phase, get_nxt_session, is_nxt_extended_tradable
 from kr_broker.us_market_hours import et_wall_clock_to_utc_ms, et_ymd, format_et_wall_clock, get_us_market_phase
 
@@ -1139,8 +1140,8 @@ class kis(Exchange, ImplicitAPI):
         })
 
     def price_to_precision(self, symbol: Str, price: Any) -> Str:
-        """가격을 호가 단위에 맞춘 문자열. 국내 일반 주식은 가격대별 호가 단위(2천원 미만 1원 … 50만원 이상 1천원)로 반올림하고,
-        ETF·ETN 은 표가 달라 그대로 둔다. 미국은 0.01 달러 단위다."""
+        """가격을 호가 단위에 맞춘 문자열. 국내 일반 주식은 가격대별 호가 단위 표(`krx_tick_size`)로 반올림하고,
+        ETF·ETN 은 표가 달라 그대로 둔다. 미국은 0.01 달러 단위다. 주문 경로는 이 메서드를 거치지 않는다."""
         if price is None:
             return None
         instrument = self._instrument_of(symbol)
@@ -1150,7 +1151,19 @@ class kis(Exchange, ImplicitAPI):
         security_type = None if stock is None else stock.get('securityType')
         if security_type is not None and security_type != 'STOCK':
             return self.number_to_string(price)
-        return decimal_to_precision(price, ROUND, get_tick_size(fn.js_number(price)), TICK_SIZE, NO_PADDING)
+        return decimal_to_precision(price, ROUND, get_krx_tick_size(fn.js_number(price)), TICK_SIZE, NO_PADDING)
+
+    def _assert_krx_tick_aligned(self, instrument: KisInstrument, price: Any, method: str) -> None:
+        """국내 지정가가 호가 단위 표에 맞지 않으면 요청 전에 `InvalidOrder` 다. 가격은 바꾸지 않는다. 마스터가 일반 주식(`STOCK`)이라고
+        알려 줄 때만 검사하고, 종목 종류를 모르거나 ETF·ETN 이면 서버에 맡긴다."""
+        if instrument.overseas:
+            return
+        stock = get_krx_stock_by_code(self._master(), instrument.code)
+        if stock is None or stock.get('securityType') != 'STOCK':
+            return
+        violation = krx_tick_violation(price)
+        if violation is not None:
+            raise InvalidOrder(f'{self.id} {method}() {violation} ({instrument.symbol})', detail=KRX_TICK_INVALID_DETAIL)
 
     def _instrument_of(self, symbol: str) -> KisInstrument:
         """심볼(또는 종목코드)을 종목 식별 결과로 바꾼다. 국내는 마스터 없이도 되고, 해외는 마스터에서 거래소를 찾는다."""
@@ -1774,6 +1787,8 @@ class kis(Exchange, ImplicitAPI):
             self.check_order_arguments(None, type, side, quantity, price, params)
             return await self._create_overseas_order(instrument, type, side, quantity, price, params)
         self.check_order_arguments(None, type, side, quantity, price, params)
+        if type == 'limit' and price is not None:
+            self._assert_krx_tick_aligned(instrument, price, 'createOrder')
         return await self._create_domestic_order(instrument, type, side, quantity, price, params)
 
     def _normalize_quantity(self, instrument: KisInstrument, side: str, requested: Any) -> int:
@@ -2049,6 +2064,7 @@ class kis(Exchange, ImplicitAPI):
         instrument = self._instrument_of(symbol)
         if instrument.overseas:
             return await self._edit_overseas_order(id, instrument, price, amount, params)
+        self._assert_krx_tick_aligned(instrument, price, 'editOrder')
         await self._assert_domestic_edit_open()
         response = await self.private_post_uapi_domestic_stock_v1_trading_order_rvsecncl(self.extend(self.extend(self._account_params(), {
             'KRX_FWDG_ORD_ORGNO': self.safe_string(params, 'orderOrgNo', ''),

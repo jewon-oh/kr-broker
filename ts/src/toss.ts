@@ -80,9 +80,12 @@ import {
     Precise,
     RateLimitExceeded,
     DECIMAL_PLACES,
+    NO_PADDING,
+    ROUND,
     TICK_SIZE,
     TRUNCATE,
     decimalToPrecision,
+    numberToString,
     type ApiName,
     type Balances,
     type Dict,
@@ -113,6 +116,7 @@ import { candlePeriodUtcMs, isDailyOrLongerTimeframe } from './broker-time';
 import { logger } from './logger';
 import type { UsdKrwRateOption } from './options';
 import { applyMarketCalendar } from './market-calendar';
+import { getKrxTickSize, KRX_TICK_INVALID_DETAIL, krxTickViolation } from './krx-tick-size';
 import { TossAuth, type TossIssuedToken } from './toss/toss-auth';
 import { OrderNotSent, TossRateLimited, TossTokenRejected } from './toss/toss-errors';
 import { TossPriceWs, type TossPriceWsOptions, type TossWsSub } from './toss/toss-price-ws';
@@ -918,6 +922,35 @@ export class toss extends Exchange {
         return market.quote === 'KRW' ? 'KR' : 'US';
     }
 
+    /**
+     * 가격을 호가 단위에 맞춘 문자열. 국내는 가격대별 호가 단위 표(`krx-tick-size`)로 반올림한다. 불러온 종목의 유형(`market.options.securityType`)이
+     * 주식(`STOCK`)이 아니면 표가 달라서 그대로 돌려준다. 미국은 기반 구현(`precision.price`)을 따른다. 주문 경로는 이 메서드로 가격을 바꾸지 않는다.
+     */
+    override priceToPrecision(symbol: Str, price: number | string | undefined): Str {
+        if (price === undefined) return undefined;
+        const market = this.market(symbol);
+        if (this.countryOf(market) !== 'KR') return super.priceToPrecision(symbol, price);
+        const securityType = this.safeString(market.options, 'securityType');
+        if (securityType !== undefined && securityType !== 'STOCK') return numberToString(price);
+        return decimalToPrecision(price, ROUND, getKrxTickSize(Number(price)), TICK_SIZE, NO_PADDING);
+    }
+
+    /**
+     * 국내 지정가가 호가 단위 표에 맞지 않으면 요청 전에 `InvalidOrder` 다. 불러온 종목이 주식(`STOCK`)일 때만 검사하고, 종목 유형을 모르거나
+     * (`loadMarkets` 전) ETF·ETN 이면 서버에 맡긴다. 서버도 같은 경우를 `price-tick-invalid` 로 거절한다.
+     */
+    private assertKrxTickAligned(market: MarketInterface, price: number, method: string): void {
+        if (this.countryOf(market) !== 'KR' || this.safeString(market.options, 'securityType') !== 'STOCK') return;
+        const violation = krxTickViolation(price);
+        if (violation !== null) throw new InvalidOrder(`${this.id} ${method}() ${violation} (${market.symbol})`, { detail: KRX_TICK_INVALID_DETAIL });
+    }
+
+    /** 요청 본문의 지정가. 국내는 호가에 맞추지 않고 그대로 보낸다(맞지 않는 가격은 `assertKrxTickAligned` 가 막거나 서버가 거절한다). */
+    private orderPriceString(market: MarketInterface, price: Num): string | undefined {
+        if (price === undefined) return undefined;
+        return this.countryOf(market) === 'KR' ? numberToString(price) : this.priceToPrecision(market.symbol, price);
+    }
+
     /** 종목 상세(종목명·상장 상태·국내 거래정지 여부)를 받아 온다(`GET /stocks`, 한 번에 200종목까지). */
     async fetchStocks(symbols: string[], params: Dict = {}): Promise<TossStockInfo[]> {
         const ids = symbols.map((symbol) => this.market(symbol).id as string);
@@ -1507,6 +1540,7 @@ export class toss extends Exchange {
         if (!useAmountBased && type === 'limit' && price === undefined) {
             throw new ArgumentsRequired(`${this.id} createOrder() requires a price argument for a limit order`);
         }
+        if (type === 'limit' && price !== undefined) this.assertKrxTickAligned(market, price, 'createOrder');
         const quantity = useAmountBased ? 0 : this.normalizeQuantity(symbol, type, side, amount);
         const clientOrderId = this.safeString(params, 'clientOrderId');
         const timeInForce = this.parseTimeInForce(params);
@@ -1550,7 +1584,7 @@ export class toss extends Exchange {
         } else {
             body.quantity = this.numberToString(quantity);
         }
-        if (effectiveType === 'limit') body.price = this.priceToPrecision(symbol, effectivePrice);
+        if (effectiveType === 'limit') body.price = this.orderPriceString(market, effectivePrice);
 
         // 고액주문 확인 표시. 명목가를 알 수 있는 경우에만 붙인다(수량 기준 시장가는 서버의 400 이 마지막 방어선이다).
         const notional = useAmountBased ? (cost as number) : (effectivePrice !== undefined ? quantity * effectivePrice : 0);
@@ -1612,10 +1646,11 @@ export class toss extends Exchange {
         if (country === 'KR' && amount === undefined) {
             throw new ArgumentsRequired(`${this.id} editOrder() 는 국내 종목의 수량 정정에 amount 인자가 필요하다`);
         }
+        if (type === 'limit' && price !== undefined) this.assertKrxTickAligned(market, price, 'editOrder');
 
         const body: Dict = { orderId: id, orderType: type === 'market' ? 'MARKET' : 'LIMIT' };
         if (country === 'KR') body.quantity = this.numberToString(this.normalizeQuantity(symbol, type, side, amount as number));
-        if (type === 'limit') body.price = this.priceToPrecision(symbol, price);
+        if (type === 'limit') body.price = this.orderPriceString(market, price);
 
         // 국내 명목가는 정정 수량 × 가격이다. 미국 정정은 수량을 받지 않으므로 주문 상세의 남은 수량 × 가격으로 본다.
         const notional = country === 'KR' ? (amount ?? 0) * (price ?? 0) : await this.usEditNotional(id, price);

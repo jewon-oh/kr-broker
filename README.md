@@ -377,7 +377,7 @@ asyncio.run(main())
 - KB증권 캔들은 코스피를 기본으로 조회합니다. 코스닥 종목은 `params.mkt_clsf = '1'`을 전달합니다.
 - KB증권 `createOrder`는 조건 인자(`triggerPrice`, `stopPrice`, `stopLossPrice`, `takeProfitPrice`)를 받지 않고 요청 전에 `NotSupported`를 던집니다. 스탑지정가는 `createTriggerOrder`로 냅니다.
 - KB증권 미체결 행에는 주문 시각이 없어서 `fetchOpenOrders`는 `since`를 적용하지 않습니다. `since`를 전달해도 미체결 전체를 반환합니다.
-- 국내 호가단위는 가격대별이라 ccxt의 단일 `precision.price`로 표현할 수 없습니다.
+- 국내 호가단위는 가격대별이라 ccxt의 단일 `precision.price`로 표현할 수 없습니다. `priceToPrecision()`은 KRX 호가 단위 표로 반올림하고, 주문은 가격을 바꾸지 않습니다. 자세한 규칙은 [FAQ](docs/faq.md)에 있습니다.
 - 실계좌 검증은 작성자가 가진 계좌로 확인한 범위까지만 했습니다.
 
 ## 약관과 시세 데이터

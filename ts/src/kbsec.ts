@@ -43,6 +43,8 @@ import { candlePeriodUtcMs, isDailyOrLongerTimeframe } from './broker-time';
 import { logger } from './logger';
 import type { UsdKrwRateOption } from './options';
 import { masterDataOf } from './kis/kis-master-data';
+import { getKRXStockByCode } from './kis/kis-stock-master';
+import { getKrxTickSize, KRX_TICK_INVALID_DETAIL, krxTickViolation } from './krx-tick-size';
 import {
     ArgumentsRequired,
     AuthenticationError,
@@ -57,7 +59,11 @@ import {
     NotSupported,
     NullResponse,
     OrderNotFound,
+    NO_PADDING,
     Precise,
+    ROUND,
+    TICK_SIZE,
+    decimalToPrecision,
     numberToString,
     omit,
     safeDict,
@@ -1995,6 +2001,34 @@ export class kbsec extends Exchange {
 
     private isUs(market: MarketInterface): boolean {
         return market.options?.country === 'US';
+    }
+
+    /** 국내 종목의 증권 유형(`STOCK`, `ETF` 등). `options.masterData` 에 없으면 `undefined` 다. */
+    private domesticSecurityType(market: MarketInterface): Str {
+        return getKRXStockByCode(masterDataOf(this.options), market.id as string)?.securityType;
+    }
+
+    /**
+     * 가격을 호가 단위에 맞춘 문자열. 국내는 가격대별 호가 단위 표(`krx-tick-size`)로 반올림한다. `options.masterData` 가 주식(`STOCK`)이 아니라고
+     * 알려 주면 표가 달라서 그대로 돌려준다. 미국은 기반 구현을 따른다. 주문 경로는 이 메서드로 가격을 바꾸지 않는다.
+     */
+    override priceToPrecision(symbol: Str, price: number | string | undefined): Str {
+        if (price === undefined) return undefined;
+        const market = this.market(symbol);
+        if (this.isUs(market)) return super.priceToPrecision(symbol, price);
+        const securityType = this.domesticSecurityType(market);
+        if (securityType !== undefined && securityType !== 'STOCK') return numberToString(price);
+        return decimalToPrecision(price, ROUND, getKrxTickSize(Number(price)), TICK_SIZE, NO_PADDING);
+    }
+
+    /**
+     * 국내 지정가가 호가 단위 표에 맞지 않으면 요청 전에 `InvalidOrder` 다. KB 는 종목 유형을 알려 주는 경로가 없어 `options.masterData` 가
+     * 주식(`STOCK`)이라고 알려 줄 때만 검사한다. 모르면 서버(`1896` 주문단가 오류)에 맡긴다.
+     */
+    private assertKrxTickAligned(market: MarketInterface, price: Num, method: string): void {
+        if (price === undefined || this.isUs(market) || this.domesticSecurityType(market) !== 'STOCK') return;
+        const violation = krxTickViolation(price);
+        if (violation !== null) throw new InvalidOrder(`${this.id} ${method}() ${violation} (${market.symbol})`, { detail: KRX_TICK_INVALID_DETAIL });
     }
 
     /** 종목기본정보(`SIQM4900`) 원문 한 행. `fetchStocks`·`fetchStockWarnings`가 함께 쓴다. 국내만 지원한다. */
@@ -4390,6 +4424,7 @@ export class kbsec extends Exchange {
             }
         }
         this.checkOrderArguments(market, type, side, amount, price, params);
+        if (type === 'limit') this.assertKrxTickAligned(market, price, 'createOrder');
         const isKr = !this.isUs(market);
         const base = market.id as string;
         const fractional = params.fractional === true;
@@ -4689,6 +4724,7 @@ export class kbsec extends Exchange {
             }
             return this.editedOrder(response, market, price, undefined);
         }
+        this.assertKrxTickAligned(market, price, 'editOrder');
         const sor = await this.resolveOrderSor(id, symbol);
         const isPartial = params.partial === true && amount !== undefined;
         if (!isPartial && amount !== undefined) {

@@ -5895,6 +5895,13 @@
             }
         },
         {
+            "description": "createOrder 국내 일반 주식(마스터 STOCK)의 지정가가 호가 단위에 맞지 않으면 가격을 바꾸지 않고 요청 없이 InvalidOrder 다",
+            "method": "createOrder",
+            "args": ["005930/KRW", "limit", "buy", 1, 70030],
+            "http": [],
+            "error": { "class": "InvalidOrder", "detail": "price-tick-invalid" }
+        },
+        {
             "description": "createOrder session 이 nxt 여도 NXT 가 닫힌 새벽에는 주문을 보내지 않고 MarketClosed 다",
             "now": 1774375200000,
             "method": "createOrder",
@@ -7051,6 +7058,13 @@
             "args": ["ORD-0001", "005930/KRW", "limit", "buy", 3],
             "http": [],
             "error": { "class": "ArgumentsRequired" }
+        },
+        {
+            "description": "editOrder 국내 일반 주식(마스터 STOCK)의 정정 가격이 호가 단위에 맞지 않으면 요청 없이 InvalidOrder 다",
+            "method": "editOrder",
+            "args": ["0000001", "005930/KRW", "limit", "buy", null, 70030],
+            "http": [],
+            "error": { "class": "InvalidOrder", "detail": "price-tick-invalid" }
         },
         {
             "description": "editOrder 미국은 수량을 주면 그 수량과 단가로 정정한다",

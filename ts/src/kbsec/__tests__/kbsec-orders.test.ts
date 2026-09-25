@@ -407,6 +407,44 @@ describe('createOrder — 실패의 종류', () => {
     });
 });
 
+describe('createOrder·editOrder — 호가 단위', () => {
+    /** 마스터가 005930 을 일반 주식(STOCK)이라고 알려 주는 인스턴스. */
+    const withStockMaster = () => new kbsec({
+        ...CREDS,
+        rateLimit: 0,
+        options: {
+            masterData: { ...MASTER_DATA, kospi: [{ code: '005930', name: '삼성전자', market: 'KOSPI' as const, securityType: 'STOCK' }] },
+            confirmBudget: { intervalMs: 0 },
+        },
+    });
+
+    it('마스터가 주식이라고 알려 주면 호가 단위에 맞지 않는 지정가를 요청 없이 InvalidOrder 로 막는다. 가격을 바꿔 내지 않는다', async () => {
+        routeTr(mockFetch, { [TR_BUY]: { ordr_no: 'A123' } });
+
+        const error = await withStockMaster().createOrder('005930/KRW', 'limit', 'buy', 3, 70_030).catch((e: unknown) => e);
+
+        expect(error).toBeInstanceOf(InvalidOrder);
+        expect((error as InvalidOrder).detail).toBe('price-tick-invalid');
+        expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('정정 가격도 같다. 원주문 라우팅 조회도 나가지 않는다', async () => {
+        routeTr(mockFetch, { [KBSEC_TR.AMEND_KR]: { ordr_no: 'AM1' } });
+
+        await expect(withStockMaster().editOrder('O9', '005930/KRW', 'limit', 'buy', undefined, 70_030)).rejects.toBeInstanceOf(InvalidOrder);
+
+        expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('종목 유형을 모르면 막지 않고 가격을 그대로 보낸다(서버의 1896 에 맡긴다)', async () => {
+        routeTr(mockFetch, { [TR_BUY]: { ordr_no: 'A123' } });
+
+        await newExchange().createOrder('005930/KRW', 'limit', 'buy', 3, 70_030);
+
+        expect(trBody(mockFetch, TR_BUY).dataBody.ordr_uprc).toBe('70030');
+    });
+});
+
 describe('editOrder', () => {
     it('국내 일부정정 — crct_clsf 1, 원주문 번호, 수량과 가격. 정정하면 주문번호가 바뀐다', async () => {
         routeTr(mockFetch, { [KBSEC_TR.AMEND_KR]: { ordr_no: 'AM1' }, [KBSEC_TR.TRADES_KR]: { Record1: [] } });

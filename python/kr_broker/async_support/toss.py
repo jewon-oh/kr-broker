@@ -49,7 +49,7 @@ from kr_broker.async_support.base.token_store import LegacyKeyTokenStore, refres
 from kr_broker.async_support.execution_confirm import confirm_execution
 from kr_broker.async_support.extended_session_limit import build_extended_session_limit
 from kr_broker.base import functions as fn
-from kr_broker.base.decimal_to_precision import DECIMAL_PLACES, TICK_SIZE, TRUNCATE, decimal_to_precision
+from kr_broker.base.decimal_to_precision import DECIMAL_PLACES, NO_PADDING, ROUND, TICK_SIZE, TRUNCATE, decimal_to_precision
 from kr_broker.base.errors import (
     AccountNotEnabled, ArgumentsRequired, AuthenticationError, BadRequest, BadResponse, BadSymbol, DuplicateOrderId, ExchangeError,
     ExchangeNotAvailable, InsufficientFunds, InvalidOrder, ManualInteractionNeeded, MarketClosed, NotSupported, NullResponse,
@@ -61,6 +61,7 @@ from kr_broker.base.token_store import BrokerTokenStore, legacy_token_store_key,
 from kr_broker.base.types import ApiName, Int, Num, Str, Strings
 from kr_broker.broker_market_group import symbol_base_code
 from kr_broker.broker_time import candle_period_utc_ms, is_daily_or_longer_timeframe
+from kr_broker.krx_tick_size import KRX_TICK_INVALID_DETAIL, get_krx_tick_size, krx_tick_violation
 from kr_broker.market_calendar import apply_market_calendar
 from kr_broker.toss_fee import pick_commission_rate
 from kr_broker.toss_trading_hours import (
@@ -787,6 +788,35 @@ class toss(Exchange, ImplicitAPI):
     def _country_of(market: Dict[str, Any]) -> str:
         return 'KR' if market.get('quote') == 'KRW' else 'US'
 
+    def price_to_precision(self, symbol: Str, price: Any) -> Str:
+        """가격을 호가 단위에 맞춘 문자열. 국내는 가격대별 호가 단위 표(`krx_tick_size`)로 반올림한다. 불러온 종목의 유형
+        (`market['options']['securityType']`)이 주식(`STOCK`)이 아니면 표가 달라서 그대로 돌려준다. 미국은 기반 구현을 따른다.
+        주문 경로는 이 메서드로 가격을 바꾸지 않는다."""
+        if price is None:
+            return None
+        market = self.market(symbol)
+        if self._country_of(market) != 'KR':
+            return super().price_to_precision(symbol, price)
+        security_type = self.safe_string(market.get('options'), 'securityType')
+        if security_type is not None and security_type != 'STOCK':
+            return fn.number_to_string(price)
+        return decimal_to_precision(price, ROUND, get_krx_tick_size(fn.js_number(price)), TICK_SIZE, NO_PADDING)
+
+    def _assert_krx_tick_aligned(self, market: Dict[str, Any], price: Any, method: str) -> None:
+        """국내 지정가가 호가 단위 표에 맞지 않으면 요청 전에 `InvalidOrder` 다. 불러온 종목이 주식(`STOCK`)일 때만 검사하고, 종목 유형을
+        모르거나(`load_markets` 전) ETF·ETN 이면 서버에 맡긴다. 서버도 같은 경우를 `price-tick-invalid` 로 거절한다."""
+        if self._country_of(market) != 'KR' or self.safe_string(market.get('options'), 'securityType') != 'STOCK':
+            return
+        violation = krx_tick_violation(price)
+        if violation is not None:
+            raise InvalidOrder(f'{self.id} {method}() {violation} ({market["symbol"]})', detail=KRX_TICK_INVALID_DETAIL)
+
+    def _order_price_string(self, market: Dict[str, Any], price: Any) -> Str:
+        """요청 본문의 지정가. 국내는 호가에 맞추지 않고 그대로 보낸다(맞지 않는 가격은 `_assert_krx_tick_aligned` 가 막거나 서버가 거절한다)."""
+        if price is None:
+            return None
+        return fn.number_to_string(price) if self._country_of(market) == 'KR' else self.price_to_precision(market['symbol'], price)
+
     async def fetch_stock_warnings(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """종목 유의사항(정리매매·투자경고·투자위험·단기과열·VI·신주인수권) 원본(`GET /stocks/{symbol}/warnings`)."""
         response = await self.private_market_get_stocks_symbol_warnings(self.extend({'symbol': self.market(symbol)['id']}, params))
@@ -1166,6 +1196,8 @@ class toss(Exchange, ImplicitAPI):
         use_amount_based = is_market and side == 'buy' and country == 'US' and cost is not None and cost > 0
         if not use_amount_based and type == 'limit' and price is None:
             raise ArgumentsRequired(f'{self.id} createOrder() requires a price argument for a limit order')
+        if type == 'limit' and price is not None:
+            self._assert_krx_tick_aligned(market, price, 'createOrder')
         quantity = 0 if use_amount_based else self.normalize_quantity(symbol, type, side, amount)
         client_order_id = self.safe_string(params, 'clientOrderId')
         time_in_force = self._parse_time_in_force(params)
@@ -1210,7 +1242,7 @@ class toss(Exchange, ImplicitAPI):
         else:
             body['quantity'] = self.number_to_string(quantity)
         if effective_type == 'limit':
-            body['price'] = self.price_to_precision(symbol, effective_price)
+            body['price'] = self._order_price_string(market, effective_price)
 
         # 고액주문 확인 표시. 명목가를 알 수 있을 때만 붙인다(수량 기준 시장가는 서버의 400 이 마지막 방어선이다).
         if use_amount_based:
@@ -1273,12 +1305,14 @@ class toss(Exchange, ImplicitAPI):
             raise NotSupported(f'{self.id} editOrder() 는 미국 종목의 수량 정정을 지원하지 않는다(가격만 가능)')
         if country == 'KR' and amount is None:
             raise ArgumentsRequired(f'{self.id} editOrder() 는 국내 종목의 수량 정정에 amount 인자가 필요하다')
+        if type == 'limit' and price is not None:
+            self._assert_krx_tick_aligned(market, price, 'editOrder')
 
         body: Dict[str, Any] = {'orderId': id, 'orderType': 'MARKET' if type == 'market' else 'LIMIT'}
         if country == 'KR':
             body['quantity'] = self.number_to_string(self.normalize_quantity(symbol, type, side, amount))
         if type == 'limit':
-            body['price'] = self.price_to_precision(symbol, price)
+            body['price'] = self._order_price_string(market, price)
         # 국내 명목가는 정정 수량 × 가격이다. 미국 정정은 수량을 받지 않으므로 주문 상세의 남은 수량 × 가격으로 본다.
         if country == 'KR':
             notional = (amount if amount is not None else 0) * (price if price is not None else 0)

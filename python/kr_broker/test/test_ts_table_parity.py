@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-from kr_broker import broker_krx_code, broker_market_group, krx_sell_tax
+from kr_broker import broker_krx_code, broker_market_group, krx_sell_tax, krx_tick_size
 from kr_broker.async_support.kis import KIS_EXCEPTIONS_EXACT
 
 TS = Path(__file__).resolve().parents[3] / 'ts' / 'src'
@@ -59,6 +59,17 @@ def test_krx_sell_tax_schedule_matches() -> None:
     assert entries and entries == [(entry['fromUtcMs'], entry['rate']) for entry in krx_sell_tax.KRX_SELL_TAX_SCHEDULE]
     horizon = re.search(r'KRX_SELL_TAX_SCHEDULE_HORIZON_MS = Date\.UTC\(([\d, ]+)\);', text)
     assert horizon is not None and _date_utc_ms(horizon.group(1)) == krx_sell_tax.KRX_SELL_TAX_SCHEDULE_HORIZON_MS
+
+
+def test_krx_tick_size_table_matches() -> None:
+    text = _source('krx-tick-size.ts')
+    body = _literal(text, 'KRX_STOCK_TICK_SIZES', '[', '];')
+    rows = [(int(below.replace('_', '')), int(tick.replace('_', ''))) for below, tick in re.findall(r'\[([\d_]+), ([\d_]+)\]', body)]
+    assert rows and tuple(rows) == krx_tick_size.KRX_STOCK_TICK_SIZES
+    top = re.search(r'KRX_STOCK_TOP_TICK_SIZE = ([\d_]+);', text)
+    assert top is not None and int(top.group(1).replace('_', '')) == krx_tick_size.KRX_STOCK_TOP_TICK_SIZE
+    detail = re.search(r"KRX_TICK_INVALID_DETAIL = '([\w-]+)';", text)
+    assert detail is not None and detail.group(1) == krx_tick_size.KRX_TICK_INVALID_DETAIL
 
 
 def test_kis_exact_error_codes_match() -> None:

@@ -323,3 +323,14 @@ def test_fetch_ohlcv_warns_when_page_cap_stops_before_since(caplog: pytest.LogCa
     assert len(seen) == 10
     assert [row[4] for row in rows] == [11, 12]
     assert any('since 까지 받지 못했다' in record.getMessage() for record in caplog.records)
+
+
+def test_price_to_precision_rounds_domestic_stock_prices_with_the_krx_table() -> None:
+    broker = kr_broker.toss({'apiKey': 'k', 'secret': 's'})
+    assert broker.price_to_precision('005930/KRW', 70030) == '70000'
+    assert broker.price_to_precision('005930/KRW', 4997) == '4995'
+    assert broker.price_to_precision('AAPL/USD', 229.456) == '229.456'
+    etf = {'id': '069500', 'symbol': '069500/KRW', 'base': '069500', 'quote': 'KRW', 'baseId': '069500', 'quoteId': 'KRW', 'type': 'spot',
+           'spot': True, 'active': True, 'precision': {'amount': 1}, 'options': {'country': 'KR', 'market': 'KOSPI', 'securityType': 'ETF'}}
+    loaded = kr_broker.toss({'apiKey': 'k', 'secret': 's', 'markets': [etf]})
+    assert loaded.price_to_precision('069500/KRW', 35005) == '35005'

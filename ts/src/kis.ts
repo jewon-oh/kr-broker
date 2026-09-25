@@ -109,9 +109,9 @@ import {
     KIS_PRESENT_BALANCE_PARAMS,
     KIS_WS_DOMAINS,
     KIS_WS_PATH,
-    getTickSize,
     isKrxDomesticCode,
 } from './kis/kis-types';
+import { getKrxTickSize, KRX_TICK_INVALID_DETAIL, krxTickViolation } from './krx-tick-size';
 import {
     getOverseasMarketForCode,
     getOverseasStockByCode,
@@ -4313,8 +4313,8 @@ export class kis extends Exchange {
     }
 
     /**
-     * 가격을 호가 단위에 맞춘 문자열. 국내 일반 주식은 가격대별 호가 단위 표(2천원 미만 1원 … 50만원 이상 1천원)로 반올림한다.
-     * ETF·ETN 은 표가 달라서 손대지 않고 그대로 돌려준다. 미국은 0.01 달러 단위다.
+     * 가격을 호가 단위에 맞춘 문자열. 국내 일반 주식은 가격대별 호가 단위 표(`krx-tick-size`)로 반올림한다.
+     * ETF·ETN 은 표가 달라서 손대지 않고 그대로 돌려준다. 미국은 0.01 달러 단위다. 주문 경로는 이 메서드를 거치지 않는다.
      */
     override priceToPrecision(symbol: Str, price: number | string | undefined): Str {
         if (price === undefined) return undefined;
@@ -4322,7 +4322,17 @@ export class kis extends Exchange {
         if (instrument.overseas) return decimalToPrecision(price, ROUND, 0.01, TICK_SIZE, NO_PADDING);
         const securityType = getKRXStockByCode(this.master(), instrument.code)?.securityType;
         if (securityType !== undefined && securityType !== 'STOCK') return numberToString(price);
-        return decimalToPrecision(price, ROUND, getTickSize(Number(price)), TICK_SIZE, NO_PADDING);
+        return decimalToPrecision(price, ROUND, getKrxTickSize(Number(price)), TICK_SIZE, NO_PADDING);
+    }
+
+    /**
+     * 국내 지정가가 호가 단위 표에 맞지 않으면 요청 전에 `InvalidOrder` 다. 가격은 바꾸지 않는다. 마스터가 일반 주식(`STOCK`)이라고 알려 줄 때만
+     * 검사하고, 종목 종류를 모르거나 ETF·ETN 이면 서버에 맡긴다.
+     */
+    private assertKrxTickAligned(instrument: KisInstrument, price: number, method: string): void {
+        if (instrument.overseas || getKRXStockByCode(this.master(), instrument.code)?.securityType !== 'STOCK') return;
+        const violation = krxTickViolation(price);
+        if (violation !== null) throw new InvalidOrder(`${this.id} ${method}() ${violation} (${instrument.symbol})`, { detail: KRX_TICK_INVALID_DETAIL });
     }
 
     /** 심볼(또는 종목코드)을 종목 식별 결과로 바꾼다. 국내는 마스터 없이도 되고, 해외는 마스터에서 거래소를 찾는다. */
@@ -4788,6 +4798,7 @@ export class kis extends Exchange {
             return this.createOverseasOrder(instrument, type, side, quantity, price, params);
         }
         this.checkOrderArguments(undefined, type, side, quantity, price, params);
+        if (type === 'limit' && price !== undefined) this.assertKrxTickAligned(instrument, price, 'createOrder');
         return this.createDomesticOrder(instrument, type, side, quantity, price, params);
     }
 
@@ -10009,6 +10020,7 @@ export class kis extends Exchange {
         }
         const instrument = this.instrumentOf(symbol);
         if (instrument.overseas) return this.editOverseasOrder(id, instrument, price, amount, params);
+        this.assertKrxTickAligned(instrument, price, 'editOrder');
         await this.assertDomesticEditOpen();
         const response = await this.privatePostUapiDomesticStockV1TradingOrderRvsecncl(this.extend({
             ...this.accountParams(),
