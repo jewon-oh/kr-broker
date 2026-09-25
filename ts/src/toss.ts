@@ -421,7 +421,7 @@ export class toss extends Exchange {
                 fetchOrders: false,
                 fetchOpenOrders: true,
                 fetchClosedOrders: true,
-                fetchCanceledOrders: false,
+                fetchCanceledOrders: true,
                 fetchMyTrades: 'emulated',
                 fetchMarketCalendar: true,
                 fetchStockWarnings: true,
@@ -2215,17 +2215,27 @@ export class toss extends Exchange {
     }
 
     /**
-     * 체결 완료 주문(종료된 주문). 종목·시작 시각·개수로 서버 조회를 좁힌다. `params.until`(ms)은 그 시각까지의 주문만 받는다.
+     * 전량 체결된 주문(`status: 'closed'`). 토스의 종료된 주문(`CLOSED`)에는 취소, 거부, 정정으로 대체된 주문도 섞여 있어 전량 체결만 거른다.
+     * 취소된 주문은 `fetchCanceledOrders` 로 받는다. 종목·시작 시각·개수로 서버 조회를 좁히고, `params.until`(ms)은 그 시각까지의 주문만 받는다.
      * 페이지는 100건씩 최대 10쪽(1,000건)까지 받고, 넘으면 로그를 남기고 자른다. 범위를 좁히려면 `since` 와 `until` 을 준다.
      */
     override async fetchClosedOrders(symbol: Str = undefined, since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<Order[]> {
+        return this.fetchEndedOrders('closed', symbol, since, limit, params);
+    }
+
+    /** 취소된 주문(정정으로 대체된 원주문 포함). `fetchClosedOrders` 와 같은 조회에서 `status: 'canceled'` 만 거른다. */
+    override async fetchCanceledOrders(symbol: Str = undefined, since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<Order[]> {
+        return this.fetchEndedOrders('canceled', symbol, since, limit, params);
+    }
+
+    private async fetchEndedOrders(status: 'closed' | 'canceled', symbol: Str, since: Int, limit: Int, params: Dict): Promise<Order[]> {
         const market = symbol !== undefined ? this.market(symbol) : undefined;
-        const rows = await this.fetchClosedOrderRows(market, since, limit, params);
+        const rows = await this.fetchClosedOrderRows(market, since, limit, params, (row) => this.parseOrderStatus(row.status) === status);
         return this.parseOrders(rows, market, since, limit);
     }
 
-    /** 체결 완료 주문 원본을 커서로 이어 받는다. */
-    private async fetchClosedOrderRows(market: Market, since: Int, limit: Int, params: Dict): Promise<TossOrder[]> {
+    /** 종료된 주문 원본을 커서로 이어 받고 `keep` 에 맞는 행만 남긴다. 개수만 정한 조회는 남긴 행이 `limit` 에 이르면 멈춘다. */
+    private async fetchClosedOrderRows(market: Market, since: Int, limit: Int, params: Dict, keep: (row: TossOrder) => boolean): Promise<TossOrder[]> {
         const request: Dict = { status: 'CLOSED', limit: CLOSED_ORDER_PAGE_LIMIT };
         if (market !== undefined) request.symbol = market.id;
         // 날짜 조건은 주문한 날짜 기준이다. 미국 정규장처럼 자정을 넘겨 체결되는 주문이 빠지지 않게 하루를 더 앞에서 받고, 정확한 시각은 아래 필터가 맞춘다.
@@ -2238,7 +2248,7 @@ export class toss extends Exchange {
         let cursor: string | undefined;
         for (let page = 0; page < maxPages; page++) {
             const response = this.unwrap<TossPaginatedOrders>(await this.privateAccountGetOrders(this.extend(request, { cursor }, query)));
-            collected.push(...(response?.orders ?? []));
+            collected.push(...(response?.orders ?? []).filter(keep));
             if (!response?.hasNext || !response?.nextCursor) return collected;
             // 시각 조건이 없고 개수만 정했다면(가장 최근 `limit` 건) 그만큼 모았을 때 멈춘다.
             if (since === undefined && limit !== undefined && collected.length >= limit) return collected;
@@ -2249,15 +2259,21 @@ export class toss extends Exchange {
     }
 
     /**
-     * 체결 내역. 토스에는 체결 단위 조회가 없어서 체결 완료 주문 가운데 체결이 있는 것(`execution.filledQuantity > 0`)을 거래 하나로 본다.
+     * 체결 내역. 토스에는 체결 단위 조회가 없어서 체결이 있는 주문(`execution.filledQuantity > 0`) 하나를 거래 하나로 본다.
+     * 종료된 주문과 함께 일부 체결된 채 걸려 있는 미체결 주문도 넣는다. 거래 id 는 주문번호이고 수량은 그 주문의 누적 체결 수량이라,
+     * 체결이 늘면 같은 id 의 거래가 더 큰 수량으로 다시 나온다. 거래를 쌓는 쪽은 id 로 덮어써야 한다.
      * 가격은 평균 체결가, 수수료는 브로커가 확정한 `execution.commission` 과 `execution.tax` 의 합이다. 종목을 주지 않으면 전 종목이다.
      */
     override async fetchMyTrades(symbol: Str = undefined, since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<Trade[]> {
         const market = symbol !== undefined ? this.market(symbol) : undefined;
-        const rows = (await this.fetchClosedOrderRows(market, since, undefined, params))
-            .filter((row) => Number(row.execution?.filledQuantity) > 0)
-            .filter((row) => market === undefined || row.symbol === market.id);
-        return this.parseTrades(rows, market, since, limit);
+        const filled = (row: TossOrder): boolean => Number(row.execution?.filledQuantity) > 0 && (market === undefined || row.symbol === market.id);
+        const ended = await this.fetchClosedOrderRows(market, since, undefined, params, filled);
+        const openRequest: Dict = { status: 'OPEN' };
+        if (market !== undefined) openRequest.symbol = market.id;
+        const open = (this.unwrap<TossPaginatedOrders>(await this.privateAccountGetOrders(openRequest))?.orders ?? []).filter(filled);
+        const until = this.safeInteger(params, 'until');
+        const trades = this.parseTrades([...ended, ...open], market, since);
+        return this.filterBySinceLimit(until === undefined ? trades : trades.filter((trade) => (trade.timestamp as number) <= until), since, limit) as Trade[];
     }
 
     /** 체결된 주문 하나를 거래 하나로 옮긴다. 체결 시각은 최종 체결 시각(없으면 주문 시각)이다. */
@@ -2310,8 +2326,9 @@ export class toss extends Exchange {
      * 미체결 주문을 모두 취소한다(토스에는 전체 취소가 없어 조회한 주문을 하나씩 취소한다). `symbol` 을 주면 그 종목만 취소한다.
      * 일반 주문만 대상이며, `params.includeTrigger: true` 면 조건주문도 취소한다.
      *
-     * 돌려주는 목록은 대상이 된 주문 전부다. 취소된 것(이미 사라진 주문 포함)은 `status: 'canceled'` 이고, 취소하지 못한 것은 `status: 'open'` 에
-     * `info.cancelError` 가 실린다.
+     * 돌려주는 목록은 대상이 된 주문 전부다. 취소된 것은 `status: 'canceled'` 이고, 취소하지 못한 것은 원래 상태(`open`)에 `info.cancelError` 가 실린다.
+     * 취소하려는 사이에 끝난 주문은 브로커 원인 코드(`info.cancelErrorDetail`)대로 옮긴다. `already-filled` 는 `closed`, `already-canceled` 는 `canceled`,
+     * `already-rejected` 는 `rejected` 다. 정정으로 대체된 주문(`already-modified`)과 원인을 모르는 경우는 새 주문이 살아 있을 수 있어 원래 상태로 둔다.
      */
     override async cancelAllOrders(symbol: Str = undefined, params: Dict = {}): Promise<Order[]> {
         const includeTrigger = this.safeBool(params, 'includeTrigger', false) === true;
@@ -2323,9 +2340,14 @@ export class toss extends Exchange {
         const results = settled.map((outcome, index): Order => {
             const order = orders[index];
             if (outcome.status === 'fulfilled') return { ...order, status: 'canceled' };
-            if (outcome.reason instanceof OrderNotFound) return { ...order, status: 'canceled', info: { ...order.info, alreadyGone: true } };
             const message = outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason);
-            return { ...order, info: { ...order.info, cancelError: message } };
+            if (!(outcome.reason instanceof OrderNotFound)) return { ...order, info: { ...order.info, cancelError: message } };
+            const detail = outcome.reason.detail;
+            const info = { ...order.info, alreadyGone: true, cancelError: message, cancelErrorDetail: detail };
+            if (detail === 'already-filled') return { ...order, status: 'closed', filled: order.amount, remaining: 0, cost: undefined, average: undefined, info };
+            if (detail === 'already-canceled') return { ...order, status: 'canceled', info };
+            if (detail === 'already-rejected') return { ...order, status: 'rejected', info };
+            return { ...order, info };
         });
         logger.info({ total: orders.length, canceled: results.filter((order) => order.status === 'canceled').length }, '[toss] 미체결 주문을 취소했다');
         return results;

@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { MarketClosed, NetworkError, OrderNotFound } from '../../base';
-import { errorReply, installFakeToss, jsonOk, makeToss, type FakeRequest } from './support/toss-fake';
+import { errorReply, installFakeToss, jsonOk, makeToss, type FakeRequest, type Route } from './support/toss-fake';
 
 const order = (id: string, symbol: string, extra: Record<string, unknown> = {}): Record<string, unknown> => ({
     orderId: id, symbol, side: 'BUY', orderType: 'LIMIT', status: 'PENDING', quantity: '5', price: '70000',
@@ -278,15 +278,16 @@ describe('체결 완료 주문과 체결 내역', () => {
         expect(fake.requestsTo('GET /api/v1/orders')).toHaveLength(10);
     });
 
+    /** 종료 목록(`status=CLOSED`)과 미체결 목록(`status=OPEN`)을 따로 답한다. */
+    const byStatus = (closedRows: Record<string, unknown>[], openRows: Record<string, unknown>[] = []): Route => (request) =>
+        (request.query.get('status') === 'OPEN' ? jsonOk({ orders: openRows }) : jsonOk({ orders: closedRows, hasNext: false }));
+
     it('fetchMyTrades: 체결된 주문만 거래로 옮기고 수수료는 확정값을 쓴다', async () => {
         installFakeToss({
-            'GET /api/v1/orders': jsonOk({
-                orders: [
-                    order('C1', '005930', { status: 'FILLED', currency: 'KRW', execution: { filledQuantity: '3', averageFilledPrice: '70000', commission: '31', tax: '0', filledAt: '2026-07-16T01:00:05Z' } }),
-                    order('C2', '005930', { status: 'CANCELED', execution: { filledQuantity: '0' } }),
-                ],
-                hasNext: false,
-            }),
+            'GET /api/v1/orders': byStatus([
+                order('C1', '005930', { status: 'FILLED', currency: 'KRW', execution: { filledQuantity: '3', averageFilledPrice: '70000', commission: '31', tax: '0', filledAt: '2026-07-16T01:00:05Z' } }),
+                order('C2', '005930', { status: 'CANCELED', execution: { filledQuantity: '0' } }),
+            ]),
         });
         const trades = await makeToss().fetchMyTrades('005930/KRW');
         expect(trades).toHaveLength(1);
@@ -295,15 +296,24 @@ describe('체결 완료 주문과 체결 내역', () => {
         expect(trades[0].timestamp).toBe(Date.parse('2026-07-16T01:00:05Z'));
     });
 
+    it('★fetchMyTrades 는 일부 체결된 채 걸려 있는 미체결 주문의 누적 체결도 거래로 넣는다(id 는 주문번호)', async () => {
+        const fake = installFakeToss({
+            'GET /api/v1/orders': byStatus([], [
+                order('P1', '005930', { status: 'PARTIAL_FILLED', quantity: '100', execution: { filledQuantity: '40', averageFilledPrice: '69900', filledAt: '2026-07-16T02:30:00Z' } }),
+                order('P2', '005930', { status: 'PENDING', quantity: '10', execution: { filledQuantity: '0' } }),
+            ]),
+        });
+        const trades = await makeToss().fetchMyTrades('005930/KRW');
+        expect(trades.map((t) => [t.id, t.amount])).toEqual([['P1', 40]]);
+        expect(fake.requestsTo('GET /api/v1/orders').map((r) => r.query.get('status'))).toEqual(['CLOSED', 'OPEN']);
+    });
+
     it('fetchMyTrades 는 since 를 체결 시각으로 거르고 종목을 주지 않으면 전 종목이다', async () => {
         installFakeToss({
-            'GET /api/v1/orders': jsonOk({
-                orders: [
-                    order('A', '005930', { status: 'FILLED', execution: { filledQuantity: '1', averageFilledPrice: '70000', filledAt: '2026-07-16T01:00:00Z' } }),
-                    order('B', '000660', { status: 'FILLED', execution: { filledQuantity: '1', averageFilledPrice: '200000', filledAt: '2026-07-16T05:00:00Z' } }),
-                ],
-                hasNext: false,
-            }),
+            'GET /api/v1/orders': byStatus([
+                order('A', '005930', { status: 'FILLED', execution: { filledQuantity: '1', averageFilledPrice: '70000', filledAt: '2026-07-16T01:00:00Z' } }),
+                order('B', '000660', { status: 'FILLED', execution: { filledQuantity: '1', averageFilledPrice: '200000', filledAt: '2026-07-16T05:00:00Z' } }),
+            ]),
         });
         const trades = await makeToss().fetchMyTrades(undefined, Date.parse('2026-07-16T03:00:00Z'));
         expect(trades.map((t) => t.order)).toEqual(['B']);
@@ -404,16 +414,21 @@ describe('전체 취소', () => {
         expect(fake.requests().filter((r) => r.method === 'POST').map((r) => r.path)).toEqual(['/api/v1/orders/O1/cancel']);
     });
 
-    it('일부가 실패하면 그 주문을 open 으로 돌려주고 이미 사라진 주문은 취소된 것으로 센다', async () => {
+    it('일부가 실패하면 그 주문을 open 으로 돌려주고, 이미 끝난 주문은 원인 코드대로 옮긴다', async () => {
         installFakeToss({
-            'GET /api/v1/orders': jsonOk({ orders: [order('O1', '005930'), order('O2', '005930'), order('O3', '005930')] }),
+            'GET /api/v1/orders': jsonOk({ orders: [order('O1', '005930'), order('O2', '005930'), order('O3', '005930'), order('O4', '005930'), order('O5', '005930')] }),
             'POST /api/v1/orders/O1/cancel': jsonOk({ orderId: 'N1' }),
             'POST /api/v1/orders/O2/cancel': errorReply(409, 'already-filled'),
             'POST /api/v1/orders/O3/cancel': () => new NetworkError('끊김'),
+            'POST /api/v1/orders/O4/cancel': errorReply(409, 'already-canceled'),
+            'POST /api/v1/orders/O5/cancel': errorReply(409, 'already-modified'),
         });
         const results = await makeToss().cancelAllOrders();
-        expect(results.map((o) => [o.id, o.status])).toEqual([['O1', 'canceled'], ['O2', 'canceled'], ['O3', 'open']]);
-        expect((results[1].info as { alreadyGone: boolean }).alreadyGone).toBe(true);
+        // ★취소 사이에 전량 체결된 주문을 취소로 적지 않는다. 정정으로 대체된 주문은 새 주문이 살아 있을 수 있어 open 으로 둔다.
+        expect(results.map((o) => [o.id, o.status])).toEqual([['O1', 'canceled'], ['O2', 'closed'], ['O3', 'open'], ['O4', 'canceled'], ['O5', 'open']]);
+        expect(results[1]).toMatchObject({ filled: results[1].amount, remaining: 0 });
+        expect(results[1].info).toMatchObject({ alreadyGone: true, cancelErrorDetail: 'already-filled' });
+        expect(results[4].info).toMatchObject({ alreadyGone: true, cancelErrorDetail: 'already-modified' });
         expect((results[2].info as { cancelError: string }).cancelError).toContain('알 수 없다');
     });
 

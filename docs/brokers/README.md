@@ -101,8 +101,9 @@
 | 주문 조회 `fetchOrder` | ✅ | ✅ | ⚠️ | `kbsec` 미국은 최근 사흘의 주문만 찾습니다. |
 | 주문 목록 `fetchOrders` | ✅ | ➖ | ⚠️ | `toss` 주문 목록 API는 상태(OPEN, CLOSED)를 지정해야 합니다.<br>`kbsec` 국내만 지원합니다. `since`는 적용하지 않습니다. |
 | 미체결 `fetchOpenOrders` | ⚠️ | ✅ | ⚠️ | `kis` 미국은 실전만 지원합니다.<br>`toss` 미체결 조건 주문은 100건씩 최대 10쪽(1,000건)까지 받습니다.<br>`kbsec` 국내만 지원합니다. `since`는 적용하지 않습니다. |
-| 종료 주문 `fetchClosedOrders` | 🔁 | ✅ | ⚠️ | `kis` `fetchOrders` 결과에서 체결 완료만 고릅니다.<br>`toss` 100건씩 최대 10쪽을 받습니다.<br>`kbsec` 국내만 지원합니다. `since`는 적용하지 않습니다. 체결 내역 상세는 `fetchMyTrades`로 봅니다. |
-| 체결 내역 `fetchMyTrades` | ✅ | 🔁 | ✅ | `kis` `fee`가 비어 있습니다.<br>`toss` 주문 목록 API로 만듭니다. |
+| 종료 주문 `fetchClosedOrders` | 🔁 | ✅ | ⚠️ | `kis` `fetchOrders` 결과에서 체결 완료만 고릅니다.<br>`toss` 전량 체결만 돌려줍니다. 100건씩 최대 10쪽을 받습니다.<br>`kbsec` 국내만 지원합니다. `since`는 적용하지 않습니다. 체결 내역 상세는 `fetchMyTrades`로 봅니다. |
+| 취소 주문 `fetchCanceledOrders` | ❌ | ✅ | ❌ | `kis` `fetchOrders` 결과에서 `status: 'canceled'`만 고르면 됩니다.<br>`toss` `fetchClosedOrders`와 같은 조회에서 취소 주문과 정정으로 대체된 주문을 고릅니다.<br>`kbsec` `fetchOrders` 결과에서 `status: 'canceled'`만 고르면 됩니다(국내만) |
+| 체결 내역 `fetchMyTrades` | ✅ | 🔁 | ✅ | `kis` `fee`가 비어 있습니다.<br>`toss` 주문 목록 API로 만듭니다. 주문 하나가 거래 하나이고 수량은 누적 체결 수량이라, 같은 id 는 덮어써야 합니다. |
 
 ### 시장 정보
 
