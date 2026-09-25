@@ -10,7 +10,8 @@
  * - `Awaitable[X]` → `X` (비동기 판의 콜백 힌트를 동기 모양으로 되돌린다). `typing` 가져오기의 `Awaitable` 도 뺀다.
  * - `<패키지>.async_support.` → `<패키지>.` (가져오는 곳을 동기 짝으로 바꾼다. 짝 모듈은 이름과 인자가 같다.)
  *
- * 바꾼 결과에 `async`·`await`·`asyncio`·`Awaitable` 이 남으면 실패한다. 비동기 소스는 asyncio 를 직접 쓰지 않고
+ * 바꾼 결과에 `async`·`await`·`asyncio`·`Awaitable` 이 남거나, 지울 `await ` 가 문자열이나 주석 안에 있으면 실패한다
+ * (줄 단위 치환이 로그 문구나 설명을 몰래 바꾸지 않게 한다). 비동기 소스는 asyncio 를 직접 쓰지 않고
  * `async_support/base/runtime.py` 의 `sleep_seconds`·`new_lock`·`new_semaphore`·`maybe_await` 를 쓴다.
  *
  * ```bash
@@ -57,6 +58,41 @@ function unwrapAwaitable(line) {
     return out;
 }
 
+/**
+ * 줄의 각 글자가 코드인지(문자열과 주석 밖인지) 표시한다. 세 따옴표 문자열은 여러 줄에 걸치므로 여는 따옴표를 `state.open` 으로 넘긴다.
+ * f-string 의 `{}` 안도 문자열로 본다.
+ */
+export function codeMask(line, state) {
+    const mask = new Array(line.length).fill(false);
+    let i = 0;
+    while (i < line.length) {
+        if (state.open !== null) {
+            const close = line.indexOf(state.open, i);
+            if (close < 0) return mask;
+            i = close + state.open.length;
+            state.open = null;
+            continue;
+        }
+        const ch = line[i];
+        if (ch === '#') return mask;
+        if (ch === '"' || ch === "'") {
+            const triple = ch.repeat(3);
+            if (line.startsWith(triple, i)) {
+                state.open = triple;
+                i += 3;
+                continue;
+            }
+            let j = i + 1;
+            while (j < line.length && line[j] !== ch) j += line[j] === '\\' ? 2 : 1;
+            i = j + 1;
+            continue;
+        }
+        mask[i] = true;
+        i++;
+    }
+    return mask;
+}
+
 /** `from typing import ...` 줄에서 `Awaitable` 을 뺀다. */
 function dropAwaitableImport(line) {
     if (!/^\s*from typing import /.test(line)) return line;
@@ -66,6 +102,15 @@ function dropAwaitableImport(line) {
 /** 비동기 소스 한 파일을 동기 판으로 바꾼다. `source` 는 비동기 소스의 저장소 기준 경로다(생성 표시에 쓴다). */
 export function toSync(text, pkg, source) {
     const asyncPrefix = new RegExp(`\\b${pkg}\\.async_support\\.`, 'g');
+    const state = { open: null };
+    text.split('\n').forEach((line, index) => {
+        const mask = codeMask(line, state);
+        for (const match of line.matchAll(/\bawait\s+/g)) {
+            if (!mask[match.index]) {
+                throw new Error(`${source}:${index + 1} 문자열이나 주석 안의 await 를 지우게 된다. 문구를 바꾼다: ${line.trim()}`);
+            }
+        }
+    });
     const lines = text.split('\n').map((line) => line
         .replace(/^(\s*)async\s+(def|with|for)\b/, '$1$2')
         .replace(/\bawait\s+/g, '')

@@ -1,6 +1,7 @@
 """기반 계층(`kr_broker.base`) 단위 테스트. 기대값은 TypeScript 판이 도는 JavaScript 런타임(node)으로 계산한 값이다."""
 
 import hashlib
+import math
 import re
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
@@ -94,6 +95,19 @@ def test_safe_number_and_integer() -> None:
     assert fn.safe_integer(row, 'c') == 5
     assert fn.safe_integer(row, 'd') == 1000
     assert fn.safe_number(row, 'e', 7) == 7
+
+
+@pytest.mark.parametrize('text,expected', [
+    # 기대값은 Node.js 의 `Number(text)` 결과다.
+    ('1_000', math.nan), ('0x10', 16.0), ('-0x10', math.nan), ('0o17', 15.0), ('0b11', 3.0), ('0x', math.nan), ('0x1_0', math.nan),
+    ('inf', math.nan), ('Infinity', math.inf), ('-Infinity', -math.inf), ('infinity', math.nan), ('nan', math.nan), ('NaN', math.nan),
+    ('\u0663', math.nan), (' 12 ', 12.0), ('', 0.0), ('1e3', 1000.0), ('.5', 0.5), ('5.', 5.0), ('+5', 5.0), ('1,000', math.nan),
+])
+def test_js_number_follows_javascript_number(text: str, expected: float) -> None:
+    result = fn.js_number(text)
+    assert (math.isnan(result) and math.isnan(expected)) or result == expected
+    truncated = fn.as_integer(text)
+    assert (math.isnan(truncated) and math.isnan(expected)) or truncated == (expected if math.isinf(expected) else math.trunc(expected))
 
 
 def test_decimal_values_read_as_numbers() -> None:

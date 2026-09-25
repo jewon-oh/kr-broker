@@ -11,14 +11,14 @@ const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 
 vi.mock('../kis-trading-hours', () => ({
     checkKRXTradingHours: () => ({ tradable: true, reason: '' }),
-    getKrxMarketPhase: () => 'regular',
+    getKrxMarketPhase: () => 'open',
     isNxtExtendedTradable: () => false, // 정규장 라우팅 회귀 테스트 — 확장시간 아님
     getNxtSession: () => 'main',
-}));
+}) satisfies Partial<typeof import('../kis-trading-hours')>);
 vi.mock('../us-market-hours', () => ({
-    getUsMarketPhase: () => 'regular',
+    getUsMarketPhase: () => 'open',
     formatEtWallClock: () => '10:00 ET',
-}));
+}) satisfies Partial<typeof import('../us-market-hours')>);
 global.fetch = mockFetch as unknown as typeof fetch;
 
 import { KIS_MASTER_FIXTURE } from '../../__tests__/support/kis-master-fixture';

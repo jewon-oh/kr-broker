@@ -10,11 +10,11 @@ const { mockFetch, tradable } = vi.hoisted(() => ({ mockFetch: vi.fn(), tradable
 
 vi.mock('../kis-trading-hours', () => ({
     checkKRXTradingHours: () => (tradable.value ? { tradable: true, reason: '' } : { tradable: false, reason: '장 마감' }),
-    getKrxMarketPhase: () => 'regular',
+    getKrxMarketPhase: () => 'open',
     isNxtExtendedTradable: () => false,
     getNxtSession: () => 'closed',
-}));
-vi.mock('../us-market-hours', () => ({ getUsMarketPhase: () => 'regular', formatEtWallClock: () => '10:00 ET' }));
+}) satisfies Partial<typeof import('../kis-trading-hours')>);
+vi.mock('../us-market-hours', () => ({ getUsMarketPhase: () => 'open', formatEtWallClock: () => '10:00 ET' }) satisfies Partial<typeof import('../us-market-hours')>);
 global.fetch = mockFetch as unknown as typeof fetch;
 
 import { NetworkError, RateLimitExceeded } from '../../base/errors';

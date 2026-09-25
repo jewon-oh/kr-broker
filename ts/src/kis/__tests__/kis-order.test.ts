@@ -4,12 +4,14 @@
  * 장 시간 밖은 실패가 아니라 예정된 조건이다. 마감 후 재시도마다 실패 거래가 쌓이지 않도록 `MarketClosed` 로 구분해 던지고 주문 요청은 보내지 않는다.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { UsMarketPhase } from '../../us-market-hours';
+import type { KrxMarketPhase } from '../../krx-trading-hours';
 
 const { mockFetch, mockTradable, mockPhase, mockUsPhase, mockExtended } = vi.hoisted(() => ({
     mockFetch: vi.fn(),
     mockTradable: vi.fn(() => ({ tradable: true, reason: '' })),
-    mockPhase: vi.fn(() => 'regular'),
-    mockUsPhase: vi.fn(() => 'regular'),
+    mockPhase: vi.fn((): KrxMarketPhase => 'open'),
+    mockUsPhase: vi.fn((): UsMarketPhase => 'open'),
     mockExtended: vi.fn(() => false),
 }));
 
@@ -18,11 +20,11 @@ vi.mock('../kis-trading-hours', () => ({
     getKrxMarketPhase: () => mockPhase(),
     isNxtExtendedTradable: () => mockExtended(),
     getNxtSession: () => (mockExtended() ? 'after-market' : 'closed'),
-}));
+}) satisfies Partial<typeof import('../kis-trading-hours')>);
 vi.mock('../us-market-hours', () => ({
     getUsMarketPhase: () => mockUsPhase(),
     formatEtWallClock: () => '10:00 ET',
-}));
+}) satisfies Partial<typeof import('../us-market-hours')>);
 global.fetch = mockFetch as unknown as typeof fetch;
 
 import { logger } from '../../logger';
@@ -36,8 +38,8 @@ const newKis = (config: Parameters<typeof newKisBase>[0] = {}) => newKisBase({ m
 beforeEach(() => {
     mockFetch.mockReset();
     mockTradable.mockReturnValue({ tradable: true, reason: '' });
-    mockPhase.mockReturnValue('regular');
-    mockUsPhase.mockReturnValue('regular');
+    mockPhase.mockReturnValue('open');
+    mockUsPhase.mockReturnValue('open');
     mockExtended.mockReturnValue(false);
 });
 

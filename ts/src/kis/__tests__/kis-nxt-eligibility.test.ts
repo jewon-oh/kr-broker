@@ -13,8 +13,8 @@ vi.mock('../kis-trading-hours', () => ({
     getKrxMarketPhase: () => 'closed',
     isNxtExtendedTradable: () => mockExtended(),
     getNxtSession: () => (mockExtended() ? 'after-market' : 'closed'),
-}));
-vi.mock('../us-market-hours', () => ({ getUsMarketPhase: () => 'regular', formatEtWallClock: () => '10:00 ET' }));
+}) satisfies Partial<typeof import('../kis-trading-hours')>);
+vi.mock('../us-market-hours', () => ({ getUsMarketPhase: () => 'open', formatEtWallClock: () => '10:00 ET' }) satisfies Partial<typeof import('../us-market-hours')>);
 global.fetch = mockFetch as unknown as typeof fetch;
 
 import { MarketClosed } from '../../base/errors';
