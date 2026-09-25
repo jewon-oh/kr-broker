@@ -4609,16 +4609,19 @@ export class kis extends Exchange {
     // ============ 잔고 ============
 
     /**
-     * 잔고. 현금은 통화 키(`KRW`, `USD`), 보유 종목은 종목코드(국내 `005930`, 미국 `AAPL`) 키이며 종목의 `total` 이 보유 수량이다.
-     * 평가금액·평균단가 같은 KIS 고유 값은 각 항목의 `info` 에 원본 그대로 있다. 조회가 하나라도 실패하면 던진다(빈 잔고와 구분한다).
+     * 잔고. 현금은 통화 키(`KRW`, `USD`), 보유 종목은 `market.base` 키(국내 `005930`, 미국 `AAPL`, 클래스 주식 `BRK.B`)이며 종목의 `total` 이
+     * 보유 수량이다. 평가금액·평균단가 같은 KIS 고유 값은 각 항목의 `info` 에 원본 그대로 있다. 조회가 하나라도 실패하면 던진다(빈 잔고와 구분한다).
+     * 보유 종목 키가 같은 잔고의 현금 키와 겹치면(미국 티커 `USD` 와 달러 현금) 한쪽을 덮어쓰지 않고 `NotSupported` 를 던진다. `params.scope` 로 나눠 받는다.
      *
      * `params.scope` 로 읽을 범위를 좁힌다. 기본은 전부(`'all'`)이고 배열로 골라도 된다.
      * - `'kr'`: 국내 잔고(`inquire-balance`). `KRW` 와 국내 보유 종목
      * - `'us'`: 미국 보유 종목(`inquire-balance`). 실전은 `NASD` 한 번이 미국 전체이고, 모의는 거래소마다 따로 부른다
-     * - `'usd'`: 달러 예수금과 평가금액(`inquire-present-balance`). `USD`
+     * - `'usd'`: 달러 예수금과 평가금액(`inquire-present-balance`). `USD`. 응답에 달러 행이 없으면 `USD` 항목이 없다(0 이 아니라 모른다는 뜻이다)
      *
      * `params.orderable` 이 `false` 가 아니면 국내 주문가능현금(`inquire-psbl-order`)을 한 번 더 조회해 `KRW.free` 로 쓴다.
      * 끄면 `KRW.free` 는 비어 있다. 원본 응답은 `balances.info` 에 `{ domestic, overseas, usd }` 로 담는다.
+     *
+     * `free` 는 지금 주문에 쓸 수 있는 양, `total` 은 정산 뒤 계좌에 남을 양, `used` 는 `total − free` 다(ccxt 정의). 모르는 값은 비운다.
      */
     override async fetchBalance(params: Dict = {}): Promise<Balances> {
         const scope = this.safeValue(params, 'scope', 'all');
@@ -4705,54 +4708,63 @@ export class kis extends Exchange {
     /**
      * `fetchBalance` 가 모은 원본(`{ domestic?, overseas?, usd? }`)을 통합 잔고로 옮긴다.
      *
-     * - `KRW`: `total`=예수금총액(`dnca_tot_amt`), `free`=주문가능현금(`ord_psbl_cash`), `used`=둘의 차이(0 밑으로 내려가지 않는다)
-     * - `USD`: `total`=예수금, `free`=예수금에서 미결제 매수증거금을 뺀 값. 종목 평가금액 합계는 `info.stockValue` 에 있다.
-     * - 종목: `total`=보유수량, `free`=주문가능수량(없으면 보유수량). 같은 종목이 매매구분이나 대출일자별로 여러 행이면 수량을 더한다.
-     *   `info` 는 첫 행이고, `info.rows` 에 원문 행 전부가 있다.
+     * - `KRW`: `total`=예수금총액(`dnca_tot_amt`), `free`=주문가능현금(`ord_psbl_cash`), `used`=둘의 차이. 주문가능현금이 예수금보다 크면
+     *   (매도 대금이 결제되기 전) 예수금은 정산 뒤 현금이 아니라서 `total` 과 `used` 를 비운다. 예수금은 `info.summary` 에 있다.
+     * - `USD`: `total`=예수금, `free`=예수금에서 미결제 매수증거금을 뺀 값. 종목 평가금액 합계는 `info.stockValue` 에 있다. 달러 행이 없으면 싣지 않는다.
+     * - 종목: `total`=보유수량, `free`=주문가능수량(없으면 보유수량). 키는 `market.base` 라 해외 슬래시 티커(`BRK/B`)는 `BRK.B` 다.
+     *   같은 종목이 매매구분이나 대출일자별로 여러 행이면 수량을 더한다. `info` 는 첫 행이고, `info.rows` 에 원문 행 전부가 있다.
      */
     override parseBalance(response: Dict): Balances {
         const result: Dict = { info: response, timestamp: undefined, datetime: undefined };
+        const holdings: Dict = {};
         const domestic = this.safeDict(response, 'domestic');
         if (domestic !== undefined) {
             const summary = this.safeDict(domestic, 'summary', {}) as Dict;
             const orderable = this.safeDict(domestic, 'orderable');
-            const total = this.safeString(summary, 'dnca_tot_amt');
+            const deposit = this.safeString(summary, 'dnca_tot_amt');
             const free = orderable === undefined ? undefined : this.safeString(orderable, 'ord_psbl_cash');
-            result.KRW = {
-                free,
-                used: free !== undefined && total !== undefined ? nonNegative(Precise.stringSub(total, free)) : undefined,
-                total,
-                info: { summary, orderable },
-            };
-            for (const item of rowsOf(domestic.holdings)) this.addHolding(result, item, 'pdno', 'hldg_qty');
+            // `used` 는 `safeBalance` 가 `total − free` 로 채운다.
+            result.KRW = { free, used: undefined, total: Precise.stringGt(free, deposit) ? undefined : deposit, info: { summary, orderable } };
+            for (const item of rowsOf(domestic.holdings)) this.addHolding(holdings, item, 'pdno', 'hldg_qty');
         }
         const overseas = this.safeDict(response, 'overseas');
         if (overseas !== undefined) {
-            for (const item of rowsOf(overseas.holdings)) this.addHolding(result, item, 'ovrs_pdno', 'ovrs_cblc_qty');
+            for (const item of rowsOf(overseas.holdings)) this.addHolding(holdings, item, 'ovrs_pdno', 'ovrs_cblc_qty');
         }
         const usd = this.safeDict(response, 'usd');
         if (usd !== undefined) {
-            const cash = rowsOf(usd.currencies).find((row) => (this.safeString(row, 'crcy_cd') ?? '').toUpperCase() === 'USD') ?? {};
-            // 금액은 문자열로 더하고 뺀다. `Number` 로 빼면 `1000.1 - 200.2` 가 `799.9000000000001` 이 된다.
-            const deposit = this.safeString(cash, 'frcr_dncl_amt_2') ?? '0';
-            const buyMargin = this.safeString(cash, 'frcr_buy_mgn_amt') ?? '0';
-            const stockValue = rowsOf(usd.stocks)
-                .filter((row) => (this.safeString(row, 'buy_crcy_cd') ?? 'USD').toUpperCase() === 'USD')
-                .reduce((sum, row) => Precise.stringAdd(sum, this.safeString(row, 'frcr_evlu_amt2') ?? '0') ?? sum, '0');
-            const free = nonNegative(Precise.stringSub(deposit, buyMargin));
-            result.USD = {
-                free,
-                used: nonNegative(Precise.stringSub(deposit, free)),
-                total: deposit,
-                info: { deposit: toNumber(deposit), buyMargin: toNumber(buyMargin), stockValue: toNumber(stockValue), currencies: usd.currencies, stocks: usd.stocks },
-            };
+            const cash = rowsOf(usd.currencies).find((row) => (this.safeString(row, 'crcy_cd') ?? '').toUpperCase() === 'USD');
+            if (cash !== undefined) {
+                // 금액은 문자열로 더하고 뺀다. `Number` 로 빼면 `1000.1 - 200.2` 가 `799.9000000000001` 이 된다.
+                const deposit = this.safeString(cash, 'frcr_dncl_amt_2') ?? '0';
+                const buyMargin = this.safeString(cash, 'frcr_buy_mgn_amt') ?? '0';
+                const stockValue = rowsOf(usd.stocks)
+                    .filter((row) => (this.safeString(row, 'buy_crcy_cd') ?? 'USD').toUpperCase() === 'USD')
+                    .reduce((sum, row) => Precise.stringAdd(sum, this.safeString(row, 'frcr_evlu_amt2') ?? '0') ?? sum, '0');
+                const free = nonNegative(Precise.stringSub(deposit, buyMargin));
+                result.USD = {
+                    free,
+                    used: nonNegative(Precise.stringSub(deposit, free)),
+                    total: deposit,
+                    info: { deposit: toNumber(deposit), buyMargin: toNumber(buyMargin), stockValue: toNumber(stockValue), currencies: usd.currencies, stocks: usd.stocks },
+                };
+            }
+        }
+        for (const [code, holding] of Object.entries(holdings)) {
+            // 겹친 키에 대입하면 보유나 현금 한쪽이 알림 없이 사라진다.
+            if (result[code] !== undefined) {
+                throw new NotSupported(`${this.id} fetchBalance() 보유 종목 ${code} 가 현금 ${code} 와 키가 같아 한 잔고에 담을 수 없다. `
+                    + `params.scope 로 미국 보유 종목('us')과 현금('kr', 'usd')을 따로 받는다`);
+            }
+            result[code] = holding;
         }
         return this.safeBalance(result);
     }
 
     /** 보유 행 하나를 더한다. 같은 종목의 행(매매구분, 대출일자별)은 수량을 합치고 원문 행은 `info.rows` 에 모은다. */
     private addHolding(result: Dict, item: Dict, codeKey: string, quantityKey: string): void {
-        const code = this.safeString(item, codeKey);
+        // 키는 `parseMarket` 의 `base` 와 같은 표기다(`BRK/B` → `BRK.B`).
+        const code = this.safeString(item, codeKey)?.replace('/', '.');
         const quantity = this.safeString(item, quantityKey);
         if (code === undefined || quantity === undefined || !(Number(quantity) > 0)) return;
         const free = this.safeString(item, 'ord_psbl_qty', quantity) as string;

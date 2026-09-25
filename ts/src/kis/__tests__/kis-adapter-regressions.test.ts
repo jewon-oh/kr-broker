@@ -48,12 +48,12 @@ describe('항목1 — 해외 USD 잔고 (체결기준현재잔고 CTRP6504R)', (
         expect(url.searchParams.get('NATN_CD')).toBe('840'); // 미국
     });
 
-    it('USD 통화 행 없음(빈 계좌) → 전부 0', async () => {
+    it('USD 통화 행 없음 → USD 항목이 없다(0 이 아니라 모른다)', async () => {
         mockFetch.mockResolvedValueOnce(tokenOk()).mockResolvedValueOnce(dataOk({ output1: [], output2: [] }));
 
         const balances = await newKis({ sandbox: false }).fetchBalance({ scope: 'usd' });
 
-        expect(balances.USD).toMatchObject({ free: 0, used: 0, total: 0 });
+        expect(balances.USD).toBeUndefined();
     });
 
     it('매수증거금 > 예수금(이상치) → free 0 으로 클램프(음수 자본 차단)', async () => {

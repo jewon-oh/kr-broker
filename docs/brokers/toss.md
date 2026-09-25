@@ -139,7 +139,7 @@
 
 | API 이름 | 엔드포인트 | 시장 | 상태 | 메서드 | 검증 | 제안 | 명세 | 비고 |
 |---|---|---|---|---|---|---|---|---|
-| 보유 주식 | `GET /api/v1/holdings` | 국내, 미국 | 통합 | `fetchBalance` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1holdings/get) | 계좌 합산 손익(`profitLoss`)은 쓰지 않습니다. 종목 행 원본은 `balances[code].info`에 있습니다. |
+| 보유 주식 | `GET /api/v1/holdings` | 국내, 미국 | 통합 | `fetchBalance` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1holdings/get) | 계좌 합산 손익(`profitLoss`)은 쓰지 않습니다. 종목 행 원본은 `balances[code].info`에 있습니다. 응답에 매도 가능 수량이 없어 전체 잔고의 보유 `free`는 비어 있습니다. |
 
 ### Order
 
@@ -175,8 +175,8 @@
 
 | API 이름 | 엔드포인트 | 시장 | 상태 | 메서드 | 검증 | 제안 | 명세 | 비고 |
 |---|---|---|---|---|---|---|---|---|
-| 매수 가능 금액 | `GET /api/v1/buying-power` | 국내, 미국 | 통합 | `fetchBalance` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1buying-power/get) | KRW, USD 현금 항목으로 실립니다. 개장 직후 09:00~09:10은 한도가 절반입니다. |
-| 판매 가능 수량 | `GET /api/v1/sellable-quantity` | 국내, 미국 | 확장 | `fetchSellableQuantity` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1sellable-quantity/get) | `fetchBalance({symbol})`는 보유 수량을 `free`로 줄 뿐 매도 가능 수량이 아닙니다. 미체결 매도 주문에 잡힌 수량, 결제 전 미결제분 등을 뺀 값은 이 메서드로 받습니다. |
+| 매수 가능 금액 | `GET /api/v1/buying-power` | 국내, 미국 | 통합 | `fetchBalance` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1buying-power/get) | KRW, USD 현금 항목의 `free`로 실립니다. 예수금을 주는 API가 없어 현금 `total`은 비어 있습니다. 개장 직후 09:00~09:10은 한도가 절반입니다. |
+| 판매 가능 수량 | `GET /api/v1/sellable-quantity` | 국내, 미국 | 확장 | `fetchSellableQuantity` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1sellable-quantity/get) | 보유 수량에서 미체결 매도 주문에 잡힌 수량, 결제 전 미결제분 등을 뺀 값입니다. `fetchBalance({symbol})`가 이 값을 그 종목의 `free`로 씁니다. 응답에 값이 없으면 0이 아니라 `BadResponse`를 던집니다. |
 | 매매 수수료율 | `GET /api/v1/commissions` | 국내, 미국 | 통합 | `fetchTradingFee` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1commissions/get) | `fetchCommissions`(확장)가 원본을 줍니다. 24시간 캐시합니다. |
 
 ### Realtime
@@ -212,7 +212,7 @@ ccxt의 통합 메서드로 표현하기 어려운 증권사 고유 기능입니
 | 통합증거금 | 부분 | 2개 | `krwIntegratedMargin` 옵션이 원화 예수금의 달러 환산분을 합산합니다. 토스증권이 USD 매수 가능 금액에 원화 환산분을 넣는지는 문서에 없어 확인 불가입니다. |
 | 클라이언트당 토큰 1개 | 지원 | 1개 | 재발급하면 이전 토큰이 무효가 됩니다. 저장소 잠금(`tokenStore`)과 401 응답 뒤 1회 재시도로 대응합니다. |
 | 실시간 체결, 호가, 본인 주문 웹소켓 | 부분 | 3개 | 체결, 호가, 본인 주문 이벤트를 모두 createPriceStream으로 지원합니다. 호가 구독 초기 스냅샷은 없어 REST로 먼저 조회해야 합니다. |
-| 주문 정정(잔량 전부, 미국은 가격만) | 지원 | 1개 | `editOrder`로 냅니다. 조건주문 정정(`params.trigger`)은 아직 안 씁니다. |
+| 주문 정정(국내 수량과 가격, 미국 가격만) | 지원 | 1개 | `editOrder`로 냅니다. 조건주문 정정(`params.trigger`)은 아직 안 씁니다. |
 
 ## 알려진 한계
 
@@ -225,7 +225,7 @@ ccxt의 통합 메서드로 표현하기 어려운 증권사 고유 기능입니
 - `fetchBalance`는 계좌 합산 손익과 종목별 손익을 반환하지 않습니다. 종목 행 원본은 `info`에 있습니다.
 - 웹소켓이 없어서 체결 확인은 주문 조회를 6회, 350ms 간격으로 반복합니다.
 - 통합증거금 환산에서 토스증권이 USD 매수 가능 금액에 원화 환산분을 넣는지는 문서에 없어 확인 불가입니다.
-- 국내 호가단위는 가격대별이라 ccxt의 단일 `precision.price`로 표현하지 못합니다. `priceToPrecision`은 KRX 호가 단위 표로 반올림하고, 주문은 가격을 바꾸지 않습니다.
+- 국내 호가단위는 가격대별이라 ccxt의 단일 `precision.price`로 표현하지 못합니다.
 
 ## 미구현 API
 

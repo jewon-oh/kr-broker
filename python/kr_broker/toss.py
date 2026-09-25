@@ -1017,23 +1017,31 @@ class toss(Exchange, ImplicitAPI):
     # ============ 잔고 ============
 
     def fetch_balance(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """잔고. 현금은 통화 키(`KRW`·`USD`)이고 값은 현금 매수 가능 금액이며, 보유 종목은 종목코드 키이고 `total` 이 보유 수량이다.
+        """잔고. 현금은 통화 키(`KRW`·`USD`)이고 값은 현금 매수 가능 금액이며, 보유 종목은 `market['base']` 키이고 `total` 이 보유 수량이다.
 
         `params['symbol']` 을 주면 그 종목의 보유만, `params['currency']`(`KRW`·`USD`)를 주면 그 현금만 받는다. 둘 다 주면 그 종목의 보유와
         그 통화의 현금을 함께 받는다. 달러 현금을 받을 때 `options['krwIntegratedMargin']` 이 켜져 있으면 원화 예수금을 참고 환율로 환산해 더한다
-        (전체 잔고에는 이중 계상이라 더하지 않는다).
+        (전체 잔고에는 이중 계상이라 더하지 않는다). 보유 종목 키가 같은 잔고의 현금 키와 겹치면(미국 티커 `USD` 와 달러 현금) 한쪽을
+        덮어쓰지 않고 `NotSupported` 를 던진다. `symbol` 과 `currency` 로 나눠 받는다.
+
+        `free` 는 지금 주문에 쓸 수 있는 양이다(ccxt 정의). 현금은 매수 가능 금액만 있고 예수금을 주는 API 가 없어 `total` 과 `used` 가 비어 있다.
+        보유 종목의 `free` 는 `symbol` 로 한 종목만 받을 때 매도 가능 수량(`GET /sellable-quantity`)으로 채우고, 전체 잔고에서는 비어 있다.
         """
         symbol = self.safe_string(params, 'symbol')
         currency = self.safe_string_upper(params, 'currency')
         if currency is not None and currency not in ('KRW', 'USD'):
             raise ArgumentsRequired(f"{self.id} fetchBalance() currency must be 'KRW' or 'USD'")
         holdings = None
+        sellable = None
         if currency is None or symbol is not None:
-            query = {'symbol': self.market(symbol)['id']} if symbol is not None else {}
-            holdings = self.unwrap(self.private_account_get_holdings(query))
+            market_id = self.market(symbol)['id'] if symbol is not None else None
+            holdings = self.unwrap(self.private_account_get_holdings({'symbol': market_id} if market_id is not None else {}))
             # 보유 목록이 없으면 "보유 없음"이 아니라 모르는 것이다.
             if not isinstance(holdings, dict) or not isinstance(holdings.get('items'), list):
                 raise BadResponse(f'{self.id} 보유 조회 응답에 items 목록이 없다: {str(holdings)[:200]}')
+            if market_id is not None and any(item.get('symbol') == market_id and (self.safe_number(item, 'quantity') or 0) > 0
+                                             for item in holdings['items']):
+                sellable = {market_id: self._fetch_sellable_quantity(market_id)}
         buying_power: Dict[str, Any] = {}
         if symbol is None or currency is not None:
             for code in ([currency] if currency is not None else ['KRW', 'USD']):
@@ -1041,7 +1049,15 @@ class toss(Exchange, ImplicitAPI):
         integrated = None
         if currency == 'USD' and self.is_option_enabled('krwIntegratedMargin'):
             integrated = self._krw_as_usd()
-        return self.parse_balance({'holdings': holdings, 'buyingPower': buying_power, 'integrated': integrated})
+        return self.parse_balance({'holdings': holdings, 'sellable': sellable, 'buyingPower': buying_power, 'integrated': integrated})
+
+    def _fetch_sellable_quantity(self, market_id: str) -> float:
+        """매도 주문에 즉시 쓸 수 있는 수량(`GET /sellable-quantity`). 값이 없거나 숫자가 아니면 0 이 아니라 모르는 것이므로 던진다."""
+        response = self.unwrap(self.private_account_get_sellable_quantity({'symbol': market_id}))
+        quantity = self.safe_number(response, 'sellableQuantity')
+        if quantity is None:
+            raise BadResponse(f'{self.id} 매도 가능 수량 응답에 sellableQuantity 가 없거나 숫자가 아니다: {response!r}')
+        return quantity
 
     def _krw_as_usd(self) -> Optional[Dict[str, float]]:
         """원화 매수 여력을 참고 환율로 달러로 환산한다. 원화가 없거나 환율을 모르면 `None`."""
@@ -1062,16 +1078,21 @@ class toss(Exchange, ImplicitAPI):
         return cash if cash > 0 else 0
 
     def parse_balance(self, response: Any) -> Dict[str, Any]:
-        """`fetch_balance` 가 모은 응답(`{'holdings', 'buyingPower', 'integrated'}`)을 잔고 구조로 옮긴다."""
+        """`fetch_balance` 가 모은 응답(`{'holdings', 'sellable', 'buyingPower', 'integrated'}`)을 잔고 구조로 옮긴다.
+
+        `sellable` 은 종목 id 별 매도 가능 수량이다. 보유 종목의 `free` 는 그 값이고 없으면 비운다. `used` 는 `safe_balance` 가 `total − free` 로 채운다.
+        """
         holdings = response.get('holdings')
+        sellable = response.get('sellable') or {}
         buying_power = response.get('buyingPower')
         integrated = response.get('integrated')
         result: Dict[str, Any] = {'info': response, 'timestamp': None, 'datetime': None}
+        held: Dict[str, Any] = {}
         for item in self.safe_list(holdings, 'items', []) or []:
             quantity = self.safe_number(item, 'quantity')
             if quantity is None or not quantity > 0:
                 continue
-            result[item.get('symbol')] = {'free': quantity, 'used': 0, 'total': quantity, 'info': item}
+            held[item.get('symbol')] = {'free': sellable.get(item.get('symbol')), 'used': None, 'total': quantity, 'info': item}
         for code, power in (buying_power or {}).items():
             cash = self._parse_cash(power)
             info = dict(power) if isinstance(power, dict) else {}
@@ -1079,7 +1100,14 @@ class toss(Exchange, ImplicitAPI):
                 logger.info('[toss] 통합증거금: 원화 매수 여력을 달러로 환산해 합산한다(달러 %s, %s)', cash, integrated)
                 cash += integrated['krwAsUsd']
                 info['integratedMargin'] = integrated
-            result[code] = {'free': cash, 'used': 0, 'total': cash, 'info': info}
+            # 매수 가능 금액은 정산 뒤 계좌 현금이 아니다. `total` 과 `used` 는 모른다.
+            result[code] = {'free': cash, 'used': None, 'total': None, 'info': info}
+        for code, holding in held.items():
+            # 겹친 키에 대입하면 보유나 현금 한쪽이 알림 없이 사라진다.
+            if result.get(code) is not None:
+                raise NotSupported(f'{self.id} fetchBalance() 보유 종목 {code} 가 현금 {code} 와 키가 같아 한 잔고에 담을 수 없다. '
+                                   'params.symbol 로 그 종목의 보유를, params.currency 로 현금을 따로 받는다')
+            result[code] = holding
         return self.safe_balance(result)
 
     # ============ 수수료 ============

@@ -217,25 +217,29 @@ describe('잔고', () => {
     const buyingPower = (request: FakeRequest) => (request.query.get('currency') === 'USD'
         ? jsonOk({ currency: 'USD', cashBuyingPower: '2609.73' })
         : jsonOk({ currency: 'KRW', cashBuyingPower: '300000' }));
+    const sellable = jsonOk({ sellableQuantity: '3' });
 
     it('현금은 통화 키, 보유 종목은 종목코드 키이고 total 이 수량이다', async () => {
-        installFakeToss({ 'GET /api/v1/holdings': jsonOk(holdings), 'GET /api/v1/buying-power': buyingPower });
+        const fake = installFakeToss({ 'GET /api/v1/holdings': jsonOk(holdings), 'GET /api/v1/buying-power': buyingPower });
         const balance = await makeToss().fetchBalance();
-        expect(balance.KRW).toMatchObject({ free: 300000, used: 0, total: 300000 });
-        expect(balance.USD).toMatchObject({ free: 2609.73, total: 2609.73 });
-        expect(balance['005930']).toMatchObject({ free: 4, total: 4 });
+        // 현금은 매수 가능 금액(free)만 있고, 전체 잔고의 보유는 매도 가능 수량을 따로 받지 않아 free 가 비어 있다.
+        expect(balance.KRW).toMatchObject({ free: 300000, used: undefined, total: undefined });
+        expect(balance.USD).toMatchObject({ free: 2609.73, total: undefined });
+        expect(balance['005930']).toMatchObject({ free: undefined, used: undefined, total: 4 });
         expect(balance['005930']!.info).toMatchObject({ name: '삼성전자', averagePurchasePrice: '249250' });
         // 수량이 0 인 보유는 싣지 않는다.
         expect(balance['000660']).toBeUndefined();
-        expect(balance.total).toMatchObject({ KRW: 300000, '005930': 4 });
+        expect(balance.total).toMatchObject({ '005930': 4 });
+        expect(fake.requestsTo('GET /api/v1/sellable-quantity')).toHaveLength(0);
     });
 
-    it('종목을 지정하면 그 종목의 보유만 받고 현금은 부르지 않는다', async () => {
-        const fake = installFakeToss({ 'GET /api/v1/holdings': jsonOk(holdings), 'GET /api/v1/buying-power': buyingPower });
+    it('종목을 지정하면 그 종목의 보유와 매도 가능 수량만 받고 현금은 부르지 않는다', async () => {
+        const fake = installFakeToss({ 'GET /api/v1/holdings': jsonOk(holdings), 'GET /api/v1/buying-power': buyingPower, 'GET /api/v1/sellable-quantity': sellable });
         const balance = await makeToss().fetchBalance({ symbol: '005930/KRW' });
-        expect(balance['005930']!.total).toBe(4);
+        expect(balance['005930']).toMatchObject({ free: 3, used: 1, total: 4 });
         expect(balance.KRW).toBeUndefined();
         expect(fake.requestsTo('GET /api/v1/holdings')[0]!.query.get('symbol')).toBe('005930');
+        expect(fake.requestsTo('GET /api/v1/sellable-quantity')[0]!.query.get('symbol')).toBe('005930');
         expect(fake.requestsTo('GET /api/v1/buying-power')).toHaveLength(0);
     });
 
@@ -248,7 +252,7 @@ describe('잔고', () => {
     });
 
     it('종목과 통화를 함께 주면 그 종목의 보유와 그 통화의 현금을 모두 받는다', async () => {
-        const fake = installFakeToss({ 'GET /api/v1/holdings': jsonOk(holdings), 'GET /api/v1/buying-power': buyingPower });
+        const fake = installFakeToss({ 'GET /api/v1/holdings': jsonOk(holdings), 'GET /api/v1/buying-power': buyingPower, 'GET /api/v1/sellable-quantity': sellable });
         const balance = await makeToss().fetchBalance({ symbol: '005930/KRW', currency: 'KRW' });
         expect(balance['005930']!.total).toBe(4);
         expect(balance.KRW!.free).toBe(300000);

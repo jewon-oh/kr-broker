@@ -3661,7 +3661,7 @@
                         ]
                     }
                 },
-                "BRK/B": {
+                "BRK.B": {
                     "free": 1,
                     "used": 0,
                     "total": 1,
@@ -3678,15 +3678,15 @@
                 },
                 "free": {
                     "AAPL": 3,
-                    "BRK/B": 1
+                    "BRK.B": 1
                 },
                 "used": {
                     "AAPL": 0,
-                    "BRK/B": 0
+                    "BRK.B": 0
                 },
                 "total": {
                     "AAPL": 3,
-                    "BRK/B": 1
+                    "BRK.B": 1
                 }
             }
         },
@@ -3874,7 +3874,7 @@
                         ]
                     }
                 },
-                "BRK/B": {
+                "BRK.B": {
                     "free": 1,
                     "used": 0,
                     "total": 1,
@@ -3886,9 +3886,9 @@
                         ]
                     }
                 },
-                "free": { "AAPL": 3, "BRK/B": 1 },
-                "used": { "AAPL": 0, "BRK/B": 0 },
-                "total": { "AAPL": 3, "BRK/B": 1 }
+                "free": { "AAPL": 3, "BRK.B": 1 },
+                "used": { "AAPL": 0, "BRK.B": 0 },
+                "total": { "AAPL": 3, "BRK.B": 1 }
             }
         },
         {
@@ -4225,7 +4225,7 @@
             }
         },
         {
-            "description": "fetchBalance 는 주문가능현금이 예수금보다 크면 used 를 0 으로 둔다",
+            "description": "fetchBalance 는 주문가능현금이 예수금보다 크면 예수금을 정산 뒤 현금으로 볼 수 없어 KRW 의 total 과 used 를 비운다",
             "method": "fetchBalance",
             "args": [{ "scope": "kr" }],
             "http": [
@@ -4270,19 +4270,14 @@
             ],
             "output": {
                 "info": { "domestic": { "holdings": [], "summary": { "dnca_tot_amt": "500000" }, "orderable": { "ord_psbl_cash": "600000" } } },
-                "KRW": {
-                    "free": 600000,
-                    "used": 0,
-                    "total": 500000,
-                    "info": { "summary": { "dnca_tot_amt": "500000" }, "orderable": { "ord_psbl_cash": "600000" } }
-                },
+                "KRW": { "free": 600000, "info": { "summary": { "dnca_tot_amt": "500000" }, "orderable": { "ord_psbl_cash": "600000" } } },
                 "free": { "KRW": 600000 },
-                "used": { "KRW": 0 },
-                "total": { "KRW": 500000 }
+                "used": {},
+                "total": {}
             }
         },
         {
-            "description": "fetchBalance 는 달러 예수금 행이 없으면 USD 를 0 으로 둔다",
+            "description": "fetchBalance 는 달러 예수금 행이 없으면 USD 항목을 싣지 않는다(0 이 아니라 모르는 값이다)",
             "method": "fetchBalance",
             "args": [{ "scope": "usd" }],
             "http": [
@@ -4314,15 +4309,184 @@
             ],
             "output": {
                 "info": { "usd": { "stocks": [], "currencies": [{ "crcy_cd": "KRW", "frcr_dncl_amt_2": "1000" }] } },
-                "USD": {
-                    "free": 0,
-                    "used": 0,
-                    "total": 0,
-                    "info": { "deposit": 0, "buyMargin": 0, "stockValue": 0, "currencies": [{ "crcy_cd": "KRW", "frcr_dncl_amt_2": "1000" }], "stocks": [] }
+                "free": {},
+                "used": {},
+                "total": {}
+            }
+        },
+        {
+            "description": "fetchBalance 는 보유 종목 키가 현금 키와 겹치면(미국 티커 USD 와 달러 현금) 한쪽을 덮어쓰지 않고 NotSupported 를 던진다",
+            "method": "fetchBalance",
+            "args": [{ "scope": ["us", "usd"] }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/trading/inquire-balance?CANO=12345678&ACNT_PRDT_CD=01&OVRS_EXCG_CD=NASD&TR_CRCY_CD=USD&CTX_AREA_FK200=&CTX_AREA_NK200=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTS3012R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_fk200": "",
+                            "ctx_area_nk200": "",
+                            "output1": [
+                                {
+                                    "cano": "12345678",
+                                    "acnt_prdt_cd": "01",
+                                    "ovrs_pdno": "USD",
+                                    "ovrs_item_name": "PROSHARES ULTRA SEMICONDUCTORS",
+                                    "ovrs_cblc_qty": "2",
+                                    "ord_psbl_qty": "2",
+                                    "pchs_avg_pric": "40.0000",
+                                    "ovrs_excg_cd": "AMEX",
+                                    "tr_crcy_cd": "USD"
+                                }
+                            ]
+                        }
+                    }
                 },
-                "free": { "USD": 0 },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/trading/inquire-present-balance?CANO=12345678&ACNT_PRDT_CD=01&WCRC_FRCR_DVSN_CD=02&NATN_CD=840&TR_MKET_CD=00&INQR_DVSN_CD=00",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "CTRP6504R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output1": [
+                                {
+                                    "pdno": "USD",
+                                    "prdt_name": "PROSHARES ULTRA SEMICONDUCTORS",
+                                    "cblc_qty13": "2",
+                                    "buy_crcy_cd": "USD",
+                                    "frcr_evlu_amt2": "90.00"
+                                }
+                            ],
+                            "output2": [{ "crcy_cd": "USD", "crcy_cd_name": "미국 달러", "frcr_dncl_amt_2": "1000.50", "frcr_buy_mgn_amt": "0" }]
+                        }
+                    }
+                }
+            ],
+            "error": { "class": "NotSupported" }
+        },
+        {
+            "description": "fetchBalance 는 scope 로 보유만 받으면 미국 티커 USD 보유를 USD 키에 싣는다",
+            "method": "fetchBalance",
+            "args": [{ "scope": "us" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/trading/inquire-balance?CANO=12345678&ACNT_PRDT_CD=01&OVRS_EXCG_CD=NASD&TR_CRCY_CD=USD&CTX_AREA_FK200=&CTX_AREA_NK200=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTS3012R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_fk200": "",
+                            "ctx_area_nk200": "",
+                            "output1": [
+                                {
+                                    "cano": "12345678",
+                                    "acnt_prdt_cd": "01",
+                                    "ovrs_pdno": "USD",
+                                    "ovrs_item_name": "PROSHARES ULTRA SEMICONDUCTORS",
+                                    "ovrs_cblc_qty": "2",
+                                    "ord_psbl_qty": "2",
+                                    "pchs_avg_pric": "40.0000",
+                                    "ovrs_excg_cd": "AMEX",
+                                    "tr_crcy_cd": "USD"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "info": {
+                    "overseas": {
+                        "holdings": [
+                            {
+                                "cano": "12345678",
+                                "acnt_prdt_cd": "01",
+                                "ovrs_pdno": "USD",
+                                "ovrs_item_name": "PROSHARES ULTRA SEMICONDUCTORS",
+                                "ovrs_cblc_qty": "2",
+                                "ord_psbl_qty": "2",
+                                "pchs_avg_pric": "40.0000",
+                                "ovrs_excg_cd": "AMEX",
+                                "tr_crcy_cd": "USD"
+                            }
+                        ]
+                    }
+                },
+                "USD": {
+                    "free": 2,
+                    "used": 0,
+                    "total": 2,
+                    "info": {
+                        "cano": "12345678",
+                        "acnt_prdt_cd": "01",
+                        "ovrs_pdno": "USD",
+                        "ovrs_item_name": "PROSHARES ULTRA SEMICONDUCTORS",
+                        "ovrs_cblc_qty": "2",
+                        "ord_psbl_qty": "2",
+                        "pchs_avg_pric": "40.0000",
+                        "ovrs_excg_cd": "AMEX",
+                        "tr_crcy_cd": "USD",
+                        "rows": [
+                            {
+                                "cano": "12345678",
+                                "acnt_prdt_cd": "01",
+                                "ovrs_pdno": "USD",
+                                "ovrs_item_name": "PROSHARES ULTRA SEMICONDUCTORS",
+                                "ovrs_cblc_qty": "2",
+                                "ord_psbl_qty": "2",
+                                "pchs_avg_pric": "40.0000",
+                                "ovrs_excg_cd": "AMEX",
+                                "tr_crcy_cd": "USD"
+                            }
+                        ]
+                    }
+                },
+                "free": { "USD": 2 },
                 "used": { "USD": 0 },
-                "total": { "USD": 0 }
+                "total": { "USD": 2 }
             }
         },
         {

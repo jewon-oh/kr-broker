@@ -231,7 +231,8 @@ describe('KB fetchBalance — 항목의 모양', () => {
     it('현금은 통화 키다 — KRW 는 예수금 TR, USD 는 해외 잔고평가의 통화별 예수금 그리드에서 온다', async () => {
         const b = await makeService().fetchBalance();
 
-        expect(b.KRW).toMatchObject({ free: 5_000_000, used: 0, total: 5_000_000 });
+        // 예수금 TR 의 어느 필드가 계좌 현금인지 모른다. 주문가능현금만 free 로 싣는다.
+        expect(b.KRW).toMatchObject({ free: 5_000_000, used: undefined, total: undefined });
         // 주문가능금액이 매수여력이다. 예수금에서 주문가능금액을 뺀 만큼은 묶인 금액이다.
         expect(b.USD).toMatchObject({ free: 1000, used: 0, total: 1000 });
     });
@@ -261,6 +262,56 @@ describe('KB fetchBalance — 항목의 모양', () => {
         const b = await makeService().fetchBalance();
 
         expect(b.USD).toMatchObject({ free: 850.5, used: 149.5, total: 1000 });
+    });
+
+    /** 예수금·해외 잔고평가는 기본 응답이고, 국내 보유 두 TR 과 해외 예수금 그리드만 바꾼다. */
+    const routeWith = (routes: { assetEval?: unknown; holdings?: unknown; usdCash?: Record<string, string> }) => {
+        mockFetch.mockImplementation(async (url: string) => {
+            const u = String(url);
+            if (u.includes('/oauth2/token')) return tokenOk();
+            const tr = u.split('/api/v1/')[1] ?? '';
+            if (tr === KBSEC_TR.HOLDINGS_US.toLowerCase()) {
+                return jsonOk({ Record1: [routes.usdCash ?? OVERSEAS_OK.Record1[0]], Record2: OVERSEAS_OK.Record2 });
+            }
+            if (tr === KBSEC_TR.DEPOSIT.toLowerCase()) return jsonOk({ ordr_psbl_csh: '5000000' });
+            if (tr === KBSEC_TR.ASSET_EVAL.toLowerCase()) {
+                if (routes.assetEval === undefined) throw connectTimeout();
+                return jsonOk(routes.assetEval);
+            }
+            if (tr === KBSEC_TR.HOLDINGS.toLowerCase() && routes.holdings !== undefined) return jsonOk(routes.holdings);
+            return jsonOk({});
+        });
+    };
+
+    it('국내 보유의 free 는 주문가능수량(ordr_psbl_q)이고 used 는 total − free 다. 해외 보유는 매도 가능 수량을 읽지 않아 free 가 비어 있다', async () => {
+        routeWith({ assetEval: { Record2: [{ ...DOMESTIC_ASSET_EVAL.Record2[0], ordr_psbl_q: '8' }] } });
+
+        const b = await makeService().fetchBalance();
+
+        expect(b['005930']).toMatchObject({ free: 8, used: 2, total: 10 });
+        expect(b.JNJ).toMatchObject({ free: undefined, used: undefined, total: 2 });
+    });
+
+    it('계좌자산평가 행에 주문가능수량이 없으면 free 를 보유 수량으로 채우지 않고 비운다', async () => {
+        const b = await makeService().fetchBalance();
+
+        expect(b['005930']).toMatchObject({ free: undefined, used: undefined, total: 10 });
+    });
+
+    it('보유주식 폴백 경로에서도 free 는 주문가능수량이다', async () => {
+        routeWith({ holdings: { Record2: [{ shrt_cd: '005930', is_nm: '삼성전자', gnrl_q: '10', ordr_psbl_q: '7' }] } });
+
+        const b = await makeService().fetchBalance();
+
+        expect(b['005930']).toMatchObject({ free: 7, used: 3, total: 10 });
+    });
+
+    it('USD 주문가능금액이 예수금보다 크면 예수금을 정산 뒤 현금으로 볼 수 없어 total 과 used 를 비운다', async () => {
+        routeWith({ assetEval: DOMESTIC_ASSET_EVAL, usdCash: { crncy_clsf_nm: 'USD', tfnd: '1000.00', ordr_psbl_amt_p2: '1200.00' } });
+
+        const b = await makeService().fetchBalance();
+
+        expect(b.USD).toMatchObject({ free: 1200, used: undefined, total: undefined });
     });
 });
 

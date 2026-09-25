@@ -17,11 +17,15 @@
  * 7. 정상 주문은 접수 결과(`Order`)를 돌려준다. 모의 주문이 없어서 그대로 부르면 주문 요청이 정확히 한 번 나간다.
  * 8. 일괄 취소(`cancelAllOrders`)가 일부만 실패하면 던지지 않고 주문마다 결과를 돌려준다. 취소하지 못한 주문은 `canceled` 가 아니라
  *    원래 상태(`open`)이고 실패 사유(`info.cancelError`)를 싣는다. 항목은 미체결 조회로 받은 주문이라 수량과 방향을 잃지 않는다.
+ * 9. 잔고의 현금은 통화 키(`KRW`, `USD`)이고 보유 종목은 `market.base` 키다. 보유 종목 키가 현금 키와 겹치면 한쪽을 덮어쓰지 않고
+ *    `NotSupported` 를 던진다. 호출하는 쪽은 `balance[market.base]` 로 보유를 찾는다.
+ * 10. 잔고의 `free` 는 지금 주문에 쓸 수 있는 양, `total` 은 정산 뒤 계좌에 남을 양이다(ccxt 정의). 모르는 값은 0 으로 채우지 않고 비운다.
+ *     현금의 `free` 와 `total` 이 모두 있으면 `free` 가 `total` 을 넘지 않는다.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
-    BaseError, ExchangeError, MarketClosed, NetworkError, OrderOutcomeUnknown,
-    type Balances, type Dict, type ErrorClass, type Order,
+    BaseError, ExchangeError, MarketClosed, NetworkError, NotSupported, OrderOutcomeUnknown,
+    type Balances, type Dict, type ErrorClass, type MarketInterface, type Order,
 } from '../../base';
 
 /** 증권사가 실측한 업무 오류 하나. 이 상황을 만들면 이 오류 클래스(와 세부 원인)로 던져져야 한다. */
@@ -65,7 +69,17 @@ export interface BrokerContractHarness {
     cancelAllTargets: { canceled: string; rejected: string };
     /** 미체결 주문 두 건 가운데 하나는 취소되고 하나는 증권사가 거절하게 한 뒤 `cancelAllOrders` 를 부른다. */
     cancelAllWithOneRejected(): Promise<Order[]>;
+    /** 보유 종목과 현금(`KRW`, `USD`)이 함께 있는 잔고를 조회한다. 원문 표기와 `market.base` 가 다른 종목(슬래시 티커)이 있으면 싣는다. */
+    fetchBalanceWithHoldings(): Promise<Balances>;
+    /** 보유 종목 키가 현금 키와 겹치는 잔고(미국 티커 `USD` 보유와 달러 현금)를 조회한다. */
+    fetchBalanceWithCollidingKey(): Promise<Balances>;
+    /** 심볼이나 종목 코드로 종목을 찾는다(`market()`). */
+    market(symbol: string): MarketInterface;
 }
+
+/** 잔고에서 통화·종목 항목이 아닌 키 */
+const BALANCE_META_KEYS: ReadonlySet<string> = new Set(['info', 'timestamp', 'datetime', 'free', 'used', 'total', 'debt']);
+const CASH_CODES: ReadonlySet<string> = new Set(['KRW', 'USD']);
 
 /** 던져진 값을 기다려 받는다. 던지지 않으면 실패로 취급한다. */
 async function caught(promise: Promise<unknown>): Promise<Error> {
@@ -202,6 +216,33 @@ export function defineBrokerContractSuite(h: BrokerContractHarness): void {
                 expect(order.id).toBeTruthy();
                 expect(order.info).toBeDefined();
                 expect(h.orderRequestsSent()).toBe(1);
+            });
+        });
+
+        describe('9. 잔고 키', () => {
+            it('현금은 통화 키이고 보유 종목의 키는 market.base 다', async () => {
+                const balance = await h.fetchBalanceWithHoldings();
+
+                const codes = Object.keys(balance).filter((key) => !BALANCE_META_KEYS.has(key));
+                const holdings = codes.filter((key) => !CASH_CODES.has(key));
+                expect(codes).toEqual(expect.arrayContaining([...CASH_CODES]));
+                expect(holdings.length).toBeGreaterThan(0);
+                for (const key of holdings) expect(h.market(key).base, key).toBe(key);
+            });
+
+            it('보유 종목 키가 현금 키와 겹치면 한쪽을 덮어쓰지 않고 NotSupported 를 던진다', async () => {
+                expect(await caught(h.fetchBalanceWithCollidingKey())).toBeInstanceOf(NotSupported);
+            });
+        });
+
+        describe('10. 현금의 free 와 total', () => {
+            it('둘 다 있으면 free 는 total 을 넘지 않는다', async () => {
+                const balance = await h.fetchBalanceWithHoldings();
+
+                for (const code of CASH_CODES) {
+                    const cash = balance[code];
+                    if (cash?.free !== undefined && cash.total !== undefined) expect(cash.free, code).toBeLessThanOrEqual(cash.total);
+                }
             });
         });
     });

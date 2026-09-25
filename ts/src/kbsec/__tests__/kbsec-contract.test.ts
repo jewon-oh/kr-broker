@@ -21,8 +21,15 @@ type OrderMode =
     | { type: 'business'; code: string; message: string }
     | { type: 'network'; code: string };
 
-const state: { order: OrderMode; balanceFails: boolean; readFailure: string | undefined; orderRequests: number } = {
-    order: { type: 'accepted' }, balanceFails: false, readFailure: undefined, orderRequests: 0,
+const state: {
+    order: OrderMode;
+    balanceFails: boolean;
+    readFailure: string | undefined;
+    orderRequests: number;
+    /** 해외 보유 행. 있으면 잔고 조회가 국내·해외 보유 종목과 현금을 함께 준다. */
+    overseasHoldings: Record<string, string>[] | undefined;
+} = {
+    order: { type: 'accepted' }, balanceFails: false, readFailure: undefined, orderRequests: 0, overseasHoldings: undefined,
 };
 
 const connectionError = (code: string) => Object.assign(new TypeError('fetch failed'), { cause: { code } });
@@ -40,8 +47,21 @@ function route(): void {
         }
         if (tr === KBSEC_TR.DEPOSIT.toLowerCase() && state.balanceFails) throw connectionError('UND_ERR_CONNECT_TIMEOUT');
         if (tr === KBSEC_TR.QUOTE_KR.toLowerCase() && state.readFailure !== undefined) throw connectionError(state.readFailure);
+        if (state.overseasHoldings !== undefined) {
+            if (tr === KBSEC_TR.DEPOSIT.toLowerCase()) return jsonOk({ ordr_psbl_csh: '5000000' });
+            if (tr === KBSEC_TR.ASSET_EVAL.toLowerCase()) return jsonOk({ Record2: [{ is_cd: 'A005930', is_nm: '삼성전자', ec_q: '10', ordr_psbl_q: '8', val_amt: '700000' }] });
+            if (tr === KBSEC_TR.HOLDINGS_US.toLowerCase()) {
+                return jsonOk({ Record1: [{ crncy_clsf_nm: 'USD', tfnd: '1000.00', ordr_psbl_amt_p2: '850.50' }], Record2: state.overseasHoldings });
+            }
+        }
         return jsonOk({});
     });
+}
+
+/** 국내·해외 보유 종목과 현금이 함께 있는 잔고를 조회한다. */
+function fetchBalanceWith(overseasHoldings: Record<string, string>[]) {
+    state.overseasHoldings = overseasHoldings;
+    return newExchange().fetchBalance();
 }
 
 /** 체결 확정 조회 간격을 0 으로 둔 인스턴스. 시도 횟수는 그대로다. */
@@ -59,6 +79,7 @@ const harness: BrokerContractHarness = {
         state.balanceFails = false;
         state.readFailure = undefined;
         state.orderRequests = 0;
+        state.overseasHoldings = undefined;
         mockFetch.mockReset();
         route();
         __resetKbsecTokenBreaker();
@@ -99,6 +120,9 @@ const harness: BrokerContractHarness = {
         });
         return newExchange().cancelAllOrders('005930/KRW');
     },
+    fetchBalanceWithHoldings: () => fetchBalanceWith([{ is_cd: 'JNJ', is_nm: '존슨앤드존슨', frgn_hld_q_p6: '2', now_prc_p4: '366.0000' }]),
+    fetchBalanceWithCollidingKey: () => fetchBalanceWith([{ is_cd: 'USD', is_nm: '프로셰어즈 울트라 반도체', frgn_hld_q_p6: '2', now_prc_p4: '45.0000' }]),
+    market: (symbol) => newExchange().market(symbol),
 };
 
 beforeEach(() => {
