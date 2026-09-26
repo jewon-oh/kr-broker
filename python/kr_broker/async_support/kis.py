@@ -1444,6 +1444,7 @@ class kis(Exchange, ImplicitAPI):
                                params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """종목의 투자자별 매매동향(`inquire-investor`)을 최근 영업일 순으로 돌려준다. 세 증권사 공통 모양이다.
         개인, 외국인, 기관계의 순매수 대금을 싣고, 매수·매도 수량과 대금은 `info` 의 원문에 있다. 국내만 받는다. 당일 값은 장 종료 뒤에 채워진다.
+        대금의 단위는 증권사 응답 그대로다. 증권사마다 다를 수 있으므로 증권사를 섞어 더하지 않는다.
         조회 기간을 받는 입력이 없어 받은 영업일을 `since`, `params['until']`, `limit` 으로 거른다.
         둘째 인자로 `params` 를 넘기던 옛 호출은 한 판 동안 경고를 남기고 받는다."""
         if isinstance(since, dict):
