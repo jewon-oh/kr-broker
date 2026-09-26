@@ -44,7 +44,7 @@
 - 세 증권사가 함께 쓰는 주문 게이트를 공개합니다. `kr-broker/krx-trading-hours`의 `krxOrderBlockReason`과 `krxAuctionBuyBlockReason`, `kr-broker/us-market-hours`의 `usOrderBlockReason`과 `usAuctionBuyBlockReason`입니다. Python 판 이름은 `krx_order_block_reason` 등입니다. `marketSessionBlockReason`은 다섯째 인자로 `{ side, blockAuctionBuys }`를 받습니다.
 - `kr-broker/krx-tick-size`(Python 판 `kr_broker.krx_tick_size`)에 KRX 주식 호가 단위 표(`KRX_STOCK_TICK_SIZES`)와 `getKrxTickSize`, `krxTickViolation`을 둡니다.
 - `kr-broker/broker-time`에 한국 표준시 오프셋 `KST_OFFSET_MS`와 한국 날짜 `kstYmd`(`YYYYMMDD`), 한국 시각 `kstHms`(`HHMMSS`)를 둡니다. 세 증권사가 이 정의를 함께 씁니다. Python 판은 `kr_broker.broker_time`의 `KST_OFFSET_MS`와 `kst_ymd`입니다.
-- 오류에 `brokerCode`(Python 판 `broker_code`)를 더합니다. 증권사가 응답에 실어 보낸 원래 오류 코드입니다. 한국투자증권은 `msg_cd`, 토스증권은 오류 코드, KB증권은 `processCode`이고, 코드 표에 없는 코드도 싣습니다. 라이브러리가 요청 전에 막은 오류에는 없습니다. `detail` 값은 그대로이고, 뜻은 라이브러리가 가른 원인 이름으로 정합니다. KB증권의 원래 코드를 오류 메시지에서 꺼내던 코드는 `brokerCode`를 읽습니다.
+- 오류에 `brokerCode`(Python 판 `broker_code`)를 더합니다. 증권사가 응답에 실어 보낸 원래 오류 코드입니다. 한국투자증권은 `msg_cd`, 토스증권은 오류 코드, KB증권은 `processCode`이고, 코드 표에 없는 코드도 싣습니다. 라이브러리가 요청 전에 막은 오류에는 없습니다. KB증권은 토큰 발급이 업무 코드로 거절된 오류에도 싣습니다. `detail` 값은 그대로이고, 뜻은 라이브러리가 가른 원인 이름으로 정합니다. KB증권의 원래 코드를 오류 메시지에서 꺼내던 코드는 `brokerCode`를 읽습니다.
 
 ### 바뀜
 
@@ -66,6 +66,7 @@
 - 휴장일 캘린더를 채우고 비우는 `applyMarketCalendar`와 `resetMarketCalendar`를 테스트 전용 경로 `kr-broker/testing`으로 옮깁니다. 두 함수는 프로세스 전체의 캘린더를 바꾸므로 테스트에서만 씁니다. `kr-broker/market-calendar`의 두 이름은 `@deprecated`를 붙여 한 판 동안 남기고, 다음 판에서 뺍니다. Python 판은 `kr_broker.testing`에서 `apply_market_calendar`와 `reset_market_calendar`를 가져옵니다. `kr_broker.market_calendar`의 두 이름도 다음 판에서 뺍니다.
 - 이 저장소의 CI가 커밋 이력도 검사합니다. `pnpm hygiene:history`는 위생 검사의 패턴으로 모든 커밋의 메시지와 추가된 줄을 봅니다. 작성자 이메일은 GitHub noreply 주소(`…@users.noreply.github.com`)만 받습니다. 커미터 이메일은 웹에서 병합할 때 GitHub이 적는 서비스 주소도 받습니다. PR에서는 PR 브랜치의 커밋과, 스쿼시 병합 커밋의 제목이 될 PR 제목도 봅니다. 위생 검사의 이메일 규칙은 `example.*` 도메인에 더해 GitHub noreply 주소, `noreply@anthropic.com`(공동 작성자 트레일러), `support@github.com`(Dependabot 서명 트레일러)을 허용합니다.
 - 이 저장소의 CI가 Python 의존성을 해시를 고정한 잠금 파일(`python/requirements/*.txt`)로 설치하고, `pip-audit`도 운영 의존성의 잠금 파일을 감사합니다. 예전에는 PyPI 최신판을 해시 없이 받아 감사했습니다. Dependabot은 Python 의존성을 `uv` 생태계로 올립니다. 사용하는 쪽의 설치와 `pyproject.toml`의 하한은 그대로입니다.
+- KB증권 `KbsecAuth.getAccessToken`(`kr-broker/kbsec/kbsec-auth`)은 토큰 발급이 거절되면 `Error` 대신 `AuthenticationError`를 던집니다. 증권사가 준 업무 코드는 `brokerCode`에 싣습니다. 본문 형태 두 가지가 모두 거절되면 먼저 보낸 형태의 코드를 싣습니다. 나중에 보내는 형태는 원인과 관계없이 `E021`을 받기 때문입니다. `detail`은 예전처럼 비어 있습니다. `kbsec` 클래스의 비공개 호출이 던지는 오류는 예전처럼 `AuthenticationError`입니다. 메시지 앞의 `kbsec 토큰을 받지 못했다:`는 빠집니다. 토큰 무효(`I445`) 뒤 재발급이 실패했을 때도 `Error` 대신 `AuthenticationError`를 던집니다.
 
 ### 고침
 

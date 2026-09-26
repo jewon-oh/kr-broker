@@ -92,6 +92,48 @@ describe('KbsecAuth 토큰 발급 오류 보고', () => {
     });
 });
 
+describe('KbsecAuth 토큰 발급 실패의 brokerCode', () => {
+    const envelopeOf = (code: string, message: string) => ({
+        dataHeader: { processFlag: 'B', processCode: code, processMessage: message },
+        dataBody: { access_token: '', token_type: '', expires_in: 0 },
+    });
+
+    it('비공개 호출의 토큰 발급 실패는 첫 형태(envelope)의 업무 코드를 brokerCode 에 싣고 detail 은 비운다', async () => {
+        __resetKbsecTokenBreaker();
+        // 실서버 응답 재현: envelope 는 HTTP 200 과 빈 토큰(9999), flat 은 500 E021.
+        mockFetch((shape) => (shape === 'envelope'
+            ? { status: 200, body: envelopeOf('9999', 'API 입력 전문에 정의되지 않은 필드입니다.') }
+            : { status: 500, body: envelopeOf('E021', '앱키로 앱정보 추출 중 오류가 발생했습니다.') }));
+
+        const error = await new kbsec({ apiKey: 'kb-app-key-123456', secret: 'kb-secret', rateLimit: 0 }).privatePostSsqm0004({}).catch((e: unknown) => e);
+
+        expect(error).toBeInstanceOf(AuthenticationError);
+        expect((error as AuthenticationError).brokerCode).toBe('9999');
+        expect((error as AuthenticationError).detail).toBeUndefined();
+    });
+
+    it('HTTP 500 봉투의 업무 코드(E021)도 brokerCode 에 싣는다', async () => {
+        mockFetch(() => ({ status: 500, body: envelopeOf('E021', '앱키로 앱정보 추출 중 오류가 발생했습니다.') }));
+
+        const error = await new KbsecAuth(CREDS).getAccessToken().catch((e: unknown) => e);
+
+        expect(error).toBeInstanceOf(AuthenticationError);
+        expect((error as AuthenticationError).brokerCode).toBe('E021');
+    });
+
+    it('첫 형태의 응답에 업무 코드가 없으면 flat 의 E021 을 싣지 않고 비운다', async () => {
+        mockFetch((shape) => (shape === 'envelope'
+            ? { status: 403, body: '<html>Forbidden</html>' }
+            : { status: 500, body: envelopeOf('E021', '앱키로 앱정보 추출 중 오류가 발생했습니다.') }));
+
+        const error = await new KbsecAuth(CREDS).getAccessToken().catch((e: unknown) => e);
+
+        expect(error).toBeInstanceOf(AuthenticationError);
+        expect((error as AuthenticationError).brokerCode).toBeUndefined();
+        expect(String((error as Error).message)).toContain('E021');
+    });
+});
+
 describe('KbsecAuth 토큰 발급의 일시 장애', () => {
     const e021 = {
         dataHeader: { processFlag: 'B', processCode: 'E021', processMessage: '앱키로 앱정보 추출 중 오류가 발생했습니다.' },
