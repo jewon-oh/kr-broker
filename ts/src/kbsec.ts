@@ -5075,7 +5075,8 @@ export class kbsec extends Exchange {
      * 주문 한 건을 조회한다. 국내는 미체결 목록에 있으면 `open`(체결분이 있으면 반영), 체결내역에만 있으면 `closed` 다.
      * 미국은 체결내역과 해외 체결현황(`SPQM2204`, 최근 사흘)을 함께 보고 잔량으로 상태를 정한다. 어디에도 없을 때만 `OrderNotFound` 다.
      *
-     * `params.date`(`YYYYMMDD`)를 주면 그날의 체결내역을 조회하고 실패를 던진다(국내는 한국 날짜, 미국은 미국 현지 날짜). 생략하면 가장 최근 영업일이다.
+     * `params.date`(`YYYYMMDD`)를 주면 그날의 체결내역을 조회하고 실패를 던진다(국내는 한국 날짜, 미국은 미국 현지 날짜). 국내는 미체결 목록도 그날을 조회한다.
+     * 생략하면 가장 최근 영업일이다.
      */
     override async fetchOrder(id: string, symbol: Str = undefined, params: Dict = {}): Promise<Order> {
         if (symbol === undefined) throw new ArgumentsRequired(`${this.id} fetchOrder() requires a symbol argument`);
@@ -5087,7 +5088,9 @@ export class kbsec extends Exchange {
         const cost = sum((trade) => trade.cost);
         const tradeInfo = trades.map(trade => trade.info);
         if (this.isUs(market)) return this.overseasOrderOf(id, market, trades, filled, cost);
-        const open = (await this.fetchOpenOrders(symbol)).find(order => order.id === id);
+        // 미체결 목록도 체결내역과 같은 날을 조회한다. 다른 날의 목록에서 같은 주문번호를 찾으면 다른 주문을 합친다.
+        const pending = await this.fetchDomesticOrderRows(KBSEC_CCLS_PENDING, market, safeString(params, 'date'));
+        const open = this.ordersFromRows(pending, market, undefined).find(order => order.id === id);
         if (open === undefined && trades.length === 0) {
             throw new OrderNotFound(`${this.id} fetchOrder() ${symbol} 주문 ${id} 을 체결내역과 미체결 목록에서 찾지 못했다`);
         }

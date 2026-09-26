@@ -1089,7 +1089,8 @@ class kbsec(Exchange, ImplicitAPI):
         """주문 한 건. 국내는 미체결 목록에 있으면 `open`(체결분이 있으면 반영), 체결내역에만 있으면 `closed` 다.
         미국은 체결내역과 해외 체결현황(`SPQM2204`, 최근 사흘)을 함께 보고 잔량으로 상태를 정한다. 어디에도 없을 때만 `OrderNotFound` 다.
 
-        `params['date']`(`YYYYMMDD`)를 주면 그날의 체결내역을 조회하고 실패를 던진다(국내는 한국 날짜, 미국은 미국 현지 날짜). 생략하면 가장 최근 영업일이다.
+        `params['date']`(`YYYYMMDD`)를 주면 그날의 체결내역을 조회하고 실패를 던진다(국내는 한국 날짜, 미국은 미국 현지 날짜). 국내는 미체결 목록도 그날을 조회한다.
+        생략하면 가장 최근 영업일이다.
         """
         params = {} if params is None else params
         if symbol is None:
@@ -1109,7 +1110,9 @@ class kbsec(Exchange, ImplicitAPI):
         trade_info = [trade['info'] for trade in trades]
         if self._is_us(market):
             return self._overseas_order_of(id, market, trades, filled, cost)
-        open_order = next((order for order in self.fetch_open_orders(symbol) if order['id'] == id), None)
+        # 미체결 목록도 체결내역과 같은 날을 조회한다. 다른 날의 목록에서 같은 주문번호를 찾으면 다른 주문을 합친다.
+        pending = self._fetch_domestic_order_rows(KBSEC_CCLS_PENDING, market, self.safe_string(params, 'date'))
+        open_order = next((order for order in self._orders_from_rows(pending, market, None) if order['id'] == id), None)
         if open_order is None and len(trades) == 0:
             raise OrderNotFound(f'{self.id} fetchOrder() {symbol} 주문 {id} 을 체결내역과 미체결 목록에서 찾지 못했다')
         if open_order is None:

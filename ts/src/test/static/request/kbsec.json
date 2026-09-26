@@ -6075,6 +6075,107 @@
             }
         },
         {
+            "description": "fetchOrder 국내는 params.date 를 주면 미체결 목록도 체결내역과 같은 날로 조회한다",
+            "now": 1790038800000,
+            "method": "fetchOrder",
+            "args": [
+                "0000000044",
+                "005930/KRW",
+                {
+                    "date": "20260918"
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm2341",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"ccls_clsf\":\"1\",\"ordr_dt\":\"20260918\",\"is_cd\":\"005930\",\"ordr_no\":\"\",\"mthr_ordr_no\":\"\",\"orgn_ordr_no\":\"\",\"s_ccls_amt\":\"\",\"b_ccls_amt\":\"\",\"s_ccls_q\":\"\",\"b_ccls_q\":\"\",\"ac_nm\":\"\",\"is_nm\":\"\",\"cn_clsf\":\"0\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "nxt_key": "",
+                                "Record1": [
+                                    {
+                                        "ordr_no": "0000000044",
+                                        "stnd_is_no": "A005930",
+                                        "trd_dl_ccd_nm": "현금매도",
+                                        "ordr_q": "2",
+                                        "tl_ccls_q": "2",
+                                        "nccls_q": "0",
+                                        "ccls_uprc": "69900",
+                                        "ordr_uprc": "69900",
+                                        "ordr_ccd": "00"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm2341",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"ccls_clsf\":\"2\",\"ordr_dt\":\"20260918\",\"is_cd\":\"005930\",\"ordr_no\":\"\",\"mthr_ordr_no\":\"\",\"orgn_ordr_no\":\"\",\"s_ccls_amt\":\"\",\"b_ccls_amt\":\"\",\"s_ccls_q\":\"\",\"b_ccls_q\":\"\",\"ac_nm\":\"\",\"is_nm\":\"\",\"cn_clsf\":\"0\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "B",
+                                "processCode": "1861",
+                                "processMessage": "조회할 자료가 없습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "id": "0000000044",
+                "symbol": "005930/KRW",
+                "status": "closed",
+                "side": "sell",
+                "filled": 2,
+                "cost": 139800,
+                "average": 69900,
+                "trades": [],
+                "info": {
+                    "trades": [
+                        {
+                            "orderId": "0000000044",
+                            "symbol": "005930",
+                            "side": "sell",
+                            "qty": 2,
+                            "price": 69900,
+                            "cost": 139800,
+                            "index": 0
+                        }
+                    ]
+                },
+                "fees": [],
+                "amount": 2,
+                "remaining": 0
+            }
+        },
+        {
             "description": "fetchOrder 미국은 체결내역에 없어도 해외 체결현황(SPQM2204, 최근 사흘)에 잔량이 있으면 open 이다",
             "now": 1790038800000,
             "method": "fetchOrder",
