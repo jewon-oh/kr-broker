@@ -420,6 +420,35 @@
             }
         },
         {
+            "description": "발급 요청이 시간 초과로 끝나면 다른 형태로 다시 보내지 않고 RequestTimeout 이다",
+            "tokenStore": {},
+            "method": "privatePostSsqm1801",
+            "args": [
+                {
+                    "inq_clsf": "1",
+                    "mkt_tm_ccd": "1",
+                    "nxt_key": ""
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/oauth2/token",
+                        "headers": {
+                            "Content-Type": "application/json"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"\",\"macAddr\":\"\"},\"dataBody\":{\"appKey\":\"TEST-APPKEY-KBSEC-0001\",\"appSecret\":\"TEST-APPSECRET-KBSEC-0001\",\"grantType\":\"client_credentials\"}}"
+                    },
+                    "network": "timeout"
+                }
+            ],
+            "error": {
+                "class": "RequestTimeout",
+                "brokerCode": null
+            }
+        },
+        {
             "description": "발급 응답이 업무 코드 없는 5xx 면 다른 형태로 다시 보내지 않고 ExchangeNotAvailable 이다",
             "tokenStore": {},
             "method": "privatePostSsqm1801",
