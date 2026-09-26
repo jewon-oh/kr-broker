@@ -69,7 +69,7 @@
             }
         },
         {
-            "description": "저장소에 토큰이 없으면 봉투 형태로 발급해 저장소(새 키와 옛 키)에 넣고 TR 을 보낸다",
+            "description": "저장소에 토큰이 없으면 봉투 형태로 발급해 저장소에 넣고 TR 을 보낸다",
             "tokenStore": {},
             "method": "privatePostSsqm1801",
             "args": [
@@ -131,8 +131,7 @@
                 }
             ],
             "tokenStoreAfter": {
-                "kbsec:token:2f6506bc8b1a20daff3b7300414b5fff": "present",
-                "kbsec:token:TEST-APPKEY-": "present"
+                "kbsec:token:2f6506bc8b1a20daff3b7300414b5fff": "present"
             },
             "output": {
                 "dataHeader": {
@@ -546,8 +545,7 @@
                 }
             ],
             "tokenStoreAfter": {
-                "kbsec:token:2f6506bc8b1a20daff3b7300414b5fff": "absent",
-                "kbsec:token:TEST-APPKEY-": "absent"
+                "kbsec:token:2f6506bc8b1a20daff3b7300414b5fff": "absent"
             },
             "output": {
                 "dataHeader": {
@@ -1549,8 +1547,7 @@
                 }
             ],
             "tokenStoreAfter": {
-                "kbsec:token:2f6506bc8b1a20daff3b7300414b5fff": "absent",
-                "kbsec:token:TEST-APPKEY-": "absent"
+                "kbsec:token:2f6506bc8b1a20daff3b7300414b5fff": "absent"
             },
             "output": {
                 "dataHeader": {

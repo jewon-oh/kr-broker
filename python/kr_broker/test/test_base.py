@@ -181,8 +181,8 @@ def _type_checking_aliases(klass: type) -> Dict[str, str]:
             for stmt in block.body if isinstance(stmt, ast.Assign) and isinstance(stmt.targets[0], ast.Name) and isinstance(stmt.value, ast.Name)}
 
 
-@pytest.mark.parametrize('cls', [kr_broker.kis, kr_broker.toss, kr_broker.async_support.kis, kr_broker.async_support.toss,
-                                 kr_broker.pro.kis, kr_broker.pro.toss])
+@pytest.mark.parametrize('cls', [kr_broker.kis, kr_broker.toss, kr_broker.kbsec, kr_broker.async_support.kis, kr_broker.async_support.toss,
+                                 kr_broker.async_support.kbsec, kr_broker.pro.kis, kr_broker.pro.toss])
 def test_camelcase_aliases_are_declared_for_type_checkers(cls: Type[Exchange]) -> None:
     """생성자가 붙이는 메서드 별칭을, 그 메서드를 정의한 클래스마다 `if TYPE_CHECKING:` 블록에 적었는지 본다.
     재정의한 클래스도 다시 적어야 그 클래스의 시그니처로 보인다. 암묵 메서드는 `abstract/*.py` 가 선언한다.

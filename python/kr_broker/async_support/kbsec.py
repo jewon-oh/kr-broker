@@ -32,12 +32,12 @@ import json
 import logging
 import math
 import re
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 from kr_broker.abstract.kbsec import ImplicitAPI
 from kr_broker.async_support.base.exchange import Exchange
 from kr_broker.async_support.base.runtime import maybe_await, new_lock
-from kr_broker.async_support.base.token_store import LegacyKeyTokenStore, refresh_token_with_lock
+from kr_broker.async_support.base.token_store import refresh_token_with_lock
 from kr_broker.base import functions as fn
 from kr_broker.base.decimal_to_precision import NO_PADDING, ROUND, TICK_SIZE, decimal_to_precision
 from kr_broker.base.errors import (
@@ -45,7 +45,7 @@ from kr_broker.base.errors import (
     NotSupported, NullResponse, RateLimitExceeded,
 )
 from kr_broker.base.exchange import assert_secure_url
-from kr_broker.base.token_store import BrokerTokenStore, legacy_token_store_key, token_store_key
+from kr_broker.base.token_store import BrokerTokenStore, token_store_key
 from kr_broker.base.types import ApiName, Int, Market, MarketInterface, OrderBook, Str, Ticker
 from kr_broker.kbsec_envelope import is_kbsec_business_error, is_kbsec_token_failure, kbsec_host_addr
 from kr_broker.kbsec_error_codes import KBSEC_ERROR_DETAIL, kbsec_error_detail, kbsec_exact_exceptions
@@ -145,9 +145,8 @@ class KbsecAuth:
         return token_store_key(KBSEC_TOKEN_KEY_PREFIX, self.app_key)
 
     def store_of(self) -> Any:
-        """저장소. 옛 키 형식(앱키 앞 12자)을 쓰는 판과 함께 도는 동안 두 키를 함께 읽고 쓴다."""
-        store = self.raw_store_of()
-        return None if store is None else LegacyKeyTokenStore(store, {self.store_key: legacy_token_store_key(KBSEC_TOKEN_KEY_PREFIX, self.app_key)})
+        """토큰 저장소. 인스턴스 옵션 `tokenStore` 를 그대로 쓴다."""
+        return self.raw_store_of()
 
     async def get_access_token(self) -> str:
         """유효한 접근 토큰. 같은 프로세스 안의 동시 갱신은 락으로 하나로 합친다."""
@@ -677,3 +676,11 @@ class kbsec(Exchange, ImplicitAPI):
             book['bids'] = book['bids'][:limit]
             book['asks'] = book['asks'][:limit]
         return book
+
+    # 생성자가 붙이는 camelCase 별칭을 타입 검사기에 알린다. 빠지거나 남는 줄은 test_base.py 가 잡는다.
+    if TYPE_CHECKING:
+        handleErrors = handle_errors
+        priceToPrecision = price_to_precision
+        fetchTicker = fetch_ticker
+        parseTicker = parse_ticker
+        fetchOrderBook = fetch_order_book
