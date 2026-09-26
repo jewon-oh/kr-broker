@@ -3,7 +3,7 @@
     "broker": "toss",
     "config": { "apiKey": "toss-client-id-123456", "secret": "toss-secret", "uid": "ACC-001", "enableRateLimit": false },
     "tokenStore": {
-        "toss:token:toss-client-" : { "accessToken": "tok-stored", "expiresAt": 4102444800000 }
+        "toss:token:ab4ed7e70bc665e95cc4455caac10155" : { "accessToken": "tok-stored", "expiresAt": 4102444800000 }
     },
     "cases": [
         {
@@ -173,7 +173,7 @@
                 }
             ],
             "output": { "result": { "rate": "1385.5" } },
-            "tokenStoreAfter": { "toss:token:toss-client-": "present" }
+            "tokenStoreAfter": { "toss:token:ab4ed7e70bc665e95cc4455caac10155": "present" }
         },
         {
             "description": "uid 가 없으면 계좌 목록의 첫 계좌 순번을 쓴다",

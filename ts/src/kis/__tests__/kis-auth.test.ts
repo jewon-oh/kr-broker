@@ -11,6 +11,7 @@ const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 global.fetch = mockFetch as unknown as typeof fetch;
 
 import type { BrokerTokenStore } from '../../options';
+import { tokenStoreKey } from '../../token-store-key';
 import { jsonResponse, newKis, tokenOk } from './support/kis-test-utils';
 
 /** 메모리로 동작하는 가짜 토큰 저장소. 호출을 기록해 검증한다. */
@@ -29,7 +30,7 @@ function fakeStore(initial: Record<string, string> = {}) {
     return { store, data, calls, holdLock: () => { lockHeldByOther = true; } };
 }
 
-const TOKEN_KEY = 'kis:token:TEST-APPKEY-';
+const TOKEN_KEY = tokenStoreKey('kis:token:', 'TEST-APPKEY-123456789');
 
 beforeEach(() => {
     mockFetch.mockReset();
@@ -183,7 +184,7 @@ describe('실시간 접속키(approval_key)', () => {
     });
 
     it('저장소에 있으면 발급하지 않는다', async () => {
-        const { store } = fakeStore({ 'kis:approval:TEST-APPKEY-': JSON.stringify({ key: 'stored-approval', expiresAt: Date.now() + 3_600_000 }) });
+        const { store } = fakeStore({ [tokenStoreKey('kis:approval:', 'TEST-APPKEY-123456789')]: JSON.stringify({ key: 'stored-approval', expiresAt: Date.now() + 3_600_000 }) });
 
         expect(await newKis({ options: { tokenStore: store } }).getApprovalKey()).toBe('stored-approval');
 

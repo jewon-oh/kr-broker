@@ -9,7 +9,6 @@
   "kis.py": 17,
   "market_calendar.py": 3,
   "pro/kis_realtime_stream.py": 10,
-  "test/test_base.py": 3,
   "test/test_kis_helpers.py": 10,
   "test/test_order_outcome.py": 1,
   "test/test_toss_helpers.py": 9,

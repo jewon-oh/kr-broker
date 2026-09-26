@@ -48,25 +48,25 @@ import json
 import logging
 import math
 import re
-from typing import Any, Awaitable, Callable, Dict, List, NamedTuple, Optional, cast
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Dict, List, NamedTuple, Optional, cast
 
 from kr_broker.abstract.kis import ImplicitAPI
 from kr_broker.async_support.base.exchange import Exchange
 from kr_broker.async_support.base.runtime import maybe_await, new_lock, sleep_seconds
-from kr_broker.async_support.base.token_store import LegacyKeyTokenStore, refresh_token_with_lock
+from kr_broker.async_support.base.token_store import refresh_token_with_lock
 from kr_broker.async_support.extended_session_limit import build_extended_session_limit
 from kr_broker.async_support.kis_candle_service import KISCandleService
 from kr_broker.async_support.kis_yahoo_candles import fetch_yahoo_candles
 from kr_broker.async_support.market_calendar import refresh_market_calendar as refresh_shared_market_calendar
 from kr_broker.base import functions as fn
 from kr_broker.base.decimal_to_precision import NO_PADDING, ROUND, TICK_SIZE, decimal_to_precision
-from kr_broker.base.exchange import kst_timestamp_of
+from kr_broker.base.exchange import kst_timestamp_of, strict_kst_timestamp_of
 from kr_broker.base.errors import (
     ArgumentsRequired, AuthenticationError, BadRequest, BadResponse, BadSymbol, ExchangeError, InvalidOrder, MarketClosed, NotSupported,
     NullResponse, OrderNotFound, RateLimitExceeded, RequestTimeout,
 )
 from kr_broker.base.precise import Precise
-from kr_broker.base.token_store import BrokerTokenStore, legacy_token_store_key, token_store_key
+from kr_broker.base.token_store import BrokerTokenStore, token_store_key
 from kr_broker.base.types import (
     ApiName, Balances, Int, Market, MarketInterface, Num, Order, OrderBook, Str, Strings, Ticker, Tickers, Trade, TradingFeeInterface,
 )
@@ -117,6 +117,8 @@ DAY_MS = 24 * 60 * 60 * 1000
 HOLIDAY_LOOKBACK_MS = 30 * DAY_MS
 # 휴장일 캘린더를 신선하게 보는 시간. KIS 는 하루 한 번 호출을 권하므로 하루에 두 번까지만 부른다.
 CALENDAR_TTL_MS = 12 * 60 * 60 * 1000
+# 최근 체결의 시각이 지금보다 늦어도 받아들이는 폭. 증권사 서버와 이 컴퓨터의 시계 차이다.
+TRADE_CLOCK_SKEW_MS = 60_000
 
 # 매도매수구분코드: 체결·미체결 조회 응답에서 `01` 이 매도, `02` 가 매수다.
 SIDE_CODE_SELL = '01'
@@ -660,7 +662,7 @@ class KISAuth:
         self.app_key = app_key
         self.request_token = request_token
         self.request_approval_key = request_approval_key
-        self.raw_store_of = store_of
+        self.store_of = store_of
         self.cached_token: Optional[Dict[str, Any]] = None
         self.cached_approval_key: Optional[Dict[str, Any]] = None
         self._lock = new_lock()
@@ -673,14 +675,6 @@ class KISAuth:
     @property
     def approval_store_key(self) -> str:
         return token_store_key(KIS_APPROVAL_KEY_PREFIX, self.app_key)
-
-    def store_of(self) -> Any:
-        """저장소. 옛 키 형식(앱키 앞 12자)을 쓰는 판과 함께 도는 동안 두 키를 함께 읽고 쓴다."""
-        store = self.raw_store_of()
-        return None if store is None else LegacyKeyTokenStore(store, {
-            self.store_key: legacy_token_store_key(KIS_TOKEN_KEY_PREFIX, self.app_key),
-            self.approval_store_key: legacy_token_store_key(KIS_APPROVAL_KEY_PREFIX, self.app_key),
-        })
 
     async def get_access_token(self) -> str:
         cached = self.cached_token
@@ -836,12 +830,13 @@ class kis(Exchange, ImplicitAPI):
                 'fetchTickers': True,
                 'fetchOrderBook': True,
                 'fetchOHLCV': True,
+                'fetchTrades': True,
                 'fetchOrder': True,
                 'fetchOrders': True,
                 'fetchOpenOrders': True,
                 # 부모 클래스가 `fetch_orders` 결과에서 체결 완료만 거른다.
                 'fetchClosedOrders': 'emulated',
-                'fetchCanceledOrders': False,
+                'fetchCanceledOrders': 'emulated',
                 'fetchMyTrades': True,
                 'fetchTradingFee': True,
                 'fetchStatus': False,
@@ -1353,6 +1348,66 @@ class kis(Exchange, ImplicitAPI):
             book['bids'] = book['bids'][:limit]
             book['asks'] = book['asks'][:limit]
         return book
+
+    async def fetch_trades(self, symbol: str, since: Int = None, limit: Int = None,
+                     params: Optional[Dict[str, Any]] = None) -> List[Trade]:
+        """최근 체결 30건(`inquire-ccnl`, TR `FHKST01010300`). 국내만 지원하고, 미국 종목은 요청 없이 `NotSupported` 다. 방향과 체결 id 는
+        응답에 없어 비운다. 시장구분은 `fetch_ticker` 와 같다.
+
+        체결 행에는 시각(HHMMSS)만 있고 날짜가 없으며, 장 밖에서는 직전 거래일의 체결이 온다. 그래서 같은 시장구분으로 일자별 시세
+        (`inquire-daily-price`, TR `FHKST01010400`)를 한 번 더 받아, 거래량이 있는 가장 최근 영업일을 가장 새 체결의 날짜로 쓴다. 행은 새 것부터
+        온다고 보고, 앞 행보다 시각이 늦은 행이 나오면 날짜가 바뀐 것이므로 그 행부터는 `timestamp` 를 비운다. 일자별 시세를 받지 못했거나,
+        거래량이 있는 날이 없거나, 가장 새 체결이 지금보다 1분 넘게 늦으면 모든 행의 `timestamp` 를 비운다. `since` 를 주면 `timestamp` 가 빈 행은 빠진다."""
+        instrument = self._instrument_of(symbol)
+        if instrument.overseas:
+            raise NotSupported(f'{self.id} fetchTrades() 는 국내 종목만 지원한다: {symbol}')
+        division = await self._quote_market_division()
+        response = await self.private_get_uapi_domestic_stock_v1_quotations_inquire_ccnl(self.extend({
+            'FID_COND_MRKT_DIV_CODE': division,
+            'FID_INPUT_ISCD': instrument.code,
+            'tr_id': 'FHKST01010300',
+        }, params))
+        rows = multi_rows_of(_field(response, 'output'))
+        if len(rows) == 0:
+            return []
+        date = await self._last_traded_date(instrument, division)
+        stamps: List[Int] = []
+        previous: Int = None
+        known = date is not None
+        for row in rows:
+            hms = self.safe_string(row, 'stck_cntg_hour', '')
+            stamp = strict_kst_timestamp_of(date, hms) if known and hms != '' else None
+            if stamp is None or (previous is not None and stamp > previous):
+                known = False
+            stamps.append(stamp if known else None)
+            previous = stamp
+        if stamps[0] is not None and stamps[0] > self.milliseconds() + TRADE_CLOCK_SKEW_MS:
+            stamps = [None] * len(rows)
+        market = self._market_of(instrument)
+        trades = [self.safe_trade({
+            'info': row, 'id': None, 'order': None, 'timestamp': stamp, 'datetime': self.iso8601(stamp), 'symbol': market['symbol'],
+            'type': None, 'side': None, 'takerOrMaker': None, 'price': self.safe_string(row, 'stck_prpr'),
+            'amount': self.safe_string(row, 'cntg_vol'), 'cost': None, 'fee': None,
+        }, market) for row, stamp in zip(rows, stamps)]
+        trades.reverse()
+        return self.filter_by_since_limit(trades, since, limit, 'timestamp', since is None)
+
+    async def _last_traded_date(self, instrument: KisInstrument, division: str) -> Str:
+        """거래량이 있는 가장 최근 영업일(`YYYYMMDD`). 일자별 시세를 받지 못했거나 그런 날이 없으면 `None` 이다."""
+        try:
+            response = await self.private_get_uapi_domestic_stock_v1_quotations_inquire_daily_price({
+                'FID_COND_MRKT_DIV_CODE': division,
+                'FID_INPUT_ISCD': instrument.code,
+                'FID_PERIOD_DIV_CODE': 'D',
+                'FID_ORG_ADJ_PRC': '1',
+                'tr_id': 'FHKST01010400',
+            })
+        except Exception as err:
+            logger.warning('[kis] fetch_trades 의 날짜를 정할 일자별 시세를 받지 못해 체결 시각을 비운다 (symbol=%s, err=%s)', instrument.symbol, err)
+            return None
+        dates = sorted(cast(str, self.safe_string(row, 'stck_bsop_date')) for row in rows_of(_field(response, 'output'))
+                       if kst_timestamp_of(self.safe_string(row, 'stck_bsop_date')) is not None and to_number(row.get('acml_vol')) > 0)
+        return dates[-1] if dates else None
 
     async def fetch_ohlcv(self, symbol: str, timeframe: str = '1m', since: Int = None, limit: Int = None,
                     params: Optional[Dict[str, Any]] = None) -> List[List[Any]]:
@@ -2256,6 +2311,14 @@ class kis(Exchange, ImplicitAPI):
             raise OrderNotFound(f'{self.id} 주문을 찾지 못했다: {id}')
         return order
 
+    async def fetch_canceled_orders(self, symbol: Str = None, since: Int = None, limit: Int = None,
+                              params: Optional[Dict[str, Any]] = None) -> List[Order]:
+        """취소된 주문. `fetch_orders` 결과에서 `status` 가 `canceled` 인 주문만 남기고, `limit` 은 거른 뒤에 적용한다.
+        국내는 취소 여부(`cncl_yn`)가 `Y` 인 주문만 `canceled` 다(일부 체결 뒤 취소 포함). 미국 행에는 취소 표시가 없어 상태가 비므로
+        미국 주문은 나오지 않는다. 빈 결과가 미국 주문의 취소가 없다는 뜻은 아니다."""
+        orders = await self.fetch_orders(symbol, since, None, params)
+        return self.filter_by_since_limit(self.filter_by(orders, 'status', 'canceled'), since, limit)
+
     async def fetch_my_trades(self, symbol: Str = None, since: Int = None, limit: Int = None,
                         params: Optional[Dict[str, Any]] = None) -> List[Trade]:
         """내 체결 내역. 종목을 주면 그 시장만, 주지 않으면 국내와 미국을 모두 조회한다(`params['market']` 으로 좁힌다). 체결별 수수료는
@@ -2427,3 +2490,41 @@ class kis(Exchange, ImplicitAPI):
             'cost': self.safe_string(trade, 'ft_ccld_amt3') if overseas else self.safe_string(trade, 'tot_ccld_amt'),
             'fee': None,
         }, market)
+
+    # 생성자가 붙이는 camelCase 별칭을 타입 검사기에 알린다. 빠지거나 남는 줄은 test_base.py 가 잡는다.
+    if TYPE_CHECKING:
+        setSandboxMode = set_sandbox_mode
+        authManager = auth_manager
+        invalidateToken = invalidate_token
+        getApprovalKey = get_approval_key
+        handleErrors = handle_errors
+        fetchMarkets = fetch_markets
+        parseMarket = parse_market
+        priceToPrecision = price_to_precision
+        fetchTicker = fetch_ticker
+        parseTicker = parse_ticker
+        fetchTickers = fetch_tickers
+        fetchOrderBook = fetch_order_book
+        fetchTrades = fetch_trades
+        fetchOHLCV = fetch_ohlcv
+        fetchTradingFee = fetch_trading_fee
+        fetchVolatilityInterruptions = fetch_volatility_interruptions
+        fetchStockWarnings = fetch_stock_warnings
+        fetchInvestorTrading = fetch_investor_trading
+        fetchRankings = fetch_rankings
+        fetchMarketCalendar = fetch_market_calendar
+        refreshMarketCalendar = refresh_market_calendar
+        fetchBalance = fetch_balance
+        parseBalance = parse_balance
+        createOrder = create_order
+        createTriggerOrder = create_trigger_order
+        cancelOrder = cancel_order
+        editOrder = edit_order
+        cancelAllOrders = cancel_all_orders
+        fetchOpenOrders = fetch_open_orders
+        fetchOrders = fetch_orders
+        fetchCanceledOrders = fetch_canceled_orders
+        fetchOrder = fetch_order
+        fetchMyTrades = fetch_my_trades
+        parseOrder = parse_order
+        parseTrade = parse_trade

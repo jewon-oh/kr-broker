@@ -27,9 +27,6 @@ export { krxSellTaxRate };
 
 // ============ 시장 판정 ============
 
-/** @deprecated `StockMarketGroup` 을 쓴다. 다음 판에서 지운다. */
-export type TossMarketCountry = StockMarketGroup;
-
 /** 종목 심볼(`005930`, `005930/KRW`, `AAPL`)의 시장. 종목코드의 모양만 본다(`isKrxDomesticCode`). */
 export function tossMarketCountry(symbol: string): StockMarketGroup {
     const [code = ''] = symbol.split('/');

@@ -579,9 +579,6 @@ export const KBSEC_CHART_KIND = {
 
 // ============ 심볼 헬퍼 ============
 
-/** @deprecated `StockMarketGroup` 을 쓴다. 다음 판에서 지운다. */
-export type KBSecMarketCountry = StockMarketGroup;
-
 /** 도메인 심볼('005930/KRW' · 'AAPL/USD') → 시장 구분. 국내 종목코드 모양이면 KR, 아니면 US. */
 export function kbsecMarketOf(symbol: string): StockMarketGroup {
     return isKrxDomesticCode(kbsecBaseSymbol(symbol)) ? 'KR' : 'US';
@@ -621,20 +618,3 @@ export function kbsecNum(value: number, decimals = 0): string {
     if (!Number.isFinite(value)) return '0';
     return value.toFixed(decimals);
 }
-
-/** @deprecated `KbsecCredentials` 를 쓴다. 다음 판에서 지운다. */
-export type KBSecCredentials = KbsecCredentials;
-/** @deprecated `KbsecDataHeader` 를 쓴다. 다음 판에서 지운다. */
-export type KBSecDataHeader = KbsecDataHeader;
-/** @deprecated `KbsecRequestEnvelope` 를 쓴다. 다음 판에서 지운다. */
-export type KBSecRequestEnvelope<T = Record<string, unknown>> = KbsecRequestEnvelope<T>;
-/** @deprecated `KbsecResponseEnvelope` 를 쓴다. 다음 판에서 지운다. */
-export type KBSecResponseEnvelope<T = Record<string, unknown>> = KbsecResponseEnvelope<T>;
-/** @deprecated `KbsecCommonOutput` 을 쓴다. 다음 판에서 지운다. */
-export type KBSecCommonOutput = KbsecCommonOutput;
-/** @deprecated `KbsecTokenResponse` 를 쓴다. 다음 판에서 지운다. */
-export type KBSecTokenResponse = KbsecTokenResponse;
-/** @deprecated `KbsecCachedToken` 을 쓴다. 다음 판에서 지운다. */
-export type KBSecCachedToken = KbsecCachedToken;
-/** @deprecated `isKbsecOrderTr` 를 쓴다. 다음 판에서 지운다. */
-export const isKBSecOrderTr = isKbsecOrderTr;

@@ -55,7 +55,7 @@ kis.set_sandbox_mode(True)             # 한국투자증권 모의투자
 
 주문 메서드의 숫자 인자(`amount`, `price`, `trigger_price`)와 `params`의 숫자 값에는 ccxt처럼 `Decimal`도 넘길 수 있습니다. 라이브러리가 입구에서 `float`로 바꾸므로, `float`로 나타낼 수 없는 자릿수는 요청에 실리지 않습니다. 결과의 숫자는 `float`입니다.
 
-통합 메서드의 결과는 ccxt처럼 `dict`입니다. 반환 타입은 `kr_broker.base.types`의 `Order`, `Trade`, `Ticker`, `OrderBook`, `Balances`, `MarketInterface`, `TradingFeeInterface`입니다. ccxt처럼 `TypedDict`로 적었고(`Balances`는 `dict`를 상속한 타입입니다), 필드는 TypeScript 판과 같습니다. pyright(VS Code의 Pylance)는 이 타입으로 필드와 값의 타입을 알려 줍니다. 패키지에 `py.typed`가 없어서 mypy는 이 패키지의 타입을 읽지 않습니다.
+통합 메서드의 결과는 ccxt처럼 `dict`입니다. 반환 타입은 `kr_broker.base.types`의 `Order`, `Trade`, `Ticker`, `OrderBook`, `Balances`, `MarketInterface`, `TradingFeeInterface`입니다. ccxt처럼 `TypedDict`로 적었고(`Balances`는 `dict`를 상속한 타입입니다), 필드는 TypeScript 판과 같습니다. pyright(VS Code의 Pylance)와 mypy는 이 타입으로 필드와 값의 타입을 알려 줍니다(패키지에 `py.typed`가 있습니다). camelCase 이름과 `async with`로 받은 인스턴스도 같은 타입으로 검사합니다.
 
 ### 한국투자증권 통합 메서드
 

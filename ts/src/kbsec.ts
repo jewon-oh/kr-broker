@@ -40,7 +40,7 @@
  * - KB 는 "잘못된 조회의 과도한 반복"을 계정 제한 사유로 든다. 영구 실패(권한 없음 등)한 조회는 이 인스턴스에서 다시 부르지 않는다.
  */
 
-import { candlePeriodUtcMs, isDailyOrLongerTimeframe } from './broker-time';
+import { candlePeriodUtcMs, isDailyOrLongerTimeframe, kstYmd } from './broker-time';
 import { logger } from './logger';
 import type { UsdKrwRateOption } from './options';
 import { masterDataOf } from './stock-master-data';
@@ -75,7 +75,7 @@ import type {
     Balances, Dict, Dictionary, Int, InvestorTradingRecord, KrTimestamped, MarketInterface, Num, OHLCV, Order, OrderBook, OrderSide, OrderType, Str, Ticker, Trade,
     TradingFeeInterface,
 } from './base';
-import { assertSecureUrl, implicitMethodName } from './base/Exchange';
+import { assertSecureUrl, implicitMethodName, kstTradeTimestamps } from './base/Exchange';
 import { KBSEC_API_TREE, type KbsecImplicitApi } from './abstract/kbsec';
 import { confirmExecution, fillDeviationBps, tradeListProbe } from './execution-confirm';
 import { expandBusinessDays, refreshMarketCalendar as refreshSharedMarketCalendar, type CalendarDay } from './market-calendar';
@@ -2665,7 +2665,7 @@ export class kbsec extends Exchange {
     /**
      * 봉. **국내만 지원한다.** 명세(`IVS11560`)의 필드 이름으로 읽으며, 실계좌로 검증한 적은 없다.
      * 해외 차트(`GSC10060`)는 15분 지연 시세다. 지연 봉을 공통 메서드에 섞지 않으려고 해외는 `fetchOverseasCandles`로만 준다.
-     * 시장구분(`mkt_clsf`)은 코스피(`0`)로 보낸다. 코스닥 종목에서 빈 응답이 오면 `params.mkt_clsf` 에 `'1'` 을 넘긴다.
+     * 시장구분(`mkt_clsf`)은 `options.masterData` 로 코스닥 종목임을 알면 `'1'`, 그 밖에는 코스피(`'0'`)로 보낸다. `params.mkt_clsf` 가 있으면 그 값을 쓴다.
      *
      * `since` 가 있으면 `since` 부터 `limit`(기본 100) 개이고, 없으면 가장 최근 `limit` 개다. `params.until`(ms)은 그 시각까지의 봉만 남긴다.
      * 명세의 시작일(`strt_dy`)은 뜻을 확인하지 못해 비워 보낸다. 대신 지금부터 `since`(또는 `until`)까지 덮을 만큼 최근 봉을 받아 거른다.
@@ -2690,7 +2690,7 @@ export class kbsec extends Exchange {
         count = Math.min(count, KBSEC_CHART_MAX);
         const body = await this.callTr(KBSEC_TR.CHART_KR, {
             info_ccd: '1', // 원주가
-            mkt_clsf: '0', // KOSPI. KOSDAQ 종목도 KB 가 종목코드로 해석하는지는 실측이 필요하다.
+            mkt_clsf: getKRXStockByCode(masterDataOf(this.options), market.id as string)?.market === 'KOSDAQ' ? '1' : '0', // 명세: 0 KOSPI, 1 KOSDAQ
             chrt_clsf,
             minute_tck_indx: minute,
             is_cd: market.id,
@@ -2773,11 +2773,12 @@ export class kbsec extends Exchange {
     }
 
     /**
-     * 시간대별 체결 내역. 국내(`IVU10080`, 당일만)와 해외(`GSA10020`)를 종목 국가로 가른다.
+     * 시간대별 체결 내역. 국내(`IVU10080`)와 해외(`GSA10020`)를 종목 국가로 가른다.
      *
      * 국내는 체결가·체결수량·체결시각만 채운다. 방향(매도매수구분, `sell_buy_ccd`)과 체결ID는 코드값 의미를 확정할 근거가
-     * 없어(명세에 설명 없음) 채우지 않는다 — `info`에 원본이 남아 있다. 시각은 조회 시점의 한국 날짜(`todayKst`)와
-     * 체결시각(`ccls_tm`, HHMMSS)을 합쳐 만든다(TR 이름대로 당일 데이터라서 가능한 조합이다).
+     * 없어(명세에 설명 없음) 채우지 않고, `info`에 원본이 남아 있다. 체결 행에는 시각(`ccls_tm`, HHMMSS)만 있어서, 일봉(`fetchOHLCV`)을
+     * 한 번 더 받아 거래량이 있는 가장 최근 영업일을 가장 새 체결의 날짜로 쓴다. 날짜가 바뀐 행부터 비우는 규칙은 한국투자증권과 같다
+     * (`kstTradeTimestamps`). 행이 새 것부터 온다는 순서는 명세에 없고 실계좌로 확인하지 못했다. `since`를 주면 `timestamp`가 빈 행은 빠진다.
      *
      * 해외는 체결구분(`ccls_clsf`, `1`:매수자체결 `2`:매도자체결)이 명세에 명시돼 있어 `side`를 채운다. 시각은 한국시각
      * 변환 필드(`kor_dt`·`kor_tm`)를 그대로 쓴다(국내와 달리 여러 날짜를 한 번에 준다). 거래소코드(`krx_cd`)는 `fetchTicker`가
@@ -2790,9 +2791,11 @@ export class kbsec extends Exchange {
             excg_clsf: '1', is_cd: market.id, ovtm_mkt_clsf: '0', inq_cnt: kbsecNum(limit ?? 30),
             ...params,
         });
-        const today = this.todayKst();
-        const trades = pickArray(body).map((row) => {
-            const timestamp = kbsecCandleTimestamp(today, pickStr(row, 'ccls_tm'));
+        const rows = pickArray(body);
+        if (rows.length === 0) return [];
+        const stamps = kstTradeTimestamps(rows.map((row) => pickStr(row, 'ccls_tm')), await this.lastTradedDate(market), this.milliseconds());
+        const trades = rows.map((row, index) => {
+            const timestamp = stamps[index];
             return this.safeTrade({
                 info: row,
                 id: undefined,
@@ -2810,6 +2813,24 @@ export class kbsec extends Exchange {
             }, market);
         });
         return since !== undefined ? trades.filter((trade) => (trade.timestamp ?? 0) >= since) : trades;
+    }
+
+    /**
+     * 거래량이 있는 가장 최근 영업일(`YYYYMMDD`). 일봉을 받지 못했거나 최근 30개에 그런 날이 없으면 `undefined`다.
+     * 통합차트의 시장구분은 코스피(`0`)가 기본이고, `options.masterData`가 코스닥 종목이라고 알려 주면 코스닥(`1`)으로 조회한다.
+     */
+    private async lastTradedDate(market: MarketInterface): Promise<Str> {
+        const symbol = market.symbol;
+        const kosdaq = getKRXStockByCode(masterDataOf(this.options), market.id as string)?.market === 'KOSDAQ';
+        let candles: OHLCV[];
+        try {
+            candles = await this.fetchOHLCV(symbol, '1d', undefined, 30, kosdaq ? { mkt_clsf: '1' } : {});
+        } catch (err) {
+            logger.warn({ err, symbol }, '[kbsec] fetchTrades 의 날짜를 정할 일봉을 받지 못해 체결 시각을 비운다');
+            return undefined;
+        }
+        const days = candles.filter((candle) => (candle[5] ?? 0) > 0).map((candle) => candle[0] as number);
+        return days.length > 0 ? kstYmd(Math.max(...days)) : undefined;
     }
 
     private async fetchOverseasTradesTimeline(market: MarketInterface, since: Int, limit: Int, params: Dict): Promise<Trade[]> {

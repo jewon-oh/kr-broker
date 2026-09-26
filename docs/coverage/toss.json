@@ -199,7 +199,7 @@
       "suggested": null,
       "proposal": null,
       "verified": "real",
-      "note": "국내 전용이며 미국 종목은 400 unsupported-market입니다. 시장 단위는 `fetchMarketInvestorTrading`입니다. 한국투자증권과 KB증권의 `fetchInvestorTrading`(종목 단위 공통 모양)으로는 아직 옮기지 않았습니다.",
+      "note": "국내 전용이며 미국 종목은 400 unsupported-market입니다. 거래대금 없이 주식 수만 줘서 순매수 대금을 싣는 공통 `fetchInvestorTrading`으로 옮기지 않습니다. 시장 단위 대금은 `fetchMarketInvestorTrading`입니다.",
       "spec": "https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1stocks~1{symbol}~1investor-trading/get"
     },
     {

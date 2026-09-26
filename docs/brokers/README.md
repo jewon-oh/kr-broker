@@ -67,8 +67,8 @@
 | 현재가 `fetchTicker` | ✅ | ✅ | ✅ | `kis` 미국은 `masterData`가 필요합니다.<br>`toss` `last`와 `close`만 채웁니다. |
 | 여러 종목 현재가 `fetchTickers` | ✅ | ✅ | ➖ | `kis` 한 번에 최대 30종목입니다. 국내만 지원하고 NXT 확장세션 시세는 섞지 않습니다.<br>`toss` 종목 지정이 필요합니다. 200건씩 나누어 호출합니다.<br>`kbsec` 여러 종목을 한 번에 조회하는 API가 없습니다. |
 | 호가 `fetchOrderBook` | ⚠️ | ✅ | ✅ | `kis` 국내만 지원합니다. 미국 호가 API는 미구현입니다.<br>`toss` 무효 호가를 거르고 `limit`은 클라이언트에서 자릅니다. |
-| 최근 체결 `fetchTrades` | ❌ | ✅ | ✅ | `kis` 주식현재가 체결 API가 있지만 아직 통합 메서드로 옮기지 않았습니다.<br>`toss` 당일 최근 체결을 최대 50건 받습니다. 방향과 체결 id가 없습니다.<br>`kbsec` 국내는 방향을 채우지 않습니다. 해외는 체결구분으로 방향을 채웁니다. |
-| 캔들 `fetchOHLCV` | ✅ | ⚠️ | ⚠️ | `kis` 야후 파이낸스에서 받습니다. 미국 일봉이 비면 한국투자증권 API로 받습니다.<br>`toss` 1분봉과 일봉만 받습니다. 미국은 확인하지 못했습니다.<br>`kbsec` 국내만 지원합니다. 코스닥은 `params.mkt_clsf`를 지정합니다. 해외 차트는 실계좌에서 15분 지연 시세라 `fetchOverseasCandles`로 따로 줍니다. |
+| 최근 체결 `fetchTrades` | ⚠️ | ✅ | ✅ | `kis` 국내만 지원합니다. 체결에 날짜가 없어 호출마다 일봉을 한 번 더 조회하고, 거래량이 있는 가장 최근 거래일을 날짜로 붙입니다. 날짜가 바뀌는 행부터는 시각을 비웁니다. 방향과 체결 id가 없습니다.<br>`toss` 당일 최근 체결을 최대 50건 받습니다. 방향과 체결 id가 없습니다.<br>`kbsec` 국내는 체결에 날짜가 없어 호출마다 일봉을 한 번 더 조회하고, 거래량이 있는 가장 최근 거래일을 날짜로 붙입니다. 코스닥 종목은 `options.masterData`로 시장을 알아야 일봉을 코스닥으로 조회합니다. 날짜가 바뀌는 행부터는 시각을 비웁니다. 방향은 채우지 않습니다. 해외는 체결구분으로 방향을 채웁니다. |
+| 캔들 `fetchOHLCV` | ✅ | ⚠️ | ⚠️ | `kis` 야후 파이낸스에서 받습니다. 미국 일봉이 비면 한국투자증권 API로 받습니다.<br>`toss` 1분봉과 일봉만 받습니다. 미국은 확인하지 못했습니다.<br>`kbsec` 국내만 지원합니다. 코스닥 종목은 `options.masterData`로 시장을 알면 코스닥으로 조회하고, 모르면 `params.mkt_clsf`에 `'1'`을 줍니다. 해외 차트는 실계좌에서 15분 지연 시세라 `fetchOverseasCandles`로 따로 줍니다. |
 | 종목 목록 `fetchMarkets` | ✅ | ✅ | ❌ | `kis` `masterData`가 필요합니다.<br>`toss` `taker`와 `maker`는 시장별 기본 위탁수수료율입니다.<br>`kbsec` 해외 종목 목록 API(`SIAM4983`)가 있습니다. 국내 종목 목록 API는 확인 불가입니다. |
 | 실시간 시세 `createPriceStream` | ⚠️ | ⚠️ | ➖ | `kis` 미국은 지연 체결만 받습니다.<br>`toss` 체결·호가·본인 주문 이벤트를 모두 지원합니다(`createPriceStream`). 호가 구독 초기 스냅샷은 없어 REST로 먼저 조회해야 합니다.<br>`kbsec` 웹소켓 API가 없습니다. |
 | 실시간(ccxt Pro) | ⚠️ | ⚠️ | ➖ | `kis` 미국은 지연 체결과 1단계 호가만 받습니다. `watchOrders`는 `options.htsId`가 필요합니다. 같은 앱키와 접속키로 다른 연결이 있으면 새 연결이 끊깁니다.<br>`toss` `watchTicker`는 체결 가격만 채웁니다.<br>`kbsec` 웹소켓 API가 없습니다. |
@@ -103,7 +103,7 @@
 | 주문 목록 `fetchOrders` | ✅ | ➖ | ⚠️ | `toss` 주문 목록 API는 상태(OPEN, CLOSED)를 지정해야 합니다.<br>`kbsec` 국내만 지원합니다. `since`는 적용하지 않습니다. |
 | 미체결 `fetchOpenOrders` | ⚠️ | ✅ | ⚠️ | `kis` 미국은 실전만 지원합니다.<br>`toss` 미체결 조건 주문은 100건씩 최대 10쪽(1,000건)까지 받습니다.<br>`kbsec` 국내만 지원합니다. `since`는 적용하지 않습니다. |
 | 종료 주문 `fetchClosedOrders` | 🔁 | ✅ | ⚠️ | `kis` `fetchOrders` 결과에서 체결 완료만 고릅니다.<br>`toss` 전량 체결만 돌려줍니다. 100건씩 최대 10쪽을 받습니다.<br>`kbsec` 국내만 지원합니다. `since`는 적용하지 않습니다. 체결 내역 상세는 `fetchMyTrades`로 봅니다. |
-| 취소 주문 `fetchCanceledOrders` | ❌ | ✅ | ❌ | `kis` `fetchOrders` 결과에서 `status: 'canceled'`만 고르면 됩니다.<br>`toss` `fetchClosedOrders`와 같은 조회에서 취소 주문과 정정으로 대체된 주문을 고릅니다.<br>`kbsec` `fetchOrders` 결과에서 `status: 'canceled'`만 고르면 됩니다(국내만) |
+| 취소 주문 `fetchCanceledOrders` | 🔁 | ✅ | ❌ | `kis` `fetchOrders` 결과에서 취소 주문만 고릅니다. 미국 주문은 취소 표시가 없어 나오지 않습니다.<br>`toss` `fetchClosedOrders`와 같은 조회에서 취소 주문과 정정으로 대체된 주문을 고릅니다.<br>`kbsec` `fetchOrders` 결과에서 `status: 'canceled'`만 고르면 됩니다(국내만) |
 | 체결 내역 `fetchMyTrades` | ✅ | 🔁 | ✅ | `kis` `fee`가 비어 있습니다.<br>`toss` 주문 목록 API로 만듭니다. 주문 하나가 거래 하나이고 수량은 누적 체결 수량이라, 같은 id 는 덮어써야 합니다. |
 
 ### 시장 정보
@@ -113,7 +113,7 @@
 | 휴장일 `fetchMarketCalendar` | ⚠️ | ✅ | ⚠️ | `kis` 국내만, 실전만 지원합니다. `params.market`이 `US`면 `NotSupported`입니다.<br>`toss` 세션 시각 원본은 `fetchMarketSessions`로 받습니다.<br>`kbsec` 국내만 지원합니다. `params.market`이 `US`면 `NotSupported`입니다. |
 | 종목 정보 `fetchStocks` | ✅ | ✅ | ✅ | `kis` 해외 종목은 지원하지 않습니다. `BadSymbol`을 던집니다.<br>`toss` 200종목을 초과해도 나누어 호출하지 않습니다.<br>`kbsec` 국내만 지원합니다. 해외 종목코드로도 조회되는지는 명세에 없어 확인 불가입니다. |
 | 거래정지와 경고 `fetchStockWarnings` | ➖ | ✅ | ➖ | `kis` 토스증권과 같은 유의사항 목록이 없습니다. VI 발동 기록은 `fetchVolatilityInterruptions`로, 정리매매와 단기과열 여부, 시장경고 구분은 `fetchStockStatus`로 받습니다.<br>`kbsec` 토스증권과 같은 유의사항 목록이 없습니다. 종목 하나의 매매제한과 위험등급은 `fetchTradingRestriction`으로 받습니다. |
-| 투자자별 매매동향 `fetchInvestorTrading` | ⚠️ | ❌ | ⚠️ | `kis` 국내만 지원합니다. 개인, 외국인, 기관계의 순매수 대금을 싣고 매수·매도 값은 `info`에 있습니다.<br>`toss` 종목 단위 API는 `fetchStockInvestorTrading`이 원문으로 줍니다. 공통 모양으로는 아직 옮기지 않았습니다. 시장 단위는 `fetchMarketInvestorTrading`입니다.<br>`kbsec` 국내만 지원합니다. 13개 투자자 유형 가운데 개인, 외국인, 기관을 싣고 나머지는 `info`에 있습니다. |
+| 투자자별 매매동향 `fetchInvestorTrading` | ⚠️ | ➖ | ⚠️ | `kis` 국내만 지원합니다. 개인, 외국인, 기관계의 순매수 대금을 싣고 매수·매도 값은 `info`에 있습니다.<br>`toss` 종목 단위 API가 거래대금 없이 주식 수만 줘서 공통 모양(순매수 대금)으로 옮기지 않습니다. 순매수 수량은 `fetchStockInvestorTrading` 원문에 있고, 시장 단위 대금은 `fetchMarketInvestorTrading`으로 받습니다.<br>`kbsec` 국내만 지원합니다. 13개 투자자 유형 가운데 개인, 외국인, 기관을 싣고 나머지는 `info`에 있습니다. |
 | 종목 랭킹 `fetchRankings` | ⚠️ | ✅ | ⚠️ | `kis` 국내와 해외, ELW 순위 46종을 받습니다. 종류마다 공식 엔드포인트가 따로 있습니다.<br>`kbsec` 국내 순위 7종(등락률, 거래량, 프로그램매매, 거래대금, 시가대비 등락률, 시간외 등락률, 급등락)을 받습니다. |
 
 ### 판단 근거
@@ -122,12 +122,14 @@
 
 | 기능 | 증권사 | 값 | 판단 근거 |
 |---|---|---|---|
+| 최근 체결 | `kis` | 부분 | 미국은 해외주식 체결추이 API가 한국 시각(HHMMSS)만 주고 미국 장이 한국 자정을 넘어서 날짜를 정할 수 없어, 요청 없이 `NotSupported`를 던집니다. 이 API는 확장 메서드 `fetchOverseasTradeTicks`로 씁니다. 국내 체결 행이 새 것부터 온다는 순서는 예제와 명세에 적혀 있지 않고, 실계좌로도 확인하지 못했습니다. |
 | 종목 목록 | `kbsec` | 미구현 | `loadMarkets()`가 요청 없이 끝나고 심볼 형식으로 종목을 판별합니다. 해외 종목 목록 API `SIAM4983`을 아직 쓰지 않아 미구현으로 적었습니다. |
 | 지정가와 시장가 | `kis` | 부분 | 알려진 한계에 미국 시장가 주문이 장마감지정가(LOC) 주문으로 나간다고 적혀 있어 지원이 아니라 부분으로 적었습니다. |
 | 소수점 주문 | `kis` | 증권사 없음 | 공식 예제 저장소의 examples_llm 334개에서 소수점 주문을 찾지 못했습니다. 포털 원문은 로그인 없이 읽지 못해 확인 불가입니다. |
 | 금액 기준 매수 | `kis` | 증권사 없음 | 공식 예제 저장소의 examples_llm 334개에서 금액으로 주문하는 API를 찾지 못했습니다. 포털 원문은 로그인 없이 읽지 못해 확인 불가입니다. |
 | 금액 기준 매수 | `kbsec` | 부분 | 소수점매도/매수주문(SKAM2201)을 금액 기준(amt_q_clsf='0')으로 부릅니다. 이 TR의 주문유형코드는 SKAM2101과 다른 코드표를 써서 유사시장가(E)만 씁니다. 수량 기준·매도는 아직 안 씁니다. |
 | 주문 목록 | `toss` | 증권사 없음 | 주문 목록 API `GET /orders`는 `status`가 필수입니다. 상태를 나누지 않는 전체 목록 API가 없다고 판단해 증권사 없음으로 적었습니다. 라이브러리는 `fetchOpenOrders`와 `fetchClosedOrders`로 나눠 제공합니다. |
+| 취소 주문 | `kis` | 대체 | 국내는 취소 여부(`cncl_yn`)가 `Y`인 주문만 취소로 봅니다. 일부 체결 뒤 취소한 주문도 여기에 듭니다. 미국 주문체결내역에는 취소 표시가 없어 상태가 비어 있습니다. 그래서 빈 결과가 미국 주문에 취소가 없다는 뜻은 아닙니다. |
 
 ## 공식 API 커버리지
 
@@ -135,7 +137,7 @@
 
 | 구분 | 공식 API 수 | 통합 | 확장 | 암묵과 내부 | 미구현 | 통합과 확장 기준 | 암묵과 내부 포함 기준 |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| [`kis`](kis.md) | 334 | 18 | 314 | 0 | 2 | 99.4% (332/334) | 99.4% (332/334) |
+| [`kis`](kis.md) | 334 | 19 | 313 | 0 | 2 | 99.4% (332/334) | 99.4% (332/334) |
 | [`toss`](toss.md) | 39 | 18 | 18 | 3 | 0 | 92.3% (36/39) | 100.0% (39/39) |
 | [`kbsec`](kbsec.md) | 93 | 21 | 61 | 1 | 10 | 88.2% (82/93) | 89.2% (83/93) |
 

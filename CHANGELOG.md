@@ -28,6 +28,14 @@
   - `kr-broker/kbsec/kbsec-types`의 `kbsecIsAlgoOrderType`. 대신할 이름은 없습니다.
   - `kr-broker/kbsec/kbsec-types`의 `KBSEC_OVERSEAS_EXCHANGE`. 미국 거래소 코드는 `KBSEC_US_EXCHANGES`에 있습니다.
   - `kr-broker/kis/kis-types`의 `KIS_DEFAULT_FEE_RATE`. `KIS_BROKERAGE_FEE`를 쓰고, 매도라면 `krxSellTaxRate()`를 더합니다. Python 판은 0.5.0에서 지웠습니다.
+- 0.5.0에서 `@deprecated` 별칭으로 남긴 옛 이름을 지웠습니다. 아래의 새 이름으로 바꿉니다. 한국투자증권과 KB증권의 새 이름은 옛 이름과 같은 경로에 있습니다. Python 판 이름(`KISAuth`, `KISCandleService` 등)은 그대로입니다.
+  - 한국투자증권: `KISAuth` → `KisAuth`, `KISCandleService` → `KisCandleService`, `KISCredentials` → `KisCredentials`, `KISCachedToken` → `KisCachedToken`, `KISDailyCandle` → `KisDailyCandle`, `KISOverseasDailyCandle` → `KisOverseasDailyCandle`, `KISApprovalResponse` → `KisApprovalResponse`
+  - KB증권: `KBSecAuth` → `KbsecAuth`, `KBSecErrorMapping` → `KbsecErrorMapping`, `KBSecCredentials` → `KbsecCredentials`, `KBSecDataHeader` → `KbsecDataHeader`, `KBSecRequestEnvelope` → `KbsecRequestEnvelope`, `KBSecResponseEnvelope` → `KbsecResponseEnvelope`, `KBSecCommonOutput` → `KbsecCommonOutput`, `KBSecTokenResponse` → `KbsecTokenResponse`, `KBSecCachedToken` → `KbsecCachedToken`, `KBSecResponseHeader` → `KbsecResponseHeader`, `isKBSecOrderTr` → `isKbsecOrderTr`, `isKBSecTokenFailure` → `isKbsecTokenFailure`, `isKBSecBusinessError` → `isKbsecBusinessError`
+  - `'KR' | 'US'` 타입: `TossMarketCountry`(`kr-broker/toss/toss-types`), `KBSecMarketCountry`(`kr-broker/kbsec/kbsec-types`), `CalendarMarket`(`kr-broker/market-calendar`와 진입점) → `StockMarketGroup`(`kr-broker/broker-market-group`와 진입점)
+- 토큰 저장소(`options.tokenStore`)에서 옛 키(자격증명 앞 12자)를 더 읽거나 쓰지 않고, 발급 락도 새 키로 잡습니다. 0.5.0에서 옛 판과 함께 돌리려고 남긴 이행 단계를 걷어냈습니다. Python 판도 같습니다.
+  - 0.5.0 전 판에서 곧바로 올리면 저장소의 토큰을 찾지 못해 한 번 새로 발급합니다. 그 판의 프로세스가 같은 저장소를 쓰는 동안에는 두 판이 서로의 토큰을 보지 못합니다. 토스증권은 새로 발급하면 직전 토큰이 무효가 되므로 401이 되풀이됩니다. 0.5.0으로 먼저 올리고, 옛 판이 발급한 토큰이 만료된 뒤(토큰 수명은 하루 안팎) 이번 판으로 올립니다.
+  - 0.5.0과 이번 판이 함께 도는 동안에는 두 판의 발급 락이 다릅니다. 두 판이 같은 때 토큰을 새로 받으려 하면 서로의 락을 보지 못해 둘 다 발급합니다.
+  - 옛 키는 저장할 때 준 TTL이 지나면 사라집니다. TTL을 지키지 않는 저장소라면 `kis:token:`, `kis:approval:`, `toss:token:`, `kbsec:token:` 뒤에 자격증명 앞 12자가 붙은 키를 지웁니다.
 - 한국투자증권과 KB증권 `fetchOHLCV`의 기본 `timeframe`을 ccxt와 같은 1분봉(`'1m'`)으로 바꿉니다. 예전에는 일봉(`'1d'`)이었습니다. `timeframe`을 빼고 일봉을 받던 코드는 `'1d'`를 직접 줍니다. 토스증권은 이미 1분봉이었습니다. `limit`을 주지 않으면 세 증권사 모두 예전처럼 최대 100개입니다. Python 판도 같고, 토스증권 `fetch_ohlcv`는 `timeframe`에 `None`을 주면 `NotSupported` 대신 1분봉을 받습니다.
 - `has`에 올린 확장 메서드를 ccxt의 `has`처럼 세 증권사에서 같은 인자로 부르고 같은 모양을 받도록 맞춥니다. 옛 이름과 옛 호출 모양은 한 판 동안 인스턴스마다 한 번 경고 로그를 남기고 동작합니다. 다음 판에서 지웁니다. Python 판(한국투자증권, 토스증권)도 같습니다.
   - `fetchMarketCalendar(params)`는 세 증권사 모두 날짜별 개장 여부(`CalendarDay[]`)를 돌려줍니다. 시장은 `params.market`(기본 `'KR'`)으로 고릅니다. 한국투자증권과 KB증권은 `'US'`를 받으면 요청 없이 `NotSupported`를 던집니다. 토스증권은 예전에 세션 시각 원본을 돌려줬고, 이제 그 결과는 `fetchMarketSessions(market)`로 받습니다. 시장 문자열을 넘기던 옛 호출(`fetchMarketCalendar('KR')`)은 예전처럼 세션 시각 원본을 돌려줍니다. 휴장일 표를 채우려고 부르던 코드는 `fetchMarketCalendar({ market })`로 바꿉니다.
@@ -46,6 +54,9 @@
 - `kr-broker/krx-tick-size`(Python 판 `kr_broker.krx_tick_size`)에 KRX 주식 호가 단위 표(`KRX_STOCK_TICK_SIZES`)와 `getKrxTickSize`, `krxTickViolation`을 둡니다.
 - `kr-broker/broker-time`에 한국 표준시 오프셋 `KST_OFFSET_MS`와 한국 날짜 `kstYmd`(`YYYYMMDD`), 한국 시각 `kstHms`(`HHMMSS`)를 둡니다. 세 증권사가 이 정의를 함께 씁니다. Python 판은 `kr_broker.broker_time`의 `KST_OFFSET_MS`와 `kst_ymd`입니다.
 - 오류에 `brokerCode`(Python 판 `broker_code`)를 더합니다. 증권사가 응답에 실어 보낸 원래 오류 코드입니다. 한국투자증권은 `msg_cd`, 토스증권은 오류 코드, KB증권은 `processCode`이고, 코드 표에 없는 코드도 싣습니다. 라이브러리가 요청 전에 막은 오류에는 없습니다. KB증권은 토큰 발급이 업무 코드로 거절된 오류에도 싣습니다. `detail` 값은 그대로이고, 뜻은 라이브러리가 가른 원인 이름으로 정합니다. KB증권의 원래 코드를 오류 메시지에서 꺼내던 코드는 `brokerCode`를 읽습니다.
+- Python 판에 `py.typed`를 싣습니다. 이제 mypy도 이 패키지의 타입을 읽으므로, 통합 메서드의 결과를 반환 타입과 다르게 쓰던 코드는 mypy에서도 오류로 잡힙니다. camelCase 이름(`fetchBalance` 등)을 타입 검사기가 알 수 있게 선언했습니다. `async with`로 받은 인스턴스는 기반 `Exchange`가 아니라 증권사 클래스로 보입니다. 예전에는 pyright(VS Code의 Pylance)가 이 두 경우를 오류로 표시했습니다.
+- 한국투자증권에 `fetchTrades`를 더합니다. 주식현재가 체결(`inquire-ccnl`)의 최근 30건을 오래된 것부터 돌려주고, 국내만 지원합니다. 미국 종목은 요청 없이 `NotSupported`를 던집니다. 체결 행에 날짜가 없어 호출마다 일자별 시세(`inquire-daily-price`)를 한 번 더 조회하고, 거래량이 있는 가장 최근 거래일을 가장 새 체결의 날짜로 붙입니다. 앞 행보다 시각이 늦은 행이 나오면 날짜가 바뀐 것이므로 그 행부터는 `timestamp`를 비웁니다. 일자별 시세를 받지 못했거나, 거래량이 있는 날이 없거나, 가장 새 체결이 지금보다 1분 넘게 늦으면 모든 행의 `timestamp`를 비우고, 던지지는 않습니다. 방향과 체결 id는 응답에 없어 비웁니다. Python 판도 같습니다.
+- 한국투자증권에 `fetchCanceledOrders`를 더합니다. `fetchOrders` 결과에서 `status`가 `canceled`인 주문만 고르고, `limit`은 고른 뒤에 적용합니다. 국내는 취소 여부(`cncl_yn`)가 `Y`인 주문이 나오며, 일부 체결 뒤 취소한 주문도 들어갑니다. 미국 주문은 취소 표시가 없어 나오지 않습니다. Python 판도 같습니다.
 
 ### 바뀜
 
@@ -77,6 +88,8 @@
 - 범위를 넘는 시각(`240000`)을 그날 0시나 다음 날로 읽던 봉 경로를 더 고쳤습니다. KB증권 국내 `fetchOHLCV`와 해외 `fetchOverseasCandles`는 이런 행을 건너뜁니다. `fetchOverseasCandles`는 날짜를 읽을 수 없는 행도 건너뜁니다. 예전에는 `timestamp`를 비운 채 남겼습니다. 한국투자증권 `fetchIndexOHLCV`의 분봉과 `fetchMinuteOHLCVAt`, `fetchOverseasMinuteOHLCV`도 건너뜁니다. 한국투자증권 `fetchExpectedPriceTrend`의 추이와 KB증권 `fetchTrades`의 체결은 행을 남기고 `timestamp`를 비웁니다.
 - 한국투자증권의 장 시간 게이트와 토스증권의 정적 시간표 폴백이 벽시계 대신 인스턴스 시계(`milliseconds()`)로 시각을 판정합니다.
 - KB증권 `fetchBalance`는 미국 보유가 0건인 계좌에서도 미국 시장을 읽은 것으로 봅니다. 예전에는 프로세스가 시작된 뒤 보유 행을 한 번도 받지 못하면 조회가 성공해도 `info.readStatus`가 `PARTIAL`이었습니다. `unreadMarkets`에도 `US`가 남았습니다. 이제는 응답에 예수금 그리드가 있거나 종목 그리드에 빈 행만 있어도 읽은 것으로 봅니다. 대신 응답에 알아보지 못한 배열이 있거나, 종목코드는 있는데 수량을 읽지 못한 행이 있으면 `US`를 못 읽은 시장으로 둡니다. 이전 조회에서 보유를 읽은 인스턴스도 마찬가지입니다. 예전에는 보유를 읽은 뒤에 이런 응답을 받으면 읽지 못한 종목을 뺀 잔고를 `COMPLETE`로 돌려줬습니다. 그래서 증권사가 명세에 없는 배열을 보내면 보유를 읽었어도 `PARTIAL`입니다. 그 배열의 필드 이름은 경고 로그에 남깁니다. 달러 예수금 행을 찾지 못하면 받은 통화구분명을 경고 로그에 남깁니다. 예수금 그리드는 예수금(`tfnd`) 필드가 있는 배열만 고릅니다. 명세상 종목 그리드에도 통화구분명이 있어서, 예전에는 예수금 그리드 없이 종목 그리드만 오면 그 행을 예수금으로 읽어 `USD`를 0으로 실을 수 있었습니다. 이제는 `USD`를 비웁니다.
+- KB증권 국내 `fetchTrades`가 체결 시각에 조회한 날의 한국 날짜를 붙이지 않습니다. 장 밖에 직전 영업일의 체결이 오면 틀린 날짜가 붙었고, 지금보다 늦은 시각이 나오기도 했습니다. 이제 한국투자증권처럼 호출마다 일봉(`IVS11560`)을 한 번 더 조회하고, 거래량이 있는 가장 최근 거래일을 가장 새 체결의 날짜로 붙입니다. 일봉은 코스피 시장구분으로 조회하고, `options.masterData`가 코스닥 종목이라고 알려 주면 코스닥 시장구분으로 조회합니다. 앞 행보다 시각이 늦은 행이 나오면 날짜가 바뀐 것이므로 그 행부터는 `timestamp`를 비웁니다. 일봉을 받지 못했거나, 최근 일봉 30개에 거래량이 있는 날이 없거나, 가장 새 체결이 지금보다 1분 넘게 늦으면 모든 행의 `timestamp`를 비웁니다. 이때 던지지는 않습니다.
+- KB증권 국내 `fetchOHLCV`는 `options.masterData`로 코스닥 종목임을 알면 시장구분(`mkt_clsf`)을 코스닥(`'1'`)으로 보냅니다. 예전에는 `params.mkt_clsf`를 주지 않으면 코스닥 종목도 코스피(`'0'`) 시장구분으로 조회했습니다. `params.mkt_clsf`를 주면 예전처럼 그 값을 씁니다.
 
 ## [0.5.0] - 2026-09-25
 

@@ -361,8 +361,3 @@ export class KisCandleService {
         return `${y}${m}${d}`;
     }
 }
-
-/** @deprecated `KisCandleService` 를 쓴다. 다음 판에서 지운다. */
-export const KISCandleService = KisCandleService;
-/** @deprecated `KisCandleService` 를 쓴다. 다음 판에서 지운다. */
-export type KISCandleService = KisCandleService;

@@ -13,7 +13,7 @@
 import { refreshTokenWithLock } from '../token-refresh-lock';
 import { logger } from '../logger';
 import type { BrokerTokenStore } from '../options';
-import { legacyTokenStoreKey, tokenStoreKey, withLegacyTokenKeys } from '../token-store-key';
+import { tokenStoreKey } from '../token-store-key';
 import {
     KIS_TOKEN_EXPIRY_MS,
     KIS_TOKEN_SAFETY_MARGIN_MS,
@@ -65,12 +65,12 @@ export class KisAuth {
     /**
      * @param appKey 저장소 키를 만드는 데 쓴다.
      * @param source 발급 요청을 보내는 쪽.
-     * @param rawStoreOf 지금 쓸 토큰 저장소를 돌려주는 함수. 저장소가 없으면 `null` 이고, 그러면 프로세스 메모리 캐시만 쓴다.
+     * @param storeOf 지금 쓸 토큰 저장소를 돌려주는 함수. 저장소가 없으면 `null` 이고, 그러면 프로세스 메모리 캐시만 쓴다.
      */
     constructor(
         private readonly appKey: string,
         private readonly source: KisTokenSource,
-        private readonly rawStoreOf: () => BrokerTokenStore | null = () => null,
+        private readonly storeOf: () => BrokerTokenStore | null = () => null,
     ) {}
 
     private get storeKey(): string {
@@ -79,15 +79,6 @@ export class KisAuth {
 
     private get approvalStoreKey(): string {
         return tokenStoreKey(KIS_APPROVAL_KEY_PREFIX, this.appKey);
-    }
-
-    /** 저장소. 옛 키 형식(앱키 앞 12자)을 쓰는 판과 함께 도는 동안 두 키를 함께 읽고 쓴다. */
-    private storeOf(): BrokerTokenStore | null {
-        const store = this.rawStoreOf();
-        return store === null ? null : withLegacyTokenKeys(store, {
-            [this.storeKey]: legacyTokenStoreKey(KIS_TOKEN_KEY_PREFIX, this.appKey),
-            [this.approvalStoreKey]: legacyTokenStoreKey(KIS_APPROVAL_KEY_PREFIX, this.appKey),
-        });
     }
 
     /**
@@ -231,8 +222,3 @@ export class KisAuth {
         logger.info('[KISAuth] 토큰 캐시 초기화');
     }
 }
-
-/** @deprecated `KisAuth` 를 쓴다. 다음 판에서 지운다. */
-export const KISAuth = KisAuth;
-/** @deprecated `KisAuth` 를 쓴다. 다음 판에서 지운다. */
-export type KISAuth = KisAuth;

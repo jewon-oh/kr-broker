@@ -265,14 +265,3 @@ export const KIS_WS_FIELD = {
 export interface KisApprovalResponse {
     approval_key: string;
 }
-
-/** @deprecated `KisCredentials` 를 쓴다. 다음 판에서 지운다. */
-export type KISCredentials = KisCredentials;
-/** @deprecated `KisCachedToken` 을 쓴다. 다음 판에서 지운다. */
-export type KISCachedToken = KisCachedToken;
-/** @deprecated `KisDailyCandle` 을 쓴다. 다음 판에서 지운다. */
-export type KISDailyCandle = KisDailyCandle;
-/** @deprecated `KisOverseasDailyCandle` 을 쓴다. 다음 판에서 지운다. */
-export type KISOverseasDailyCandle = KisOverseasDailyCandle;
-/** @deprecated `KisApprovalResponse` 를 쓴다. 다음 판에서 지운다. */
-export type KISApprovalResponse = KisApprovalResponse;

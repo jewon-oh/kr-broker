@@ -20,7 +20,7 @@
 돌려준다. 같은 앱키와 접속키로 다른 프로그램이 이미 연결돼 있으면 KIS 가 이 연결을 곧바로 끊는다(2026-09-24 실측).
 """
 
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set
 
 import kr_broker.async_support
 from kr_broker.async_support.base.ws.client import session_connector
@@ -321,3 +321,12 @@ class kis(kr_broker.async_support.kis):
         if not hts_id:
             raise ArgumentsRequired(f'{self.id} {method}() 는 options.htsId(HTS 사용자 ID)가 필요하다')
         return hts_id
+
+    # 생성자가 붙이는 camelCase 별칭을 타입 검사기에 알린다. 빠지거나 남는 줄은 test_base.py 가 잡는다.
+    if TYPE_CHECKING:
+        createPriceStream = create_price_stream
+        createRealtimeStream = create_realtime_stream
+        watchTicker = watch_ticker
+        watchTrades = watch_trades
+        watchOrderBook = watch_order_book
+        watchOrders = watch_orders

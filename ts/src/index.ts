@@ -22,7 +22,7 @@ import { toss } from './toss';
 export * from './base';
 export { kis, kbsec, toss };
 export { isMarketClosedDay, marketCalendarStatus, marketDayStatus } from './market-calendar';
-export type { CalendarDay, CalendarDayStatus, CalendarMarket, MarketCalendarStatus } from './market-calendar';
+export type { CalendarDay, CalendarDayStatus, MarketCalendarStatus } from './market-calendar';
 export type { StockMarketGroup } from './broker-market-group';
 export { setLogger, noopLogger } from './logger';
 export type { BrokerLogger, BrokerLogFn, BrokerLogContext } from './logger';

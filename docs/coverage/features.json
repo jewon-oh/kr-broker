@@ -119,8 +119,13 @@
       ],
       "cells": {
         "kis": {
-          "status": "미구현",
-          "constraint": "주식현재가 체결 API가 있지만 아직 통합 메서드로 옮기지 않았습니다"
+          "status": "부분",
+          "constraint": "국내만 지원합니다. 체결에 날짜가 없어 호출마다 일봉을 한 번 더 조회하고, 거래량이 있는 가장 최근 거래일을 날짜로 붙입니다. 날짜가 바뀌는 행부터는 시각을 비웁니다. 방향과 체결 id가 없습니다",
+          "note": "미국은 해외주식 체결추이 API가 한국 시각(HHMMSS)만 주고 미국 장이 한국 자정을 넘어서 날짜를 정할 수 없어, 요청 없이 `NotSupported`를 던집니다. 이 API는 확장 메서드 `fetchOverseasTradeTicks`로 씁니다. 국내 체결 행이 새 것부터 온다는 순서는 예제와 명세에 적혀 있지 않고, 실계좌로도 확인하지 못했습니다.",
+          "apis": [
+            "examples_llm/domestic_stock/inquire_ccnl",
+            "examples_llm/domestic_stock/inquire_daily_price"
+          ]
         },
         "toss": {
           "status": "지원",
@@ -131,9 +136,10 @@
         },
         "kbsec": {
           "status": "지원",
-          "constraint": "국내는 방향을 채우지 않습니다. 해외는 체결구분으로 방향을 채웁니다",
+          "constraint": "국내는 체결에 날짜가 없어 호출마다 일봉을 한 번 더 조회하고, 거래량이 있는 가장 최근 거래일을 날짜로 붙입니다. 코스닥 종목은 `options.masterData`로 시장을 알아야 일봉을 코스닥으로 조회합니다. 날짜가 바뀌는 행부터는 시각을 비웁니다. 방향은 채우지 않습니다. 해외는 체결구분으로 방향을 채웁니다",
           "apis": [
             "IVU10080",
+            "IVS11560",
             "GSA10020"
           ]
         }
@@ -166,7 +172,7 @@
         },
         "kbsec": {
           "status": "부분",
-          "constraint": "국내만 지원합니다. 코스닥은 `params.mkt_clsf`를 지정합니다. 해외 차트는 실계좌에서 15분 지연 시세라 `fetchOverseasCandles`로 따로 줍니다",
+          "constraint": "국내만 지원합니다. 코스닥 종목은 `options.masterData`로 시장을 알면 코스닥으로 조회하고, 모르면 `params.mkt_clsf`에 `'1'`을 줍니다. 해외 차트는 실계좌에서 15분 지연 시세라 `fetchOverseasCandles`로 따로 줍니다",
           "apis": [
             "IVS11560"
           ]
@@ -857,8 +863,9 @@
       ],
       "cells": {
         "kis": {
-          "status": "미구현",
-          "constraint": "`fetchOrders` 결과에서 `status: 'canceled'`만 고르면 됩니다",
+          "status": "대체",
+          "constraint": "`fetchOrders` 결과에서 취소 주문만 고릅니다. 미국 주문은 취소 표시가 없어 나오지 않습니다",
+          "note": "국내는 취소 여부(`cncl_yn`)가 `Y`인 주문만 취소로 봅니다. 일부 체결 뒤 취소한 주문도 여기에 듭니다. 미국 주문체결내역에는 취소 표시가 없어 상태가 비어 있습니다. 그래서 빈 결과가 미국 주문에 취소가 없다는 뜻은 아닙니다.",
           "apis": [
             "examples_llm/domestic_stock/inquire_daily_ccld",
             "examples_llm/overseas_stock/inquire_ccnl"
@@ -1024,11 +1031,8 @@
           ]
         },
         "toss": {
-          "status": "미구현",
-          "constraint": "종목 단위 API는 `fetchStockInvestorTrading`이 원문으로 줍니다. 공통 모양으로는 아직 옮기지 않았습니다. 시장 단위는 `fetchMarketInvestorTrading`입니다",
-          "apis": [
-            "GET /stocks/{symbol}/investor-trading"
-          ]
+          "status": "증권사 없음",
+          "constraint": "종목 단위 API가 거래대금 없이 주식 수만 줘서 공통 모양(순매수 대금)으로 옮기지 않습니다. 순매수 수량은 `fetchStockInvestorTrading` 원문에 있고, 시장 단위 대금은 `fetchMarketInvestorTrading`으로 받습니다"
         },
         "kbsec": {
           "status": "부분",

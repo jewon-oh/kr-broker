@@ -28,7 +28,7 @@ import time
 import types
 import urllib.parse
 from collections.abc import Mapping
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, cast
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple, cast
 
 import requests
 
@@ -1568,4 +1568,144 @@ class Exchange:
         if self.session is not None and self.own_session:
             self.session.close()
             self.session = None
+
+    # 생성자가 붙이는 camelCase 별칭을 타입 검사기에 알린다. 빠지거나 남는 줄은 test_base.py 가 잡는다.
+    if TYPE_CHECKING:
+        safeValue = safe_value
+        safeValue2 = safe_value_2
+        safeValueN = safe_value_n
+        safeString = safe_string
+        safeString2 = safe_string_2
+        safeStringN = safe_string_n
+        safeStringLower = safe_string_lower
+        safeStringUpper = safe_string_upper
+        safeFloat = safe_float
+        safeFloat2 = safe_float_2
+        safeInteger = safe_integer
+        safeInteger2 = safe_integer_2
+        safeIntegerN = safe_integer_n
+        safeIntegerProduct = safe_integer_product
+        safeTimestamp = safe_timestamp
+        safeTimestamp2 = safe_timestamp_2
+        safeNumber = safe_number
+        safeNumber2 = safe_number_2
+        safeNumberN = safe_number_n
+        safeBool = safe_bool
+        safeBool2 = safe_bool_2
+        safeDict = safe_dict
+        safeDict2 = safe_dict_2
+        safeList = safe_list
+        safeList2 = safe_list_2
+        parseNumber = parse_number
+        numberToString = number_to_string
+        omitZero = omit_zero
+        precisionFromString = precision_from_string
+        parseTimeframe = parse_timeframe
+        deepExtend = deep_extend
+        toArray = to_array
+        indexBy = index_by
+        groupBy = group_by
+        filterBy = filter_by
+        sortBy = sort_by
+        sortBy2 = sort_by_2
+        isEmpty = is_empty
+        extractParams = extract_params
+        implodeParams = implode_params
+        getDefaultOptions = get_default_options
+        afterConstruct = after_construct
+        isPrivateApi = is_private_api
+        isOutcomeUnknown = is_outcome_unknown
+        httpStatusError = http_status_error
+        checkOrderResponse = check_order_response
+        prepareRequestHeaders = prepare_request_headers
+        httpRequest = http_request
+        handleRestResponse = handle_rest_response
+        handleErrors = handle_errors
+        handleHttpStatusCode = handle_http_status_code
+        parseJson = parse_json
+        getResponseHeaders = get_response_headers
+        throwExactlyMatchedException = throw_exactly_matched_exception
+        throwBroadlyMatchedException = throw_broadly_matched_exception
+        findBroadlyMatchedKey = find_broadly_matched_key
+        calculateRateLimiterCost = calculate_rate_limiter_cost
+        initRestRateLimiter = init_rest_rate_limiter
+        checkRequiredCredentials = check_required_credentials
+        setSandboxMode = set_sandbox_mode
+        handleOptionAndParams = handle_option_and_params
+        getTokenStore = get_token_store
+        isOptionEnabled = is_option_enabled
+        getConfirmBudget = get_confirm_budget
+        loadMarkets = load_markets
+        fetchMarkets = fetch_markets
+        fetchCurrencies = fetch_currencies
+        parseMarket = parse_market
+        parseMarkets = parse_markets
+        setMarkets = set_markets
+        safeMarketStructure = safe_market_structure
+        marketId = market_id
+        marketSymbols = market_symbols
+        safeMarket = safe_market
+        safeSymbol = safe_symbol
+        commonCurrencyCode = common_currency_code
+        commonStockCode = common_stock_code
+        stockTicker = stock_ticker
+        safeCurrency = safe_currency
+        safeCurrencyCode = safe_currency_code
+        isTickPrecision = is_tick_precision
+        priceToPrecision = price_to_precision
+        amountToPrecision = amount_to_precision
+        costToPrecision = cost_to_precision
+        safeTicker = safe_ticker
+        safeTrade = safe_trade
+        safeOrder = safe_order
+        safeBalance = safe_balance
+        safeOrderBook = safe_order_book
+        parseOrderBook = parse_order_book
+        parseBidsAsks = parse_bids_asks
+        reduceFeesByCurrency = reduce_fees_by_currency
+        parsedFeeAndFees = parsed_fee_and_fees
+        parseFeeNumeric = parse_fee_numeric
+        parseTicker = parse_ticker
+        parseTickers = parse_tickers
+        parseTrade = parse_trade
+        parseTrades = parse_trades
+        parseOrder = parse_order
+        parseOrders = parse_orders
+        parseOHLCV = parse_ohlcv
+        parseOhlcvs = parse_ohlcvs
+        parseBalance = parse_balance
+        handleUntilParam = handle_until_param
+        limitRows = limit_rows
+        msStamp = ms_stamp
+        kstStamp = kst_stamp
+        filterByLimit = filter_by_limit
+        filterBySinceLimit = filter_by_since_limit
+        filterByValueSinceLimit = filter_by_value_since_limit
+        filterBySymbolSinceLimit = filter_by_symbol_since_limit
+        filterByArrayTickers = filter_by_array_tickers
+        checkOrderArguments = check_order_arguments
+        fetchTime = fetch_time
+        fetchStatus = fetch_status
+        fetchTicker = fetch_ticker
+        fetchTickers = fetch_tickers
+        fetchOrderBook = fetch_order_book
+        fetchOHLCV = fetch_ohlcv
+        fetchBalance = fetch_balance
+        createOrder = create_order
+        createTriggerOrder = create_trigger_order
+        editOrder = edit_order
+        createLimitOrder = create_limit_order
+        createMarketOrder = create_market_order
+        createLimitBuyOrder = create_limit_buy_order
+        createLimitSellOrder = create_limit_sell_order
+        createMarketBuyOrder = create_market_buy_order
+        createMarketSellOrder = create_market_sell_order
+        cancelOrder = cancel_order
+        cancelAllOrders = cancel_all_orders
+        fetchOrder = fetch_order
+        fetchOrders = fetch_orders
+        fetchOpenOrders = fetch_open_orders
+        fetchClosedOrders = fetch_closed_orders
+        fetchMyTrades = fetch_my_trades
+        fetchTradingFee = fetch_trading_fee
 

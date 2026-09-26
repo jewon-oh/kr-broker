@@ -37,9 +37,6 @@ import {
     warnedUnknownDays,
 } from './market-calendar-state';
 
-/** @deprecated `StockMarketGroup` 을 쓴다. 다음 판에서 지운다. */
-export type CalendarMarket = StockMarketGroup;
-
 /** 시장 현지 달력 날짜(국내는 KST, 미국은 ET)의 개장 여부. `date` 는 `YYYYMMDD`. */
 export interface CalendarDay {
     date: string;

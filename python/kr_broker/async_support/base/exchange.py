@@ -11,7 +11,7 @@ HTTP 는 aiohttp 로 보낸다. 세션은 처음 요청할 때 열리고, 다 �
 
 import asyncio
 import logging
-from typing import Any, Callable, Dict, List, Optional, Set, cast
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, TypeVar, cast
 
 import aiohttp
 
@@ -30,6 +30,9 @@ logger = logging.getLogger('kr_broker')
 
 # `close()` 가 `spawn` 으로 띄운 작업(토큰 저장소 정리 등)을 기다리는 상한(초). 저장소가 응답하지 않아도 세션은 닫힌다.
 CLOSE_WAIT_SECONDS = 5.0
+
+# `async with` 로 받은 값이 증권사 클래스로 보이게 한다. `typing.Self` 는 3.11 부터 있다.
+T = TypeVar('T', bound='Exchange')
 
 
 class HttpResponse:
@@ -96,7 +99,7 @@ class Exchange(BaseExchange):
             self.session = None
             self._session_loop = None
 
-    async def __aenter__(self) -> 'Exchange':
+    async def __aenter__(self: T) -> T:
         self.open()
         return self
 
@@ -357,3 +360,35 @@ class Exchange(BaseExchange):
 
     async def fetch_trading_fee(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> TradingFeeInterface:  # type: ignore[override]
         raise NotSupported(f'{self.id} fetch_trading_fee() is not supported yet')
+
+    # 생성자가 붙이는 camelCase 별칭을 타입 검사기에 알린다. 빠지거나 남는 줄은 test_base.py 가 잡는다.
+    if TYPE_CHECKING:
+        httpRequest = http_request
+        isOptionEnabled = is_option_enabled
+        loadMarkets = load_markets
+        fetchMarkets = fetch_markets
+        fetchCurrencies = fetch_currencies
+        fetchTime = fetch_time
+        fetchStatus = fetch_status
+        fetchTicker = fetch_ticker
+        fetchTickers = fetch_tickers
+        fetchOrderBook = fetch_order_book
+        fetchOHLCV = fetch_ohlcv
+        fetchBalance = fetch_balance
+        createOrder = create_order
+        createTriggerOrder = create_trigger_order
+        editOrder = edit_order
+        createLimitOrder = create_limit_order
+        createMarketOrder = create_market_order
+        createLimitBuyOrder = create_limit_buy_order
+        createLimitSellOrder = create_limit_sell_order
+        createMarketBuyOrder = create_market_buy_order
+        createMarketSellOrder = create_market_sell_order
+        cancelOrder = cancel_order
+        cancelAllOrders = cancel_all_orders
+        fetchOrder = fetch_order
+        fetchOrders = fetch_orders
+        fetchOpenOrders = fetch_open_orders
+        fetchClosedOrders = fetch_closed_orders
+        fetchMyTrades = fetch_my_trades
+        fetchTradingFee = fetch_trading_fee

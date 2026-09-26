@@ -142,6 +142,28 @@ export function strictKstTimestampOf(ymd: Str, hms: Str = undefined): number | u
     return kstTimestampOf(ymd, hms);
 }
 
+/** 최근 체결의 시각이 지금보다 늦어도 받아들이는 폭. 증권사 서버와 이 컴퓨터의 시계 차이다. */
+const TRADE_CLOCK_SKEW_MS = 60_000;
+
+/**
+ * 날짜 없이 시각(`HHMMSS`)만 오는 최근 체결 행의 UTC 밀리초. 한국투자증권과 KB증권의 `fetchTrades`가 쓴다.
+ * 행은 새 것부터 온다고 보고, 가장 새 행에 한국 날짜 `ymd`를 붙인다. 앞 행보다 시각이 늦은 행(날짜가 바뀐 행)이나 시각을 읽을 수 없는
+ * 행이 나오면 그 행부터 끝까지 비운다. `ymd`가 없거나 가장 새 행이 `now`보다 1분 넘게 늦으면 모두 비운다.
+ */
+export function kstTradeTimestamps(times: readonly string[], ymd: Str, now: number): Int[] {
+    const stamps: Int[] = [];
+    let previous: Int;
+    let known = ymd !== undefined;
+    for (const hms of times) {
+        const stamp = known && hms !== '' ? strictKstTimestampOf(ymd, hms) : undefined;
+        if (stamp === undefined || (previous !== undefined && stamp > previous)) known = false;
+        stamps.push(known ? stamp : undefined);
+        previous = stamp;
+    }
+    if (stamps[0] !== undefined && stamps[0] > now + TRADE_CLOCK_SKEW_MS) stamps.fill(undefined);
+    return stamps;
+}
+
 /** `HHMMSS` 를 시, 분, 초로 읽는다. 앞의 0 이 빠진 값(`93000`)은 여섯 자리로 채운다. 숫자가 아니거나 범위(`235959`)를 넘으면 `undefined` 다. */
 function kstClockOf(hms: string): [number, number, number] | undefined {
     const time = /^(\d{2})(\d{2})(\d{2})$/.exec(hms.padStart(6, '0'));
