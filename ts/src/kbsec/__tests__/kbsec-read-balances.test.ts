@@ -20,6 +20,7 @@ import { kbsec } from '../../kbsec';
 import { KBSEC_TR } from '../kbsec-types';
 import { BadResponse } from '../../base/errors';
 import type { Balances } from '../../base/types';
+import { logger } from '../../logger';
 
 const CREDS = { appKey: 'kb-app-key-123456', appSecret: 'kb-secret' };
 
@@ -48,8 +49,30 @@ const tokenOk = () => {
     return { ok: true, status: 200, json: async () => JSON.parse(text), text: async () => text };
 };
 
-/** ok=정상 그리드, empty=성공했지만 종목 그리드 없음, timeout=연결 타임아웃, business=권한 오류 */
-type UsMode = 'ok' | 'empty' | 'timeout' | 'business';
+/** ok=정상 그리드, empty=성공했지만 배열이 없음, timeout=연결 타임아웃, business=권한 오류. 나머지는 `US_BODIES` 의 응답이다. */
+type UsMode = 'ok' | 'empty' | 'timeout' | 'business' | keyof typeof US_BODIES;
+
+const CASH_GRID = OVERSEAS_OK.Record1;
+/** 해외 잔고평가(SPQM2226)가 성공으로 주는 응답 모양들. 모두 해외 보유 행을 읽을 수 있는지가 판정을 가른다. */
+const US_BODIES = {
+    /** 보유 0 건. 예수금 그리드만 온다 */
+    cashOnly: { Record1: CASH_GRID },
+    /** 보유 0 건. 종목 그리드가 빈 행 50개를 싣고 온다 */
+    blankRows: {
+        Record1: CASH_GRID,
+        Record2: Array.from({ length: 50 }, () => ({ is_cd: '', is_nm: '', frgn_hld_q_p6: '', now_prc_p4: '', byng_avr_prc_p4: '' })),
+    },
+    /** 수량이 숫자 0 인 종목 행. 보유 0 이다 */
+    zeroQuantity: { Record1: CASH_GRID, Record2: [{ is_cd: 'JNJ', is_nm: '존슨앤드존슨', frgn_hld_q_p6: '0', now_prc_p4: '366.0000' }] },
+    /** 종목 그리드의 종목코드와 수량 필드 이름이 모두 어긋났다. 고를 수 없는 배열이다 */
+    renamedGrid: { Record1: CASH_GRID, Record2: [{ shrt_is_cd: 'JNJ', is_nm: '존슨앤드존슨', hld_q_p6: '2' }] },
+    /** 종목코드는 맞고 수량 필드 이름만 어긋났다 */
+    renamedQuantity: { Record1: CASH_GRID, Record2: [{ is_cd: 'JNJ', is_nm: '존슨앤드존슨', hld_q_p6: '2', now_prc_p4: '366.0000' }] },
+    /** 예수금 그리드 없이, 종목코드 이름이 어긋난 종목 그리드만 온다. 종목 그리드에도 통화구분명이 있다 */
+    renamedCodeNoCash: { Record2: [{ mkt_clsf_nm: '나스닥', crncy_clsf_nm: 'USD', shrt_is_cd: 'JNJ', hld_q_p6: '2' }] },
+    /** 종목 그리드가 객체 안에 들어 있다 */
+    nestedGrid: { Record1: CASH_GRID, Output2: { grid: [{ shrt_is_cd: 'JNJ', hld_q_p6: '2' }] } },
+};
 let usMode: UsMode = 'ok';
 let depositFails = false;
 /** 예수금 TR 이 성공 플래그로 오지만 주문가능현금 필드가 없다. */
@@ -75,6 +98,7 @@ function route() {
             }
             if (usMode === 'business') return businessError();
             if (usMode === 'empty') return jsonOk({});
+            if (usMode !== 'ok') return jsonOk(US_BODIES[usMode]);
             return jsonOk(OVERSEAS_OK);
         }
         if (tr === KBSEC_TR.DEPOSIT.toLowerCase()) {
@@ -215,6 +239,110 @@ describe('KB fetchBalance — 완전성 상태', () => {
         depositMissingFields = true;
 
         await expect(makeService().fetchBalance()).rejects.toBeInstanceOf(BadResponse);
+    });
+});
+
+// 해외 보유가 0 건인 계좌는 종목 행을 한 번도 받지 못한다. 그래도 응답 모양을 알아봤으면 "보유 없음"을 읽은 것이다. 반대로 알아보지 못한
+// 배열이나 읽지 못한 보유 행이 있으면, 이름이 어긋난 종목 그리드를 "보유 없음"으로 읽지 않도록 못 읽은 것으로 둔다.
+describe('KB fetchBalance — 해외 보유 0 건과 응답 모양', () => {
+    const warnMessages = (warn: { mock: { calls: unknown[][] } }) => warn.mock.calls.map((c) => [c[0], String(c[1])] as const);
+
+    it('보유 0 건이고 예수금 그리드만 오면 처음 부른 인스턴스에서도 해외를 읽은 것이다', async () => {
+        usMode = 'cashOnly';
+
+        const b = await makeService().fetchBalance();
+
+        expect(b.info.readStatus).toBe('COMPLETE');
+        expect(b.info.unreadMarkets).not.toContain('US');
+        expect(b.USD).toMatchObject({ free: 1000, total: 1000 });
+    });
+
+    it('종목 그리드가 빈 행만 담아 와도 읽은 것이다 — 필드 이름으로 종목 그리드를 골랐다', async () => {
+        usMode = 'blankRows';
+
+        const b = await makeService().fetchBalance();
+
+        expect(b.info.readStatus).toBe('COMPLETE');
+        expect(codesOf(b)).toEqual(expect.arrayContaining(['KRW', 'USD', '005930']));
+        expect(codesOf(b)).toHaveLength(3);
+    });
+
+    it('종목 행의 수량이 숫자 0 이면 보유 0 이고 읽은 것이다', async () => {
+        usMode = 'zeroQuantity';
+
+        const b = await makeService().fetchBalance();
+
+        expect(b.info.readStatus).toBe('COMPLETE');
+        expect(codesOf(b)).not.toContain('JNJ');
+    });
+
+    it('알아보지 못한 배열이 있으면 못 읽은 것이고, 그 배열의 필드 이름을 경고로 남긴다', async () => {
+        usMode = 'renamedGrid';
+        const warn = vi.spyOn(logger, 'warn');
+
+        const b = await makeService().fetchBalance();
+
+        expect(b.info.readStatus).toBe('PARTIAL');
+        expect(b.info.unreadMarkets).toEqual(['US']);
+        const logged = warnMessages(warn).find(([, message]) => message.includes('알아보지 못한 배열'));
+        expect(logged?.[0]).toMatchObject({ unknownArrays: [{ len: 1, keys: ['shrt_is_cd', 'is_nm', 'hld_q_p6'] }] });
+        warn.mockRestore();
+    });
+
+    it('★종목코드는 있는데 수량 필드를 읽지 못한 행이 있으면 못 읽은 것이다 — 수량 필드 이름이 어긋나도 보유 0 건이 되지 않는다', async () => {
+        usMode = 'renamedQuantity';
+
+        const b = await makeService().fetchBalance();
+
+        expect(b.info.readStatus).toBe('PARTIAL');
+        expect(b.info.unreadMarkets).toEqual(['US']);
+    });
+
+    it('★통화구분명만으로는 예수금 그리드라고 보지 않는다 — 종목코드 이름이 어긋난 종목 그리드만 오면 못 읽은 것이다', async () => {
+        usMode = 'renamedCodeNoCash';
+
+        const b = await makeService().fetchBalance();
+
+        expect(b.info.readStatus).toBe('PARTIAL');
+        expect(b.info.unreadMarkets).toEqual(['US']);
+        // 종목 그리드의 `crncy_clsf_nm: 'USD'` 행을 예수금으로 읽어 달러 잔고를 0 으로 싣지 않는다. 모르는 현금은 비운다.
+        expect(b.USD).toBeUndefined();
+    });
+
+    it('★객체 안에 든 배열도 알아보지 못한 배열로 센다', async () => {
+        usMode = 'nestedGrid';
+
+        const b = await makeService().fetchBalance();
+
+        expect(b.info.readStatus).toBe('PARTIAL');
+        expect(b.info.unreadMarkets).toEqual(['US']);
+    });
+
+    it('★보유 행을 읽은 뒤라도 알아보지 못한 배열이 오면 못 읽은 것이다 — 이력이 이름 불일치를 덮지 않는다', async () => {
+        const svc = makeService();
+        expect((await svc.fetchBalance()).info.readStatus).toBe('COMPLETE'); // 보유 행을 읽었다
+        usMode = 'renamedGrid';
+        vi.setSystemTime(Date.now() + 1000);
+
+        const b = await svc.fetchBalance();
+
+        expect(b.info.readStatus).toBe('PARTIAL');
+        expect(b.info.unreadMarkets).toEqual(['US']);
+        expect(codesOf(b)).not.toContain('JNJ');
+    });
+
+    it('예수금 그리드만 와서 읽은 뒤에 조회가 실패하면 못 읽은 것이다', async () => {
+        const svc = makeService();
+        usMode = 'cashOnly';
+        expect((await svc.fetchBalance()).info.readStatus).toBe('COMPLETE');
+        usMode = 'timeout';
+        vi.setSystemTime(Date.now() + 1000);
+
+        const b = await svc.fetchBalance();
+
+        expect(b.info.readStatus).toBe('PARTIAL');
+        expect(b.info.unreadMarkets).toEqual(['US']);
+        expect(b.USD).toBeUndefined();
     });
 });
 
@@ -408,5 +536,50 @@ describe('KB fetchBalance — 국내 보유의 완전성', () => {
 
         expect(b.info.readStatus).toBe('PARTIAL');
         expect(b.info.unreadMarkets).toEqual(['KR', 'US']);
+    });
+});
+
+describe('KB fetchBalance — 달러 예수금 행', () => {
+    it('예수금 그리드에 USD 행이 없으면 받은 통화구분명 목록을 경고로 남긴다. 금액은 남기지 않는다', async () => {
+        const warn = vi.spyOn(logger, 'warn');
+        mockFetch.mockImplementation(async (url: string) => {
+            const u = String(url);
+            if (u.includes('/oauth2/token')) return tokenOk();
+            const tr = u.split('/api/v1/')[1] ?? '';
+            if (tr === KBSEC_TR.HOLDINGS_US.toLowerCase()) {
+                return jsonOk({
+                    Record1: [
+                        { crncy_clsf_nm: '미국달러', tfnd: '1234.56', ordr_psbl_amt_p2: '1234.56' },
+                        { crncy_clsf_nm: '홍콩달러', tfnd: '78.90', ordr_psbl_amt_p2: '78.90' },
+                    ],
+                    Record2: OVERSEAS_OK.Record2,
+                });
+            }
+            if (tr === KBSEC_TR.DEPOSIT.toLowerCase()) return jsonOk({ ordr_psbl_csh: '5000000' });
+            if (tr === KBSEC_TR.ASSET_EVAL.toLowerCase()) return jsonOk(DOMESTIC_ASSET_EVAL);
+            return jsonOk({});
+        });
+
+        const b = await makeService().fetchBalance();
+
+        // 매칭 규칙은 그대로다. USD 행을 못 찾으면 USD 항목이 없다.
+        expect(b.USD).toBeUndefined();
+        const logged = warn.mock.calls.filter((c) => String(c[1]).includes('USD 행이 없다'));
+        expect(logged).toHaveLength(1);
+        expect(logged[0]![0]).toMatchObject({ currencyNames: ['미국달러', '홍콩달러'] });
+        const text = JSON.stringify(logged[0]![0]);
+        expect(text).not.toContain('1234');
+        expect(text).not.toContain('78.9');
+        warn.mockRestore();
+    });
+
+    it('USD 행이 있으면 통화구분명 경고를 남기지 않는다', async () => {
+        const warn = vi.spyOn(logger, 'warn');
+
+        const b = await makeService().fetchBalance();
+
+        expect(b.USD).toMatchObject({ free: 1000, total: 1000 });
+        expect(warn.mock.calls.filter((c) => String(c[1]).includes('USD 행이 없다'))).toHaveLength(0);
+        warn.mockRestore();
     });
 });

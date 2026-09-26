@@ -10,9 +10,8 @@ global.fetch = mockFetch as unknown as typeof fetch;
 
 import { kbsec } from '../../kbsec';
 import { ArgumentsRequired, MarketClosed } from '../../base/errors';
-import { resetMarketCalendar } from '../../market-calendar';
 import { KBSEC_TR } from '../kbsec-types';
-import { __resetKbsecTokenBreaker } from '../../testing';
+import { __resetKbsecTokenBreaker, resetMarketCalendar } from '../../testing';
 import { KIS_MASTER_FIXTURE } from '../../__tests__/support/kis-master-fixture';
 import { calledTrs, CREDS, routeTr, trBody } from './support/kbsec-fetch';
 

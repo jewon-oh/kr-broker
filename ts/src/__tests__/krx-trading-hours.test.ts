@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { applyMarketCalendar, resetMarketCalendar } from '../market-calendar';
+import { applyMarketCalendar, resetMarketCalendar } from '../testing';
 import {
     getTimeUntilKrxOpen, getKrxMarketPhase, getNxtSession, isNxtExtendedTradable,
     isKrxBusinessDayKst, krxOrderBlockReason,

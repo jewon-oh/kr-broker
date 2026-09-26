@@ -17,10 +17,9 @@ import {
     ArgumentsRequired, BadRequest, ExchangeError, InsufficientFunds, InvalidOrder, MarketClosed, NotSupported, OrderNotFound, OrderOutcomeUnknown,
     PermissionDenied,
 } from '../../base/errors';
-import { resetMarketCalendar } from '../../market-calendar';
 import { KBSEC_ERROR_DETAIL } from '../kbsec-error-codes';
 import { KBSEC_ORDER_TYPE_US, KBSEC_TR } from '../kbsec-types';
-import { __resetFillSideWarn, __resetKbsecTokenBreaker } from '../../testing';
+import { __resetFillSideWarn, __resetKbsecTokenBreaker, resetMarketCalendar } from '../../testing';
 import { KIS_MASTER_FIXTURE } from '../../__tests__/support/kis-master-fixture';
 import { CREDS, bizError, calledTrs, routeTr, tokenOk, trBody } from './support/kbsec-fetch';
 

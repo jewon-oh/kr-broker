@@ -8,15 +8,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import {
-    applyMarketCalendar,
     expandBusinessDays,
     isMarketClosedDay,
     marketCalendarStatus,
     marketDayStatus,
     refreshMarketCalendar,
-    resetMarketCalendar,
     CALENDAR_RETRY_MS,
 } from '../market-calendar';
+import { applyMarketCalendar, resetMarketCalendar } from '../testing';
 import { setLogger, noopLogger, type BrokerLogger } from '../logger';
 
 const warn = vi.fn();

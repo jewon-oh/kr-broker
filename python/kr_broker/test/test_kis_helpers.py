@@ -33,7 +33,7 @@ from kr_broker.krx_tick_size import get_krx_tick_size, krx_tick_violation
 from kr_broker.kis_yahoo_candles import (
     align_tail_to_series_grid, dedupe_by_timestamp_keep_last, fetch_yahoo_candles, to_yahoo_range, to_yahoo_ticker,
 )
-from kr_broker.market_calendar import reset_market_calendar
+from kr_broker.testing import reset_market_calendar
 from kr_broker.trading_hours import market_session_block_reason
 
 MASTER = {

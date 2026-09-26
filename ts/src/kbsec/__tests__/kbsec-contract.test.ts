@@ -9,11 +9,10 @@ global.fetch = mockFetch as unknown as typeof fetch;
 
 import { kbsec } from '../../kbsec';
 import { InsufficientFunds, InvalidOrder, PermissionDenied } from '../../base/errors';
-import { resetMarketCalendar } from '../../market-calendar';
 import { defineBrokerContractSuite, type BrokerContractHarness } from '../../__tests__/support/broker-contract-suite';
 import { KBSEC_ERROR_DETAIL } from '../kbsec-error-codes';
 import { KBSEC_TR } from '../kbsec-types';
-import { __resetKbsecTokenBreaker } from '../../testing';
+import { __resetKbsecTokenBreaker, resetMarketCalendar } from '../../testing';
 import { CREDS, bizError, jsonOk, tokenOk } from './support/kbsec-fetch';
 
 type OrderMode =

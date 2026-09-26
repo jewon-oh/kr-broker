@@ -9,7 +9,8 @@ global.fetch = mockFetch as unknown as typeof fetch;
 
 import { kis } from '../../kis';
 import { BadRequest, NotSupported, MarketClosed } from '../../base/errors';
-import { marketDayStatus, resetMarketCalendar } from '../../market-calendar';
+import { marketDayStatus } from '../../market-calendar';
+import { resetMarketCalendar } from '../../testing';
 import { dataOk, headersOf, jsonResponse, newKis, tokenOk } from './support/kis-test-utils';
 
 const holidayOk = (rows: Array<Record<string, string>>) => dataOk({ output: rows });

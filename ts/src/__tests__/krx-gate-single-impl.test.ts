@@ -25,7 +25,7 @@ import { join } from 'node:path';
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import { applyMarketCalendar, resetMarketCalendar } from '../market-calendar';
+import { applyMarketCalendar, resetMarketCalendar } from '../testing';
 import { checkKRXTradingHours, checkKRXTradingHoursAt } from '../krx-trading-hours';
 
 beforeEach(() => {

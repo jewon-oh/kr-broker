@@ -12,7 +12,7 @@ from kr_broker.base import functions as fn
 from kr_broker.execution_confirm import confirm_execution, fill_deviation_bps, resolve_confirm_budget, trade_list_probe
 from kr_broker.extended_session_limit import build_extended_session_limit
 from kr_broker.krx_sell_tax import krx_sell_tax_rate
-from kr_broker.market_calendar import reset_market_calendar
+from kr_broker.testing import reset_market_calendar
 from kr_broker.toss_fee import normalize_commission_rate, pick_commission_rate
 from kr_broker.toss_trading_hours import (
     find_kr_session, find_us_regular_close_ms, find_us_session, is_toss_orderable, is_toss_trading_open, kr_session_order_restriction,

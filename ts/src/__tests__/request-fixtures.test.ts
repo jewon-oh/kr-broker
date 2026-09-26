@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { deepExtend } from '../base/functions/generic';
 import type { Dict } from '../base/types';
 import { kis } from '../kis';
-import { resetMarketCalendar } from '../market-calendar';
+import { resetMarketCalendar } from '../testing';
 import type { BrokerTokenStore } from '../options';
 import { toss } from '../toss';
 

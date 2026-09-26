@@ -96,8 +96,8 @@ import {
 import { kbsecNumberOf } from './kbsec/kbsec-number';
 import { buildKrOrderBody } from './kbsec/kbsec-order-body';
 import {
-    kbsecHoldingQuantity, OVERSEAS_QTY_CANDIDATES, pickArray, pickCashGrid, pickGrid, pickHoldingGrid, pickNum,
-    pickOverseasSettlementGrid, pickPositiveNum, pickSettlementGrid, pickStr,
+    isUsdCashRow, kbsecHoldingQuantity, OVERSEAS_QTY_CANDIDATES, pickArray, pickCashGrid, pickGrid, pickHoldingGrid, pickNum,
+    pickOverseasSettlementGrid, pickPositiveNum, pickSettlementGrid, pickStr, unknownGrids,
 } from './kbsec/kbsec-pick';
 import {
     KBSEC_SETTLE_CLSF, KBSEC_SETTLE_TRD_CLSF, kbsecResolveSettlementRows, parseKbsecDomesticSettlementRow,
@@ -1674,8 +1674,8 @@ export class kbsec extends Exchange {
     /** 일시 오류 뒤 해외 잔고를 다시 부르기 전까지 기다리는 시각(epoch ms). 0 이면 대기 없음. */
     private overseasHoldingsRetryAt = 0;
     /**
-     * 해외 보유 종목 **그리드를 실제로 본 적이 있는가.** 종목 그리드를 못 알아보면 빈 배열이 돌아오므로 "해외 보유 없음"과 "보유를 못 읽음"이
-     * 같은 모습이 된다. 이 값이 그 둘을 가른다. 한 번 참이 되면 내려가지 않는 이력이다.
+     * 해외 보유 행을 **실제로 읽은 적이 있는가.** 한 번 참이 되면 내려가지 않는 이력이다. 이 값이 참이면 뒤의 응답이 종목 그리드 없이 와도
+     * 미보유로 읽는다. 빈 행이나 예수금 그리드만 온 응답으로는 켜지 않는다. 이력이 넓으면 뒤 응답의 필드 이름 불일치를 덮는다.
      */
     private overseasGridSeen = false;
     /** 해외 체결조회(SPQM2103) 영구 실패. */
@@ -2855,8 +2855,9 @@ export class kbsec extends Exchange {
      * - 국내(`KR`): 계좌자산평가(`SSQM2952`)가 국내 행을 주면 읽은 것이다. 실패해서 보유주식(`SSQM1801`) 경로로 내려갔는데 그 행이 전부
      *   걸러졌거나, 종목코드를 못 읽어 버린 행이 있거나, 연속조회가 상한에서 잘렸거나, 계좌자산평가가 실패했는데 보유주식도 비었으면 못 읽은 것이다.
      *   계좌자산평가가 성공했는데 국내 행이 없고 보유주식도 비었으면 두 조회가 모두 "보유 없음"이라 읽은 것으로 본다.
-     * - 해외(`US`): 이번 조회가 성공했고 해외 그리드를 한 번이라도 본 적이 있으면 읽은 것이다. 그리드를 본 적이 없으면 빈 응답이
-     *   "보유 없음"인지 "그리드를 못 알아봄"인지 가를 수 없다.
+     * - 해외(`US`): 이번 조회가 성공했고 응답 모양을 알아봤으면 보유가 0 건이어도 읽은 것이다. 종목 그리드가 왔거나(빈 행만 와도),
+     *   예수금 그리드(`tfnd`)가 왔거나, 예전에 보유 행을 읽은 적이 있으면 알아본 것이다. 두 그리드 밖의 배열이 있거나, 종목코드나 수량을
+     *   읽지 못한 보유 행이 있으면 못 읽은 것이다. 이름이 어긋난 종목 그리드를 "보유 없음"으로 읽지 않으려는 것이다.
      *
      * `USD` 항목은 해외 잔고평가(`SPQM2226`)의 통화별 예수금 그리드에서 온다(예수금·주문가능금액). 그 그리드를 못 읽었으면 `USD` 항목이 없다.
      * **없다는 것은 0 이 아니라 모른다는 뜻이다.** `options.krwIntegratedMargin` 이 켜져 있고 원화환산 외화예수금이 있으면 그것을 환율로 환산한 USD 가 우선한다.
@@ -3094,30 +3095,35 @@ export class kbsec extends Exchange {
                 nxt_key: '',
             });
             const { rows, seen } = pickHoldingGrid(body);
-            const usdCash = pickCashGrid(body).find(row => pickStr(row, 'crncy_clsf_nm').toUpperCase() === 'USD');
-            if (rows.length === 0) {
-                logger.warn({ trCode: KBSEC_TR.HOLDINGS_US, arrays: seen },
-                    seen.length === 0
-                        ? '[kbsec] 해외 잔고 응답에 배열이 없다 — 권한/파라미터 확인'
-                        : '[kbsec] 해외 잔고에 종목 그리드가 없다 — 보유 0건이거나 필드명 불일치(arrays 로 확인)');
+            const cashRows = pickCashGrid(body);
+            const usdCash = cashRows.find(isUsdCashRow);
+            if (cashRows.length > 0 && usdCash === undefined) {
+                // 통화구분명은 금액이 아니라 남긴다. 금액 필드는 남기지 않는다.
+                logger.warn({ trCode: KBSEC_TR.HOLDINGS_US, currencyNames: cashRows.map((row) => row.crncy_clsf_nm) },
+                    '[kbsec] 해외 예수금 그리드에 USD 행이 없다 — currencyNames 가 받은 통화구분명이다');
             }
             const out: HoldingRow[] = [];
-            // 버린 이유를 세어서 남긴다. "종목코드가 비었다"와 "수량이 0 이다"는 원인도 조치도 다르다.
+            // 버린 이유를 세어서 남긴다. "종목코드가 비었다", "수량을 못 읽었다", "수량이 0 이다"는 원인도 조치도 다르다.
             let droppedNoCode = 0;
+            let droppedNoQuantity = 0;
             let droppedZeroQty = 0;
-            // 종목코드 없이 수량이 있는 행은 보유를 잃은 것이다. 이 행이 있으면 다 읽었다고 하지 않는다.
+            // 보유를 잃은 행의 수. 이 행이 있으면 다 읽었다고 하지 않는다.
             let droppedHoldings = 0;
             // 수량 후보 중 실제로 0 이 아니었던 필드 이름만 모은다. 알아야 하는 것은 보유 수량이 아니라 어느 필드가 보유수량인가다.
             const nonZeroQtyFields = new Set<string>();
             for (const row of rows) {
                 const code = kbsecNormalizeCode(pickStr(row, 'is_cd'));
-                const quantity = pickNum(row, 'frgn_hld_q_p6');
-                if (code === '' || quantity <= 0) {
-                    if (code !== '') droppedZeroQty++; else droppedNoCode++;
+                const quantity = kbsecNumberOf(row.frgn_hld_q_p6);
+                if (code === '' || quantity === undefined || quantity <= 0) {
+                    if (code === '') droppedNoCode++;
+                    else if (quantity === undefined) droppedNoQuantity++;
+                    else droppedZeroQty++;
                     for (const k of OVERSEAS_QTY_CANDIDATES) {
                         if (pickNum(row, k) > 0) nonZeroQtyFields.add(k);
                     }
-                    if (code === '' && OVERSEAS_QTY_CANDIDATES.some((k) => pickNum(row, k) > 0)) droppedHoldings++;
+                    // 종목코드 없이 수량이 있는 행, 종목코드는 있는데 수량을 숫자로 못 읽은 행(필드 없음, 빈 값)은 보유를 잃은 것이다.
+                    // 뒤의 행을 수량 0 으로 두면 수량 필드 이름이 어긋났을 때 보유가 0 건으로 읽힌다. 수량이 숫자 0 인 행은 보유 0 이다.
+                    if (code === '' ? OVERSEAS_QTY_CANDIDATES.some((k) => pickNum(row, k) > 0) : quantity === undefined) droppedHoldings++;
                     continue;
                 }
                 const price = pickNum(row, 'now_prc_p4');
@@ -3130,19 +3136,36 @@ export class kbsec extends Exchange {
                     name: pickStr(row, 'is_nm') || undefined,
                 });
             }
-            if (rows.length > 0 && out.length === 0) {
+            if (droppedHoldings > 0 || (out.length === 0 && droppedZeroQty > 0)) {
                 logger.warn({
-                    rows: rows.length, droppedNoCode, droppedZeroQty, nonZeroQtyFields: [...nonZeroQtyFields], arrays: seen,
+                    rows: rows.length, droppedNoCode, droppedNoQuantity, droppedZeroQty, nonZeroQtyFields: [...nonZeroQtyFields], arrays: seen,
                     rowKeys: Object.keys(rows[0] ?? {}).slice(0, 40),
-                }, '[kbsec] 해외 보유 행이 전부 수량 0 이거나 종목코드가 없다 — droppedNoCode/droppedZeroQty 로 갈린다');
-            } else if (out.length > 0) {
-                // 그리드를 실제로 봤다. 이제부터 "해외 목록에 없음"은 진짜 미보유다.
+                }, droppedHoldings > 0
+                    ? '[kbsec] 해외 보유 행에서 종목코드나 수량을 읽지 못했다 — 해외를 못 읽은 시장으로 표시'
+                    : '[kbsec] 해외 보유 행이 전부 수량 0 이다 — nonZeroQtyFields 로 수량 필드 확인');
+            }
+            if (out.length > 0) {
+                // 보유 행을 실제로 읽었다. 이 이력은 뒤의 응답이 종목 그리드 없이 와도 미보유로 읽게 한다.
                 this.overseasGridSeen = true;
                 logger.info({ trCode: KBSEC_TR.HOLDINGS_US, holdings: out.length }, '[kbsec] 해외 보유 조회 완료');
             }
+            // 응답 모양을 알아봤으면 보유 0 건도 읽은 것이다. 뽑은 두 그리드 밖에 배열이 있으면 이름이 어긋난 종목 그리드일 수 있어
+            // 이력이 있어도 못 읽은 것이다. `crncy_clsf_nm` 은 종목 그리드에도 있어서, 예수금 그리드는 그 그리드에만 있는 `tfnd` 로 알아본다.
+            const unknown = unknownGrids(body, [rows, cashRows]);
+            const cashGridRead = 'tfnd' in (cashRows[0] ?? {});
+            const read = droppedHoldings === 0 && unknown.length === 0 && (rows.length > 0 || this.overseasGridSeen || cashGridRead);
+            if (unknown.length > 0) {
+                logger.warn({ trCode: KBSEC_TR.HOLDINGS_US, unknownArrays: unknown },
+                    '[kbsec] 해외 잔고 응답에 알아보지 못한 배열이 있다 — 필드명 불일치일 수 있어 해외를 못 읽은 시장으로 표시(unknownArrays 로 확인)');
+            } else if (!read && rows.length === 0) {
+                logger.warn({ trCode: KBSEC_TR.HOLDINGS_US, arrays: seen },
+                    seen.length === 0
+                        ? '[kbsec] 해외 잔고 응답에 배열이 없다 — 권한/파라미터 확인'
+                        : '[kbsec] 해외 잔고에서 종목 그리드도 예수금 그리드(tfnd)도 알아보지 못했다 — arrays 로 확인');
+            }
             // 호출이 예외 없이 끝났다. 직전의 실패 상태를 푼다(자가 치유).
             this.overseasHoldingsRetryAt = 0;
-            return { rows: out, usdCash, read: this.overseasGridSeen && droppedHoldings === 0 };
+            return { rows: out, usdCash, read };
         } catch (err) {
             const permanent = this.isPermanentFailure(err);
             if (permanent) {

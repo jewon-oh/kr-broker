@@ -10,9 +10,9 @@ const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 global.fetch = mockFetch as unknown as typeof fetch;
 
 import { kbsec } from '../../kbsec';
-import { isMarketClosedDay, marketDayStatus, resetMarketCalendar } from '../../market-calendar';
+import { isMarketClosedDay, marketDayStatus } from '../../market-calendar';
 import { KBSEC_TR } from '../kbsec-types';
-import { __resetKbsecTokenBreaker } from '../../testing';
+import { __resetKbsecTokenBreaker, resetMarketCalendar } from '../../testing';
 import { BadRequest, NotSupported } from '../../base/errors';
 import { CREDS, calledTrs, routeTr, trBody } from './support/kbsec-fetch';
 

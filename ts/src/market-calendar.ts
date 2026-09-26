@@ -22,11 +22,20 @@
  * - 장 시간 판정 함수(`krx-trading-hours.ts`, `us-market-hours.ts`)는 동기 함수라 API 를 부르지 않고 이 모듈의 값을 읽는다.
  * - 캘린더에 없는 평일은 **열린 날로 본다.** 증권사가 휴장일 주문을 거절하므로 열린 것으로 잘못 보는 쪽이 주문을 막는 쪽보다 피해가
  *   작다. 대신 그 달마다 한 번 경고를 남겨 캘린더를 받지 못했다는 사실이 드러나게 한다.
- * - 값은 프로세스 메모리에만 있다. 재시작하면 다시 받는다.
+ * - 값은 프로세스 메모리에만 있다. 재시작하면 다시 받는다. 상태와 그 상태를 바꾸는 함수는 `market-calendar-state.ts` 에 있다.
  */
 
 import type { StockMarketGroup } from './broker-market-group';
 import { logger } from './logger';
+import {
+    applyMarketCalendar as applyCalendarDays,
+    isWeekend,
+    knownDays,
+    parseYmd,
+    refreshState,
+    resetMarketCalendar as resetCalendarState,
+    warnedUnknownDays,
+} from './market-calendar-state';
 
 /** @deprecated `StockMarketGroup` 을 쓴다. 다음 판에서 지운다. */
 export type CalendarMarket = StockMarketGroup;
@@ -42,48 +51,14 @@ export type CalendarDayStatus = 'open' | 'closed' | 'unknown';
 /** 갱신에 실패한 뒤 다시 시도하기까지의 간격. */
 export const CALENDAR_RETRY_MS = 10 * 60_000;
 
-const DATE_RE = /^\d{8}$/;
-
-const knownDays: Record<StockMarketGroup, Map<string, boolean>> = { KR: new Map(), US: new Map() };
-const warnedUnknownDays = new Set<string>();
-
-interface RefreshState {
-    okAtMs: number | null;
-    failedAtMs: number | null;
-    inflight: Promise<boolean> | null;
-}
-
-const refreshState: Record<StockMarketGroup, RefreshState> = {
-    KR: { okAtMs: null, failedAtMs: null, inflight: null },
-    US: { okAtMs: null, failedAtMs: null, inflight: null },
-};
-
-/** `YYYYMMDD` 가 실제 달력에 있는 날짜인지. `20260231` 같은 값은 거른다. */
-function parseYmd(ymd: string): Date | null {
-    if (!DATE_RE.test(ymd)) return null;
-    const year = Number(ymd.slice(0, 4));
-    const month = Number(ymd.slice(4, 6));
-    const day = Number(ymd.slice(6, 8));
-    const d = new Date(Date.UTC(year, month - 1, day));
-    return d.getUTCFullYear() === year && d.getUTCMonth() === month - 1 && d.getUTCDate() === day ? d : null;
-}
-
-function isWeekend(d: Date): boolean {
-    const wd = d.getUTCDay();
-    return wd === 0 || wd === 6;
-}
-
 /**
  * 증권사 API 가 알려 준 날짜별 개장 여부를 넣는다. 같은 날짜가 이미 있으면 새 값으로 덮어쓴다.
  * 형식이 틀린 날짜와 주말은 버린다(주말은 캘린더 없이도 닫혀 있다).
+ *
+ * @deprecated 테스트 전용이다. `kr-broker/testing` 에서 가져온다. 다음 판에서 이 경로에서 뺀다.
  */
 export function applyMarketCalendar(market: StockMarketGroup, days: readonly CalendarDay[]): void {
-    const target = knownDays[market];
-    for (const day of days) {
-        const d = parseYmd(day.date);
-        if (!d || isWeekend(d)) continue;
-        target.set(day.date, day.open);
-    }
+    applyCalendarDays(market, days);
 }
 
 /**
@@ -169,7 +144,7 @@ export function refreshMarketCalendar(
 
     state.inflight = (async () => {
         try {
-            applyMarketCalendar(market, await fetchDays());
+            applyCalendarDays(market, await fetchDays());
             state.okAtMs = now;
             state.failedAtMs = null;
             return true;
@@ -184,11 +159,11 @@ export function refreshMarketCalendar(
     return state.inflight;
 }
 
-/** 캘린더와 갱신 상태를 비운다. 테스트 전용이다. */
+/**
+ * 캘린더와 갱신 상태를 비운다.
+ *
+ * @deprecated 테스트 전용이다. `kr-broker/testing` 에서 가져온다. 다음 판에서 이 경로에서 뺀다.
+ */
 export function resetMarketCalendar(): void {
-    for (const market of ['KR', 'US'] as const) {
-        knownDays[market].clear();
-        refreshState[market] = { okAtMs: null, failedAtMs: null, inflight: null };
-    }
-    warnedUnknownDays.clear();
+    resetCalendarState();
 }
