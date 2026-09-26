@@ -5,7 +5,7 @@
  * 보는 것: JWT 모양(`eyJ…`), 개인 키 블록, AWS 액세스 키 모양, KIS 앱키 모양(`PS` + 34자), 긴 Bearer 토큰, GitHub·Slack 토큰,
  * 긴 base64 문자열(KIS 앱시크릿처럼 80자 이상이고 무작위로 보이는 값), KIS 접속키(`approval_key` 에 붙은 UUID), `client_secret` 에 붙은 값,
  * 사설 IP(`10.`, `172.16~31.`, `192.168.`, CGNAT `100.64/10`), 링크로컬 주소(IPv4 `169.254/16`, IPv6 `fe80/10`), IPv6 사설 주소(`fc00/7`),
- * `.lan` 으로 끝나는 호스트, 이메일 주소(`example.*` 도메인, GitHub noreply 주소, `noreply@anthropic.com` 은 허용), 홈 디렉터리 경로(유닉스, Windows),
+ * `.lan` 으로 끝나는 호스트, 이메일 주소(`example.*` 도메인, GitHub noreply 주소, `noreply@anthropic.com`, `support@github.com` 은 허용), 홈 디렉터리 경로(유닉스, Windows),
  * 계좌번호 모양(8자리-2자리, 픽스처의 가짜 값 `12345678-01` 등은 허용). 대상은 git 이 추적하는 파일과 아직 커밋하지 않은 새 파일이다(`.gitignore` 제외).
  * NUL 바이트가 있는 파일도 건너뛰지 않는다. BOM 이 있는 UTF-16 은 풀어 읽고, 그 밖의 바이너리는 ASCII 로 읽히는 8자 이상 구간만 본다.
  *
@@ -26,7 +26,7 @@
  * ```
  */
 
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -63,12 +63,13 @@ const GITHUB_NOREPLY = /^[^\s@]+@users\.noreply\.github\.com$/i;
  * 칸마다 공개해도 되는 이메일. 작성자는 GitHub noreply 주소만 받는다.
  * 커미터는 웹에서 병합한 커밋과 Dependabot 커밋에 GitHub 이 커미터로 적는 서비스 주소도 받는다. 이 주소는 파일과 메시지에서는 걸린다.
  * 파일과 커밋 메시지(`text`)는 `example.*` 도메인과 공동 작성자 트레일러의 `noreply@anthropic.com` 도 받는다.
+ * Dependabot 커밋 메시지의 `Signed-off-by` 트레일러에 적히는 GitHub 지원 주소(`support@github.com`)도 받는다. 스쿼시 본문이 커밋 메시지이므로 받지 않으면 Dependabot PR 이 늘 걸린다.
  * @type {Readonly<Record<'author' | 'committer' | 'text', (address: string) => boolean>>}
  */
 export const EMAIL_ALLOWED = {
     author: (address) => GITHUB_NOREPLY.test(address),
     committer: (address) => GITHUB_NOREPLY.test(address) || /^noreply@github\.com$/i.test(address),
-    text: (address) => GITHUB_NOREPLY.test(address) || /^noreply@anthropic\.com$/i.test(address) || /@example\./i.test(address),
+    text: (address) => GITHUB_NOREPLY.test(address) || /^(?:noreply@anthropic|support@github)\.com$/i.test(address) || /@example\./i.test(address),
 };
 
 /**
@@ -130,7 +131,7 @@ export const COMMIT_EMAIL_RULE = '허용하지 않는 커밋 이메일';
  * `git log -p --format=%x01%H` 출력의 줄을 읽어 추가된 줄에서 걸린 것과 바이너리 파일의 새 blob 을 모은다.
  * 헤더의 `+++ b/…` 와 헝크 안의 `+++…`(`++…` 를 추가한 줄)는 헝크 머리(`@@`)를 지났는지로 가린다.
  */
-export async function scanPatch(lines) {
+export function scanPatch(lines) {
     const findings = [];
     const binaries = [];
     let sha = '';
@@ -138,7 +139,7 @@ export async function scanPatch(lines) {
     let blob = '';
     let inHunk = false;
     let lineNo = 0;
-    for await (const line of lines) {
+    for (const line of lines) {
         if (line.startsWith('\x01')) {
             sha = line.slice(1);
             inHunk = false;
@@ -168,34 +169,14 @@ function git(cwd, args) {
     return execFileSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 1 << 30 });
 }
 
-/** 명령의 표준 출력을 줄 단위로 돌려준다. 이력이 커도 한꺼번에 메모리에 올리지 않는다. */
-async function* outputLines(cwd, command, args) {
-    const child = spawn(command, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
-    let stderr = '';
-    child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk; });
-    const exited = new Promise((resolve, reject) => {
-        child.on('error', reject);
-        child.on('close', resolve);
-    });
-    let rest = '';
-    for await (const chunk of child.stdout.setEncoding('utf8')) {
-        const parts = (rest + chunk).split('\n');
-        rest = parts.pop() ?? '';
-        yield* parts;
-    }
-    if (rest !== '') yield rest;
-    const code = await exited;
-    if (code !== 0) throw new Error(`${command} ${args.join(' ')} 이(가) ${code} 로 끝났다\n${stderr}`);
-}
-
 /**
  * `revs` 에 닿는 커밋의 메시지, 추가된 줄, 작성자와 커미터 이메일을 본다.
- * 사용자 git 설정(서명 표시, 접두사 없는 diff, 외부 diff 도구, 루트 커밋 diff 끄기)이 출력 모양을 바꾸지 못하게 옵션을 모두 적는다.
+ * 사용자 git 설정(서명 표시, 색, 접두사 없는 diff, 외부 diff 도구, 루트 커밋 diff 끄기)이 출력 모양을 바꾸지 못하게 옵션을 적는다.
  * 병합 커밋은 첫 부모와 비교해 병합하면서 새로 들어간 줄도 본다.
  */
-export async function scanHistory({ cwd = ROOT, revs = ['HEAD'] } = {}) {
+export function scanHistory({ cwd = ROOT, revs = ['HEAD'] } = {}) {
     const shallow = git(cwd, ['rev-parse', '--is-shallow-repository']).trim() === 'true';
-    const logArgs = ['-c', 'core.quotePath=false', '-c', 'log.showRoot=true', 'log', '--no-show-signature', '--encoding=UTF-8'];
+    const logArgs = ['-c', 'core.quotePath=false', '-c', 'log.showRoot=true', 'log', '--no-show-signature'];
     const findings = [];
 
     let commits = 0;
@@ -212,27 +193,28 @@ export async function scanHistory({ cwd = ROOT, revs = ['HEAD'] } = {}) {
         });
     }
 
-    const patch = await scanPatch(outputLines(cwd, 'git', [
+    const patch = scanPatch(git(cwd, [
         ...logArgs, '-p', '-U0', '--format=%x01%H', '--diff-merges=first-parent', '--full-index', '--no-color', '--no-ext-diff', '--no-textconv',
-        '--no-relative', '--submodule=short', '--src-prefix=a/', '--dst-prefix=b/', ...revs, '--',
-    ]));
+        '--src-prefix=a/', '--dst-prefix=b/', ...revs, '--',
+    ]).split('\n'));
     findings.push(...patch.findings);
     for (const { sha, file, blob } of patch.binaries) {
         const buf = execFileSync('git', ['cat-file', 'blob', blob], { cwd, maxBuffer: 1 << 30 });
         for (const line of linesOf(buf).lines) for (const name of scanLine(line)) findings.push(`${sha.slice(0, 12)} ${file} (바이너리) ${name}`);
     }
-    return { shallow, commits, findings: [...new Set(findings)].filter((finding) => !HISTORY_ACCEPTED.includes(finding)) };
+    return { shallow, commits, findings: findings.filter((finding) => !HISTORY_ACCEPTED.includes(finding)) };
 }
 
 /**
- * main 에 이미 들어가 다시 쓸 수 없는 커밋에서 걸린 것 가운데, 확인한 뒤 받아들인 것. `scanHistory` 가 출력하는 문자열 그대로 적고 까닭을 주석으로 남긴다.
- * 비밀이 맞다면 여기에 넣기 전에 그 비밀을 폐기한다.
+ * 다시 쓸 수 없는 main 이력에 들어간 오탐의 탈출구. 지금은 비어 있다.
+ * 항목은 `scanHistory` 가 출력하는 문자열 그대로(커밋 SHA 앞 12자로 시작) 적고, 항목마다 커밋 SHA 전체와 까닭을 주석으로 남긴다.
+ * 오탐이 아니라 비밀이면 여기에 넣기 전에 그 비밀을 폐기한다.
  */
 const HISTORY_ACCEPTED = [];
 
-async function mainHistory(args) {
+function mainHistory(args) {
     const revs = args.filter((arg) => !arg.startsWith('--'));
-    const { shallow, commits, findings } = await scanHistory({ revs: revs.length > 0 ? revs : ['HEAD'] });
+    const { shallow, commits, findings } = scanHistory({ revs: revs.length > 0 ? revs : ['HEAD'] });
     if (shallow && !args.includes('--allow-shallow')) {
         process.stderr.write('얕은 클론이라 커밋 이력이 잘려 있다. CI 는 actions/checkout 에 fetch-depth: 0 을 주고, 로컬 클론은 git fetch --unshallow 로 이력을 받는다.\n');
         process.exit(1);

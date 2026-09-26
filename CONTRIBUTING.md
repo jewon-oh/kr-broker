@@ -78,8 +78,6 @@ python -m venv .venv
 node ../scripts/check-python-types.mjs --python .venv/bin/python   # pyright 타입 검사
 ```
 
-CI와 같은 판으로 설치하려면 `.venv/bin/pip install --require-hashes -r requirements/ci.txt` 뒤 `.venv/bin/pip install --no-deps -e .`를 실행합니다.
-
 - `python/kr_broker/abstract/`는 `node scripts/gen-python-abstract.mjs`가 `ts/src/spec/*.json`에서 만드는 파일입니다. 직접 고치지 말고 엔드포인트 표를 고친 뒤 다시 만듭니다.
 - 동작은 TypeScript 판과 같아야 합니다. 두 판이 함께 돌리는 요청 픽스처(`ts/src/test/static/request/`)에 케이스를 더하고, TypeScript 판에서 먼저 통과시킨 뒤 Python 판을 맞춥니다. 형식은 [ts/src/test/static/README.md](ts/src/test/static/README.md)에 있습니다.
 - 증권사 클래스와 I/O 가 있는 도우미는 `python/kr_broker/async_support/`의 비동기 판이 정본입니다. 동기 판(`kis.py`, `toss.py` 등 `scripts/gen-python-sync.mjs`의 `GENERATED_MODULES`)은 `node scripts/gen-python-sync.mjs`로 만듭니다. 동기 판 파일을 직접 고치면 CI가 실패합니다.
@@ -87,22 +85,16 @@ CI와 같은 판으로 설치하려면 `.venv/bin/pip install --require-hashes -
 - 두 판이 함께 써야 하는 전역 상태(휴장일 캘린더, 한국투자증권 앱키 슬롯)는 생성하지 않는 모듈(`market_calendar.py`, `kis_rate_limit.py`)에 둡니다. 베이스(`base/`)와 캘린더 갱신 함수는 동기 짝과 비동기 짝(`async_support/base/`, `async_support/market_calendar.py`)을 손으로 씁니다. 한쪽을 고치면 다른 쪽도 고칩니다. `test_async_support.py`가 두 짝의 인자가 같은지 봅니다.
 - 타입 검사는 pyright(`basic`)로 센 파일별 오류 수가 `python/pyright-baseline.json`과 다르면 실패합니다. 오류가 늘었으면 새 오류를 고치고, 줄었으면 `--update`를 붙여 스크립트를 다시 돌린 뒤 바뀐 기준선 파일을 코드와 함께 커밋합니다.
 - CI는 `node scripts/gen-python-abstract.mjs --check`, `node scripts/gen-python-sync.mjs --check`, `node scripts/python-lock.mjs --check`, `pytest`, 운영 의존성의 취약점 감사(`pip-audit`)를 Python 3.10과 3.13에서 실행합니다. 타입 검사는 3.13에서만 돌립니다.
-- CI는 의존성을 해시를 고정한 잠금 파일(`python/requirements/ci.txt`)로 설치합니다. 패키지 자신은 잠금 파일의 hatchling으로 빌드해 의존성 없이 설치하고(`--no-deps --no-build-isolation`), `pip check`로 `pyproject.toml`의 요구사항을 잠금 파일의 판이 만족하는지 봅니다. 잠금 파일은 CI 전용입니다. 사용하는 쪽의 설치는 `pyproject.toml`의 하한을 따릅니다.
-- `pip-audit`는 운영 의존성의 잠금 파일(`python/requirements/runtime.txt`)을 감사합니다. 감사 도구도 해시를 고정한 잠금 파일(`pip-audit.txt`)로 따로 만든 venv에 설치합니다. 로컬에서는 그 venv에서 `pip install --require-hashes -r python/requirements/pip-audit.txt` 뒤 `pip-audit --disable-pip -r python/requirements/runtime.txt`를 실행합니다.
+- CI는 의존성을 해시를 고정한 잠금 파일(`python/requirements/ci.txt`)로 설치하고, 패키지 자신은 `--no-deps --no-build-isolation`으로 설치합니다. 잠금 파일은 CI 전용입니다. 사용하는 쪽의 설치는 `pyproject.toml`의 하한을 따릅니다.
+- `pip-audit`는 운영 의존성의 잠금 파일(`python/requirements/runtime.txt`)을 감사합니다. 로컬에서는 새 venv에서 `pip install --require-hashes -r python/requirements/pip-audit.txt` 뒤 `pip-audit --disable-pip -r python/requirements/runtime.txt`를 실행합니다.
 
 ### Python 잠금 파일
 
 `python/requirements/`의 `.in`은 직접 요구하는 의존성이고, `.txt`는 `uv pip compile --universal --generate-hashes`로 푼 판과 해시입니다. `.txt` 하나가 환경 마커로 Python 3.10과 3.13을 함께 덮습니다.
 
-| 파일 | 담는 것 | 쓰는 곳 |
-|---|---|---|
-| `runtime` | `pyproject.toml`의 `dependencies` | `pip-audit`의 감사 대상 |
-| `ci` | `runtime.txt`와 같은 판의 운영 의존성, `dev` extra, `build-system.requires` | CI 설치 |
-| `pip-audit` | 감사 도구 | CI 감사 |
-
-- `pyproject.toml`의 `dependencies`, `dev` extra, `build-system.requires`를 바꾸면 같은 PR에서 `.in`을 맞추고 `pnpm python:lock`으로 `.txt`를 다시 만듭니다. [uv](https://docs.astral.sh/uv/)가 필요합니다. 이미 있는 판은 그대로 둡니다. 모든 판을 올리려면 `pnpm python:lock --upgrade`, 하나만 올리려면 `pnpm python:lock --upgrade-package requests`를 씁니다.
+- `pyproject.toml`의 `dependencies`, `dev` extra, `build-system.requires`를 바꾸면 같은 PR에서 `.in`을 맞추고 `pnpm python:lock`으로 `.txt`를 다시 만듭니다. [uv](https://docs.astral.sh/uv/)가 필요합니다. 이미 있는 판은 그대로 두고, 모든 판을 올리려면 `pnpm python:lock --upgrade`를 씁니다.
 - `node scripts/python-lock.mjs --check`는 네트워크 없이 `.in`이 `pyproject.toml`과 같은지, `.txt`의 판이 `.in`의 범위를 만족하는지 봅니다. `pnpm verify`와 CI가 이 검사를 돌립니다.
-- Dependabot(`uv` 생태계)이 매주 `.in`과 `.txt`를 함께 올립니다. `.txt` 머리말에 적힌 명령으로 다시 만들므로 머리말을 손으로 고치지 않습니다.
+- Dependabot(`uv` 생태계)이 `.in`과 `.txt`를 함께 올립니다. `.txt` 머리말의 명령으로 다시 만들므로 머리말을 손으로 고치지 않습니다.
 
 ## 커밋과 PR
 
@@ -165,7 +157,7 @@ PR 본문은 [PR 템플릿](.github/pull_request_template.md)의 항목을 채�
 - 실제 응답을 바탕으로 만든 픽스처는 필드 구조를 그대로 두고 값을 바꿉니다.
 - 수량, 가격, 체결 시각처럼 계좌 활동을 드러내는 값도 바꿉니다.
 - 커밋한 비밀은 이력에 남습니다. 커밋 전에 `git diff`로 픽스처를 확인합니다.
-- `pnpm hygiene:check`는 토큰과 키 모양(JWT, 개인 키, KIS 앱키, 긴 base64 시크릿, `approval_key`와 `client_secret`에 붙은 값 등), 사설 주소(사설 IP, 링크로컬, IPv6 사설 주소, `.lan` 호스트), 이메일(`example.*` 도메인, GitHub noreply 주소, `noreply@anthropic.com`은 허용), 홈 디렉터리 경로, 계좌번호 모양을 찾습니다. 전체 목록은 `scripts/check-hygiene.mjs`의 머리 주석에 있습니다. 주문번호는 패턴으로 가릴 수 없고 계좌번호도 8자리-2자리 모양만 찾으므로 직접 확인합니다.
+- `pnpm hygiene:check`는 토큰과 키 모양(JWT, 개인 키, KIS 앱키, 긴 base64 시크릿, `approval_key`와 `client_secret`에 붙은 값 등), 사설 주소(사설 IP, 링크로컬, IPv6 사설 주소, `.lan` 호스트), 이메일(`example.*` 도메인, GitHub noreply 주소, `noreply@anthropic.com`, Dependabot 서명 트레일러의 `support@github.com`은 허용), 홈 디렉터리 경로, 계좌번호 모양을 찾습니다. 전체 목록은 `scripts/check-hygiene.mjs`의 머리 주석에 있습니다. 주문번호는 패턴으로 가릴 수 없고 계좌번호도 8자리-2자리 모양만 찾으므로 직접 확인합니다.
 - `pnpm hygiene:history`는 같은 패턴으로 `HEAD`에 닿는 모든 커밋의 메시지와 추가된 줄을 봅니다. 나중 커밋에서 지운 값도 이력에는 남기 때문입니다. PR에서는 PR 브랜치의 커밋도 봅니다. 걸린 커밋이 PR 브랜치에 있으면 그 커밋을 고쳐 다시 푸시합니다.
 - 실수로 올렸다면 PR을 닫고 [보안 정책](SECURITY.md)의 절차대로 앱키를 폐기합니다.
 

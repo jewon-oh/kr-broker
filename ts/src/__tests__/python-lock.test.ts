@@ -13,7 +13,7 @@ const SCRIPT = path.join(ROOT, 'scripts/python-lock.mjs');
 
 interface PythonLock {
     tomlStringArray(text: string, section: string, key: string): string[];
-    parseIn(text: string): { options: string[]; requirements: string[] };
+    parseIn(text: string): string[];
     parsePins(text: string): Map<string, string>;
     satisfies(requirement: string, pins: Map<string, string>): true | string;
 }
@@ -51,11 +51,8 @@ describe('python-lock 읽기', () => {
         expect(() => lock.tomlStringArray(pyproject, 'tool.none', 'x')).toThrow('[tool.none]');
     });
 
-    it('.in 에서 주석과 빈 줄을 빼고 옵션 줄과 요구사항을 나눈다', () => {
-        expect(lock.parseIn('# 머리 주석\n-c runtime.txt\n-r runtime.in\n\npytest>=8  # 끝 주석\nhatchling>=1.24\n')).toEqual({
-            options: ['-c runtime.txt', '-r runtime.in'],
-            requirements: ['pytest>=8', 'hatchling>=1.24'],
-        });
+    it('.in 에서 주석, 빈 줄, 옵션 줄을 빼고 요구사항만 읽는다', () => {
+        expect(lock.parseIn('# 머리 주석\n-c runtime.txt\n-r runtime.in\n\npytest>=8  # 끝 주석\nhatchling>=1.24\n')).toEqual(['pytest>=8', 'hatchling>=1.24']);
     });
 
     it('.txt 에서 고정한 판을 정규화한 이름으로 읽는다(환경 마커와 해시 줄 무시)', () => {
@@ -74,15 +71,13 @@ describe('python-lock 판 비교', () => {
     const pins = new Map([['requests', '2.34.2'], ['pytest', '9.1.1'], ['odd', '1.0rc1']]);
 
     it('범위를 만족하면 true 다', () => {
-        for (const requirement of ['requests>=2.33.0', 'requests>=2.34.2', 'Requests == 2.34.2', 'requests>=2,<3', 'requests!=2.34.1', 'requests~=2.34.0', 'requests~=2.3', 'pytest>=8', 'pytest'])
+        for (const requirement of ['requests>=2.33.0', 'requests>=2.34.2', 'Requests == 2.34.2', 'requests>=2,<3', 'requests!=2.34.1', 'pytest>=8', 'pytest'])
             expect(lock.satisfies(requirement, pins), requirement).toBe(true);
     });
 
     it('범위를 벗어나거나 고정한 판이 없으면 이유를 돌려준다', () => {
         expect(lock.satisfies('requests>=2.35', pins)).toContain('만족하지 않는다');
         expect(lock.satisfies('requests<2.34.2', pins)).toContain('만족하지 않는다');
-        expect(lock.satisfies('requests~=2.33.0', pins)).toContain('만족하지 않는다');
-        expect(lock.satisfies('requests~=3.0', pins)).toContain('만족하지 않는다');
         expect(lock.satisfies('hatchling>=1.24', pins)).toContain('고정한 판이 없다');
     });
 
@@ -90,5 +85,6 @@ describe('python-lock 판 비교', () => {
         expect(lock.satisfies('odd>=1.0', pins)).toContain('비교하지 못한다');
         expect(lock.satisfies('requests==2.*', pins)).toContain('비교하지 못한다');
         expect(lock.satisfies('requests===2.34.2', pins)).toContain('비교하지 못한다');
+        expect(lock.satisfies('requests~=2.34', pins)).toContain('비교하지 못한다');
     });
 });

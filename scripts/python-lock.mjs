@@ -11,8 +11,8 @@
  * - `pip-audit`: 감사 도구.
  *
  * 인자 없이 돌리면 uv 로 세 파일을 다시 만든다(네트워크 필요). 이미 있는 판은 그대로 두고, `--upgrade` 나 `--upgrade-package <이름>` 같은 인자는 uv 에 넘긴다.
- * `--check` 는 네트워크 없이 `.in` 이 `pyproject.toml` 과 같은지, `.txt` 가 정해진 명령으로 만들어졌고 `.in` 의 범위를 만족하는 판을 담았는지 본다.
- * 빠진 하위 의존성은 CI 의 `pip install --require-hashes` 가 잡는다.
+ * `--check` 는 네트워크 없이 `.in` 이 `pyproject.toml` 과 같은지, `.txt` 가 `.in` 의 범위를 만족하는 판을 담았는지 본다.
+ * 빠진 하위 의존성과 `.txt` 를 다른 옵션으로 만든 것은 CI 의 `pip install --require-hashes` 가 잡는다.
  *
  * ```bash
  * pnpm python:lock                              # 다시 만든다
@@ -58,10 +58,9 @@ export function tomlStringArray(text, section, key) {
     return [...(match[1] ?? '').matchAll(/"([^"]*)"|'([^']*)'/g)].map((m) => m[1] ?? m[2] ?? '');
 }
 
-/** `.in` 파일에서 요구사항과 옵션 줄(`-c`, `-r`)을 나눈다. 주석과 빈 줄은 뺀다. */
+/** `.in` 파일의 요구사항. 주석, 빈 줄, 옵션 줄(`-c`, `-r`)은 뺀다. */
 export function parseIn(text) {
-    const lines = text.split('\n').map((line) => line.replace(/(^|\s)#.*$/, '').trim()).filter(Boolean);
-    return { options: lines.filter((line) => line.startsWith('-')), requirements: lines.filter((line) => !line.startsWith('-')) };
+    return text.split('\n').map((line) => line.replace(/(^|\s)#.*$/, '').trim()).filter((line) => line !== '' && !line.startsWith('-'));
 }
 
 /** `.txt` 에서 고정한 판(`이름==판`)을 읽는다. 키는 정규화한 이름이다. */
@@ -94,13 +93,10 @@ export function satisfies(requirement, pins) {
     const pinned = pins.get(name);
     if (pinned === undefined) return `${name} 의 고정한 판이 없다`;
     for (const spec of (match[2] ?? '').split(',').map((s) => s.trim()).filter(Boolean)) {
-        const op = /^(==|!=|>=|<=|>|<|~=)\s*(\S+)$/.exec(spec);
+        const op = /^(==|!=|>=|<=|>|<)\s*(\S+)$/.exec(spec);
         const cmp = op === null ? undefined : compareRelease(pinned, op[2] ?? '');
         if (op === null || cmp === undefined) return `${name} ${spec} 를 이 검사가 비교하지 못한다(판 ${pinned})`;
-        // `~=2.3.1` 은 `>=2.3.1, ==2.3.*` 이다.
-        const prefix = (op[2] ?? '').split('.').slice(0, -1);
-        const compatible = cmp >= 0 && prefix.every((part, i) => Number(part) === Number(pinned.split('.')[i] ?? 0));
-        const ok = { '==': cmp === 0, '!=': cmp !== 0, '>=': cmp >= 0, '<=': cmp <= 0, '>': cmp > 0, '<': cmp < 0, '~=': compatible }[op[1] ?? ''];
+        const ok = { '==': cmp === 0, '!=': cmp !== 0, '>=': cmp >= 0, '<=': cmp <= 0, '>': cmp > 0, '<': cmp < 0 }[op[1] ?? ''];
         if (!ok) return `${name} ${pinned} 이(가) ${spec} 를 만족하지 않는다`;
     }
     return true;
@@ -120,31 +116,16 @@ function check() {
     };
     const problems = [];
     for (const lock of LOCKS) {
-        const input = parseIn(read(path.join(LOCK_DIR, `${lock}.in`)));
-        const compiled = read(path.join(LOCK_DIR, `${lock}.txt`));
-        const own = input.requirements;
+        const own = parseIn(read(path.join(LOCK_DIR, `${lock}.in`)));
         const want = expected[lock];
         if (want !== undefined && !sameRequirements(own, want)) {
             problems.push(`${lock}.in 의 요구사항(${own.join(', ')})이 pyproject.toml(${want.join(', ')})과 다르다`);
         }
-        const command = ['uv pip compile', ...COMPILE_OPTIONS, `${lock}.in`, '-o', `${lock}.txt`].join(' ');
-        if (!compiled.split('\n', 5).some((line) => line.trim() === `#    ${command}`)) {
-            problems.push(`${lock}.txt 의 머리말이 \`${command}\` 로 만든 모양이 아니다`);
-        }
-        const pins = parsePins(compiled);
-        const nested = input.options.flatMap((option) => {
-            const ref = /^-r\s+(\S+)\.in$/.exec(option);
-            return ref === null ? [] : parseIn(read(path.join(LOCK_DIR, `${ref[1]}.in`))).requirements;
-        });
-        for (const requirement of [...own, ...nested]) {
+        const pins = parsePins(read(path.join(LOCK_DIR, `${lock}.txt`)));
+        for (const requirement of own) {
             const result = satisfies(requirement, pins);
             if (result !== true) problems.push(`${lock}.txt: ${result}`);
         }
-    }
-    const runtimePins = parsePins(read(path.join(LOCK_DIR, 'runtime.txt')));
-    const ciPins = parsePins(read(path.join(LOCK_DIR, 'ci.txt')));
-    for (const [name, version] of runtimePins) {
-        if (ciPins.get(name) !== version) problems.push(`ci.txt 의 ${name} 판(${ciPins.get(name) ?? '없음'})이 runtime.txt(${version})와 다르다`);
     }
     if (problems.length > 0) {
         fail(`Python 잠금 파일(python/requirements)이 pyproject.toml 과 맞지 않는다:\n  ${problems.join('\n  ')}\n`
@@ -154,16 +135,10 @@ function check() {
 }
 
 function compile(extra) {
-    const version = spawnSync('uv', ['--version'], { encoding: 'utf8', shell: process.platform === 'win32' });
-    if (version.status !== 0) fail('uv 가 필요하다. 설치 방법은 https://docs.astral.sh/uv/getting-started/installation/ 에 있다.');
     for (const lock of LOCKS) {
         process.stdout.write(`▶ ${lock}.txt\n`);
-        const result = spawnSync('uv', ['pip', 'compile', '--quiet', ...COMPILE_OPTIONS, ...extra, `${lock}.in`, '-o', `${lock}.txt`], {
-            cwd: LOCK_DIR,
-            stdio: 'inherit',
-            shell: process.platform === 'win32',
-        });
-        if (result.status !== 0) fail(`${lock}.txt 를 만들지 못했다`);
+        const result = spawnSync('uv', ['pip', 'compile', '--quiet', ...COMPILE_OPTIONS, ...extra, `${lock}.in`, '-o', `${lock}.txt`], { cwd: LOCK_DIR, stdio: 'inherit' });
+        if (result.status !== 0) fail(`${lock}.txt 를 만들지 못했다. uv(https://docs.astral.sh/uv/)가 필요하다.`);
     }
     check();
 }

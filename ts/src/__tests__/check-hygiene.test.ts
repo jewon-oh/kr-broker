@@ -21,8 +21,8 @@ interface Hygiene {
     EMAIL_ALLOWED: Readonly<Record<'author' | 'committer' | 'text', (address: string) => boolean>>;
     scanLine(line: string): string[];
     linesOf(buf: Buffer): { binary: boolean; lines: string[] };
-    scanPatch(lines: Iterable<string>): Promise<{ findings: string[]; binaries: { sha: string; file: string; blob: string }[] }>;
-    scanHistory(options: { cwd: string; revs?: string[] }): Promise<{ shallow: boolean; commits: number; findings: string[] }>;
+    scanPatch(lines: Iterable<string>): { findings: string[]; binaries: { sha: string; file: string; blob: string }[] };
+    scanHistory(options: { cwd: string; revs?: string[] }): { shallow: boolean; commits: number; findings: string[] };
 }
 
 // 검사기는 타입 선언이 없는 .mjs 다. 경로를 변수로 만들어 불러오면 경계 검사와 타입 검사가 파일 안쪽으로 따라가지 않는다.
@@ -160,7 +160,6 @@ describe('check-hygiene 패턴', () => {
         join('someone', '@users.noreply.github.com.evil.test'),
         '@users.noreply.github.com',
         join('a b', '@users.noreply.github.com'),
-        join('support', '@github.com'),
         join('noreply', '@github.io'),
         join('noreply', '@anthropic.com.evil.test'),
     ];
@@ -170,17 +169,18 @@ describe('check-hygiene 패턴', () => {
 
     it('작성자 이메일: GitHub noreply 주소(봇 포함)만 허용하고, GitHub 서비스 주소와 noreply@anthropic.com 은 걸린다', () => {
         for (const address of githubNoreply) expect(hygiene.EMAIL_ALLOWED.author(address), address).toBe(true);
-        for (const address of [...neverAllowed, githubService, join('NoReply', '@GitHub.com'), anthropic, 'alice@example.com'])
+        for (const address of [...neverAllowed, githubService, join('NoReply', '@GitHub.com'), join('support', '@github.com'), anthropic, 'alice@example.com'])
             expect(hygiene.EMAIL_ALLOWED.author(address), address).toBe(false);
     });
 
     it('커미터 이메일: GitHub noreply 주소와 GitHub 서비스 주소를 허용하고, noreply@anthropic.com 은 걸린다', () => {
         for (const address of [...githubNoreply, githubService, join('NoReply', '@GitHub.com')]) expect(hygiene.EMAIL_ALLOWED.committer(address), address).toBe(true);
-        for (const address of [...neverAllowed, anthropic, 'alice@example.com']) expect(hygiene.EMAIL_ALLOWED.committer(address), address).toBe(false);
+        for (const address of [...neverAllowed, join('support', '@github.com'), anthropic, 'alice@example.com']) expect(hygiene.EMAIL_ALLOWED.committer(address), address).toBe(false);
     });
 
-    it('파일과 커밋 메시지의 이메일: GitHub noreply 주소, noreply@anthropic.com, example.* 을 허용하고, GitHub 서비스 주소는 걸린다', () => {
-        for (const address of [...githubNoreply, anthropic, 'alice@example.com']) expect(hygiene.EMAIL_ALLOWED.text(address), address).toBe(true);
+    it('파일과 커밋 메시지의 이메일: GitHub noreply 주소, noreply@anthropic.com, Dependabot 트레일러의 지원 주소, example.* 을 허용하고, GitHub 서비스 주소는 걸린다', () => {
+        for (const address of [...githubNoreply, anthropic, join('support', '@github.com'), 'alice@example.com']) expect(hygiene.EMAIL_ALLOWED.text(address), address).toBe(true);
+        expect(hygiene.scanLine(`Signed-off-by: dependabot[bot] <${join('support', '@github.com')}>`)).not.toContain('이메일 주소');
         for (const address of [...neverAllowed, githubService]) expect(hygiene.EMAIL_ALLOWED.text(address), address).toBe(false);
     });
 
@@ -265,9 +265,9 @@ describe('check-hygiene 커밋 이력', () => {
         return { dir, repo, git, write, commit };
     }
 
-    it('추가된 줄의 파일과 줄 번호를 알리고, 헝크 안의 +++ 줄도 추가된 줄로 읽고, 바이너리의 새 blob 을 모은다', async () => {
+    it('추가된 줄의 파일과 줄 번호를 알리고, 헝크 안의 +++ 줄도 추가된 줄로 읽고, 바이너리의 새 blob 을 모은다', () => {
         const [a, b] = ['a'.repeat(40), 'b'.repeat(40)];
-        const { findings, binaries } = await hygiene.scanPatch([
+        const { findings, binaries } = hygiene.scanPatch([
             `\x01${a}`,
             '',
             'diff --git a/fixtures/x.json b/fixtures/x.json',
@@ -302,7 +302,7 @@ describe('check-hygiene 커밋 이력', () => {
         expect(binaries).toEqual([{ sha: b, file: 'img.png', blob: '3'.repeat(40) }]);
     });
 
-    it('★지운 파일의 줄, 바이너리, 메시지, 커밋 이메일(작성자 칸의 GitHub 서비스 주소 포함), 병합 커밋에서 새로 들어간 줄이 걸린다', async () => {
+    it('★지운 파일의 줄, 바이너리, 메시지, 커밋 이메일(작성자 칸의 GitHub 서비스 주소 포함), 병합 커밋에서 새로 들어간 줄이 걸린다', () => {
         const { repo, git, write, commit } = tempRepo();
         write('a.txt', `a\nhost=${privateIp}\n`);
         write('b.bin', Buffer.concat([Buffer.from([0, 1]), Buffer.from(`host=${privateIp};`), Buffer.from([0])]));
@@ -324,7 +324,7 @@ describe('check-hygiene 커밋 이력', () => {
         write('s.txt', `side\n${privateIp}\n`);
         const merge = commit('merge');
 
-        const result = await hygiene.scanHistory({ cwd: repo });
+        const result = hygiene.scanHistory({ cwd: repo });
         expect(result.shallow).toBe(false);
         expect(result.commits).toBe(10);
         expect([...result.findings].sort()).toEqual([
@@ -338,18 +338,18 @@ describe('check-hygiene 커밋 이력', () => {
         ].sort());
     }, 30_000);
 
-    it('noreply 주소와 걸리지 않는 내용만 있으면 아무것도 걸리지 않고, 얕은 클론은 shallow 로 알린다', async () => {
+    it('noreply 주소와 걸리지 않는 내용만 있으면 아무것도 걸리지 않고, 얕은 클론은 shallow 로 알린다', () => {
         const { dir, repo, git, write, commit } = tempRepo();
         write('a.txt', 'alice@example.com\n');
         commit('feat: 첫 커밋\n\nCo-Authored-By: Claude <noreply@anthropic.com>');
         write('a.txt', 'b\n');
         commit('fix: 둘째 커밋');
-        const clean = await hygiene.scanHistory({ cwd: repo });
+        const clean = hygiene.scanHistory({ cwd: repo });
         expect(clean).toEqual({ shallow: false, commits: 2, findings: [] });
 
         const shallow = path.join(dir, 'shallow');
         git(['clone', '-q', '--depth', '1', pathToFileURL(repo).href, shallow], dir);
-        expect(await hygiene.scanHistory({ cwd: shallow })).toEqual({ shallow: true, commits: 1, findings: [] });
+        expect(hygiene.scanHistory({ cwd: shallow })).toEqual({ shallow: true, commits: 1, findings: [] });
     }, 30_000);
 });
 
