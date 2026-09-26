@@ -1204,7 +1204,7 @@ class kbsec(Exchange, ImplicitAPI):
         둘 다 없으면 가장 최근 영업일이다. 날짜는 국내가 한국 날짜, 미국이 미국 현지 날짜다. 체결 행에는 시각이 없어 `since` 는 날짜 단위로만 적용된다.
 
         분할체결은 식별자를 지운 연속 행으로 온다. 이 메서드가 그 행을 앞 헤더에 귀속시키므로 주문번호(`trade['order']`)별로 `amount` 를 더하면 체결수량이다.
-        단가가 0 인 체결은 체결가를 모르므로 버린다.
+        단가가 0 인 체결은 체결가를 모르므로 버린다. 체결 id 는 `주문번호#순번` 이고, 순번은 조회일자마다 센다(`_fill_rows_to_trades`).
         """
         params = {} if params is None else params
         if symbol is None:
@@ -1216,15 +1216,15 @@ class kbsec(Exchange, ImplicitAPI):
         if country == 'US':
             return self._fetch_overseas_trades(market, dates, limit)
         if dates is None:
-            return self._fill_rows_to_trades(self._fetch_domestic_order_rows(KBSEC_CCLS_FILLED, market, None), market, limit)
+            return self._fill_rows_to_trades([self._fetch_domestic_order_rows(KBSEC_CCLS_FILLED, market, None)], market, limit)
 
         def request(ordr_dt: str) -> List[Dict[str, Any]]:
             return self._fetch_domestic_order_rows(KBSEC_CCLS_FILLED, market, ordr_dt)
 
-        rows: List[Dict[str, Any]] = []
+        days: List[List[Dict[str, Any]]] = []
         for date in dates:
-            rows.extend(self._on_date_skipping_holiday(date, request, len(dates) > 1))
-        return self._fill_rows_to_trades(rows, market, limit)
+            days.append(self._on_date_skipping_holiday(date, request, len(dates) > 1))
+        return self._fill_rows_to_trades(days, market, limit)
 
     def _trade_dates_since(self, since: int, country: str) -> List[str]:
         """`since` 의 날짜부터 오늘까지의 평일(`YYYYMMDD`). 국내는 한국 날짜, 해외는 미국 현지 날짜다. 31일을 넘으면 던진다."""
@@ -1276,13 +1276,14 @@ class kbsec(Exchange, ImplicitAPI):
                     raise BadResponse(f"{self.id} 해외 체결 목록({KBSEC_TR['ORDERS_US']})이 페이지 상한(holdingsMaxPages)에서 잘렸다. 일부만 돌려주지 않는다")
                 return result['rows']
 
-            rows: List[Dict[str, Any]] = []
+            days: List[List[Dict[str, Any]]] = []
             if dates is None:
-                rows.extend(self._call_on_business_date(request, 'US'))
+                days.append(self._call_on_business_date(request, 'US'))
             else:
                 for date in dates:
-                    rows.extend(self._on_date_skipping_holiday(date, request, len(dates) > 1))
-            trades = self._fill_rows_to_trades(rows, market, limit)
+                    days.append(self._on_date_skipping_holiday(date, request, len(dates) > 1))
+            trades = self._fill_rows_to_trades(days, market, limit)
+            rows = [row for day in days for row in day]
             if rows and not trades:
                 logger.warning('[kbsec] 해외 체결 행은 있으나 전부 걸러짐 — 응답 필드명 불일치: rows=%s rowKeys=%s', len(rows), list(rows[0])[:40])
             return trades
@@ -1294,31 +1295,41 @@ class kbsec(Exchange, ImplicitAPI):
                            'symbol=%s trCode=%s latched=%s err=%s', market['symbol'], KBSEC_TR['ORDERS_US'], permanent, err)
             raise
 
-    def _fill_rows_to_trades(self, rows: List[Dict[str, Any]], market: MarketInterface, limit: Int) -> List[Trade]:
-        """체결 행을 체결 건별 `Trade` 로 옮긴다. 필드 이름은 `kbsec_fill_row` 가 정본이다.
+    def _fill_rows_to_trades(self, days: List[List[Dict[str, Any]]], market: MarketInterface, limit: Int) -> List[Trade]:
+        """체결 행을 체결 건별 `Trade` 로 옮긴다. `days` 는 조회일자마다 받은 행이다. 필드 이름은 `kbsec_fill_row` 가 정본이다.
 
         - 한 행이 한 체결이라 수량은 그대로 쓴다. 분할체결 연속 행은 식별자가 비어 오므로 `kbsec_resolve_fills` 로 헤더 행에 귀속시킨다.
+          귀속은 조회일자 안에서만 한다. 다른 날의 연속 행을 앞날의 주문에 붙이면 그 주문의 순번이 겹친다.
         - 종목 필터는 귀속 뒤에 건다. 앞에서 걸면 다른 종목의 헤더 행이 사라지고 식별자 없는 연속 행이 엉뚱한 헤더에 붙는다.
           요청이 이미 종목 단위라 코드가 비어 온 행은 걸러 내지 않는다. 다른 종목이 분명한 행만 뺀다.
         - 단가 0 인 체결은 버린다. 수량만 있고 단가가 없으면 확정된 것처럼 보이는 추측이 만들어진다.
+        - 체결 id 는 `주문번호#순번` 이다. 순번은 그날 그 주문의 체결을 행 순서대로 센 번호라서 조회 범위(`since`, `params['date']`)가 달라도 같다.
+          같은 주문의 새 체결이 그 주문의 행 가운데 어디에 붙는지는 실계좌로 확인하지 못했다. 앞에 붙는다면 그날 체결이 더 생길 때 먼저 받은 체결의 순번이 밀린다.
         """
         base = market['id'] or ''
         parse = parse_kbsec_overseas_fill_row if self._is_us(market) else parse_kbsec_domestic_fill_row
-        parsed = [parse(row) for row in rows]
-        warn_if_fill_totals_inconsistent(parsed, rows, f"체결내역 {market['symbol']}")
-        fills = [fill for fill in kbsec_resolve_fills(parsed) if base == '' or fill['symbol'] == '' or fill['symbol'] == base]
+        rows = [row for day in days for row in day]
+        parsed_days = [[parse(row) for row in day] for day in days]
+        warn_if_fill_totals_inconsistent([parsed for day in parsed_days for parsed in day], rows, f"체결내역 {market['symbol']}")
+        fill_days = [[fill for fill in kbsec_resolve_fills(parsed) if base == '' or fill['symbol'] == '' or fill['symbol'] == base]
+                     for parsed in parsed_days]
         trades: List[Trade] = []
-        for index, fill in enumerate(fills):
-            if not fill['price'] > 0:
-                warn_fill_without_price(rows[0] if rows else {}, market['symbol'] or '')
-                continue
-            trades.append(self.parse_trade(self.extend(fill, {'index': index}), market))
-        warn_if_fill_side_unreadable(rows, len([fill for fill in fills if fill['side'] is not None]), f"체결내역 {market['symbol']}")
+        for fills in fill_days:
+            counts: Dict[str, int] = {}
+            for fill in fills:
+                index = counts.get(fill['orderId'], 0)
+                counts[fill['orderId']] = index + 1
+                if not fill['price'] > 0:
+                    warn_fill_without_price(rows[0] if rows else {}, market['symbol'] or '')
+                    continue
+                trades.append(self.parse_trade(self.extend(fill, {'index': index}), market))
+        side_known = len([fill for fills in fill_days for fill in fills if fill['side'] is not None])
+        warn_if_fill_side_unreadable(rows, side_known, f"체결내역 {market['symbol']}")
         # 행 순서가 체결 순서다. `parse_trades` 는 시각·id 로 다시 정렬하는데, 체결 시각을 모르는 채로 id 문자열 순서로 섞이게 둘 수 없다.
         return trades[-limit:] if limit is not None else trades
 
     def parse_trade(self, trade: Dict[str, Any], market: Market = None) -> Trade:
-        """`kbsec_resolve_fills` 의 체결 건 하나(순번 `index` 를 더한 것)를 체결로 옮긴다. id 는 `주문번호#순번` 이다."""
+        """`kbsec_resolve_fills` 의 체결 건 하나(순번 `index` 를 더한 것)를 체결로 옮긴다. id 는 `주문번호#순번` 이고, 순번은 그날 그 주문 안에서 센다."""
         return self.safe_trade({
             'id': f"{trade['orderId']}#{trade['index']}",
             'info': trade,

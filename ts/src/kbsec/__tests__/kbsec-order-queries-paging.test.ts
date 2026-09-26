@@ -104,6 +104,25 @@ describe('해외 체결 조회(SPQM2103)의 날짜 축', () => {
     });
 });
 
+describe('체결 id', () => {
+    const filled = (ordr_no: string, price: string) => ({
+        ordr_no, stnd_is_no: 'A005930', trd_dl_ccd_nm: '현금매수', ordr_q: '1', tl_ccls_q: '1', nccls_q: '0', ccls_uprc: price, ordr_uprc: price, ordr_ccd: '00',
+    });
+
+    it('★같은 체결의 id 는 조회 범위에 따라 바뀌지 않는다 — since 로 여러 날을 조회해도 그날만 조회한 것과 같다', async () => {
+        serve({
+            [KBSEC_TR.TRADES_KR]: (b) => ok({ nxt_key: '', Record1: [b.ordr_dt === '20260922' ? filled('0000000001', '70000') : filled('0000000002', '70100')] }),
+        });
+        const exchange = newExchange();
+
+        const range = await exchange.fetchMyTrades('005930/KRW', Date.parse('2026-09-22T00:00:00+09:00'));   // 22일(화)과 23일(수)
+        const single = await exchange.fetchMyTrades('005930/KRW', undefined, undefined, { date: '20260923' });
+
+        expect(range.map((t) => t.id)).toEqual(['0000000001#0', '0000000002#0']);
+        expect(single.map((t) => t.id)).toEqual(['0000000002#0']);
+    });
+});
+
 describe('주문 경로', () => {
     it('미국 주문도 1주 미만이면 0주로 보내지 않고 요청 없이 InvalidOrder 다', async () => {
         vi.setSystemTime(new Date('2026-09-23T15:00:00Z'));   // 수 11:00 EDT, 미국 정규장
