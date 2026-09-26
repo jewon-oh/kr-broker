@@ -20,6 +20,17 @@ def kbsec_number_of(value: Any) -> Optional[float]:
     return n if math.isfinite(n) else None
 
 
+def kbsec_number(raw: Optional[Mapping[str, Any]], *keys: str) -> float:
+    """문자열·쉼표 섞인 KB 숫자를 읽는다. 키를 앞에서부터 시도하고 하나도 못 읽으면 0 이다."""
+    if not raw:
+        return 0
+    for key in keys:
+        n = kbsec_number_of(raw.get(key))
+        if n is not None:
+            return n
+    return 0
+
+
 def kbsec_string(raw: Optional[Mapping[str, Any]], *keys: str) -> str:
     """공백이 아닌 첫 후보 문자열(앞뒤 공백을 뗀 값). 없으면 `''` 이다."""
     if not raw:

@@ -1,6 +1,7 @@
 """KB증권 Open API(`class kbsec(Exchange, ImplicitAPI)`). TypeScript 판 `ts/src/kbsec.ts` 와 `ts/src/kbsec/kbsec-auth.ts` 를 옮기는 중이다.
 지금은 인증과 요청 봉투, 오류 처리, 토큰 복구, 시세(`fetch_ticker`, `fetch_order_book`, `fetch_ohlcv`, `fetch_trades`), 수수료 추정
-(`fetch_trading_fee`), 휴장일(`fetch_market_calendar`, `refresh_market_calendar`), 투자자 매매동향(`fetch_investor_trading`)만 옮겼다.
+(`fetch_trading_fee`), 휴장일(`fetch_market_calendar`, `refresh_market_calendar`), 투자자 매매동향(`fetch_investor_trading`), 주문·체결 조회
+(`fetch_order`, `fetch_orders`, `fetch_open_orders`, `fetch_closed_orders`, `fetch_my_trades`, `fetch_overseas_order_status`)만 옮겼다.
 `has` 가 `False` 인 통합 메서드는 부모 클래스가 `NotSupported` 를 던진다. 모든 TR 은 암묵 메서드로 부를 수 있다.
 
 .. code-block:: python
@@ -29,6 +30,7 @@
 """
 
 import base64
+import datetime
 import json
 import logging
 import math
@@ -43,28 +45,34 @@ from kr_broker.async_support.market_calendar import refresh_market_calendar as r
 from kr_broker.base import functions as fn
 from kr_broker.base.decimal_to_precision import NO_PADDING, ROUND, TICK_SIZE, decimal_to_precision
 from kr_broker.base.errors import (
-    ArgumentsRequired, AuthenticationError, BadResponse, BadSymbol, BaseError, ExchangeError, ExchangeNotAvailable, NetworkError,
-    NotSupported, NullResponse, RateLimitExceeded,
+    ArgumentsRequired, AuthenticationError, BadRequest, BadResponse, BadSymbol, BaseError, ExchangeError, ExchangeNotAvailable, NetworkError,
+    NotSupported, NullResponse, OrderNotFound, RateLimitExceeded,
 )
 from kr_broker.base.exchange import assert_secure_url, kst_trade_timestamps
+from kr_broker.base.precise import Precise
 from kr_broker.base.token_store import BrokerTokenStore, token_store_key
-from kr_broker.base.types import ApiName, Int, Market, MarketInterface, Num, OrderBook, Str, Ticker, Trade, TradingFeeInterface
+from kr_broker.base.types import ApiName, Int, Market, MarketInterface, Num, Order, OrderBook, Str, Ticker, Trade, TradingFeeInterface
 from kr_broker.broker_time import candle_period_utc_ms, is_daily_or_longer_timeframe, kst_ymd
 from kr_broker.kbsec_chart import KBSEC_CHART_MAX, KBSEC_TIMEFRAMES, kbsec_bar_ms, kbsec_candle_timestamp, kbsec_chart_params
 from kr_broker.kbsec_envelope import is_kbsec_business_error, is_kbsec_token_failure, kbsec_host_addr
 from kr_broker.kbsec_error_codes import KBSEC_ERROR_DETAIL, kbsec_error_detail, kbsec_exact_exceptions
 from kr_broker.kbsec_fee import kbsec_estimated_fee_rate
+from kr_broker.kbsec_fill_row import kbsec_resolve_fills, parse_kbsec_domestic_fill_row, parse_kbsec_overseas_fill_row
+from kr_broker.kbsec_fill_warnings import warn_fill_without_price, warn_if_fill_side_unreadable, warn_if_fill_totals_inconsistent
 from kr_broker.kbsec_pick import pick_array, pick_num, pick_positive_num, pick_str
 from kr_broker.kbsec_token_breaker import record_kbsec_call_ok, record_token_failure, throw_if_token_breaker_open
 from kr_broker.kbsec_tr_inputs import fill_tr_inputs
 from kr_broker.kbsec_types import (
-    KBSEC_API_BASE, KBSEC_REVOKE_PATH, KBSEC_TOKEN_DEFAULT_TTL_MS, KBSEC_TOKEN_PATH, KBSEC_TOKEN_SAFETY_MARGIN_MS, KBSEC_TR,
-    KBSEC_TR_PATH_PREFIX, KBSEC_US_EXCHANGES, kbsec_base_symbol, kbsec_market_of, kbsec_num,
+    KBSEC_API_BASE, KBSEC_CCLS_ALL, KBSEC_CCLS_FILLED, KBSEC_CCLS_PENDING, KBSEC_CONT_FIRST, KBSEC_CONT_NEXT, KBSEC_INQ_STOCK,
+    KBSEC_ORDER_TYPE_KR, KBSEC_REVOKE_PATH, KBSEC_TOKEN_DEFAULT_TTL_MS, KBSEC_TOKEN_PATH, KBSEC_TOKEN_SAFETY_MARGIN_MS, KBSEC_TR,
+    KBSEC_TR_PATH_PREFIX, KBSEC_US_EXCHANGES, kbsec_base_symbol, kbsec_business_date_kst, kbsec_business_date_us_eastern, kbsec_market_of,
+    kbsec_num,
 )
 from kr_broker.kis_master_data import master_data_of
 from kr_broker.kis_stock_master import get_krx_stock_by_code
 from kr_broker.krx_tick_size import get_krx_tick_size
 from kr_broker.market_calendar import expand_business_days
+from kr_broker.us_market_hours import et_ymd
 
 logger = logging.getLogger('kr_broker')
 
@@ -333,6 +341,10 @@ class kbsec(Exchange, ImplicitAPI):
         self._auth_identity = ''
         # 해외 종목의 KB 거래소코드(`krx_cd`). 심볼마다 한 번 찾아 둔다. NYSE 종목이 섞여 있어 `NAS` 로 고정하면 안 된다.
         self._us_exchange_cache: Dict[str, str] = {}
+        # 조회일자 되감기 캐시(시장별, 그 시장 날짜별). 연휴에 호출마다 같은 실패를 되풀이하지 않게 한다. 국내와 해외는 날짜 축이 달라 따로 둔다.
+        self._business_date_backoff: Dict[str, Dict[str, Any]] = {'KR': {'day': '', 'steps': 0}, 'US': {'day': '', 'steps': 0}}
+        # 해외 체결조회(SPQM2103) 영구 실패.
+        self._overseas_fills_unavailable = False
         super().__init__(config)
 
     def describe(self) -> Dict[str, Any]:
@@ -372,12 +384,12 @@ class kbsec(Exchange, ImplicitAPI):
                 'editOrder': False,
                 'cancelOrder': False,
                 'cancelAllOrders': False,
-                'fetchOrder': False,
-                'fetchOrders': False,
-                'fetchOpenOrders': False,
-                'fetchClosedOrders': False,
+                'fetchOrder': True,
+                'fetchOrders': True,
+                'fetchOpenOrders': True,
+                'fetchClosedOrders': True,
                 'fetchCanceledOrders': False,
-                'fetchMyTrades': False,
+                'fetchMyTrades': True,
                 'fetchTrades': True,
                 # KB 에 수수료 조회 TR 이 없어 공시 요율로 추정한다.
                 'fetchTradingFee': 'emulated',
@@ -407,6 +419,10 @@ class kbsec(Exchange, ImplicitAPI):
                 'tokenStore': None,
                 # 국내 종목 유형을 알려 주는 KIS 마스터 데이터(`kis_master_data` 참고). 없으면 빈 데이터다.
                 'masterData': None,
+                # 연속조회 페이지 상한. 호출 급증을 막는 값이지 정상 한도가 아니다.
+                'holdingsMaxPages': 20,
+                # 조회일자 되감기 상한. 연휴를 덮되 날짜와 무관한 실패를 끝없이 다시 부르지 않는다.
+                'businessDateMaxBackoff': 5,
             },
         })
 
@@ -896,6 +912,429 @@ class kbsec(Exchange, ImplicitAPI):
             return False
         return await refresh_shared_market_calendar('KR', self.fetch_market_calendar, CALENDAR_TTL_MS)
 
+    # ============ 주문·체결 조회 ============
+
+    def _is_permanent_failure(self, err: BaseException) -> bool:
+        """이 인스턴스에서 다시 불러도 답이 같은 영구 실패인가. KB 가 응답으로 거절한 업무 오류(권한 없음 I446, 미신청 H049 등)만 해당한다.
+        연결 끊김, 시간 초과, 5xx, 토큰 차단기, 토큰 무효(I445, 재발급으로 풀린다)는 영구 실패가 아니다."""
+        return isinstance(err, ExchangeError) and not (isinstance(err, AuthenticationError) and err.detail == KBSEC_ERROR_DETAIL['TOKEN_INVALID'])
+
+    async def _collect_tr_pages(self, tr_code: str, request: Dict[str, Any], parse: Callable[[Dict[str, Any]], Any]) -> Dict[str, Any]:
+        """다음키(`nxt_key`)가 있는 목록 TR 을 끝까지 읽어 `{'rows', 'truncated'}` 로 돌려준다. 첫 페이지만 보면 2페이지 이후 행이 빠진다.
+
+        - 다음키가 빈 값이면 멈춘다(KB 는 마지막 페이지에 공백을 주고, `pick_str` 가 잘라 낸다).
+        - 같은 다음키가 되풀이되면 그 페이지는 버리고 `truncated` 로 표시한다. 담으면 같은 행이 두 번 들어간다.
+        - 페이지 상한은 `options['holdingsMaxPages']` 다. 상한에 걸리면 `truncated` 로 표시한다.
+        - 호출하는 쪽이 `request` 에 넣은 `nxt_key` 는 무시하고 처음부터 읽는다. 행은 첫 배열에서 읽는다.
+
+        조회 실패는 그대로 던진다(빈 목록으로 삼키지 않는다).
+        """
+        max_pages = self.options['holdingsMaxPages']
+        base = self.omit(request, 'nxt_key')
+        rows: List[Any] = []
+        next_key = ''
+        truncated = False
+        for page in range(max_pages):
+            # 연속구분(`cn_clsf`)을 받는 TR 은 둘째 페이지부터 `1`(연속)을 보낸다.
+            continued = {'cn_clsf': KBSEC_CONT_NEXT} if next_key != '' and 'cn_clsf' in base else {}
+            body = await self._call_tr(tr_code, self.extend(base, continued, {'nxt_key': next_key}))
+            page_rows = [parse(row) for row in pick_array(body)]
+            prev_key = next_key
+            next_key = pick_str(body, 'nxt_key')
+            if next_key != '' and next_key == prev_key:
+                truncated = True
+                break
+            rows.extend(page_rows)
+            if next_key == '':
+                break
+            if page == max_pages - 1:
+                truncated = True
+        return {'rows': rows, 'truncated': truncated}
+
+    async def _call_on_business_date(self, call: Callable[[str], Awaitable[Any]], country: str = 'KR') -> Any:
+        """조회일자를 KB 영업일로 맞춰 부른다. 주말·휴장일에는 조회 전체가 거부된다(`주문일자가 현재일자보다 큽니다`, 2854).
+
+        주말은 `kbsec_business_date_kst` 가 되감는다. 남는 것은 표에 없는 공휴일이라, 2854 를 만나면 한 칸씩 더 되감아 다시 부른다
+        (상한 `options['businessDateMaxBackoff']`). 처음 칸이 아닌 칸에서 성공하면 모르는 휴장일이라 WARN 을 남기고, 되감은 칸 수를 그날 하루 캐시한다.
+        2854 가 아닌 오류는 그대로 던진다. 날짜와 무관한 실패를 날짜 탓으로 삼키지 않는다. 해외 조회(`US`)는 미국 현지 날짜로 되감는다.
+        """
+        today = et_ymd(self.milliseconds()) if country == 'US' else kst_ymd(self.milliseconds())
+        if self._business_date_backoff[country]['day'] != today:
+            self._business_date_backoff[country] = {'day': today, 'steps': 0}
+        start_steps = self._business_date_backoff[country]['steps']
+        last_err: Optional[BaseException] = None
+        for steps in range(start_steps, self.options['businessDateMaxBackoff'] + 1):
+            now = self.milliseconds()
+            ordr_dt = kbsec_business_date_us_eastern(steps, now) if country == 'US' else kbsec_business_date_kst(steps, now)
+            try:
+                result = await call(ordr_dt)
+            except ExchangeError as err:
+                if err.detail != KBSEC_ERROR_DETAIL['FUTURE_QUERY_DATE']:
+                    raise
+                last_err = err
+                continue
+            # 새로 되감았을 때만 WARN 을 남긴다. 캐시가 맞은 경우는 조용히 지나간다.
+            if steps != start_steps:
+                logger.warning('[kbsec] 조회일자를 영업일보다 더 되감아 성공 — 미등록 휴장일로 보임: ordrDt=%s steps=%s country=%s', ordr_dt, steps, country)
+                self._business_date_backoff[country] = {'day': today, 'steps': steps}
+            return result
+        raise cast(BaseException, last_err)
+
+    async def _fetch_domestic_order_rows(self, ccls_clsf: str, market: Optional[MarketInterface], date: Str,
+                                         params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """국내 주문·체결 목록(`SSQM2341`)의 행을 모든 페이지 읽는다. 날짜를 주지 않으면 가장 최근 영업일이다.
+        목록이 페이지 상한(`holdingsMaxPages`)에서 잘리면 일부만 돌려주지 않고 던진다. 빠진 주문은 취소 누락이나 재주문으로 이어진다."""
+
+        async def request(ordr_dt: str) -> Dict[str, Any]:
+            return await self._collect_tr_pages(KBSEC_TR['TRADES_KR'], self.extend({
+                'inq_clsf': KBSEC_INQ_STOCK,  # 주식
+                'ccls_clsf': ccls_clsf,  # 구분 필드를 비우면 거부된다(`체결구분을 확인하십시오`, 8654)
+                'ordr_dt': ordr_dt,
+                'is_cd': '' if market is None else market['id'] or '',
+                'cn_clsf': KBSEC_CONT_FIRST,
+            }, params), lambda row: row)
+
+        result = await request(date) if date is not None else await self._call_on_business_date(request)
+        if result['truncated']:
+            raise BadResponse(f"{self.id} 주문·체결 목록({KBSEC_TR['TRADES_KR']})이 페이지 상한(holdingsMaxPages)에서 잘렸다. 일부만 돌려주지 않는다")
+        return result['rows']
+
+    def _orders_from_rows(self, rows: List[Dict[str, Any]], market: Optional[MarketInterface], limit: Int) -> List[Order]:
+        """주문·체결 목록 행을 주문 단위로 묶는다. 이 TR 은 한 행이 한 체결이고, 분할체결의 둘째 체결부터는 주문번호를 지운 연속 행으로 온다.
+        헤더 행이 주문 하나를 열고 뒤따르는 연속 행의 체결을 그 주문에 더한다. 헤더 없이 온 연속 행은 귀속할 곳이 없어 버린다."""
+        groups: List[Dict[str, Any]] = []
+        for row in rows:
+            fill = parse_kbsec_domestic_fill_row(row)
+            if not fill['continuation']:
+                groups.append({'header': row, 'filled': fill['filledQty'], 'cost': fill['cost']})
+            elif groups:
+                groups[-1]['filled'] += fill['filledQty']
+                groups[-1]['cost'] += fill['cost']
+        orders = [self._parse_order_group(group['header'], group['filled'], group['cost'], market) for group in groups]
+        matched = orders if market is None else [order for order in orders if order['symbol'] == market['symbol']]
+        return matched if limit is None else matched[:limit]
+
+    async def fetch_open_orders(self, symbol: Str = None, since: Int = None, limit: Int = None,
+                                params: Optional[Dict[str, Any]] = None) -> List[Order]:
+        """국내 미체결 주문. 계좌별주문체결조회(`SSQM2341`)에서 체결구분 `미체결` 로 뽑는다. 이 TR 은 미체결이 0건이면 플래그 `B` 와 1861 로 주는데,
+        그것은 빈 결과로 받는다. 해외 미체결은 지원하지 않는다. 모든 페이지를 읽고 분할체결 행을 주문 단위로 묶는다.
+
+        `since` 는 적용하지 않는다. 미체결 행에는 주문 날짜가 없어 `timestamp` 를 채울 수 없고, 기본 필터는 `timestamp` 가 없는 항목을 전부 버린다.
+        미체결은 빠지면 위험한 목록이라 시각을 모르는 항목을 거르지 않고 전부 돌려준다. `symbol` 과 `limit` 은 그대로 적용한다.
+        """
+        params = {} if params is None else params
+        market = None if symbol is None else self.market(symbol)
+        if market is not None and self._is_us(market):
+            raise NotSupported(f'{self.id} fetchOpenOrders() 는 국내 종목만 지원한다')
+        rows = await self._fetch_domestic_order_rows(KBSEC_CCLS_PENDING, market, None, params)
+        return self._orders_from_rows(rows, market, limit)
+
+    async def fetch_orders(self, symbol: Str = None, since: Int = None, limit: Int = None,
+                           params: Optional[Dict[str, Any]] = None) -> List[Order]:
+        """국내 전체 주문(체결+미체결+취소). 계좌별주문체결조회(`SSQM2341`)에서 체결구분 전체로 뽑아 주문 단위로 묶는다. 해외는 지원하지 않는다.
+
+        `since` 는 적용하지 않는다. 이 TR 행으로는 `timestamp` 를 채우지 않아서 `since` 를 그대로 넘기면 기본 필터가 전부 버린다(`fetch_open_orders` 와 같은 이유).
+        `params['date']`(`YYYYMMDD`)를 주면 그 영업일을 조회한다.
+        """
+        params = {} if params is None else params
+        market = None if symbol is None else self.market(symbol)
+        if market is not None and self._is_us(market):
+            raise NotSupported(f'{self.id} fetchOrders() 는 국내 종목만 지원한다')
+        rows = await self._fetch_domestic_order_rows(KBSEC_CCLS_ALL, market, self.safe_string(params, 'date'), self.omit(params, 'date'))
+        return self._orders_from_rows(rows, market, limit)
+
+    async def fetch_closed_orders(self, symbol: Str = None, since: Int = None, limit: Int = None,
+                                  params: Optional[Dict[str, Any]] = None) -> List[Order]:
+        """국내 종료 주문(전량 체결, 취소). 전체 주문(`fetch_orders`)에서 `open` 이 아닌 주문만 돌려준다. 체결 내역 자체(행 단위 단가·수량)는
+        `fetch_my_trades` 로 본다. 해외는 지원하지 않는다. `since` 를 적용하지 않는 이유는 `fetch_orders` 와 같다."""
+        orders = await self.fetch_orders(symbol, None, None, params)
+        closed = [order for order in orders if order['status'] != 'open']
+        return closed if limit is None else closed[:limit]
+
+    def parse_order(self, order: Dict[str, Any], market: Market = None) -> Order:
+        """국내 주문·체결 목록(`SSQM2341`)의 행 하나를 주문으로 옮긴다. 분할체결 연속 행을 묶은 주문은 `fetch_orders` 가 만든다."""
+        fill = parse_kbsec_domestic_fill_row(order)
+        return self._parse_order_group(order, fill['filledQty'], fill['cost'], market)
+
+    def _parse_order_group(self, header: Dict[str, Any], filled: float, cost: float, market: Market) -> Order:
+        """헤더 행과 그 주문의 체결 합계로 주문을 만든다. 필드 이름은 `kbsec_fill_row` 가 정본이다.
+        상태는 미체결수량(`nccls_q`)으로 정한다. 남았으면 `open`, 전량 체결이면 `closed`, 남지 않았는데 덜 체결됐으면 `canceled`(전부나 일부 취소)다.
+        미체결수량 필드가 없으면 취소를 가릴 수 없어 체결 수량만 본다."""
+        fill = parse_kbsec_domestic_fill_row(header)
+        quantity = fill['orderQty']
+        knows_unfilled = 'nccls_q' in header
+        remaining = fill['unfilledQty'] if knows_unfilled else max(0, quantity - filled)
+        fully_filled = quantity > 0 and filled >= quantity
+        status = 'closed' if fully_filled else 'open' if remaining > 0 or not knows_unfilled else 'canceled'
+        # `A005930` 을 그대로 두면 심볼 필터가 맞지 않고 취소가 해외 TR 로 잘못 넘어간다. 종목코드를 정규화해 심볼로 옮긴다.
+        symbol = self.market(fill['symbol'])['symbol'] if fill['symbol'] != '' else None if market is None else market['symbol']
+        return self.safe_order({
+            'info': header,
+            'id': None if fill['orderId'] == '' else fill['orderId'],
+            'symbol': symbol,
+            'type': 'market' if pick_str(header, 'ordr_ccd') == KBSEC_ORDER_TYPE_KR['MARKET'] else 'limit',
+            'side': fill['side'],
+            'status': status,
+            'price': pick_num(header, 'ordr_uprc'),
+            'amount': quantity,
+            'filled': filled,
+            'remaining': 0 if fully_filled else remaining,
+            'cost': cost,
+            'average': cost / filled if filled > 0 and cost > 0 else None,
+            'trades': [],
+        }, market)
+
+    async def fetch_order(self, id: str, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> Order:
+        """주문 한 건. 국내는 미체결 목록에 있으면 `open`(체결분이 있으면 반영), 체결내역에만 있으면 `closed` 다.
+        미국은 체결내역과 해외 체결현황(`SPQM2204`, 최근 사흘)을 함께 보고 잔량으로 상태를 정한다. 어디에도 없을 때만 `OrderNotFound` 다.
+
+        `params['date']`(`YYYYMMDD`)를 주면 그날의 체결내역을 조회하고 실패를 던진다(국내는 한국 날짜, 미국은 미국 현지 날짜). 생략하면 가장 최근 영업일이다.
+        """
+        params = {} if params is None else params
+        if symbol is None:
+            raise ArgumentsRequired(f'{self.id} fetchOrder() requires a symbol argument')
+        market = self.market(symbol)
+        trades = [trade for trade in await self.fetch_my_trades(symbol, None, None, params) if trade['order'] == id]
+
+        # 체결 행의 수량과 금액은 문자열로 더한다. 부동소수로 더하면 잡음이 남는다.
+        def total(values: List[Any]) -> float:
+            acc = '0'
+            for value in values:
+                acc = Precise.string_add(acc, self.number_to_string(0 if value is None else value))
+            return fn.js_number(acc)
+
+        filled = total([trade['amount'] for trade in trades])
+        cost = total([trade['cost'] for trade in trades])
+        trade_info = [trade['info'] for trade in trades]
+        if self._is_us(market):
+            return await self._overseas_order_of(id, market, trades, filled, cost)
+        open_order = next((order for order in await self.fetch_open_orders(symbol) if order['id'] == id), None)
+        if open_order is None and len(trades) == 0:
+            raise OrderNotFound(f'{self.id} fetchOrder() {symbol} 주문 {id} 을 체결내역과 미체결 목록에서 찾지 못했다')
+        if open_order is None:
+            return self.safe_order({
+                'id': id, 'symbol': market['symbol'], 'status': 'closed', 'side': trades[0]['side'], 'filled': filled, 'cost': cost,
+                'average': cost / filled if filled > 0 else None, 'trades': [], 'info': {'trades': trade_info},
+            }, market)
+        # 미체결 행의 체결수량은 그날 목록에 보인 것이다. 이 주문의 체결내역 합계가 정본이다.
+        amount = cast(float, open_order['amount'])
+        return self.safe_order(self.extend(open_order, {
+            'filled': filled, 'cost': cost, 'remaining': max(0, amount - filled), 'average': cost / filled if filled > 0 else None,
+            'status': 'closed' if filled >= amount and amount > 0 else 'open', 'trades': [],
+        }), market)
+
+    async def _overseas_order_of(self, id: str, market: MarketInterface, trades: List[Trade], filled: float, cost: float) -> Order:
+        """미국 주문 한 건. 체결내역에 없어도 해외 체결현황에 있으면 미체결이나 취소로 돌려준다. 둘 다 없을 때만 `OrderNotFound` 다."""
+        lookback_ms = 3 * 24 * 60 * 60 * 1000
+        rows = (await self.fetch_overseas_order_status(self.milliseconds() - lookback_ms))['rows']
+        status = next((row for row in rows if row['id'] == id), None)
+        if status is None and len(trades) == 0:
+            raise OrderNotFound(f"{self.id} fetchOrder() {market['symbol']} 주문 {id} 을 체결내역과 해외 체결현황에서 찾지 못했다")
+        trade_info = [trade['info'] for trade in trades]
+        if status is None:
+            return self.safe_order({
+                'id': id, 'symbol': market['symbol'], 'status': 'closed', 'side': trades[0]['side'], 'filled': filled, 'cost': cost,
+                'average': cost / filled if filled > 0 else None, 'trades': [], 'info': {'trades': trade_info},
+            }, market)
+        # 체결내역이 비었으면(조회 날짜가 다른 경우) 체결현황의 체결수량과 체결가를 쓴다.
+        total_filled = filled if trades else status['filledQuantity']
+        total_cost = cost if trades else status['filledQuantity'] * status['filledPrice']
+        amount = status['quantity']
+        remaining = status['remainingQuantity']
+        order_status = ('open' if remaining > 0
+                        else 'closed' if amount > 0 and total_filled >= amount
+                        else 'rejected' if status['rejectReason'] != '' else 'canceled')
+        return self.safe_order({
+            'id': id, 'symbol': market['symbol'], 'status': order_status, 'side': trades[0]['side'] if trades else None, 'amount': amount,
+            'filled': total_filled, 'remaining': remaining, 'price': status['price'] if status['price'] > 0 else None, 'cost': total_cost,
+            'average': total_cost / total_filled if total_filled > 0 and total_cost > 0 else None,
+            'trades': [], 'info': {'status': status['info'], 'trades': trade_info},
+        }, market)
+
+    async def fetch_overseas_order_status(self, since: Int = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """해외 체결현황(`SPQM2204`). 해외 주문번호별주문내역(`SPQM1818`)과 같은 주문 목록에 단축종목코드를 더 준다. 결과는 `{'rows', 'truncated'}` 다.
+
+        시작과 종료 주문일자가 필수 입력이라 `since` 가 없으면 던진다. 날짜는 미국 현지 일자이고, 끝은 `params['until']`, 없으면 오늘이다.
+        체결구분, 매매구분, 거래구분은 설명된 전체(`0`, `99`, `0`)를 보낸다. 해외거래소구분, ISO코드, 원화통합증거금신청여부,
+        다이렉트인덱싱여부는 설명이 없어 비워 보낸다. 미체결만 보려면 `params['ccls_clsf']` 를 `2` 로 준다. 연속조회는 끝까지 따라가고,
+        상한(`holdingsMaxPages`)에 걸리면 `truncated` 로 알린다.
+        """
+        params = {} if params is None else params
+        if since is None:
+            raise ArgumentsRequired(f'{self.id} fetchOverseasOrderStatus() 는 since 인자가 필요하다(시작 주문일자가 필수 입력이다)')
+        until = self.safe_integer(params, 'until')
+        date_from = et_ymd(since)
+        date_to = et_ymd(self.milliseconds() if until is None else until)
+
+        def parse(row: Dict[str, Any]) -> Dict[str, Any]:
+            return {
+                'date': pick_str(row, 'ordr_dt'),
+                'time': pick_str(row, 'ordr_tm'),
+                'id': pick_str(row, 'ordr_no'),
+                'originalId': pick_str(row, 'orgn_ordr_no'),
+                'standardCode': pick_str(row, 'stnd_is_cd'),
+                'shortCode': pick_str(row, 'shrt_is_cd'),
+                'name': pick_str(row, 'shrt_is_nm'),
+                'statusName': pick_str(row, 'ordr_st_nm'),
+                'orderTypeName': pick_str(row, 'ordr_clsf_nm'),
+                'currency': pick_str(row, 'crncy_cd'),
+                'quantity': pick_num(row, 'frgn_ordr_q_p6'),
+                'price': pick_num(row, 'frgn_ordr_prc_p6'),
+                'filledQuantity': pick_num(row, 'ccls_q_p6'),
+                'filledPrice': pick_num(row, 'frgn_ccls_prc_p6'),
+                'remainingQuantity': pick_num(row, 'nccls_q_p6'),
+                'rejectReason': pick_str(row, 'rfsl_rsn'),
+                'info': row,
+            }
+
+        result = await self._collect_tr_pages(KBSEC_TR['ORDER_STATUS_US'], self.extend({
+            'strt_ordr_dt': date_from, 'end_ordr_dt': date_to, 'ccls_clsf': '0', 'frgn_krx_ccd': '', 'trd_clsf': '99', 'stnd_is_cd': '', 'iso_cd': '',
+            'krw_unty_mgn_rqst_f': '', 'dl_clsf': '0', 'drid_f': '',
+        }, self.omit(params, 'until')), parse)
+        if result['truncated']:
+            logger.warning('[kbsec] 해외 체결현황 연속조회가 잘렸다 — 기간을 좁혀 다시 불러야 한다: rows=%s from=%s to=%s', len(result['rows']), date_from, date_to)
+        return result
+
+    async def fetch_my_trades(self, symbol: Str = None, since: Int = None, limit: Int = None,
+                              params: Optional[Dict[str, Any]] = None) -> List[Trade]:
+        """체결내역. 계좌 체결내역을 종목 단위로 준다(`symbol` 이 필요하다). 국내는 `SSQM2341`, 해외는 `SPQM2103` 이고 모든 페이지를 읽는다.
+
+        조회일자는 세 가지다. `params['date']`(`YYYYMMDD`)를 주면 그날만 조회한다. `since` 를 주면 그 날짜부터 오늘까지 영업일마다 조회한다(최대 31일).
+        둘 다 없으면 가장 최근 영업일이다. 날짜는 국내가 한국 날짜, 미국이 미국 현지 날짜다. 체결 행에는 시각이 없어 `since` 는 날짜 단위로만 적용된다.
+
+        분할체결은 식별자를 지운 연속 행으로 온다. 이 메서드가 그 행을 앞 헤더에 귀속시키므로 주문번호(`trade['order']`)별로 `amount` 를 더하면 체결수량이다.
+        단가가 0 인 체결은 체결가를 모르므로 버린다.
+        """
+        params = {} if params is None else params
+        if symbol is None:
+            raise ArgumentsRequired(f'{self.id} fetchMyTrades() requires a symbol argument')
+        market = self.market(symbol)
+        country = 'US' if self._is_us(market) else 'KR'
+        explicit_date = self.safe_string(params, 'date')
+        dates = [explicit_date] if explicit_date is not None else None if since is None else self._trade_dates_since(since, country)
+        if country == 'US':
+            return await self._fetch_overseas_trades(market, dates, limit)
+        if dates is None:
+            return self._fill_rows_to_trades(await self._fetch_domestic_order_rows(KBSEC_CCLS_FILLED, market, None), market, limit)
+
+        async def request(ordr_dt: str) -> List[Dict[str, Any]]:
+            return await self._fetch_domestic_order_rows(KBSEC_CCLS_FILLED, market, ordr_dt)
+
+        rows: List[Dict[str, Any]] = []
+        for date in dates:
+            rows.extend(await self._on_date_skipping_holiday(date, request, len(dates) > 1))
+        return self._fill_rows_to_trades(rows, market, limit)
+
+    def _trade_dates_since(self, since: int, country: str) -> List[str]:
+        """`since` 의 날짜부터 오늘까지의 평일(`YYYYMMDD`). 국내는 한국 날짜, 해외는 미국 현지 날짜다. 31일을 넘으면 던진다."""
+
+        def date_of(at: int) -> datetime.date:
+            ymd = et_ymd(at) if country == 'US' else kst_ymd(at)
+            return datetime.date(int(ymd[0:4]), int(ymd[4:6]), int(ymd[6:8]))
+
+        start = date_of(since)
+        end = date_of(self.milliseconds())
+        if (end - start).days > 31:
+            raise BadRequest(f'{self.id} fetchMyTrades() 는 since 부터 31일까지만 조회한다. 기간을 나눠 부른다')
+        dates: List[str] = []
+        day = start
+        while day <= end:
+            if day.weekday() < 5:
+                dates.append(f'{day.year:04d}{day.month:02d}{day.day:02d}')
+            day += datetime.timedelta(days=1)
+        return dates
+
+    async def _on_date_skipping_holiday(self, date: str, call: Callable[[str], Awaitable[List[Dict[str, Any]]]],
+                                        skip_holiday: bool) -> List[Dict[str, Any]]:
+        """날짜 하나를 조회한다. 여러 날을 도는 중이면 휴장일 거부(2854)는 그날만 건너뛴다. 하루만 조회하면 그대로 던진다."""
+        try:
+            return await call(date)
+        except ExchangeError as err:
+            if skip_holiday and err.detail == KBSEC_ERROR_DETAIL['FUTURE_QUERY_DATE']:
+                return []
+            raise
+
+    async def _fetch_overseas_trades(self, market: MarketInterface, dates: Optional[List[str]], limit: Int) -> List[Trade]:
+        """해외 체결내역(`SPQM2103`). 응답 필드는 공식 스펙 이름(`ccls_q_p6`·`frgn_ccls_prc_p6`·`dl_clsf_nm`)이 먼저이고 국내 이름은 폴백이다.
+        체결구분은 비우면 거부되므로 명시한다. 조회일자는 미국 현지 날짜이고, 날짜를 주지 않으면 미국 날짜 기준 가장 최근 영업일이다.
+        모든 페이지를 읽고, 페이지 상한에서 잘리면 던진다.
+
+        영구 실패(`_is_permanent_failure`)면 이 인스턴스에서는 다시 부르지 않는다(반복 실패는 계정 제한 사유). 해외 체결 확정이 실패해도
+        주문 자체는 접수된 상태다.
+        """
+        if self._overseas_fills_unavailable:
+            raise ExchangeError(f'{self.id} 해외 체결 조회가 이 인스턴스에서 영구 실패해 다시 부르지 않는다')
+        try:
+            async def request(ordr_dt: str) -> List[Dict[str, Any]]:
+                result = await self._collect_tr_pages(KBSEC_TR['ORDERS_US'], {
+                    'ccls_clsf': KBSEC_CCLS_FILLED,  # 체결만. 비우면 거부된다
+                    'ordr_dt': ordr_dt,
+                    'is_cd': market['id'],
+                }, lambda row: row)
+                if result['truncated']:
+                    raise BadResponse(f"{self.id} 해외 체결 목록({KBSEC_TR['ORDERS_US']})이 페이지 상한(holdingsMaxPages)에서 잘렸다. 일부만 돌려주지 않는다")
+                return result['rows']
+
+            rows: List[Dict[str, Any]] = []
+            if dates is None:
+                rows.extend(await self._call_on_business_date(request, 'US'))
+            else:
+                for date in dates:
+                    rows.extend(await self._on_date_skipping_holiday(date, request, len(dates) > 1))
+            trades = self._fill_rows_to_trades(rows, market, limit)
+            if rows and not trades:
+                logger.warning('[kbsec] 해외 체결 행은 있으나 전부 걸러짐 — 응답 필드명 불일치: rows=%s rowKeys=%s', len(rows), list(rows[0])[:40])
+            return trades
+        except Exception as err:
+            permanent = self._is_permanent_failure(err)
+            if permanent:
+                self._overseas_fills_unavailable = True
+            logger.warning('[kbsec] 해외 체결 조회 실패 — 영구 실패면 이 인스턴스에서 재시도하지 않는다(반복 실패는 계정 제한 사유): '
+                           'symbol=%s trCode=%s latched=%s err=%s', market['symbol'], KBSEC_TR['ORDERS_US'], permanent, err)
+            raise
+
+    def _fill_rows_to_trades(self, rows: List[Dict[str, Any]], market: MarketInterface, limit: Int) -> List[Trade]:
+        """체결 행을 체결 건별 `Trade` 로 옮긴다. 필드 이름은 `kbsec_fill_row` 가 정본이다.
+
+        - 한 행이 한 체결이라 수량은 그대로 쓴다. 분할체결 연속 행은 식별자가 비어 오므로 `kbsec_resolve_fills` 로 헤더 행에 귀속시킨다.
+        - 종목 필터는 귀속 뒤에 건다. 앞에서 걸면 다른 종목의 헤더 행이 사라지고 식별자 없는 연속 행이 엉뚱한 헤더에 붙는다.
+          요청이 이미 종목 단위라 코드가 비어 온 행은 걸러 내지 않는다. 다른 종목이 분명한 행만 뺀다.
+        - 단가 0 인 체결은 버린다. 수량만 있고 단가가 없으면 확정된 것처럼 보이는 추측이 만들어진다.
+        """
+        base = market['id'] or ''
+        parse = parse_kbsec_overseas_fill_row if self._is_us(market) else parse_kbsec_domestic_fill_row
+        parsed = [parse(row) for row in rows]
+        warn_if_fill_totals_inconsistent(parsed, rows, f"체결내역 {market['symbol']}")
+        fills = [fill for fill in kbsec_resolve_fills(parsed) if base == '' or fill['symbol'] == '' or fill['symbol'] == base]
+        trades: List[Trade] = []
+        for index, fill in enumerate(fills):
+            if not fill['price'] > 0:
+                warn_fill_without_price(rows[0] if rows else {}, market['symbol'] or '')
+                continue
+            trades.append(self.parse_trade(self.extend(fill, {'index': index}), market))
+        warn_if_fill_side_unreadable(rows, len([fill for fill in fills if fill['side'] is not None]), f"체결내역 {market['symbol']}")
+        # 행 순서가 체결 순서다. `parse_trades` 는 시각·id 로 다시 정렬하는데, 체결 시각을 모르는 채로 id 문자열 순서로 섞이게 둘 수 없다.
+        return trades[-limit:] if limit is not None else trades
+
+    def parse_trade(self, trade: Dict[str, Any], market: Market = None) -> Trade:
+        """`kbsec_resolve_fills` 의 체결 건 하나(순번 `index` 를 더한 것)를 체결로 옮긴다. id 는 `주문번호#순번` 이다."""
+        return self.safe_trade({
+            'id': f"{trade['orderId']}#{trade['index']}",
+            'info': trade,
+            # 체결 시각은 응답에 있으나 형식이 확정되지 않아 읽지 않는다. 지어낸 시각을 넣지 않는다.
+            'timestamp': None,
+            'datetime': None,
+            'order': trade['orderId'],
+            'symbol': None if market is None else market['symbol'],
+            'type': None,
+            'side': trade['side'],
+            'takerOrMaker': None,
+            'price': trade['price'],
+            'amount': trade['qty'],
+            'cost': trade['cost'],
+            'fee': None,
+        }, market)
+
     # 생성자가 붙이는 camelCase 별칭을 타입 검사기에 알린다. 빠지거나 남는 줄은 test_base.py 가 잡는다.
     if TYPE_CHECKING:
         handleErrors = handle_errors
@@ -910,3 +1349,11 @@ class kbsec(Exchange, ImplicitAPI):
         fetchTradingFee = fetch_trading_fee
         fetchMarketCalendar = fetch_market_calendar
         refreshMarketCalendar = refresh_market_calendar
+        fetchOpenOrders = fetch_open_orders
+        fetchOrders = fetch_orders
+        fetchClosedOrders = fetch_closed_orders
+        parseOrder = parse_order
+        fetchOrder = fetch_order
+        fetchOverseasOrderStatus = fetch_overseas_order_status
+        fetchMyTrades = fetch_my_trades
+        parseTrade = parse_trade

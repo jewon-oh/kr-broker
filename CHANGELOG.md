@@ -57,14 +57,14 @@
 - Python 판에 `py.typed`를 싣습니다. 이제 mypy도 이 패키지의 타입을 읽으므로, 통합 메서드의 결과를 반환 타입과 다르게 쓰던 코드는 mypy에서도 오류로 잡힙니다. camelCase 이름(`fetchBalance` 등)을 타입 검사기가 알 수 있게 선언했습니다. `async with`로 받은 인스턴스는 기반 `Exchange`가 아니라 증권사 클래스로 보입니다. 예전에는 pyright(VS Code의 Pylance)가 이 두 경우를 오류로 표시했습니다.
 - 한국투자증권에 `fetchTrades`를 더합니다. 주식현재가 체결(`inquire-ccnl`)의 최근 30건을 오래된 것부터 돌려주고, 국내만 지원합니다. 미국 종목은 요청 없이 `NotSupported`를 던집니다. 체결 행에 날짜가 없어 호출마다 일자별 시세(`inquire-daily-price`)를 한 번 더 조회하고, 거래량이 있는 가장 최근 거래일을 가장 새 체결의 날짜로 붙입니다. 앞 행보다 시각이 늦은 행이 나오면 날짜가 바뀐 것이므로 그 행부터는 `timestamp`를 비웁니다. 일자별 시세를 받지 못했거나, 거래량이 있는 날이 없거나, 가장 새 체결이 지금보다 1분 넘게 늦으면 모든 행의 `timestamp`를 비우고, 던지지는 않습니다. 방향과 체결 id는 응답에 없어 비웁니다. Python 판도 같습니다.
 - 한국투자증권에 `fetchCanceledOrders`를 더합니다. `fetchOrders` 결과에서 `status`가 `canceled`인 주문만 고르고, `limit`은 고른 뒤에 적용합니다. 국내는 취소 여부(`cncl_yn`)가 `Y`인 주문이 나오며, 일부 체결 뒤 취소한 주문도 들어갑니다. 미국 주문은 취소 표시가 없어 나오지 않습니다. Python 판도 같습니다.
-- Python 판에 KB증권(`kr_broker.kbsec`, `kr_broker.async_support.kbsec`)을 옮기기 시작합니다. 지금은 인증과 오류 처리, 시세, 수수료 추정, 휴장일, 투자자 매매동향을 옮겼습니다. 두 판은 새 요청 픽스처 `ts/src/test/static/request/kbsec.json`을 함께 돌립니다.
+- Python 판에 KB증권(`kr_broker.kbsec`, `kr_broker.async_support.kbsec`)을 옮기기 시작합니다. 지금은 인증과 오류 처리, 시세, 수수료 추정, 휴장일, 투자자 매매동향, 주문·체결 조회를 옮겼습니다. 두 판은 새 요청 픽스처 `ts/src/test/static/request/kbsec.json`을 함께 돌립니다.
   - 토큰 발급은 봉투 형태가 거절되면 평면 형태로 한 번 더 보내고, 토큰 저장소를 씁니다.
   - 토큰이 무효(401, `I445`)면 토큰을 회전하고 한 번만 다시 보냅니다. 다시 발급한 토큰의 `jti`가 같으면 폐기한 뒤 한 번 더 발급합니다. 그래도 토큰 실패가 이어지면 토큰 차단기가 호출을 멈춥니다.
   - 오류는 `processCode`로 분류하고, 코드를 `broker_code`에 싣습니다. TR 본문은 입력 필드를 모두 채워 보냅니다.
-  - 통합 메서드는 `fetch_ticker`, `fetch_order_book`, `fetch_ohlcv`(국내만), `fetch_trades`, `fetch_trading_fee`(공시 요율로 추정)입니다. 고유 조회는 `fetch_market_calendar`, `refresh_market_calendar`, `fetch_investor_trading`입니다. `price_to_precision`은 TypeScript 판처럼 국내 가격을 KRX 호가 단위 표로 반올림합니다. 나머지 통합 메서드는 `has`가 `False`라서 부르면 `NotSupported`를 던집니다. 83개 TR은 모두 암묵 메서드로 부를 수 있습니다.
+  - 통합 메서드는 `fetch_ticker`, `fetch_order_book`, `fetch_ohlcv`(국내만), `fetch_trades`, `fetch_trading_fee`(공시 요율로 추정)와 주문·체결 조회 다섯 개(`fetch_order`, `fetch_orders`, `fetch_open_orders`, `fetch_closed_orders`, `fetch_my_trades`)입니다. 고유 조회는 `fetch_market_calendar`, `refresh_market_calendar`, `fetch_investor_trading`, 해외 체결현황 `fetch_overseas_order_status`입니다. `price_to_precision`은 TypeScript 판처럼 국내 가격을 KRX 호가 단위 표로 반올림합니다. 나머지 통합 메서드는 `has`가 `False`라서 부르면 `NotSupported`를 던집니다. 83개 TR은 모두 암묵 메서드로 부를 수 있습니다.
   - 국내 `fetch_trades`는 TypeScript 판처럼 일봉을 한 번 더 조회해 체결 날짜를 붙입니다. 국내 `fetch_ohlcv`와 이 일봉 조회는 `options['masterData']`로 코스닥 종목임을 알면 코스닥 시장구분으로 보냅니다.
   - KB증권은 웹소켓을 제공하지 않아서 ccxt처럼 `kr_broker.pro`에 넣지 않았습니다. 그래서 `kr_broker.pro.exchanges`는 이제 `kr_broker.exchanges`의 일부입니다.
-  - 테스트 훅 `reset_kbsec_token_breaker`를 `kr_broker.testing`에서 가져옵니다.
+  - 테스트 훅 `reset_kbsec_token_breaker`와 `reset_fill_side_warn`을 `kr_broker.testing`에서 가져옵니다.
 
 ### 바뀜
 

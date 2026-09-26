@@ -1,4 +1,4 @@
-"""KB증권 도우미 가운데 요청 픽스처로 재현할 수 없는 동작(`jti` 읽기, 호스트 주소, 토큰 차단기, `price_to_precision`, `kbsec_num`).
+"""KB증권 도우미 가운데 요청 픽스처로 재현할 수 없는 동작(`jti` 읽기, 호스트 주소, 토큰 차단기, 해외 체결 조회 래치, `price_to_precision`, `kbsec_num`).
 기대값은 TypeScript 판의 같은 테스트에서 가져왔다."""
 
 import base64
@@ -178,6 +178,21 @@ def test_a_business_rejection_closes_the_breaker_but_a_bare_5xx_does_not() -> No
     with pytest.raises(kr_broker.PermissionDenied):
         _broker([TOKEN, {'status': 500, 'body': {'dataHeader': {'processFlag': 'B', 'processCode': 'I446'}}}]).private_post_ssqm1801({})
     assert kbsec_token_breaker_state('app-a')['streak'] == 0
+
+
+# ============ 해외 체결 조회 래치 ============
+
+def test_overseas_fills_latch_after_a_business_rejection_but_not_after_a_transient_failure() -> None:
+    """한 인스턴스를 여러 번 부르는 동작이라 픽스처로 볼 수 없다. 일시 오류 뒤에는 다시 부르고, 업무 오류 뒤에는 요청 없이 던진다."""
+    i446 = {'status': 500, 'body': {'dataHeader': {'processFlag': 'B', 'processCode': 'I446'}, 'dataBody': {}}}
+    broker = _broker([TOKEN, {'status': 503, 'body': 'down'}, i446])
+    with pytest.raises(ExchangeNotAvailable):
+        broker.fetch_my_trades('AAPL/USD', None, None, {'date': '20260922'})
+    with pytest.raises(kr_broker.PermissionDenied):
+        broker.fetch_my_trades('AAPL/USD', None, None, {'date': '20260922'})
+    with pytest.raises(kr_broker.ExchangeError, match='다시 부르지 않는다'):
+        broker.fetch_my_trades('AAPL/USD', None, None, {'date': '20260922'})
+    assert broker.session.seen == ['token', 'spqm2103', 'spqm2103']
 
 
 # ============ price_to_precision ============

@@ -27,8 +27,8 @@ Python 3.10 이상이 필요하고, 의존성은 `requests`(동기 판), `aiohtt
 | 종목과 시세 | `fetch_markets`, `fetch_ticker`, `fetch_tickers`, `fetch_order_book`, `fetch_ohlcv` | `fetch_markets`, `fetch_ticker`, `fetch_tickers`, `fetch_order_book`, `fetch_ohlcv` | `fetch_ticker`, `fetch_order_book`, `fetch_ohlcv`, `fetch_trades` |
 | 잔고와 수수료 | `fetch_balance`, `fetch_trading_fee` | `fetch_balance`, `fetch_trading_fee` | `fetch_trading_fee` |
 | 주문 | `create_order`, `create_limit_order`, `create_market_order`, `create_trigger_order`, `edit_order`, `cancel_order`, `cancel_all_orders` | `create_order`, `create_limit_order`, `create_market_order`, `create_market_buy_order_with_cost`, `create_trigger_order`, `edit_order`, `cancel_order`, `cancel_all_orders` | 아직 없음 |
-| 주문 조회 | `fetch_order`, `fetch_orders`, `fetch_open_orders`, `fetch_closed_orders`, `fetch_my_trades` | `fetch_order`, `fetch_open_orders`, `fetch_closed_orders`, `fetch_my_trades` | 아직 없음 |
-| 고유 조회 | `fetch_market_calendar`, `fetch_stock_warnings`, `fetch_investor_trading`, `fetch_rankings` | `fetch_market_calendar`, `fetch_stock_warnings`, `fetch_investor_trading`, `fetch_rankings` | `fetch_market_calendar`, `fetch_investor_trading` |
+| 주문 조회 | `fetch_order`, `fetch_orders`, `fetch_open_orders`, `fetch_closed_orders`, `fetch_my_trades` | `fetch_order`, `fetch_open_orders`, `fetch_closed_orders`, `fetch_my_trades` | `fetch_order`, `fetch_orders`, `fetch_open_orders`, `fetch_closed_orders`, `fetch_my_trades` |
+| 고유 조회 | `fetch_market_calendar`, `fetch_stock_warnings`, `fetch_investor_trading`, `fetch_rankings` | `fetch_market_calendar`, `fetch_stock_warnings`, `fetch_investor_trading`, `fetch_rankings` | `fetch_market_calendar`, `fetch_investor_trading`, `fetch_overseas_order_status` |
 
 고유 조회는 이름이 같아도 증권사마다 인자와 결과가 다릅니다. 예를 들어 `fetch_investor_trading`은 한국투자증권에서 종목 단위이고 토스증권에서 시장 단위입니다.
 
@@ -104,7 +104,9 @@ kb = kr_broker.kbsec({
 })
 ticker = kb.fetch_ticker('005930/KRW')
 book = kb.fetch_order_book('AAPL/USD')
-candles = kb.fetch_ohlcv('005930/KRW', '1d', limit=30)                 # 국내만 받는다
+candles = kb.fetch_ohlcv('005930/KRW', '1d', limit=30)                      # 국내만 받는다
+orders = kb.fetch_open_orders('005930/KRW')                                 # 국내만 받는다
+trades = kb.fetch_my_trades('005930/KRW', since)                            # 종목이 필요하다. since 부터 영업일마다 조회한다
 holdings = kb.private_post_ssqm1801({'inq_clsf': '1', 'mkt_tm_ccd': '1'})   # 빠진 입력 필드는 빈 문자열로 채워 보낸다
 ```
 
@@ -120,6 +122,10 @@ TypeScript 판은 네트워크 인터페이스 목록에서 첫 외부 IPv4 주�
 
 토큰이 무효라는 응답(HTTP 401, `I445`)을 받으면 토큰을 다시 발급하고 요청을 한 번만 다시 보냅니다. 주문 TR도 같습니다. KB증권이 다시 발급한 토큰의 `jti`가 실패한 토큰과 같으면, 그 토큰을 폐기한 뒤 한 번 더 발급합니다.
 다시 보낸 요청도 토큰 실패로 끝나는 일이 앱키마다 5번 이어지면, 10분 동안 요청을 보내지 않고 `ExchangeNotAvailable`을 던집니다. KB증권은 잘못된 조회를 과도하게 반복하는 것을 계정 제한 사유로 듭니다.
+
+주문 목록(`fetch_orders`, `fetch_open_orders`, `fetch_closed_orders`)은 국내 종목만 받고 `since`를 쓰지 않습니다. 목록의 행에 주문 시각이 없기 때문입니다.
+`fetch_my_trades`와 `fetch_order`는 미국 종목도 받습니다. 분할체결은 주문번호를 지운 연속 행으로 오는데, 라이브러리가 이 행을 앞 주문에 붙입니다.
+조회일은 KB증권 영업일로 맞춥니다. 휴장일이라 거절되면(`2854`) 영업일을 하나씩 더 되돌려 다시 조회합니다. `fetch_my_trades`의 `since`는 31일 전까지만 받습니다.
 
 ### 오류
 
