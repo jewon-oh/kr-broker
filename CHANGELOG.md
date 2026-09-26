@@ -27,6 +27,7 @@
   - `kr-broker/kbsec/kbsec-types`의 `kbsecIsAlgoOrderType`. 대신할 이름은 없습니다.
   - `kr-broker/kbsec/kbsec-types`의 `KBSEC_OVERSEAS_EXCHANGE`. 미국 거래소 코드는 `KBSEC_US_EXCHANGES`에 있습니다.
   - `kr-broker/kis/kis-types`의 `KIS_DEFAULT_FEE_RATE`. `KIS_BROKERAGE_FEE`를 쓰고, 매도라면 `krxSellTaxRate()`를 더합니다. Python 판은 0.5.0에서 지웠습니다.
+- 한국투자증권과 KB증권 `fetchOHLCV`의 기본 `timeframe`을 ccxt와 같은 1분봉(`'1m'`)으로 바꿉니다. 예전에는 일봉(`'1d'`)이었습니다. `timeframe`을 빼고 일봉을 받던 코드는 `'1d'`를 직접 줍니다. 토스증권은 이미 1분봉이었습니다. `limit`을 주지 않으면 세 증권사 모두 예전처럼 최대 100개입니다. Python 판도 같고, 토스증권 `fetch_ohlcv`는 `timeframe`에 `None`을 주면 `NotSupported` 대신 1분봉을 받습니다.
 
 ### 추가
 

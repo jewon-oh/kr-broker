@@ -4557,11 +4557,11 @@ export class kis extends Exchange {
      * 캔들. 국내는 항상 야후 파이낸스로 받는다(KIS 는 분봉이 당일뿐이고 일봉도 100행이라 과거 이력이 모자란다). 미국 일봉·주봉·월봉은 야후를
      * 먼저 부르고, 야후가 비거나 실패하면 KIS 로 다시 받는다. 둘 다 실패하면 던진다.
      *
-     * `since <= 시각 <= params.until` 인 봉을 ccxt 규칙대로 `limit` 개 준다(`since` 가 있으면 가장 이른 것부터, 없으면 가장 최근 것부터).
+     * `since <= 시각 <= params.until` 인 봉을 ccxt 규칙대로 `limit`(기본 100) 개 준다(`since` 가 있으면 가장 이른 것부터, 없으면 가장 최근 것부터).
      * `since` 가 없으면 야후의 타임프레임별 기본 기간(일봉 5년, 1분봉 1일 등) 안에서 고른다. 야후 분봉과 시간봉은 조회 폭 상한(1분봉 6일,
      * 5분봉~30분봉 59일, 시간봉 729일)보다 오래된 `since` 를 상한까지 줄여 받고 경고를 남긴다.
      */
-    override async fetchOHLCV(symbol: string, timeframe = '1d', since: Int = undefined, limit: Int = 100, params: Dict = {}): Promise<OHLCV[]> {
+    override async fetchOHLCV(symbol: string, timeframe = '1m', since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<OHLCV[]> {
         const instrument = this.instrumentOf(symbol);
         const until = this.safeInteger(params, 'until');
         // KOSPI/KOSDAQ 구분으로 야후 티커의 접미사(.KS/.KQ)를 정확히 붙인다.
@@ -4572,7 +4572,7 @@ export class kis extends Exchange {
         let yahoo: OHLCV[] = [];
         let yahooError: unknown;
         try {
-            yahoo = await fetchYahooCandles(instrument.symbol, timeframe, limit, since, until, krMarket, this) as OHLCV[];
+            yahoo = await fetchYahooCandles(instrument.symbol, timeframe, limit ?? 100, since, until, krMarket, this) as OHLCV[];
         } catch (e) {
             if (fallbackExchange === undefined) throw e;
             yahooError = e;

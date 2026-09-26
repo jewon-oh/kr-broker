@@ -2007,6 +2007,48 @@
             "error": { "class": "NotSupported" }
         },
         {
+            "description": "fetchOHLCV 는 timeframe 을 주지 않으면 ccxt 기본값인 1분봉(1m)을 받는다",
+            "now": 1774440000000,
+            "method": "fetchOHLCV",
+            "args": ["005930/KRW", null, null, 2],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://query1.finance.yahoo.com/v8/finance/chart/005930.KS?interval=1m&range=1d",
+                        "headers": { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "chart": {
+                                "result": [
+                                    {
+                                        "meta": { "symbol": "005930.KS", "currency": "KRW", "exchangeTimezoneName": "Asia/Seoul", "regularMarketPrice": 70300 },
+                                        "timestamp": [1774400400, 1774400460, 1774400520],
+                                        "indicators": {
+                                            "quote": [
+                                                {
+                                                    "open": [70000, 70100, 70200],
+                                                    "high": [70100, 70200, 70300],
+                                                    "low": [70000, 70100, 70200],
+                                                    "close": [70100, 70200, 70300],
+                                                    "volume": [10, 11, 12]
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ],
+                                "error": null
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [[1774400460000, 70100, 70200, 70100, 70200, 11], [1774400520000, 70200, 70300, 70200, 70300, 12]]
+        },
+        {
             "description": "fetchTradingFee 국내는 위탁수수료 0.015% 와 그해의 증권거래세율이다",
             "now": 1774400400000,
             "method": "fetchTradingFee",

@@ -195,6 +195,14 @@ describe('fetchOHLCV — 국내(명세 기준, 실계좌 미검증)', () => {
         });
     });
 
+    it('timeframe 을 주지 않으면 ccxt 기본값인 1분봉(chrt_clsf B, 1분)을 받는다', async () => {
+        routeTr(mockFetch, { [KBSEC_TR.CHART_KR]: {} });
+
+        await newExchange().fetchOHLCV('005930/KRW');
+
+        expect(trBody(mockFetch, KBSEC_TR.CHART_KR).dataBody).toMatchObject({ chrt_clsf: 'B', minute_tck_indx: '1', inq_cnt: '100' });
+    });
+
     it('시장구분은 코스피로 보내고 params.mkt_clsf 로 코스닥을 고를 수 있다', async () => {
         routeTr(mockFetch, { [KBSEC_TR.CHART_KR]: {} });
 

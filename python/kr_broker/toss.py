@@ -950,6 +950,7 @@ class toss(Exchange, ImplicitAPI):
         `since` 가 있으면 `since` 부터 `limit` 개이고, 없으면 가장 최근 `limit` 개다. 최신 봉부터 200봉씩 10쪽까지 거슬러 받으므로,
         그 안에 `since` 까지 닿지 못하면 경고 로그를 남기고 받은 가장 오래된 봉부터 돌려준다."""
         params = {} if params is None else params
+        timeframe = '1m' if timeframe is None else timeframe
         interval = self.safe_string(self.timeframes, timeframe)
         if interval is None:
             raise NotSupported(f"{self.id} 미지원 타임프레임 '{timeframe}'. 지원: 1m, 1d")

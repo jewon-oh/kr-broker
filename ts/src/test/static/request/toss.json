@@ -888,6 +888,48 @@
             "error": { "class": "NotSupported" }
         },
         {
+            "description": "fetchOHLCV 는 timeframe 을 주지 않으면 ccxt 기본값인 1분봉(1m)을 받는다",
+            "method": "fetchOHLCV",
+            "args": ["005930", null, null, 2],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/candles?symbol=005930&interval=1m&count=2&adjusted=true",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "candles": [
+                                    {
+                                        "timestamp": "2026-03-25T10:02:00+09:00",
+                                        "openPrice": "70200",
+                                        "highPrice": "70200",
+                                        "lowPrice": "70200",
+                                        "closePrice": "70200",
+                                        "volume": "11"
+                                    },
+                                    {
+                                        "timestamp": "2026-03-25T10:01:00+09:00",
+                                        "openPrice": "70100",
+                                        "highPrice": "70100",
+                                        "lowPrice": "70100",
+                                        "closePrice": "70100",
+                                        "volume": "10"
+                                    }
+                                ],
+                                "nextBefore": "2026-03-25T10:01:00+09:00"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [[1774400400000, 70100, 70100, 70100, 70100, 10], [1774400460000, 70200, 70200, 70200, 70200, 11]]
+        },
+        {
             "description": "fetchBalance 는 보유 종목(수량 0 제외)과 통화별 현금 매수 가능 금액을 싣고, 모르는 매도 가능 수량과 예수금은 비운다",
             "method": "fetchBalance",
             "args": [],

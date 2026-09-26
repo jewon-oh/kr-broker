@@ -1351,15 +1351,15 @@ class kis(Exchange, ImplicitAPI):
             book['asks'] = book['asks'][:limit]
         return book
 
-    async def fetch_ohlcv(self, symbol: str, timeframe: str = '1d', since: Int = None, limit: Int = 100,
+    async def fetch_ohlcv(self, symbol: str, timeframe: str = '1m', since: Int = None, limit: Int = None,
                     params: Optional[Dict[str, Any]] = None) -> List[List[Any]]:
         """봉. 국내는 항상 야후 파이낸스로 받는다(KIS 는 분봉이 당일뿐이고 일봉도 100행이다). 미국 일·주·월봉은 야후를 먼저 부르고,
         야후가 비거나 실패하면 KIS 로 다시 받는다. 둘 다 실패하면 던진다.
 
-        `since <= 시각 <= params['until']` 인 봉을 ccxt 규칙대로 `limit` 개 준다(`since` 가 있으면 가장 이른 것부터, 없으면 가장 최근 것부터).
+        `since <= 시각 <= params['until']` 인 봉을 ccxt 규칙대로 `limit`(기본 100) 개 준다(`since` 가 있으면 가장 이른 것부터, 없으면 가장 최근 것부터).
         `since` 가 없으면 야후의 타임프레임별 기본 기간(일봉 5년, 1분봉 1일 등) 안에서 고른다. 야후 분봉과 시간봉은 조회 폭 상한(1분봉 6일,
         5분봉~30분봉 59일, 시간봉 729일)보다 오래된 `since` 를 상한까지 줄여 받고 경고를 남긴다."""
-        timeframe = '1d' if timeframe is None else timeframe
+        timeframe = '1m' if timeframe is None else timeframe
         limit = 100 if limit is None else limit
         instrument = self._instrument_of(symbol)
         until = self.safe_integer(params, 'until')

@@ -2690,7 +2690,7 @@ export class kbsec extends Exchange {
      * 조회건수 상한(9999)으로도 `since` 까지 닿지 못하면 경고 로그를 남기고 받은 가장 오래된 봉부터 돌려준다.
      */
     override async fetchOHLCV(
-        symbol: string, timeframe = '1d', since: Int = undefined, limit: Int = undefined, params: Dict = {},
+        symbol: string, timeframe = '1m', since: Int = undefined, limit: Int = undefined, params: Dict = {},
     ): Promise<OHLCV[]> {
         const market = this.market(symbol);
         if (this.isUs(market)) {
