@@ -2505,6 +2505,7 @@ class kis(Exchange, ImplicitAPI):
         parseTicker = parse_ticker
         fetchTickers = fetch_tickers
         fetchOrderBook = fetch_order_book
+        fetchTrades = fetch_trades
         fetchOHLCV = fetch_ohlcv
         fetchTradingFee = fetch_trading_fee
         fetchVolatilityInterruptions = fetch_volatility_interruptions
@@ -2522,6 +2523,7 @@ class kis(Exchange, ImplicitAPI):
         cancelAllOrders = cancel_all_orders
         fetchOpenOrders = fetch_open_orders
         fetchOrders = fetch_orders
+        fetchCanceledOrders = fetch_canceled_orders
         fetchOrder = fetch_order
         fetchMyTrades = fetch_my_trades
         parseOrder = parse_order
