@@ -5,14 +5,14 @@ ccxt 의 `edit_order(id, symbol, type, side, amount, price)` 에서 `amount` 는
 요청 전에 막는다. 잔량 일부만 옮기는 일부정정은 증권사 고유 기능이라 `params['partial']` 로만 받는다.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Mapping, Optional
 
 from kr_broker.base import functions as fn
 from kr_broker.base.errors import NotSupported
 from kr_broker.base.precise import Precise
 
 
-def edit_order_total(original: Dict[str, Any]) -> Optional[float]:
+def edit_order_total(original: Mapping[str, Any]) -> Optional[float]:
     """원주문의 총수량(체결 수량 + 잔량). 둘 중 하나라도 모르면 `None`."""
     filled, remaining = original.get('filled'), original.get('remaining')
     if filled is None or remaining is None:
@@ -20,7 +20,7 @@ def edit_order_total(original: Dict[str, Any]) -> Optional[float]:
     return fn.js_number(Precise.string_add(fn.number_to_string(filled), fn.number_to_string(remaining)))
 
 
-def assert_whole_remaining_edit(exchange_id: str, order_id: str, amount: Any, original: Dict[str, Any]) -> None:
+def assert_whole_remaining_edit(exchange_id: str, order_id: str, amount: Any, original: Mapping[str, Any]) -> None:
     """`amount` 가 원주문의 총수량과 같으면 지나가고, 다르면 요청 전에 `NotSupported` 다. 체결 수량이나 잔량을 모르면 대조할 수 없어 던진다.
     추정한 잔량으로 정정하지 않기 위해서다."""
     total = edit_order_total(original)

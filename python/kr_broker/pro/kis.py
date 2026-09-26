@@ -44,7 +44,7 @@ class kis(kr_broker.async_support.kis):
         # 구독 키(`005930`, `DNASAAPL`) → 통합 심볼
         self._watch_keys: Dict[str, str] = {}
         # 체결통보로 쌓은 주문 상태(주문번호 → 주문). 통보는 한 건씩 오므로 누적 체결 수량을 여기서 더한다
-        self._watch_order_state: Dict[str, Dict[str, Any]] = {}
+        self._watch_order_state: Dict[str, Any] = {}
         # 원주문에 반영한 정정·취소 통보의 주문번호. 같은 번호로 통보가 다시 와도 한 번만 반영한다
         self._watch_revision_ids: Set[str] = set()
         # `watch_orders` 가 기다리는 해시(`orders`, `orders:<심볼>`). 체결통보 구독이 거부되면 모두 거절한다

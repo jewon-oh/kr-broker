@@ -28,7 +28,7 @@ import time
 import types
 import urllib.parse
 from collections.abc import Mapping
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, cast
 
 import requests
 
@@ -44,7 +44,9 @@ from kr_broker.base.errors import (
 from kr_broker.base.precise import Precise
 from kr_broker.base.throttler import Throttler
 from kr_broker.base.token_store import BrokerTokenStore, resolve_token_store
-from kr_broker.base.types import ApiName, Int, Num, Str, Strings
+from kr_broker.base.types import (
+    ApiName, Balances, Int, Market, MarketInterface, Num, Order, OrderBook, Str, Strings, Ticker, Tickers, Trade, TradingFeeInterface,
+)
 from kr_broker.broker_market_group import COMMON_STOCK_CODES, common_stock_code, stock_ticker
 from kr_broker.broker_time import KST_OFFSET_MS
 from kr_broker.execution_confirm import resolve_confirm_budget
@@ -216,8 +218,8 @@ class Exchange:
     walletAddress: Str = None
 
     # ---- 종목·통화 ----
-    markets: Optional[Dict[str, Any]] = None
-    markets_by_id: Optional[Dict[str, List[Dict[str, Any]]]] = None
+    markets: Optional[Dict[str, MarketInterface]] = None
+    markets_by_id: Optional[Dict[str, List[MarketInterface]]] = None
     symbols: List[str] = []
     ids: List[str] = []
     currencies: Dict[str, Any] = {}
@@ -757,11 +759,11 @@ class Exchange:
 
     # ============ 종목 ============
 
-    def load_markets(self, reload: bool = False, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def load_markets(self, reload: bool = False, params: Optional[Dict[str, Any]] = None) -> Dict[str, MarketInterface]:
         """종목 목록을 받는다. 이미 받았으면 `reload` 가 아닌 한 다시 부르지 않는다(비동기 판은 진행 중인 조회도 함께 쓴다)."""
         return self._load_markets_helper(reload, params)
 
-    def _load_markets_helper(self, reload: bool, params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    def _load_markets_helper(self, reload: bool, params: Optional[Dict[str, Any]]) -> Dict[str, MarketInterface]:
         if not reload and self.markets is not None:
             if self.markets_by_id is None:
                 return self.set_markets(self.markets)
@@ -770,21 +772,21 @@ class Exchange:
         markets = self.fetch_markets({} if params is None else params)
         return self.set_markets(markets, currencies)
 
-    def fetch_markets(self, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def fetch_markets(self, params: Optional[Dict[str, Any]] = None) -> List[MarketInterface]:
         return list((self.markets or {}).values())
 
     def fetch_currencies(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         return self.currencies
 
-    def parse_market(self, market: Dict[str, Any]) -> Dict[str, Any]:
+    def parse_market(self, market: Dict[str, Any]) -> MarketInterface:
         raise NotSupported(f'{self.id} parse_market() is not supported yet')
 
-    def parse_markets(self, markets: Any) -> List[Dict[str, Any]]:
+    def parse_markets(self, markets: Any) -> List[MarketInterface]:
         return [self.parse_market(market) for market in fn.to_array(markets)]
 
-    def set_markets(self, markets: Any, currencies: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def set_markets(self, markets: Any, currencies: Optional[Dict[str, Any]] = None) -> Dict[str, MarketInterface]:
         """종목 목록을 넣고 색인(`markets`·`markets_by_id`·`symbols`·`ids`)과 통화 목록을 다시 만든다."""
-        markets_by_id: Dict[str, List[Dict[str, Any]]] = {}
+        markets_by_id: Dict[str, List[MarketInterface]] = {}
         values: List[Dict[str, Any]] = []
         for value in fn.sort_by(fn.to_array(markets), 'spot', True, True):
             if value.get('id') is None:
@@ -831,7 +833,7 @@ class Exchange:
             add(market.get('quote'), market.get('quoteId'), precision.get('quote') if precision.get('quote') is not None else precision.get('price'))
         return fn.keysort(result)
 
-    def safe_market_structure(self, market: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def safe_market_structure(self, market: Optional[Dict[str, Any]] = None) -> MarketInterface:
         """빈 종목 골격. 모르는 값은 `None` 이고, 현물이면 파생 관련 플래그를 `False` 로 채운다."""
         clean: Dict[str, Any] = {
             'id': None, 'lowercaseId': None, 'symbol': None, 'base': None, 'quote': None, 'settle': None,
@@ -855,9 +857,9 @@ class Exchange:
             for key in ('contract', 'swap', 'future', 'option', 'index'):
                 if result.get(key) is None:
                     result[key] = False
-        return result
+        return cast(MarketInterface, result)
 
-    def market(self, symbol: Str) -> Dict[str, Any]:
+    def market(self, symbol: Str) -> MarketInterface:
         """통합 심볼(없으면 id 도)로 종목을 찾는다. 종목이 로드되지 않았으면 `ExchangeError`, 못 찾으면 `BadSymbol`."""
         if symbol is None:
             raise ArgumentsRequired(f'{self.id} market() requires a symbol argument')
@@ -867,7 +869,7 @@ class Exchange:
             return self.markets[symbol]
         by_id = (self.markets_by_id or {}).get(symbol)
         if by_id is not None:
-            default_type = fn.safe_string_2(self.options, 'defaultType', 'defaultSubType', 'spot')
+            default_type = cast(str, fn.safe_string_2(self.options, 'defaultType', 'defaultSubType', 'spot'))
             for candidate in by_id:
                 if candidate.get(default_type) is True:
                     return candidate
@@ -889,8 +891,8 @@ class Exchange:
             return symbols
         return [self.symbol(symbol) for symbol in symbols]
 
-    def safe_market(self, market_id: Str = None, market: Optional[Dict[str, Any]] = None, delimiter: Str = None,
-                    market_type: Str = None) -> Dict[str, Any]:
+    def safe_market(self, market_id: Str = None, market: Market = None, delimiter: Str = None,
+                    market_type: Str = None) -> MarketInterface:
         """응답의 종목 id 를 종목으로 바꾼다. 로드한 종목에 있으면 그것을, 없으면 `delimiter` 로 쪼개 임시 종목을 만든다."""
         if market_id is not None:
             candidates = (self.markets_by_id or {}).get(market_id)
@@ -913,8 +915,10 @@ class Exchange:
                     quote = self.safe_currency_code(quote_id)
                     result['baseId'] = base_id
                     result['quoteId'] = quote_id
-                    result['base'] = base
-                    result['quote'] = quote
+                    if base is not None:
+                        result['base'] = base
+                    if quote is not None:
+                        result['quote'] = quote
                     if base is not None and quote is not None:
                         result['symbol'] = f'{base}/{quote}'
                 return result
@@ -922,7 +926,7 @@ class Exchange:
             return market
         return self.safe_market_structure({'symbol': market_id, 'marketId': market_id})
 
-    def safe_symbol(self, market_id: Str = None, market: Optional[Dict[str, Any]] = None, delimiter: Str = None,
+    def safe_symbol(self, market_id: Str = None, market: Market = None, delimiter: Str = None,
                     market_type: Str = None) -> str:
         return self.safe_market(market_id, market, delimiter, market_type)['symbol']
 
@@ -995,7 +999,7 @@ class Exchange:
 
     # ============ 응답 정리(safe*·parse*) ============
 
-    def safe_ticker(self, ticker: Dict[str, Any], market: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def safe_ticker(self, ticker: Dict[str, Any], market: Market = None) -> Ticker:
         """시세 응답을 통합 구조로 정리한다. `open`·`close`·`change`·`percentage`·`average`·`vwap` 중 빠진 것은 있는 값으로 계산한다."""
         open_ = fn.omit_zero(fn.safe_string(ticker, 'open'))
         close = fn.omit_zero(fn.safe_string_2(ticker, 'close', 'last'))
@@ -1043,7 +1047,7 @@ class Exchange:
                         digits = fn.precision_from_string(price_tick)
                 average = Precise.string_div(Precise.string_add(open_, close), '2', digits)
         close_parsed = fn.parse_number(fn.omit_zero(close))
-        return fn.extend(ticker, {
+        return cast(Ticker, fn.extend(ticker, {
             'bid': fn.parse_number(fn.omit_zero(fn.safe_string(ticker, 'bid'))),
             'bidVolume': fn.safe_number(ticker, 'bidVolume'),
             'ask': fn.parse_number(fn.omit_zero(fn.safe_string(ticker, 'ask'))),
@@ -1062,9 +1066,9 @@ class Exchange:
             'previousClose': fn.safe_number(ticker, 'previousClose'),
             'indexPrice': fn.safe_number(ticker, 'indexPrice'),
             'markPrice': fn.safe_number(ticker, 'markPrice'),
-        })
+        }))
 
-    def safe_trade(self, trade: Dict[str, Any], market: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def safe_trade(self, trade: Dict[str, Any], market: Market = None) -> Trade:
         """체결 응답을 정리한다: 금액이 없으면 가격 × 수량, 수수료를 `fee`·`fees` 로 맞추고, 수치를 `float` 로 바꾼다."""
         amount = fn.safe_string(trade, 'amount')
         price = fn.safe_string(trade, 'price')
@@ -1083,9 +1087,9 @@ class Exchange:
         trade['amount'] = fn.parse_number(amount)
         trade['price'] = fn.parse_number(price)
         trade['cost'] = fn.parse_number(cost)
-        return trade
+        return cast(Trade, trade)
 
-    def safe_order(self, order: Dict[str, Any], market: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def safe_order(self, order: Dict[str, Any], market: Market = None) -> Order:
         """주문 응답을 정리한다. 있는 값에서 빠진 값을 계산해 채우고 수치를 `float` 로 바꾼다."""
         amount = fn.omit_zero(fn.safe_string(order, 'amount'))
         remaining = fn.safe_string(order, 'remaining')
@@ -1107,7 +1111,7 @@ class Exchange:
         parse_side = side is None
         should_parse_fees = parse_fee or parse_fees
         fees = list(fn.safe_list(order, 'fees', []))
-        trades: List[Dict[str, Any]] = []
+        trades: List[Any] = []
         is_trigger_order = any(fn.safe_string(order, k) is not None for k in ('triggerPrice', 'stopLossPrice', 'takeProfitPrice'))
         if parse_filled or parse_cost or should_parse_fees:
             raw_trades = fn.safe_value(order, 'trades', [])
@@ -1212,7 +1216,7 @@ class Exchange:
         timestamp = fn.safe_integer(order, 'timestamp')
         trigger_price = fn.parse_number(fn.safe_string_2(order, 'triggerPrice', 'stopPrice'))
         datetime_ = fn.safe_string(order, 'datetime')
-        return fn.extend(order, {
+        return cast(Order, fn.extend(order, {
             'id': fn.safe_string(order, 'id'),
             'clientOrderId': fn.safe_string(order, 'clientOrderId'),
             'timestamp': timestamp,
@@ -1238,9 +1242,9 @@ class Exchange:
             'stopLossPrice': fn.parse_number(fn.safe_string(order, 'stopLossPrice')),
             'status': status,
             'fee': fn.safe_value(order, 'fee'),
-        })
+        }))
 
-    def safe_balance(self, balance: Dict[str, Any]) -> Dict[str, Any]:
+    def safe_balance(self, balance: Dict[str, Any]) -> Balances:
         """코드별 `{free, used, total}` 에서 빠진 값을 채우고 같은 값을 `free`·`used`·`total`(·`debt`) 사전으로도 담는다."""
         codes = list(fn.omit(balance, ['info', 'timestamp', 'datetime', 'free', 'used', 'total', 'debt']).keys())
         balance['free'] = {}
@@ -1269,9 +1273,9 @@ class Exchange:
                 debt_balance[code] = balance[code]['debt']
         if debt_balance:
             balance['debt'] = debt_balance
-        return balance
+        return cast(Balances, balance)
 
-    def safe_order_book(self, orderbook: Dict[str, Any]) -> Dict[str, Any]:
+    def safe_order_book(self, orderbook: Dict[str, Any]) -> OrderBook:
         """호가 응답을 정리한다: 매수는 가격 내림차순, 매도는 오름차순으로 정렬하고 `datetime` 을 채운다."""
         timestamp = fn.safe_integer(orderbook, 'timestamp')
         datetime_ = fn.safe_string(orderbook, 'datetime')
@@ -1285,7 +1289,7 @@ class Exchange:
         }
 
     def parse_order_book(self, orderbook: Any, symbol: Str, timestamp: Int = None, bids_key: str = 'bids', asks_key: str = 'asks',
-                         price_key: Any = 0, amount_key: Any = 1) -> Dict[str, Any]:
+                         price_key: Any = 0, amount_key: Any = 1) -> OrderBook:
         return self.safe_order_book({
             'symbol': symbol,
             'timestamp': timestamp,
@@ -1336,25 +1340,25 @@ class Exchange:
     def account(self) -> Dict[str, Num]:
         return {'free': None, 'used': None, 'total': None}
 
-    def parse_ticker(self, ticker: Dict[str, Any], market: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def parse_ticker(self, ticker: Dict[str, Any], market: Market = None) -> Ticker:
         raise NotSupported(f'{self.id} parse_ticker() is not supported yet')
 
-    def parse_tickers(self, tickers: Any, symbols: Strings = None) -> Dict[str, Any]:
+    def parse_tickers(self, tickers: Any, symbols: Strings = None) -> Tickers:
         return self.filter_by_array_tickers([self.parse_ticker(ticker) for ticker in fn.to_array(tickers)], 'symbol', symbols)
 
-    def parse_trade(self, trade: Dict[str, Any], market: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def parse_trade(self, trade: Dict[str, Any], market: Market = None) -> Trade:
         raise NotSupported(f'{self.id} parse_trade() is not supported yet')
 
-    def parse_trades(self, trades: Any, market: Optional[Dict[str, Any]] = None, since: Int = None, limit: Int = None,
-                     params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def parse_trades(self, trades: Any, market: Market = None, since: Int = None, limit: Int = None,
+                     params: Optional[Dict[str, Any]] = None) -> List[Trade]:
         parsed = [fn.extend(self.parse_trade(trade, market), params) for trade in fn.to_array(trades)]
         return self.filter_by_symbol_since_limit(fn.sort_by_2(parsed, 'timestamp', 'id'), (market or {}).get('symbol'), since, limit)
 
-    def parse_order(self, order: Dict[str, Any], market: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def parse_order(self, order: Dict[str, Any], market: Market = None) -> Order:
         raise NotSupported(f'{self.id} parse_order() is not supported yet')
 
-    def parse_orders(self, orders: Any, market: Optional[Dict[str, Any]] = None, since: Int = None, limit: Int = None,
-                     params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def parse_orders(self, orders: Any, market: Market = None, since: Int = None, limit: Int = None,
+                     params: Optional[Dict[str, Any]] = None) -> List[Order]:
         results = []
         if isinstance(orders, list):
             results = [fn.extend(self.parse_order(order, market), params) for order in orders]
@@ -1362,17 +1366,17 @@ class Exchange:
             results = [fn.extend(self.parse_order(fn.extend({'id': order_id}, order), market), params) for order_id, order in orders.items()]
         return self.filter_by_symbol_since_limit(fn.sort_by(results, 'timestamp'), (market or {}).get('symbol'), since, limit)
 
-    def parse_ohlcv(self, ohlcv: Any, market: Optional[Dict[str, Any]] = None) -> List[Num]:
+    def parse_ohlcv(self, ohlcv: Any, market: Market = None) -> List[Num]:
         raise NotSupported(f'{self.id} parse_ohlcv() is not supported yet')
 
-    def parse_ohlcvs(self, ohlcvs: Optional[List[Any]], market: Optional[Dict[str, Any]] = None, timeframe: str = '1m',
+    def parse_ohlcvs(self, ohlcvs: Optional[List[Any]], market: Market = None, timeframe: str = '1m',
                      since: Int = None, limit: Int = None, tail: bool = False) -> List[List[Num]]:
         if ohlcvs is None:
             return []
         parsed = fn.sort_by([self.parse_ohlcv(ohlcv, market) for ohlcv in ohlcvs], 0)
         return self.filter_by_since_limit(parsed, since, limit, 0, tail)
 
-    def parse_balance(self, response: Any) -> Dict[str, Any]:
+    def parse_balance(self, response: Any) -> Balances:
         raise NotSupported(f'{self.id} parse_balance() is not supported yet')
 
     # ---- 자르기·거르기 ----
@@ -1439,7 +1443,7 @@ class Exchange:
                                      tail: bool = False) -> List[Any]:
         return self.filter_by_value_since_limit(array, 'symbol', symbol, since, limit, 'timestamp', tail)
 
-    def filter_by_array_tickers(self, objects: List[Dict[str, Any]], key: Any, values: Strings = None) -> Dict[str, Any]:
+    def filter_by_array_tickers(self, objects: List[Any], key: Any, values: Strings = None) -> Dict[str, Any]:
         result: Dict[str, Any] = {}
         for obj in objects:
             object_key = fn.safe_string(obj, key)
@@ -1451,7 +1455,7 @@ class Exchange:
 
     # ============ 주문 인자 검사 ============
 
-    def check_order_arguments(self, market: Optional[Dict[str, Any]], type: str, side: str, amount: Num, price: Num,
+    def check_order_arguments(self, market: Market, type: str, side: str, amount: Num, price: Num,
                               params: Optional[Dict[str, Any]] = None) -> None:
         if side not in ('buy', 'sell'):
             raise InvalidOrder(f"{self.id} create_order() side must be 'buy' or 'sell'")
@@ -1472,7 +1476,7 @@ class Exchange:
     def fetch_status(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         raise NotSupported(f'{self.id} fetch_status() is not supported yet')
 
-    def fetch_ticker(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def fetch_ticker(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> Ticker:
         if self.has.get('fetchTickers') not in (None, False):
             self.load_markets()
             market = self.market(symbol)
@@ -1480,83 +1484,83 @@ class Exchange:
             ticker = fn.safe_dict(tickers, market['symbol'])
             if ticker is None:
                 raise NullResponse(f'{self.id} fetch_tickers() could not find a ticker for {market["symbol"]}')
-            return ticker
+            return cast(Ticker, ticker)
         raise NotSupported(f'{self.id} fetch_ticker() is not supported yet')
 
-    def fetch_tickers(self, symbols: Strings = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def fetch_tickers(self, symbols: Strings = None, params: Optional[Dict[str, Any]] = None) -> Tickers:
         raise NotSupported(f'{self.id} fetch_tickers() is not supported yet')
 
-    def fetch_order_book(self, symbol: str, limit: Int = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def fetch_order_book(self, symbol: str, limit: Int = None, params: Optional[Dict[str, Any]] = None) -> OrderBook:
         raise NotSupported(f'{self.id} fetch_order_book() is not supported yet')
 
     def fetch_ohlcv(self, symbol: str, timeframe: str = '1m', since: Int = None, limit: Int = None,
                     params: Optional[Dict[str, Any]] = None) -> List[List[Num]]:
         raise NotSupported(f'{self.id} fetch_ohlcv() is not supported yet')
 
-    def fetch_balance(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def fetch_balance(self, params: Optional[Dict[str, Any]] = None) -> Balances:
         raise NotSupported(f'{self.id} fetch_balance() is not supported yet')
 
     def create_order(self, symbol: str, type: str, side: str, amount: float, price: Num = None,
-                     params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                     params: Optional[Dict[str, Any]] = None) -> Order:
         raise NotSupported(f'{self.id} create_order() is not supported yet')
 
     def create_trigger_order(self, symbol: str, type: str, side: str, amount: float, price: Num = None, trigger_price: Num = None,
-                             params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                             params: Optional[Dict[str, Any]] = None) -> Order:
         raise NotSupported(f'{self.id} create_trigger_order() is not supported yet')
 
     def edit_order(self, id: str, symbol: str, type: str, side: str, amount: Num = None, price: Num = None,
-                   params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                   params: Optional[Dict[str, Any]] = None) -> Order:
         raise NotSupported(f'{self.id} edit_order() is not supported yet')
 
-    def create_limit_order(self, symbol: str, side: str, amount: float, price: float, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def create_limit_order(self, symbol: str, side: str, amount: float, price: float, params: Optional[Dict[str, Any]] = None) -> Order:
         return self.create_order(symbol, 'limit', side, amount, price, params)
 
     def create_market_order(self, symbol: str, side: str, amount: float, price: Num = None,
-                            params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                            params: Optional[Dict[str, Any]] = None) -> Order:
         return self.create_order(symbol, 'market', side, amount, price, params)
 
-    def create_limit_buy_order(self, symbol: str, amount: float, price: float, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def create_limit_buy_order(self, symbol: str, amount: float, price: float, params: Optional[Dict[str, Any]] = None) -> Order:
         return self.create_order(symbol, 'limit', 'buy', amount, price, params)
 
-    def create_limit_sell_order(self, symbol: str, amount: float, price: float, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def create_limit_sell_order(self, symbol: str, amount: float, price: float, params: Optional[Dict[str, Any]] = None) -> Order:
         return self.create_order(symbol, 'limit', 'sell', amount, price, params)
 
-    def create_market_buy_order(self, symbol: str, amount: float, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def create_market_buy_order(self, symbol: str, amount: float, params: Optional[Dict[str, Any]] = None) -> Order:
         return self.create_order(symbol, 'market', 'buy', amount, None, params)
 
-    def create_market_sell_order(self, symbol: str, amount: float, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def create_market_sell_order(self, symbol: str, amount: float, params: Optional[Dict[str, Any]] = None) -> Order:
         return self.create_order(symbol, 'market', 'sell', amount, None, params)
 
-    def cancel_order(self, id: str, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def cancel_order(self, id: str, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> Order:
         raise NotSupported(f'{self.id} cancel_order() is not supported yet')
 
-    def cancel_all_orders(self, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def cancel_all_orders(self, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> List[Order]:
         raise NotSupported(f'{self.id} cancel_all_orders() is not supported yet')
 
-    def fetch_order(self, id: str, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def fetch_order(self, id: str, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> Order:
         raise NotSupported(f'{self.id} fetch_order() is not supported yet')
 
     def fetch_orders(self, symbol: Str = None, since: Int = None, limit: Int = None,
-                     params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+                     params: Optional[Dict[str, Any]] = None) -> List[Order]:
         raise NotSupported(f'{self.id} fetch_orders() is not supported yet')
 
     def fetch_open_orders(self, symbol: Str = None, since: Int = None, limit: Int = None,
-                          params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+                          params: Optional[Dict[str, Any]] = None) -> List[Order]:
         if self.has.get('fetchOrders') not in (None, False):
             return fn.filter_by(self.fetch_orders(symbol, since, limit, params), 'status', 'open')
         raise NotSupported(f'{self.id} fetch_open_orders() is not supported yet')
 
     def fetch_closed_orders(self, symbol: Str = None, since: Int = None, limit: Int = None,
-                            params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+                            params: Optional[Dict[str, Any]] = None) -> List[Order]:
         if self.has.get('fetchOrders') not in (None, False):
             return fn.filter_by(self.fetch_orders(symbol, since, limit, params), 'status', 'closed')
         raise NotSupported(f'{self.id} fetch_closed_orders() is not supported yet')
 
     def fetch_my_trades(self, symbol: Str = None, since: Int = None, limit: Int = None,
-                        params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+                        params: Optional[Dict[str, Any]] = None) -> List[Trade]:
         raise NotSupported(f'{self.id} fetch_my_trades() is not supported yet')
 
-    def fetch_trading_fee(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def fetch_trading_fee(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> TradingFeeInterface:
         raise NotSupported(f'{self.id} fetch_trading_fee() is not supported yet')
 
     def close(self) -> None:

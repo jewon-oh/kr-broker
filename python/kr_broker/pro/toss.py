@@ -17,7 +17,7 @@ TypeScript 판 `ts/src/toss.ts` 의 `createPriceStream` 과 실시간(ccxt pro) 
 체결 프레임은 가격과 수량만 주므로 `watch_ticker` 의 시세도 현재가뿐이다. `close()` 는 실시간 연결과 HTTP 세션을 함께 닫는다.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import kr_broker.async_support
 from kr_broker.async_support.base.ws.client import session_connector
@@ -106,7 +106,7 @@ class toss(kr_broker.async_support.toss):
     def _watch_market_sub(self, channel: str, symbol: str) -> str:
         market = self.market(symbol)
         country = 'us' if self._country_of(market) == 'US' else 'kr'
-        code = market['id']
+        code = cast(str, market['id'])
         self._watch_subscribe(f'{channel}:{country}:{code}', {'channel': channel, 'market': country, 'symbol': code})
         return market['symbol']
 
