@@ -8,7 +8,7 @@ const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 global.fetch = mockFetch as unknown as typeof fetch;
 
 import { kis } from '../../kis';
-import { NotSupported, MarketClosed } from '../../base/errors';
+import { BadRequest, NotSupported, MarketClosed } from '../../base/errors';
 import { marketDayStatus, resetMarketCalendar } from '../../market-calendar';
 import { dataOk, headersOf, jsonResponse, newKis, tokenOk } from './support/kis-test-utils';
 
@@ -56,6 +56,19 @@ describe('kis.fetchMarketCalendar', () => {
         await expect(newKis({ sandbox: true }).fetchMarketCalendar()).rejects.toThrow(NotSupported);
 
         expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('params.market 은 KR 만 받고 요청에 싣지 않는다. US 는 NotSupported, 그 밖은 BadRequest 이고 요청을 보내지 않는다', async () => {
+        mockFetch.mockResolvedValueOnce(tokenOk()).mockResolvedValueOnce(holidayOk(ROWS)).mockResolvedValueOnce(holidayOk(ROWS));
+        const broker = newKis({ sandbox: false });
+
+        await broker.fetchMarketCalendar({ market: 'kr' });
+        const calls = mockFetch.mock.calls.length;
+        await expect(broker.fetchMarketCalendar({ market: 'US' })).rejects.toThrow(NotSupported);
+        await expect(broker.fetchMarketCalendar({ market: 'JP' })).rejects.toThrow(BadRequest);
+
+        expect(String(mockFetch.mock.calls[1]![0])).not.toContain('market');
+        expect(mockFetch.mock.calls.length).toBe(calls);
     });
 });
 

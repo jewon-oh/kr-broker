@@ -343,6 +343,7 @@ export class Exchange {
 
     private throttler: Throttler | undefined = undefined;
     private bucketThrottlers: Dictionary<Throttler | undefined> = {};
+    private readonly deprecationWarned = new Set<string>();
 
     constructor(userConfig: ConstructorArgs = {}) {
         Object.assign(this, boundFunctions);
@@ -903,6 +904,20 @@ export class Exchange {
     /** 켜고 끄는 옵션(`nxtRouting` 등)이 켜져 있는가. 불리언이거나 불리언을 돌려주는 함수를 받는다. 값이 없으면 꺼진 것이다. */
     async isOptionEnabled(name: string): Promise<boolean> {
         return resolveFlag(this.options[name]);
+    }
+
+    /** `fetchMarketCalendar` 의 `params.market`. 대소문자를 가리지 않고 기본은 `'KR'` 이다. `'KR'`·`'US'` 밖의 값은 요청 없이 `BadRequest` 다. */
+    protected calendarMarket(params: Dict): 'KR' | 'US' {
+        const market = (safeString(params, 'market') ?? 'KR').toUpperCase();
+        if (market !== 'KR' && market !== 'US') throw new BadRequest(`${this.id} fetchMarketCalendar() 의 params.market 은 'KR' 이나 'US' 다: ${market}`);
+        return market;
+    }
+
+    /** 옛 이름이나 옛 호출 모양으로 부른 것을 인스턴스마다 한 번 경고로 남긴다. 그 모양은 다음 판에서 지운다. */
+    protected warnDeprecated(usage: string, replacement: string): void {
+        if (this.deprecationWarned.has(usage)) return;
+        this.deprecationWarned.add(usage);
+        logger.warn({ usage, replacement }, `[${this.id}] ${usage} 는 다음 판에서 지운다. ${replacement} 로 바꾼다`);
     }
 
     /**

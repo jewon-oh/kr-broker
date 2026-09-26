@@ -90,10 +90,10 @@ TypeScript 판과 Python 판이 있습니다. Python 판은 ccxt처럼 동기(`k
 | 종료 주문 `fetchClosedOrders` | 🔁 | ✅ | ⚠️ | `kis` `fetchOrders` 결과에서 체결 완료만 고릅니다.<br>`toss` 전량 체결만 돌려줍니다. 100건씩 최대 10쪽을 받습니다.<br>`kbsec` 국내만 지원합니다. `since`는 적용하지 않습니다. 체결 내역 상세는 `fetchMyTrades`로 봅니다. |
 | 취소 주문 `fetchCanceledOrders` | ❌ | ✅ | ❌ | `kis` `fetchOrders` 결과에서 `status: 'canceled'`만 고르면 됩니다.<br>`toss` `fetchClosedOrders`와 같은 조회에서 취소 주문과 정정으로 대체된 주문을 고릅니다.<br>`kbsec` `fetchOrders` 결과에서 `status: 'canceled'`만 고르면 됩니다(국내만) |
 | 체결 내역 `fetchMyTrades` | ✅ | 🔁 | ✅ | `kis` `fee`가 비어 있습니다.<br>`toss` 주문 목록 API로 만듭니다. 주문 하나가 거래 하나이고 수량은 누적 체결 수량이라, 같은 id 는 덮어써야 합니다. |
-| 휴장일 `fetchMarketCalendar` | ⚠️ | ✅ | ⚠️ | `kis` 국내만, 실전만 지원합니다.<br>`toss` 세션 시각 원본을 반환합니다.<br>`kbsec` 국내만 지원합니다. |
+| 휴장일 `fetchMarketCalendar` | ⚠️ | ✅ | ⚠️ | `kis` 국내만, 실전만 지원합니다. `params.market`이 `US`면 `NotSupported`입니다.<br>`toss` 세션 시각 원본은 `fetchMarketSessions`로 받습니다.<br>`kbsec` 국내만 지원합니다. `params.market`이 `US`면 `NotSupported`입니다. |
 | 종목 정보 `fetchStocks` | ✅ | ✅ | ✅ | `kis` 해외 종목은 지원하지 않습니다. `BadSymbol`을 던집니다.<br>`toss` 200종목을 초과해도 나누어 호출하지 않습니다.<br>`kbsec` 국내만 지원합니다. 해외 종목코드로도 조회되는지는 명세에 없어 확인 불가입니다. |
-| 거래정지와 경고 `fetchStockWarnings` | ⚠️ | ✅ | ✅ | `kis` VI(변동성완화장치) 발동 현황만 줍니다. 정리매매와 단기과열 여부, 시장경고 구분은 `fetchStockStatus`가 현재 상태로만 줍니다. 신주인수권은 대응하는 값이 없습니다.<br>`kbsec` 국내만 지원합니다. 종목 하나의 현재 상태(매매제한·위험등급)를 줍니다. 발동 이력이 아닙니다. |
-| 투자자별 매매동향 `fetchInvestorTrading` | ⚠️ | ⚠️ | ⚠️ | `kis` 종목 단위만 지원합니다(토스는 시장 단위)<br>`toss` 국내 시장 단위만 지원합니다.<br>`kbsec` 국내만 지원합니다. 13개 투자자 유형(개인·외국인·기관 외 증권·보험·투신 등)을 하루 단위로 줍니다. |
+| 거래정지와 경고 `fetchStockWarnings` | ➖ | ✅ | ➖ | `kis` 토스증권과 같은 유의사항 목록이 없습니다. VI 발동 기록은 `fetchVolatilityInterruptions`로, 정리매매와 단기과열 여부, 시장경고 구분은 `fetchStockStatus`로 받습니다.<br>`kbsec` 토스증권과 같은 유의사항 목록이 없습니다. 종목 하나의 매매제한과 위험등급은 `fetchTradingRestriction`으로 받습니다. |
+| 투자자별 매매동향 `fetchInvestorTrading` | ⚠️ | ❌ | ⚠️ | `kis` 국내만 지원합니다. 개인, 외국인, 기관계의 순매수 대금을 싣고 매수·매도 값은 `info`에 있습니다.<br>`toss` 종목 단위 API는 `fetchStockInvestorTrading`이 원문으로 줍니다. 공통 모양으로는 아직 옮기지 않았습니다. 시장 단위는 `fetchMarketInvestorTrading`입니다.<br>`kbsec` 국내만 지원합니다. 13개 투자자 유형 가운데 개인, 외국인, 기관을 싣고 나머지는 `info`에 있습니다. |
 | 종목 랭킹 `fetchRankings` | ⚠️ | ✅ | ⚠️ | `kis` 국내와 해외, ELW 순위 46종을 받습니다. 종류마다 공식 엔드포인트가 따로 있습니다.<br>`kbsec` 국내 순위 7종(등락률, 거래량, 프로그램매매, 거래대금, 시가대비 등락률, 시간외 등락률, 급등락)을 받습니다. |
 <!-- coverage:end -->
 
@@ -101,7 +101,7 @@ TypeScript 판과 Python 판이 있습니다. Python 판은 ccxt처럼 동기(`k
 
 `has`는 메서드 단위라서 시장별 제약까지는 알려 주지 못합니다. 시장별 제약은 기능별 지원 표를 기준으로 삼으십시오.
 
-`fetchMarketCalendar`는 세 증권사 모두 있지만 반환 형식이 다릅니다. 토스증권은 세션 시각 원본을, 한국투자증권과 KB증권은 날짜별 캘린더 목록을 반환합니다.
+기반 클래스에 없는 확장 메서드도 `has`가 `true`면 ccxt처럼 세 증권사에서 같은 인자로 부르고 같은 모양을 받습니다. `fetchMarketCalendar`는 세 증권사 모두 날짜별 개장 여부를 반환하고, 시장은 `params.market`으로 고릅니다. 토스증권의 세션 시각 원본은 `fetchMarketSessions`로 받습니다.
 
 한국투자증권과 토스증권에서 정규장 밖 국내 주문을 내려면 `options.nxtRouting`을 켜야 합니다. 이때 두 증권사는 시장가 주문을 현재가 기준의 지정가 주문으로 바꿔 냅니다. 같은 방향의 미체결 주문이 있거나 기준가를 구하지 못하면 주문을 보내지 않고 오류를 던집니다. 토스증권은 미국도 정규장 밖에는 정수 수량의 지정가 주문만 받습니다. `options.usExtendedLimit`을 켜면 미국 정규장 밖의 시장가 주문을 지정가 주문으로 변환해 냅니다.
 

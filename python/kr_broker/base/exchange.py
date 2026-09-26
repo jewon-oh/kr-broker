@@ -28,7 +28,7 @@ import time
 import types
 import urllib.parse
 from collections.abc import Mapping
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 import requests
 
@@ -324,6 +324,7 @@ class Exchange:
                     setattr(self, key, value)
         self._throttler: Optional[Throttler] = None
         self._bucket_throttlers: Dict[str, Optional[Throttler]] = {}
+        self._deprecation_warned: Set[str] = set()
         self._define_camelcase_aliases()
         if self.session is None and self.synchronous:
             self.session = self._new_requests_session()
@@ -735,6 +736,20 @@ class Exchange:
         if inspect.iscoroutine(overrides):
             overrides.close()
         return resolve_confirm_budget(defaults, overrides if isinstance(overrides, Mapping) else None)
+
+    def _calendar_market(self, params: Optional[Dict[str, Any]]) -> str:
+        """`fetch_market_calendar` 의 `params['market']`. 대소문자를 가리지 않고 기본은 `'KR'` 이다. `'KR'`·`'US'` 밖의 값은 요청 없이 `BadRequest` 다."""
+        market = (fn.safe_string(params, 'market') or 'KR').upper()
+        if market not in ('KR', 'US'):
+            raise BadRequest(f"{self.id} fetchMarketCalendar() 의 params.market 은 'KR' 이나 'US' 다: {market}")
+        return market
+
+    def _warn_deprecated(self, usage: str, replacement: str) -> None:
+        """옛 이름이나 옛 호출 모양으로 부른 것을 인스턴스마다 한 번 경고로 남긴다. 그 모양은 다음 판에서 지운다."""
+        if usage in self._deprecation_warned:
+            return
+        self._deprecation_warned.add(usage)
+        logger.warning('[%s] %s 는 다음 판에서 지운다. %s 로 바꾼다', self.id, usage, replacement)
 
     # ============ 종목 ============
 

@@ -5,16 +5,20 @@
  *
  * - `true`·`'emulated'`: 클래스가 그 메서드를 구현한다. 부모 클래스의 기본 구현이 다른 메서드로 대신해 주는 경우(`fetchClosedOrders` 는 `fetchOrders` 로)도 구현으로 본다.
  * - `false`(또는 적지 않음): 구현하지 않는다. 부르면 요청을 보내지 않고 `NotSupported` 를 던진다.
+ * - 기반 클래스에 없는 확장 메서드도 `has` 가 `true` 면 세 증권사에서 같은 인자로 부르고 같은 모양을 받는다(ccxt 의 `has` 와 같은 뜻).
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 global.fetch = mockFetch as unknown as typeof fetch;
 
 import { Exchange, NotSupported } from '../base';
+import type { Dict, Int, InvestorTradingRecord } from '../base/types';
 import { kbsec } from '../kbsec';
 import { kis } from '../kis';
+import type { CalendarDay } from '../market-calendar';
 import { toss } from '../toss';
+import type { TossStockWarning } from '../toss/toss-types';
 
 const BROKERS: ReadonlyArray<[string, () => Exchange]> = [
     ['kis', () => new kis({ apiKey: 'kis-app-key-123456', secret: 'kis-secret', uid: '12345678-01' })],
@@ -37,6 +41,28 @@ const IMPLEMENTED_BY: Readonly<Record<string, string>> = {};
 
 /** 메서드 이름꼴의 `has` 키. `spot`·`sandbox` 같은 성질 플래그는 뺀다. */
 const isMethodKey = (key: string): boolean => /^(fetch|create|cancel|edit|watch)[A-Z]/.test(key);
+
+/**
+ * `has` 에 올린 확장 메서드(기반 클래스에 없는 이름)의 공통 계약. `has` 가 `true` 인 증권사는 이 인자로 부를 수 있고 이 모양을 돌려준다.
+ * 확장 메서드를 `has` 에 새로 올리려면 여기에 계약을 적고, 아래 타입 검사에 그 증권사를 더한다.
+ */
+interface ExtensionContracts {
+    fetchMarketCalendar: (params?: Dict) => Promise<CalendarDay[]>;
+    fetchInvestorTrading: (symbol: string, since?: Int, limit?: Int, params?: Dict) => Promise<InvestorTradingRecord[]>;
+    fetchStockWarnings: (symbol: string, params?: Dict) => Promise<TossStockWarning[]>;
+}
+
+/** 기반 클래스에는 없지만 ccxt 통합 메서드인 이름. 모양은 ccxt 매뉴얼이 정하므로 확장 메서드 계약에서 뺀다. */
+const CCXT_UNIFIED_OUTSIDE_BASE: ReadonlySet<string> = new Set([
+    'fetchTrades', 'createMarketBuyOrderWithCost', 'watchTicker', 'watchTrades', 'watchOrderBook', 'watchOrders',
+]);
+
+/** 계약마다 `has` 가 `true` 인 증권사. 런타임 검사가 `has` 와 이 표를 대조하고, 타입 검사가 표의 조합마다 모양을 본다. */
+const EXTENSION_BROKERS: Readonly<Record<keyof ExtensionContracts, readonly string[]>> = {
+    fetchMarketCalendar: ['kis', 'toss', 'kbsec'],
+    fetchInvestorTrading: ['kis', 'kbsec'],
+    fetchStockWarnings: ['toss'],
+};
 
 /** 부모 클래스의 기본 구현이 다른 메서드로 대신해 주는 경우. 원천이 되는 `has` 키가 켜져 있으면 그 메서드는 부모 구현으로 동작한다. */
 const DERIVED_FROM: Readonly<Record<string, string>> = {
@@ -98,6 +124,31 @@ describe.each(BROKERS)('%s — has 와 실제 구현의 일치', (_name, make) =
         const declared = exchange.has.fetchMarkets;
 
         expect(isImplemented(exchange, 'fetchMarkets'), `${exchange.id}.fetchMarkets: has=${String(declared)}`).toBe(declared === true);
+    });
+});
+
+describe.each(BROKERS)('%s — has 에 올린 확장 메서드', (name, make) => {
+    it('has 가 true·emulated 인 확장 메서드는 공통 계약 표에 있고, 표가 적은 증권사와 has 가 같다', () => {
+        const declared = Object.entries(make().has)
+            .filter(([key, value]) => isMethodKey(key) && (value === true || value === 'emulated'))
+            .filter(([key]) => typeof (Exchange.prototype as unknown as Record<string, unknown>)[key] !== 'function')
+            .filter(([key]) => !CCXT_UNIFIED_OUTSIDE_BASE.has(key))
+            .map(([key]) => key)
+            .sort();
+        const contracted = Object.entries(EXTENSION_BROKERS).filter(([, brokers]) => brokers.includes(name)).map(([key]) => key).sort();
+
+        expect(declared).toEqual(contracted);
+    });
+});
+
+describe('has 에 올린 확장 메서드는 세 증권사에서 같은 인자로 부른다', () => {
+    it('계약 표의 증권사마다 계약의 인자를 받고 계약의 모양을 돌려준다(pnpm typecheck 가 검사한다)', () => {
+        expectTypeOf<kis['fetchMarketCalendar']>().toExtend<ExtensionContracts['fetchMarketCalendar']>();
+        expectTypeOf<toss['fetchMarketCalendar']>().toExtend<ExtensionContracts['fetchMarketCalendar']>();
+        expectTypeOf<kbsec['fetchMarketCalendar']>().toExtend<ExtensionContracts['fetchMarketCalendar']>();
+        expectTypeOf<kis['fetchInvestorTrading']>().toExtend<ExtensionContracts['fetchInvestorTrading']>();
+        expectTypeOf<kbsec['fetchInvestorTrading']>().toExtend<ExtensionContracts['fetchInvestorTrading']>();
+        expectTypeOf<toss['fetchStockWarnings']>().toExtend<ExtensionContracts['fetchStockWarnings']>();
     });
 });
 

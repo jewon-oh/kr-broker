@@ -199,7 +199,7 @@
       "suggested": null,
       "proposal": null,
       "verified": "real",
-      "note": "국내 전용이며 미국 종목은 400 unsupported-market입니다. 기존 `fetchInvestorTrading`은 시장 단위입니다.",
+      "note": "국내 전용이며 미국 종목은 400 unsupported-market입니다. 시장 단위는 `fetchMarketInvestorTrading`입니다. 한국투자증권과 KB증권의 `fetchInvestorTrading`(종목 단위 공통 모양)으로는 아직 옮기지 않았습니다.",
       "spec": "https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1stocks~1{symbol}~1investor-trading/get"
     },
     {
@@ -284,12 +284,12 @@
       "endpoint": "GET /api/v1/market-calendar/KR",
       "markets": ["KR"],
       "status": "extended",
-      "method": "fetchMarketCalendar",
+      "method": "fetchMarketSessions",
       "evidence": ["ts/src/spec/toss.json:36", "ts/src/toss.ts:1077-1097", "ts/src/toss.ts:1102"],
       "suggested": null,
       "proposal": null,
       "verified": "real",
-      "note": "`date`를 전달하지 못합니다. `currentKrSession`도 같은 API를 씁니다.",
+      "note": "`date`를 전달하지 못합니다. 세션 시각 원본을 돌려줍니다. 날짜별 개장 여부는 `fetchMarketCalendar`가 이 결과로 만들고, `currentKrSession`도 같은 API를 씁니다.",
       "spec": "https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1market-calendar~1KR/get"
     },
     {
@@ -299,12 +299,12 @@
       "endpoint": "GET /api/v1/market-calendar/US",
       "markets": ["US"],
       "status": "extended",
-      "method": "fetchMarketCalendar",
+      "method": "fetchMarketSessions",
       "evidence": ["ts/src/spec/toss.json:37", "ts/src/toss.ts:1095-1109", "ts/src/toss.ts:1113"],
       "suggested": null,
       "proposal": null,
       "verified": "real",
-      "note": "`date`를 전달하지 못합니다. 4세션(데이마켓 포함)이며 `currentUsSession`도 같은 API를 씁니다.",
+      "note": "`date`를 전달하지 못합니다. 4세션(데이마켓 포함)의 시각 원본을 돌려줍니다. 날짜별 개장 여부는 `fetchMarketCalendar`가 이 결과로 만들고, `currentUsSession`도 같은 API를 씁니다.",
       "spec": "https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1market-calendar~1US/get"
     },
     {
@@ -359,7 +359,7 @@
       "endpoint": "GET /api/v1/market-indicators/{symbol}/investor-trading",
       "markets": ["KR"],
       "status": "extended",
-      "method": "fetchInvestorTrading",
+      "method": "fetchMarketInvestorTrading",
       "evidence": ["ts/src/spec/toss.json:47", "ts/src/toss.ts:978-989"],
       "suggested": null,
       "proposal": null,
@@ -648,7 +648,7 @@
     {"name": "국내 확장 세션과 미국 4세션 캘린더", "apis": ["GET /market-calendar/KR", "GET /market-calendar/US"], "support": "부분", "scope": "캘린더 조회, 세션 판정, 세션별 주문 형태 사전 검사를 지원합니다. 시장가를 지정가로 바꾸는 옵션도 있습니다. `date`를 지정한 조회는 지원하지 않습니다."},
     {"name": "종목 유의사항(정리매매, 투자경고, 단기과열, VI)", "apis": ["GET /stocks/{symbol}/warnings"], "support": "지원", "scope": "`fetchStockWarnings`로 조회합니다. 주문 경로는 조회 결과를 미리 확인하지 않습니다."},
     {"name": "거래정지, NXT 지원, 정리매매 여부", "apis": ["GET /stocks"], "support": "부분", "scope": "`fetchStocks`가 원본을 반환합니다. 200종목을 초과해도 나누어 호출하지 않습니다."},
-    {"name": "투자자별 매매대금(시장 단위)", "apis": ["GET /market-indicators/{symbol}/investor-trading"], "support": "지원", "scope": "`fetchInvestorTrading`으로 코스피와 코스닥 단위를 조회합니다."},
+    {"name": "투자자별 매매대금(시장 단위)", "apis": ["GET /market-indicators/{symbol}/investor-trading"], "support": "지원", "scope": "`fetchMarketInvestorTrading`으로 코스피와 코스닥 단위를 조회합니다."},
     {"name": "종목 단위 수급 5종(국내 전용)", "apis": ["GET /stocks/{symbol}/investor-trading", "GET /stocks/{symbol}/program-trades", "GET /stocks/{symbol}/short-selling", "GET /stocks/{symbol}/credit-trades", "GET /stocks/{symbol}/securities-lending"], "support": "지원", "scope": "투자자별 매매동향(`fetchStockInvestorTrading`), 프로그램매매 동향(`fetchProgramTrades`), 공매도 동향(`fetchShortSelling`), 신용거래 동향(`fetchCreditTrades`), 대차거래 동향(`fetchSecuritiesLending`)을 모두 지원합니다."},
     {"name": "랭킹", "apis": ["GET /rankings"], "support": "지원", "scope": "`fetchRankings`로 시장 전체 랭킹을 조회합니다. 토스증권 체결 기준이며 기간은 실시간부터 1년까지입니다."},
     {"name": "시장 지표(코스피, 코스닥, 국채 시세와 캔들)", "apis": ["GET /market-indicators/prices", "GET /market-indicators/{symbol}/candles"], "support": "지원", "scope": "현재가(`fetchMarketIndicators`)와 캔들(`fetchMarketIndicatorOHLCV`)을 모두 지원합니다."},

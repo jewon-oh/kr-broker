@@ -55,7 +55,7 @@
       "suggested": "fetchSecurityInfo",
       "proposal": "확장",
       "verified": "spec-only",
-      "note": "종목명, 종목유형, 매매제한, 위험등급을 줍니다. 공개 메서드는 `fetchStocks`와 `fetchStockWarnings` 둘 다(같은 TR을 각자 부른다). 국내만 지원한다(해외 종목코드로도 되는지 명세에 없어 확인 불가). 필드명은 공식 저장소 samples.generated.json의 Tkb_SIQM4900_B2C outputSpec으로 확인했다",
+      "note": "종목명, 종목유형, 매매제한, 위험등급을 줍니다. 공개 메서드는 `fetchStocks`와 `fetchTradingRestriction` 둘 다(같은 TR을 각자 부른다). 옛 이름 `fetchStockWarnings`는 한 판 동안 별칭이다. 국내만 지원한다(해외 종목코드로도 되는지 명세에 없어 확인 불가). 필드명은 공식 저장소 samples.generated.json의 Tkb_SIQM4900_B2C outputSpec으로 확인했다",
       "spec": "https://github.com/kbsecurities/kb-openapi/blob/159480c/frontend/src/app/openapi-test/samples.generated.json#Tkb_SIQM4900_B2C"
     },
     {
@@ -185,7 +185,7 @@
       "suggested": "fetchInvestorTrend",
       "proposal": "확장",
       "verified": "spec-only",
-      "note": "종목별 투자자(개인, 외국인, 기관 등 13개 유형) 일별 매매. 국내만 지원한다. 필드명은 공식 저장소 samples.generated.json의 Tkb_IVU10430_B2C inputSpec·outputSpec으로 확인했다",
+      "note": "종목별 투자자(개인, 외국인, 기관 등 13개 유형) 일별 매매. 국내만 지원한다. 한국투자증권과 같은 공통 모양으로 개인, 외국인, 기관만 싣고 나머지 유형은 `info` 원문에 둔다. 필드명은 공식 저장소 samples.generated.json의 Tkb_IVU10430_B2C inputSpec·outputSpec으로 확인했다",
       "spec": "https://github.com/kbsecurities/kb-openapi/blob/159480c/frontend/src/app/openapi-test/samples.generated.json#Tkb_IVU10430_B2C"
     },
     {
@@ -1571,7 +1571,7 @@
     {"name": "정산(실청구 수수료와 세금)", "apis": ["SSQM2121", "SPQM2205"], "support": "지원", "scope": "`fetchDomesticSettlements`와 `fetchOverseasSettlements`로 조회합니다."},
     {"name": "실현 손익과 평가 손익", "apis": ["SSQM2392", "SSQM2442", "SSQM2443", "SSQM0006", "SPQM2206", "SPQM2207"], "support": "부분", "scope": "국내 평가손익(`fetchUnrealizedPnl`), 기간 매매손익(`fetchRealizedPnl`), 일자별 실현손익 상세(`fetchRealizedPnlDaily`), 종목별 기간 실현손익(`fetchRealizedPnlBySymbol`)을 지원합니다. 일자별 조회의 매체구분은 실계좌에서 행을 거르지 않아 공식 예제값을 보내고, 종목별 조회는 권한이 없어 확인하지 못해 호출하는 쪽이 고릅니다. 해외 매매손익은 실계좌에서 입력을 바꿔도 내역 없음(I749)만 와서 보류했습니다."},
     {"name": "장운영상태와 공휴일", "apis": ["SZQM0771", "SPAM2508"], "support": "부분", "scope": "국내는 전영업일, 기준영업일, 익영업일 3개만 압니다(`fetchMarketCalendar`). 미국 공휴일관리는 `fetchHolidays`로 원문을 주지만, 행 필드의 형식이 명세에 없어 `fetchMarketCalendar`의 미국 휴장일로는 채우지 않습니다."},
-    {"name": "종목 마스터와 기본정보", "apis": ["SIAM4983", "SIQM4900"], "support": "부분", "scope": "종목기본정보(`fetchStocks`, `fetchStockWarnings`)를 확장 메서드로 제공합니다. `market()`은 심볼 모양만 봅니다. 종목관리(SIAM4983)는 실계좌에서 입력 없이 부르면 자료 없음(1861)과 빈 행만 와서 쓰지 않습니다."},
+    {"name": "종목 마스터와 기본정보", "apis": ["SIAM4983", "SIQM4900"], "support": "부분", "scope": "종목기본정보(`fetchStocks`, `fetchTradingRestriction`)를 확장 메서드로 제공합니다. `market()`은 심볼 모양만 봅니다. 종목관리(SIAM4983)는 실계좌에서 입력 없이 부르면 자료 없음(1861)과 빈 행만 와서 쓰지 않습니다."},
     {"name": "수급, 순위, 시장 종합", "apis": ["IVU10430", "IVU10420", "IVU10450", "IVU10020", "IVS10920", "IVU10280", "IVU10270", "IVU10210", "IVU10240", "IVS10910", "IVS11190", "IVU10550", "IVM30010", "IVSA0070", "IVA60140", "IVA60190", "IVA10370"], "support": "지원", "scope": "등락률상위와 거래량상위, 프로그램매매상위, 거래대금상위, 시가대비등락률상위, 기간외등락률순위, 급등급락상위(`fetchRankings`), 환율종합(`fetchExchangeRates`), 세계지수(`fetchWorldIndices`), 신고가와 신저가(`fetchNewHighLow`), 외국인·기관매매상위(`fetchInvestorRanking`), 증시주변자금동향(`fetchMarketFundFlow`), 당일 주요 외국계 거래원(`fetchForeignBrokers`), 종목별 프로그램매매 추이(`fetchProgramTradingTrend`), 시장종합(`fetchMarketOverview`)을 지원합니다. 업종랭킹(`fetchSectorRanking`)은 실계좌 응답 모양(시장 지수 머리 레코드와 업종 행)으로 정리합니다."},
     {"name": "계좌 원장, 쿠폰, 권리", "apis": ["SWQA2301", "SWQB2301", "SWQM2412", "SZQM6019", "SRQM3051"], "support": "지원", "scope": "위탁, 금융상품, 저축 계좌의 원장 거래내역(`fetchAccountLedger`)과 CMA 원장 거래내역(`fetchCmaLedger`), 개인별 쿠폰(`fetchCoupons`), 거래내역 상세(`fetchLedgerEntryDetail`), 권리 발생 내역(`fetchCorporateActions`)을 지원합니다."},
     {"name": "자산평가", "apis": ["SSQM0005", "SSQM0009", "SSQM2932", "SSQN2952", "SWQM2302", "SWQN2302"], "support": "부분", "scope": "익일과 익익일 출금가능금액(`fetchWithdrawableAmount`), 종합계좌 잔고(`fetchIntegratedBalance`, 실계좌 확인), 예수금 상세(`fetchDepositDetails`, 원문), 총 잔고(`fetchAccountSummary`), 실시간 주식자산평가(`fetchRealtimeAssetValuation`)를 지원합니다. 예수금 상세, 총 잔고, 실시간 자산평가는 실계좌에 API 권한이 없어 응답을 확인하지 못했습니다. 총 자산평가는 권한이 없고 입력값도 정할 근거가 없어 보류했습니다."}

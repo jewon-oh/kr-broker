@@ -924,14 +924,14 @@
       "cells": {
         "kis": {
           "status": "부분",
-          "constraint": "국내만, 실전만 지원합니다",
+          "constraint": "국내만, 실전만 지원합니다. `params.market`이 `US`면 `NotSupported`입니다",
           "apis": [
             "examples_llm/domestic_stock/chk_holiday"
           ]
         },
         "toss": {
           "status": "지원",
-          "constraint": "세션 시각 원본을 반환합니다",
+          "constraint": "세션 시각 원본은 `fetchMarketSessions`로 받습니다",
           "apis": [
             "GET /market-calendar/KR",
             "GET /market-calendar/US"
@@ -939,7 +939,7 @@
         },
         "kbsec": {
           "status": "부분",
-          "constraint": "국내만 지원합니다",
+          "constraint": "국내만 지원합니다. `params.market`이 `US`면 `NotSupported`입니다",
           "apis": [
             "SZQM0771"
           ]
@@ -990,11 +990,8 @@
       ],
       "cells": {
         "kis": {
-          "status": "부분",
-          "constraint": "VI(변동성완화장치) 발동 현황만 줍니다. 정리매매와 단기과열 여부, 시장경고 구분은 `fetchStockStatus`가 현재 상태로만 줍니다. 신주인수권은 대응하는 값이 없습니다",
-          "apis": [
-            "examples_llm/domestic_stock/inquire_vi_status"
-          ]
+          "status": "증권사 없음",
+          "constraint": "토스증권과 같은 유의사항 목록이 없습니다. VI 발동 기록은 `fetchVolatilityInterruptions`로, 정리매매와 단기과열 여부, 시장경고 구분은 `fetchStockStatus`로 받습니다"
         },
         "toss": {
           "status": "지원",
@@ -1003,11 +1000,8 @@
           ]
         },
         "kbsec": {
-          "status": "지원",
-          "constraint": "국내만 지원합니다. 종목 하나의 현재 상태(매매제한·위험등급)를 줍니다. 발동 이력이 아닙니다",
-          "apis": [
-            "SIQM4900"
-          ]
+          "status": "증권사 없음",
+          "constraint": "토스증권과 같은 유의사항 목록이 없습니다. 종목 하나의 매매제한과 위험등급은 `fetchTradingRestriction`으로 받습니다"
         }
       }
     },
@@ -1024,21 +1018,21 @@
       "cells": {
         "kis": {
           "status": "부분",
-          "constraint": "종목 단위만 지원합니다(토스는 시장 단위)",
+          "constraint": "국내만 지원합니다. 개인, 외국인, 기관계의 순매수 대금을 싣고 매수·매도 값은 `info`에 있습니다",
           "apis": [
             "examples_llm/domestic_stock/inquire_investor"
           ]
         },
         "toss": {
-          "status": "부분",
-          "constraint": "국내 시장 단위만 지원합니다",
+          "status": "미구현",
+          "constraint": "종목 단위 API는 `fetchStockInvestorTrading`이 원문으로 줍니다. 공통 모양으로는 아직 옮기지 않았습니다. 시장 단위는 `fetchMarketInvestorTrading`입니다",
           "apis": [
-            "GET /market-indicators/{symbol}/investor-trading"
+            "GET /stocks/{symbol}/investor-trading"
           ]
         },
         "kbsec": {
           "status": "부분",
-          "constraint": "국내만 지원합니다. 13개 투자자 유형(개인·외국인·기관 외 증권·보험·투신 등)을 하루 단위로 줍니다",
+          "constraint": "국내만 지원합니다. 13개 투자자 유형 가운데 개인, 외국인, 기관을 싣고 나머지는 `info`에 있습니다",
           "apis": [
             "IVU10430"
           ]
@@ -1049,9 +1043,7 @@
       "id": "fetchRankings",
       "name": "종목 랭킹",
       "group": "시장 정보",
-      "hasKeys": [
-        "fetchRankings"
-      ],
+      "hasKeys": [],
       "methods": [
         "fetchRankings"
       ],

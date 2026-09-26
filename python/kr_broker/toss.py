@@ -407,8 +407,6 @@ class toss(Exchange, ImplicitAPI):
                 'fetchTrades': True,
                 'fetchMarketCalendar': True,
                 'fetchStockWarnings': True,
-                'fetchInvestorTrading': True,
-                'fetchRankings': True,
             },
             'urls': {
                 'logo': None,
@@ -829,12 +827,19 @@ class toss(Exchange, ImplicitAPI):
         response = self.private_market_get_stocks_symbol_warnings(self.extend({'symbol': self.market(symbol)['id']}, params))
         return self.to_array(self.unwrap(response))
 
-    def fetch_investor_trading(self, market: str, interval: str = '1d', limit: int = 5,
-                               params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def fetch_market_investor_trading(self, market: str, interval: str = '1d', limit: int = 5,
+                                      params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """투자자별 매매대금(개인·외국인·기관·기타법인의 매수·매도 대금). 종목이 아니라 시장(`KOSPI`·`KOSDAQ`) 단위다."""
         response = self.private_market_get_market_indicators_symbol_investor_trading(
             self.extend({'symbol': market, 'interval': interval, 'count': limit}, params))
         return self.safe_list(self.unwrap(response), 'records', [])
+
+    def fetch_investor_trading(self, market: str, interval: str = '1d', limit: int = 5,
+                               params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """`fetch_market_investor_trading` 의 옛 이름이다(한 판 뒤에 지운다). `fetch_investor_trading` 은 종목 단위 공통 조회
+        (한국투자증권, KB증권)의 이름이라 토스증권의 `has['fetchInvestorTrading']` 은 비어 있다."""
+        self._warn_deprecated('toss.fetchInvestorTrading()', 'fetchMarketInvestorTrading()')
+        return self.fetch_market_investor_trading(market, interval, limit, params)
 
     def fetch_rankings(self, type: str, market_country: str = 'KR', duration: str = '1d', count: int = 100,
                        params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
@@ -845,13 +850,13 @@ class toss(Exchange, ImplicitAPI):
 
     # ============ 장 운영 캘린더와 세션 ============
 
-    def fetch_market_calendar(self, market: str, params: Optional[Dict[str, Any]] = None) -> Any:
+    def fetch_market_sessions(self, market: str, params: Optional[Dict[str, Any]] = None) -> Any:
         """장 운영 캘린더(전일·당일·익일 영업일의 세션 시각) 원본. 30분 안에 받은 것은 다시 부르지 않는다(`params['refresh']` 로 강제).
         받은 날짜별 개장 여부는 공용 휴장일 캘린더에도 넣는다. `market` 은 `'KR'`·`'US'` 이고 대소문자를 가리지 않는다.
-        그 밖의 값은 요청 없이 `BadRequest` 다."""
+        그 밖의 값은 요청 없이 `BadRequest` 다. 날짜별 개장 여부만 필요하면 세 증권사 공통인 `fetch_market_calendar` 를 쓴다."""
         country = market.upper() if isinstance(market, str) else None
         if country not in ('KR', 'US'):
-            raise BadRequest(f"{self.id} fetchMarketCalendar() market must be 'KR' or 'US'")
+            raise BadRequest(f"{self.id} fetchMarketSessions() market must be 'KR' or 'US'")
         cached = self._calendars.get(country)
         ttl = self.safe_integer(self.options, 'calendarTtl', CALENDAR_TTL_MS)
         if cached is not None and self.safe_bool(params, 'refresh', False) is not True and _now_ms() - cached['fetchedAt'] < ttl:
@@ -866,10 +871,22 @@ class toss(Exchange, ImplicitAPI):
         apply_market_calendar('US', toss_us_calendar_days(value))
         return value
 
+    def fetch_market_calendar(self, params: Any = None, legacy_params: Optional[Dict[str, Any]] = None) -> Any:
+        """날짜별 개장 여부. 세 증권사 공통 모양이다. `params['market']` 은 `'KR'`(기본)·`'US'` 이고 대소문자를 가리지 않는다.
+        장 운영 캘린더(`fetch_market_sessions`)의 전일·당일·익일 영업일과 그 사이의 평일(닫힌 날)이다. 받은 날짜는 공용 휴장일 캘린더에도 넣는다.
+        첫 인자로 시장 문자열을 넘기던 옛 호출(`fetch_market_calendar('KR', params)`)은 한 판 동안 경고를 남기고
+        `fetch_market_sessions` 의 결과를 돌려준다. 둘째 인자 `legacy_params` 는 그 옛 호출의 `params` 자리다."""
+        if isinstance(params, str):
+            self._warn_deprecated('toss.fetchMarketCalendar(market)', 'fetchMarketCalendar({ market }) 나 fetchMarketSessions(market)')
+            return self.fetch_market_sessions(params, legacy_params)
+        market = self._calendar_market(params)
+        value = self.fetch_market_sessions(market, self.omit(params or {}, 'market'))
+        return toss_kr_calendar_days(value) if market == 'KR' else toss_us_calendar_days(value)
+
     def current_kr_session(self, now_ms: Optional[int] = None) -> Optional[str]:
         """국내 캘린더로 본 지금의 세션. `'closed'` 는 열린 세션이 없다는 뜻이고, `None` 은 캘린더를 받지 못했다는 뜻이다."""
         try:
-            session = find_kr_session(self.fetch_market_calendar('KR'), now_ms)
+            session = find_kr_session(self.fetch_market_sessions('KR'), now_ms)
             return session if session is not None else 'closed'
         except Exception:
             logger.warning('[toss] 국내 장 운영 캘린더를 받지 못했다. 정적 시간표로 판정한다', exc_info=True)
@@ -878,7 +895,7 @@ class toss(Exchange, ImplicitAPI):
     def current_us_session(self, now_ms: Optional[int] = None) -> Optional[str]:
         """미국 캘린더로 본 지금의 세션. `'closed'` 와 `None` 의 뜻은 `current_kr_session` 과 같다."""
         try:
-            session = find_us_session(self.fetch_market_calendar('US'), now_ms)
+            session = find_us_session(self.fetch_market_sessions('US'), now_ms)
             return session if session is not None else 'closed'
         except Exception:
             logger.warning('[toss] 미국 장 운영 캘린더를 받지 못했다. 정규장 기준으로 판정한다', exc_info=True)

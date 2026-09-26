@@ -1,5 +1,6 @@
 /**
- * @fileoverview `kbsec.fetchInvestorTrading` — 종목별투자자(`IVU10430`). 13개 투자자 유형을 하루 단위로 준다.
+ * @fileoverview `kbsec.fetchInvestorTrading` — 종목별투자자(`IVU10430`). 세 증권사 공통 모양(`InvestorTradingRecord`)으로 준다.
+ * 13개 투자자 유형 가운데 개인·외국인·기관만 필드로 싣고, 나머지는 `info` 원문에 있다.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
@@ -20,7 +21,7 @@ beforeEach(() => {
 });
 
 describe('fetchInvestorTrading', () => {
-    it('기본은 오늘 하루·순매수·금액 기준이고, 13개 유형을 정리해 돌려준다', async () => {
+    it('기본은 오늘 하루·순매수·금액 기준이고, 개인·외국인·기관을 공통 모양으로 돌려준다. 나머지 유형은 info 원문에 있다', async () => {
         routeTr(mockFetch, {
             [KBSEC_TR.INVESTOR_TRADING]: {
                 Record1: [{
@@ -36,9 +37,10 @@ describe('fetchInvestorTrading', () => {
         const body = trBody(mockFetch, KBSEC_TR.INVESTOR_TRADING).dataBody;
         expect(body).toMatchObject({ excg_clsf: '1', is_cd: '005930', amt_q_clsf: '1', trd_clsf: '1', acml_clsf: '0' });
         expect(body.strt_dt).toBe(body.end_dt);
-        expect(record).toMatchObject({
-            date: '20260922', close: 71000, change: 500, percentage: 0.71, volume: 123456,
-            amounts: { individual: -1000000, foreign: 800000, institution: 200000, securities: 10000, program: 15000 },
+        expect(record).toEqual({
+            timestamp: Date.parse('2026-09-21T15:00:00Z'), datetime: '2026-09-21T15:00:00.000Z',
+            date: '20260922', close: 71000, change: 500, individual: -1000000, foreign: 800000, institution: 200000,
+            info: expect.objectContaining({ up_dwn_r_p2: '0.71', vlm: '123456', scrt: '10000', pgm: '15000' }),
         });
     });
 

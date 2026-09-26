@@ -71,7 +71,7 @@ import {
     safeString,
 } from './base';
 import type {
-    Balances, Dict, Dictionary, Int, KrTimestamped, MarketInterface, Num, OHLCV, Order, OrderBook, OrderSide, OrderType, Str, Ticker, Trade,
+    Balances, Dict, Dictionary, Int, InvestorTradingRecord, KrTimestamped, MarketInterface, Num, OHLCV, Order, OrderBook, OrderSide, OrderType, Str, Ticker, Trade,
     TradingFeeInterface,
 } from './base';
 import { assertSecureUrl, implicitMethodName } from './base/Exchange';
@@ -761,6 +761,8 @@ export interface KbsecStockWarning {
 /**
  * 투자자 유형별 매매(`IVU10430`)의 한 값 축(기본은 순매수). 13개 유형을 준다 — 다른 증권사보다 세분화됐다.
  * 수량은 `amt_q_clsf` 파라미터로 대금 대신 받을 수 있다.
+ *
+ * @deprecated `fetchInvestorTrading` 이 공통 타입(`InvestorTradingRecord`)을 돌려주면서 쓰지 않는다. 13개 유형은 `info` 의 원문 필드로 읽는다. 다음 판에서 지운다.
  */
 export interface KbsecInvestorAmounts {
     individual: number;
@@ -780,21 +782,8 @@ export interface KbsecInvestorAmounts {
     foreignBrokerTotal: number;
 }
 
-/** 종목별 투자자 매매동향 하루치(`IVU10430`). 국내만 지원한다. */
-export interface KbsecInvestorTradingRecord extends KrTimestamped {
-    /** 일자 `YYYYMMDD`(`dt`) */
-    date: string;
-    /** 종가(`cls_prc`) */
-    close: number;
-    /** 전일대비(`bdy_cmpr`) */
-    change: number;
-    /** 등락율(`up_dwn_r_p2`) */
-    percentage: number;
-    /** 거래량(`vlm`) */
-    volume: number;
-    amounts: KbsecInvestorAmounts;
-    info: Dict;
-}
+/** @deprecated `fetchInvestorTrading` 이 공통 타입을 돌려준다. `InvestorTradingRecord` 를 쓴다. 다음 판에서 지운다. */
+export type KbsecInvestorTradingRecord = InvestorTradingRecord;
 
 /** 외국계 거래원 한 곳의 매도 또는 매수 현황(`IVU10420`). */
 export interface KbsecBrokerFlow {
@@ -1747,9 +1736,7 @@ export class kbsec extends Exchange {
                 fetchTime: false,
                 // 주식 고유. 장운영상태 TR 로 전·기준·익영업일을 받아 휴장일 캘린더를 채운다.
                 fetchMarketCalendar: true,
-                fetchStockWarnings: true,
                 fetchInvestorTrading: true,
-                fetchRankings: true,
                 createMarketBuyOrderWithCost: true,
                 createConditionalOrder: false,
             },
@@ -2037,7 +2024,7 @@ export class kbsec extends Exchange {
         if (violation !== null) throw new InvalidOrder(`${this.id} ${method}() ${violation} (${market.symbol})`, { detail: KRX_TICK_INVALID_DETAIL });
     }
 
-    /** 종목기본정보(`SIQM4900`) 원문 한 행. `fetchStocks`·`fetchStockWarnings`가 함께 쓴다. 국내만 지원한다. */
+    /** 종목기본정보(`SIQM4900`) 원문 한 행. `fetchStocks`·`fetchTradingRestriction`이 함께 쓴다. 국내만 지원한다. */
     private async fetchSecurityInfo(symbol: string, params: Dict = {}): Promise<Dict> {
         const market = this.market(symbol);
         if (this.isUs(market)) throw new NotSupported(`${this.id} fetchStocks() 는 국내 종목만 지원한다: ${symbol}`);
@@ -2063,7 +2050,7 @@ export class kbsec extends Exchange {
     }
 
     /** 매매제한·위험등급. `fetchStocks`와 같은 TR(`SIQM4900`)을 다시 부른다. 국내만 지원한다. */
-    async fetchStockWarnings(symbol: string, params: Dict = {}): Promise<KbsecStockWarning> {
+    async fetchTradingRestriction(symbol: string, params: Dict = {}): Promise<KbsecStockWarning> {
         const row = await this.fetchSecurityInfo(symbol, params);
         return {
             tradingRestriction: safeString(row, 'trd_rstn_clsf_nm') || undefined,
@@ -2076,12 +2063,19 @@ export class kbsec extends Exchange {
         };
     }
 
+    /** @deprecated `fetchTradingRestriction` 의 옛 이름이다. `fetchStockWarnings` 는 토스증권의 유의사항 조회 이름으로 남는다. 다음 판에서 지운다. */
+    async fetchStockWarnings(symbol: string, params: Dict = {}): Promise<KbsecStockWarning> {
+        this.warnDeprecated('kbsec.fetchStockWarnings()', 'fetchTradingRestriction()');
+        return this.fetchTradingRestriction(symbol, params);
+    }
+
     /**
-     * 종목별 투자자 매매동향(`IVU10430`). 개인·외국인·기관 등 13개 유형을 하루 단위로 준다. 국내만 지원한다.
-     * 기본은 오늘(KST) 하루, 순매수(`trd_clsf='1'`), 금액 기준(`amt_q_clsf='1'`)이다. `since`와 `params.until`로 기간을 넓히고,
-     * `params`로 `trd_clsf`(1순매수·2매수·3매도)나 `amt_q_clsf`(1금액·2수량)를 덮어쓸 수 있다.
+     * 종목별 투자자 매매동향(`IVU10430`)을 하루 단위로 준다. 세 증권사 공통 모양이다(`InvestorTradingRecord`). 국내만 지원한다.
+     * 개인, 외국인, 기관의 값을 싣고, 등락률과 거래량, 나머지 10개 투자자 유형은 `info` 의 원문에 있다.
+     * 기본은 오늘(KST) 하루, 순매수(`trd_clsf='1'`), 금액 기준(`amt_q_clsf='1'`)이다. `since`와 `params.until`로 기간을 넓힌다.
+     * `params`로 `trd_clsf`(1순매수·2매수·3매도)나 `amt_q_clsf`(1금액·2수량)를 덮어쓰면 세 투자자 필드도 그 값이 된다.
      */
-    async fetchInvestorTrading(symbol: string, since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<KbsecInvestorTradingRecord[]> {
+    async fetchInvestorTrading(symbol: string, since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<InvestorTradingRecord[]> {
         const [until, query] = this.handleUntilParam('fetchInvestorTrading', limit, params);
         const market = this.market(symbol);
         if (this.isUs(market)) throw new NotSupported(`${this.id} fetchInvestorTrading() 는 국내 종목만 지원한다: ${symbol}`);
@@ -2101,25 +2095,9 @@ export class kbsec extends Exchange {
             date: pickStr(row, 'dt'),
             close: pickNum(row, 'cls_prc'),
             change: pickNum(row, 'bdy_cmpr'),
-            percentage: pickNum(row, 'up_dwn_r_p2'),
-            volume: pickNum(row, 'vlm'),
-            amounts: {
-                individual: pickNum(row, 'indv'),
-                foreign: pickNum(row, 'fgnr'),
-                institution: pickNum(row, 'ogn'),
-                securities: pickNum(row, 'scrt'),
-                insurance: pickNum(row, 'insr'),
-                investmentTrust: pickNum(row, 'invst_trst'),
-                merchantBank: pickNum(row, 'invst_bnk'),
-                bank: pickNum(row, 'bnk'),
-                fund: pickNum(row, 'fnd'),
-                privateFund: pickNum(row, 'prv_o_fnd'),
-                otherCorporate: pickNum(row, 'etc_corp'),
-                government: pickNum(row, 'ntn'),
-                nativeForeign: pickNum(row, 'ntv_fgnr'),
-                program: pickNum(row, 'pgm'),
-                foreignBrokerTotal: pickNum(row, 'frgn_afflt_dl_orgn_sum'),
-            },
+            individual: pickNum(row, 'indv'),
+            foreign: pickNum(row, 'fgnr'),
+            institution: pickNum(row, 'ogn'),
             info: row,
         })), since, limit);
     }
@@ -5262,9 +5240,12 @@ export class kbsec extends Exchange {
     /**
      * 국내 휴장일을 날짜별 개장 여부로 돌려준다. 장운영상태(`SZQM0771`)가 주는 전영업일·기준영업일·익영업일을 열린 날로 보고, 그 사이의 평일을
      * 닫힌 날로 넓힌다. KB 는 이 세 날짜 밖은 알려 주지 않으므로 넓히는 범위가 앞뒤 며칠이다.
+     *
+     * 세 증권사 공통 모양이다. `params.market` 은 `'KR'`(기본)만 받고, `'US'` 는 요청 없이 `NotSupported` 다.
      */
     async fetchMarketCalendar(params: Dict = {}): Promise<CalendarDay[]> {
-        const body = await this.callTr(KBSEC_TR.MARKET_STATUS, { ...params });
+        if (this.calendarMarket(params) === 'US') throw new NotSupported(`${this.id} fetchMarketCalendar() 는 국내 휴장일만 준다`);
+        const body = await this.callTr(KBSEC_TR.MARKET_STATUS, this.omit(params, 'market'));
         const openDates = [pickStr(body, 'bfr_bsns_dt'), pickStr(body, 'std_bsnss_dt'), pickStr(body, 'next_biz_dt')].filter(date => date !== '');
         return expandBusinessDays(openDates);
     }

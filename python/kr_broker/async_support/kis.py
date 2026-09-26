@@ -844,9 +844,7 @@ class kis(Exchange, ImplicitAPI):
                 'fetchStatus': False,
                 'fetchTime': False,
                 'fetchMarketCalendar': True,
-                'fetchStockWarnings': True,
                 'fetchInvestorTrading': True,
-                'fetchRankings': True,
             },
             # 야후 파이낸스로 받는 봉 주기. 국내 캔들은 KIS 가 당일 분봉과 100행 일봉만 줘서 야후를 쓴다.
             'timeframes': {'1m': '1m', '5m': '5m', '15m': '15m', '30m': '30m', '1h': '1h', '4h': '4h', '1d': '1d', '1w': '1w', '1M': '1M'},
@@ -1409,12 +1407,12 @@ class kis(Exchange, ImplicitAPI):
 
     # ============ 고유 조회 ============
 
-    async def fetch_stock_warnings(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    async def fetch_volatility_interruptions(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """변동성완화장치(VI) 발동 현황(`inquire-vi-status`). 오늘(한국 날짜) 이 종목의 VI 가 발동한 기록이다. `params.until` 은 읽지 않는다.
         발동한 적이 없으면 빈 목록이다. 국내만 받는다."""
         instrument = self._instrument_of(symbol)
         if instrument.overseas:
-            raise BadSymbol(f'{self.id} fetchStockWarnings() 은 국내 종목만 지원한다: {symbol}')
+            raise BadSymbol(f'{self.id} fetchVolatilityInterruptions() 은 국내 종목만 지원한다: {symbol}')
         response = await self.private_get_uapi_domestic_stock_v1_quotations_inquire_vi_status(self.extend({
             'FID_DIV_CLS_CODE': '0',
             'FID_COND_SCR_DIV_CODE': VI_STATUS_SCREEN_CODE,
@@ -1437,9 +1435,21 @@ class kis(Exchange, ImplicitAPI):
             'info': row,
         }) for row in multi_rows_of(self.safe_value(response, 'output'))]
 
-    async def fetch_investor_trading(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        """종목의 투자자별(개인·외국인·기관계) 매매동향(`inquire-investor`)을 최근 영업일 순으로 돌려준다. 국내만 받는다.
-        당일 값은 장 종료 뒤에 채워진다. 토스증권의 같은 이름 메서드는 시장 단위라서 범위가 다르다."""
+    async def fetch_stock_warnings(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """`fetch_volatility_interruptions` 의 옛 이름이다(한 판 뒤에 지운다). `fetch_stock_warnings` 는 토스증권의 유의사항 조회 이름으로 남는다."""
+        self._warn_deprecated('kis.fetchStockWarnings()', 'fetchVolatilityInterruptions()')
+        return await self.fetch_volatility_interruptions(symbol, params)
+
+    async def fetch_investor_trading(self, symbol: str, since: Any = None, limit: Int = None,
+                               params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """종목의 투자자별 매매동향(`inquire-investor`)을 최근 영업일 순으로 돌려준다. 세 증권사 공통 모양이다.
+        개인, 외국인, 기관계의 순매수 대금을 싣고, 매수·매도 수량과 대금은 `info` 의 원문에 있다. 국내만 받는다. 당일 값은 장 종료 뒤에 채워진다.
+        조회 기간을 받는 입력이 없어 받은 영업일을 `since`, `params['until']`, `limit` 으로 거른다.
+        둘째 인자로 `params` 를 넘기던 옛 호출은 한 판 동안 경고를 남기고 받는다."""
+        if isinstance(since, dict):
+            self._warn_deprecated('kis.fetchInvestorTrading(symbol, params)', 'fetchInvestorTrading(symbol, since, limit, params)')
+            since, params = None, since
+        until, query = self.handle_until_param('fetchInvestorTrading', limit, params or {})
         instrument = self._instrument_of(symbol)
         if instrument.overseas:
             raise BadSymbol(f'{self.id} fetchInvestorTrading() 은 국내 종목만 지원한다: {symbol}')
@@ -1447,28 +1457,19 @@ class kis(Exchange, ImplicitAPI):
             'FID_COND_MRKT_DIV_CODE': 'J',
             'FID_INPUT_ISCD': instrument.code,
             'tr_id': 'FHKST01010900',
-        }, params))
-
-        def amounts(row: Dict[str, Any], prefix: str) -> Dict[str, Any]:
-            return {
-                'netBuyVolume': self.safe_number(row, f'{prefix}_ntby_qty'),
-                'netBuyAmount': self.safe_number(row, f'{prefix}_ntby_tr_pbmn'),
-                'buyVolume': self.safe_number(row, f'{prefix}_shnu_vol'),
-                'buyAmount': self.safe_number(row, f'{prefix}_shnu_tr_pbmn'),
-                'sellVolume': self.safe_number(row, f'{prefix}_seln_vol'),
-                'sellAmount': self.safe_number(row, f'{prefix}_seln_tr_pbmn'),
-            }
-
-        return [self.extend(self.kst_stamp(self.safe_string(row, 'stck_bsop_date')), {
-            'businessDate': self.safe_string(row, 'stck_bsop_date', ''),
+        }, query))
+        records = [self.extend(self.kst_stamp(self.safe_string(row, 'stck_bsop_date')), {
+            'date': self.safe_string(row, 'stck_bsop_date', ''),
             'close': self.safe_number(row, 'stck_clpr'),
             'change': self.safe_number(row, 'prdy_vrss'),
-            'changeSign': _or_none(self.safe_string(row, 'prdy_vrss_sign')),
-            'individual': amounts(row, 'prsn'),
-            'foreign': amounts(row, 'frgn'),
-            'institution': amounts(row, 'orgn'),
+            'individual': self.safe_number(row, 'prsn_ntby_tr_pbmn'),
+            'foreign': self.safe_number(row, 'frgn_ntby_tr_pbmn'),
+            'institution': self.safe_number(row, 'orgn_ntby_tr_pbmn'),
             'info': row,
         }) for row in multi_rows_of(self.safe_value(response, 'output'))]
+        if until is not None:
+            records = [record for record in records if record['timestamp'] is not None and record['timestamp'] <= until]
+        return self.filter_by_since_limit(records, since, limit)
 
     async def fetch_rankings(self, type: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """종목 순위. 국내 순위, 해외 순위(`OVERSEAS_*`, `params['exchange']` 로 거래소를 반드시 고른다), ELW 순위(`ELW_*`)를 받는다.
@@ -1566,7 +1567,11 @@ class kis(Exchange, ImplicitAPI):
 
     async def fetch_market_calendar(self, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """국내 휴장일 캘린더(`chk-holiday`). 기준일부터 이후 날짜의 개장·영업·거래·결제 여부를 준다. 실전 계좌에서만 쓸 수 있다.
-        지난 영업일을 세는 코드가 지난 연휴를 알도록 30일 전 기준일과 오늘 기준일을 함께 조회한다. KIS 는 하루 한 번 호출을 권한다."""
+        지난 영업일을 세는 코드가 지난 연휴를 알도록 30일 전 기준일과 오늘 기준일을 함께 조회한다. KIS 는 하루 한 번 호출을 권한다.
+        세 증권사 공통 모양이다. `params['market']` 은 `'KR'`(기본)만 받고, `'US'` 는 요청 없이 `NotSupported` 다."""
+        if self._calendar_market(params) == 'US':
+            raise NotSupported(f'{self.id} fetchMarketCalendar() 는 국내 휴장일만 준다')
+        query = self.omit(params or {}, 'market')
         if self.isSandboxModeEnabled:
             raise NotSupported(f'{self.id} 휴장일 조회(chk-holiday)는 실전 계좌에서만 쓸 수 있다')
         now = self.milliseconds()
@@ -1577,7 +1582,7 @@ class kis(Exchange, ImplicitAPI):
                 'CTX_AREA_FK': '',
                 'CTX_AREA_NK': '',
                 'tr_id': 'CTCA0903R',
-            }, params))
+            }, query))
             rows = _field(response, 'output')
             for row in (rows if isinstance(rows, list) else [rows]):
                 date = self.safe_string(row, 'bass_dt')

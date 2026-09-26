@@ -28,6 +28,12 @@
   - `kr-broker/kbsec/kbsec-types`의 `KBSEC_OVERSEAS_EXCHANGE`. 미국 거래소 코드는 `KBSEC_US_EXCHANGES`에 있습니다.
   - `kr-broker/kis/kis-types`의 `KIS_DEFAULT_FEE_RATE`. `KIS_BROKERAGE_FEE`를 쓰고, 매도라면 `krxSellTaxRate()`를 더합니다. Python 판은 0.5.0에서 지웠습니다.
 - 한국투자증권과 KB증권 `fetchOHLCV`의 기본 `timeframe`을 ccxt와 같은 1분봉(`'1m'`)으로 바꿉니다. 예전에는 일봉(`'1d'`)이었습니다. `timeframe`을 빼고 일봉을 받던 코드는 `'1d'`를 직접 줍니다. 토스증권은 이미 1분봉이었습니다. `limit`을 주지 않으면 세 증권사 모두 예전처럼 최대 100개입니다. Python 판도 같고, 토스증권 `fetch_ohlcv`는 `timeframe`에 `None`을 주면 `NotSupported` 대신 1분봉을 받습니다.
+- `has`에 올린 확장 메서드를 ccxt의 `has`처럼 세 증권사에서 같은 인자로 부르고 같은 모양을 받도록 맞춥니다. 옛 이름과 옛 호출 모양은 한 판 동안 인스턴스마다 한 번 경고 로그를 남기고 동작합니다. 다음 판에서 지웁니다. Python 판(한국투자증권, 토스증권)도 같습니다.
+  - `fetchMarketCalendar(params)`는 세 증권사 모두 날짜별 개장 여부(`CalendarDay[]`)를 돌려줍니다. 시장은 `params.market`(기본 `'KR'`)으로 고릅니다. 한국투자증권과 KB증권은 `'US'`를 받으면 요청 없이 `NotSupported`를 던집니다. 토스증권은 예전에 세션 시각 원본을 돌려줬고, 이제 그 결과는 `fetchMarketSessions(market)`로 받습니다. 시장 문자열을 넘기던 옛 호출(`fetchMarketCalendar('KR')`)은 예전처럼 세션 시각 원본을 돌려줍니다. 휴장일 표를 채우려고 부르던 코드는 `fetchMarketCalendar({ market })`로 바꿉니다.
+  - 한국투자증권과 KB증권 `fetchInvestorTrading(symbol, since, limit, params)`는 공통 타입 `InvestorTradingRecord[]`를 돌려줍니다. 필드는 `date`, `close`, `change`와 개인, 외국인, 기관의 순매수 대금(`individual`, `foreign`, `institution`)입니다. 한국투자증권의 매수·매도 수량과 대금, KB증권의 등락률과 거래량, 나머지 투자자 유형은 `info` 원문에서 읽습니다. `KisInvestorTradingRecord`와 `KbsecInvestorTradingRecord`는 새 타입의 옛 이름으로 남깁니다. 한국투자증권은 `since`, `limit`, `params.until`로 받은 영업일을 거릅니다. 둘째 인자로 `params`를 넘기던 옛 호출도 받습니다.
+  - 토스증권의 시장 단위 조회 `fetchInvestorTrading`은 `fetchMarketInvestorTrading`으로 옮기고, 토스증권 `has`에서 `fetchInvestorTrading`을 뺍니다.
+  - 한국투자증권 `fetchStockWarnings`는 `fetchVolatilityInterruptions`로, KB증권 `fetchStockWarnings`는 `fetchTradingRestriction`으로 옮깁니다. 두 증권사의 `has`에서 `fetchStockWarnings`를 뺍니다. `fetchStockWarnings`는 토스증권의 유의사항 조회 이름으로 남습니다.
+  - `fetchRankings`는 순위 종류(`type`)가 증권사마다 달라 세 증권사의 `has`에서 뺍니다. 메서드는 그대로입니다.
 
 ### 추가
 

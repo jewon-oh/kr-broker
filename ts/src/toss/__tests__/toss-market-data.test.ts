@@ -396,11 +396,41 @@ describe('장 운영 캘린더', () => {
     it('받은 캘린더를 30분 동안 다시 부르지 않고, refresh 로 강제한다', async () => {
         const fake = installFakeToss({ 'GET /api/v1/market-calendar/US': jsonOk({ today: { date: '2026-08-03', dayMarket: null, preMarket: null, regularMarket: null, afterMarket: null } }) });
         const exchange = makeToss();
-        await exchange.fetchMarketCalendar('US');
-        await exchange.fetchMarketCalendar('US');
+        await exchange.fetchMarketSessions('US');
+        await exchange.fetchMarketCalendar({ market: 'US' });
         expect(fake.requestsTo('GET /api/v1/market-calendar/US')).toHaveLength(1);
-        await exchange.fetchMarketCalendar('US', { refresh: true });
+        await exchange.fetchMarketCalendar({ market: 'US', refresh: true });
         expect(fake.requestsTo('GET /api/v1/market-calendar/US')).toHaveLength(2);
+    });
+
+    it('fetchMarketCalendar 는 세 증권사 공통 모양(날짜별 개장 여부)이고, 기본 시장은 KR 이다', async () => {
+        installFakeToss({
+            'GET /api/v1/market-calendar/KR': jsonOk({
+                previousBusinessDay: { date: '2026-08-18', integrated: { regularMarket: { startTime: '2026-08-18T09:00:00+09:00', endTime: '2026-08-18T15:30:00+09:00' } } },
+                today: { date: '2026-08-19', integrated: null },
+                nextBusinessDay: { date: '2026-08-20', integrated: { regularMarket: { startTime: '2026-08-20T09:00:00+09:00', endTime: '2026-08-20T15:30:00+09:00' } } },
+            }),
+        });
+
+        expect(await makeToss().fetchMarketCalendar()).toEqual([
+            { date: '20260818', open: true },
+            { date: '20260819', open: false },
+            { date: '20260820', open: true },
+        ]);
+    });
+
+    it('시장 문자열을 받던 옛 호출은 세션 시각 원본을 주고, 인스턴스마다 한 번 경고한다', async () => {
+        const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined as never);
+        const calendar = { today: { date: '2026-08-03', dayMarket: null, preMarket: null, regularMarket: null, afterMarket: null } };
+        installFakeToss({ 'GET /api/v1/market-calendar/US': jsonOk(calendar) });
+        const exchange = makeToss();
+
+        expect(await exchange.fetchMarketCalendar('US')).toEqual(await exchange.fetchMarketSessions('US'));
+        await exchange.fetchMarketCalendar('us');
+
+        expect(await exchange.fetchMarketSessions('US')).toEqual(calendar);
+        expect(warn.mock.calls.filter((c) => String(c[1]).includes('fetchMarketCalendar(market)'))).toHaveLength(1);
+        warn.mockRestore();
     });
 
     it('currentKrSession: 세션이 없으면 closed, 캘린더를 못 받으면 null', async () => {
@@ -421,7 +451,8 @@ describe('종목 부가 정보', () => {
         });
         const exchange = makeToss();
         expect(await exchange.fetchStockWarnings('005930/KRW')).toEqual([{ warningType: 'OVERHEATED' }]);
-        expect((await exchange.fetchInvestorTrading('KOSPI'))[0]!.foreigner?.buyAmount).toBe('100');
+        expect((await exchange.fetchMarketInvestorTrading('KOSPI'))[0]!.foreigner?.buyAmount).toBe('100');
+        expect(await exchange.fetchInvestorTrading('KOSPI')).toEqual(await exchange.fetchMarketInvestorTrading('KOSPI'));
         expect((await exchange.fetchRankings('TOSS_SECURITIES_TRADING_AMOUNT'))[0]!.rank).toBe(1);
         expect((await exchange.fetchStocks(['005930/KRW', 'AAPL']))[0]!.name).toBe('삼성전자');
         expect(fake.requestsTo('GET /api/v1/stocks')[0]!.query.get('symbols')).toBe('005930,AAPL');

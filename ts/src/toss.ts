@@ -116,7 +116,7 @@ import { symbolBaseCode, type StockMarketGroup } from './broker-market-group';
 import { KST_OFFSET_MS, candlePeriodUtcMs, isDailyOrLongerTimeframe } from './broker-time';
 import { logger } from './logger';
 import type { UsdKrwRateOption } from './options';
-import { applyMarketCalendar } from './market-calendar';
+import { applyMarketCalendar, type CalendarDay } from './market-calendar';
 import { krxAuctionBuyBlockReason } from './krx-trading-hours';
 import { usAuctionBuyBlockReason } from './us-market-hours';
 import { getKrxTickSize, KRX_TICK_INVALID_DETAIL, krxTickViolation } from './krx-tick-size';
@@ -444,8 +444,6 @@ export class toss extends Exchange {
                 fetchTrades: true,
                 fetchMarketCalendar: true,
                 fetchStockWarnings: true,
-                fetchInvestorTrading: true,
-                fetchRankings: true,
             },
             urls: {
                 logo: undefined,
@@ -976,9 +974,9 @@ export class toss extends Exchange {
     }
 
     /**
-     * 투자자별 매매대금(개인·외국인·기관·기타법인의 매수·매도 대금). 종목이 아니라 시장(`KOSPI`·`KOSDAQ`) 단위다.
+     * 투자자별 매매대금(개인·외국인·기관·기타법인의 매수·매도 대금). 종목이 아니라 시장(`KOSPI`·`KOSDAQ`) 단위다. 종목 단위는 `fetchStockInvestorTrading` 이다.
      */
-    async fetchInvestorTrading(
+    async fetchMarketInvestorTrading(
         market: 'KOSPI' | 'KOSDAQ',
         interval: '1d' | '1w' | '1mo' | '1y' = '1d',
         limit = 5,
@@ -986,6 +984,20 @@ export class toss extends Exchange {
     ): Promise<TossInvestorTradingRecord[]> {
         const response = await this.privateMarketGetMarketIndicatorsSymbolInvestorTrading(this.extend({ symbol: market, interval, count: limit }, params));
         return this.safeList(this.unwrap(response), 'records', []) as TossInvestorTradingRecord[];
+    }
+
+    /**
+     * @deprecated `fetchMarketInvestorTrading` 의 옛 이름이다. `fetchInvestorTrading` 은 종목 단위 공통 조회(한국투자증권, KB증권)의 이름이라
+     * 토스증권의 `has.fetchInvestorTrading` 은 비어 있다. 다음 판에서 지운다.
+     */
+    async fetchInvestorTrading(
+        market: 'KOSPI' | 'KOSDAQ',
+        interval: '1d' | '1w' | '1mo' | '1y' = '1d',
+        limit = 5,
+        params: Dict = {},
+    ): Promise<TossInvestorTradingRecord[]> {
+        this.warnDeprecated('toss.fetchInvestorTrading()', 'fetchMarketInvestorTrading()');
+        return this.fetchMarketInvestorTrading(market, interval, limit, params);
     }
 
     /** 시장 지표(국내 지수·국채) 현재가(`GET /market-indicators/prices`, 최대 200개). 심볼은 카탈로그 8종만 받고, 그 밖은 서버가 400으로 거절한다. */
@@ -1006,7 +1018,7 @@ export class toss extends Exchange {
     }
 
     /**
-     * 종목 단위 투자자별 매매동향(`GET /stocks/{symbol}/investor-trading`, 국내 전용). 시장 단위인 `fetchInvestorTrading`와 다르다.
+     * 종목 단위 투자자별 매매동향(`GET /stocks/{symbol}/investor-trading`, 국내 전용). 시장 단위인 `fetchMarketInvestorTrading`과 다르다.
      * 당일 기록은 장중 잠정치라 `individual`·`institution.breakdown`·`otherCorporation`·`foreignerHolding`·`cfd`가 `null`일 수 있다.
      * `params.until`에 응답의 `nextUntil`을 넣으면 다음 페이지를 받는다.
      */
@@ -1077,10 +1089,11 @@ export class toss extends Exchange {
     /**
      * 장 운영 캘린더(전일·당일·익일 영업일의 세션 시각)를 받아 온다. 30분 안에 받은 것은 다시 부르지 않는다(`params.refresh` 로 강제).
      * 받은 날짜별 개장 여부는 공용 휴장일 캘린더에도 넣는다. `market` 은 `'KR'`·`'US'` 이고 대소문자를 가리지 않는다. 그 밖의 값은 요청 없이 `BadRequest` 다.
+     * 날짜별 개장 여부만 필요하면 세 증권사 공통인 `fetchMarketCalendar` 를 쓴다.
      */
-    async fetchMarketCalendar(market: StockMarketGroup | Lowercase<StockMarketGroup>, params: Dict = {}): Promise<TossKrMarketCalendar | TossUsMarketCalendar> {
+    async fetchMarketSessions(market: StockMarketGroup | Lowercase<StockMarketGroup>, params: Dict = {}): Promise<TossKrMarketCalendar | TossUsMarketCalendar> {
         const country = String(market).toUpperCase();
-        if (country !== 'KR' && country !== 'US') throw new BadRequest(`${this.id} fetchMarketCalendar() market must be 'KR' or 'US'`);
+        if (country !== 'KR' && country !== 'US') throw new BadRequest(`${this.id} fetchMarketSessions() market must be 'KR' or 'US'`);
         const cached = this.calendars[country];
         const ttl = this.safeInteger(this.options, 'calendarTtl', CALENDAR_TTL_MS) as number;
         if (cached !== undefined && this.safeBool(params, 'refresh', false) !== true && this.milliseconds() - cached.fetchedAt < ttl) return cached.value;
@@ -1097,11 +1110,32 @@ export class toss extends Exchange {
     }
 
     /**
+     * @deprecated 시장 문자열을 받던 옛 호출이다. 세션 시각 원본은 `fetchMarketSessions(market)` 로, 날짜별 개장 여부는
+     * `fetchMarketCalendar({ market })` 로 받는다. 다음 판에서 지운다.
+     */
+    fetchMarketCalendar(market: StockMarketGroup | Lowercase<StockMarketGroup>, params?: Dict): Promise<TossKrMarketCalendar | TossUsMarketCalendar>;
+    /**
+     * 날짜별 개장 여부. 세 증권사 공통 모양이다. `params.market` 은 `'KR'`(기본)·`'US'` 이고 대소문자를 가리지 않는다. 그 밖의 값은 요청 없이 `BadRequest` 다.
+     * 장 운영 캘린더(`fetchMarketSessions`)의 전일·당일·익일 영업일과 그 사이의 평일(닫힌 날)이다. 받은 날짜는 공용 휴장일 캘린더에도 넣는다.
+     * 첫 인자로 시장 문자열을 넘기던 옛 호출은 한 판 동안 경고를 남기고 `fetchMarketSessions` 의 결과를 돌려준다.
+     */
+    fetchMarketCalendar(params?: Dict): Promise<CalendarDay[]>;
+    async fetchMarketCalendar(marketOrParams: string | Dict = {}, params: Dict = {}): Promise<CalendarDay[] | TossKrMarketCalendar | TossUsMarketCalendar> {
+        if (typeof marketOrParams === 'string') {
+            this.warnDeprecated('toss.fetchMarketCalendar(market)', 'fetchMarketCalendar({ market }) 나 fetchMarketSessions(market)');
+            return this.fetchMarketSessions(marketOrParams as StockMarketGroup, params);
+        }
+        const market = this.calendarMarket(marketOrParams);
+        const value = await this.fetchMarketSessions(market, this.omit(marketOrParams, 'market'));
+        return market === 'KR' ? tossKrCalendarDays(value as TossKrMarketCalendar) : tossUsCalendarDays(value as TossUsMarketCalendar);
+    }
+
+    /**
      * 국내 캘린더로 본 지금의 세션. `'closed'` 는 캘린더상 열린 세션이 없다는 뜻이고, `null` 은 캘린더를 받지 못했다는 뜻이다(호출하는 쪽이 정적 시간표로 판정한다).
      */
     async currentKrSession(now: Date = new Date(this.milliseconds())): Promise<TossKrSession | 'closed' | null> {
         try {
-            const calendar = await this.fetchMarketCalendar('KR') as TossKrMarketCalendar;
+            const calendar = await this.fetchMarketSessions('KR') as TossKrMarketCalendar;
             return findKrSession(calendar, now) ?? 'closed';
         } catch (err) {
             logger.warn({ err }, '[toss] 국내 장 운영 캘린더를 받지 못했다. 정적 시간표로 판정한다');
@@ -1112,7 +1146,7 @@ export class toss extends Exchange {
     /** 미국 캘린더로 본 지금의 세션. `'closed'` 와 `null` 의 뜻은 `currentKrSession` 과 같다. */
     async currentUsSession(now: Date = new Date(this.milliseconds())): Promise<TossUsSession | 'closed' | null> {
         try {
-            const calendar = await this.fetchMarketCalendar('US') as TossUsMarketCalendar;
+            const calendar = await this.fetchMarketSessions('US') as TossUsMarketCalendar;
             return findUsSession(calendar, now) ?? 'closed';
         } catch (err) {
             logger.warn({ err }, '[toss] 미국 장 운영 캘린더를 받지 못했다. 정규장 기준으로 판정한다');

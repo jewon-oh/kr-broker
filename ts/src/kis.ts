@@ -68,6 +68,7 @@ import {
     type Dict,
     type Dictionary,
     type Int,
+    type InvestorTradingRecord,
     type KrTimestamped,
     type MarketInterface,
     type Num,
@@ -292,24 +293,8 @@ export interface KisInvestorAmounts {
     sellAmount: number | undefined;
 }
 
-/**
- * 종목의 투자자별(개인·외국인·기관계) 매매동향 하루치(`inquire-investor`, TR `FHKST01010900`). 종목 단위다 — 토스의
- * 같은 이름 메서드는 시장(KOSPI·KOSDAQ) 단위라서 범위가 다르다(2026-09-22 조사).
- */
-export interface KisInvestorTradingRecord extends KrTimestamped {
-    /** 영업일자 `YYYYMMDD`(`stck_bsop_date`) */
-    businessDate: string;
-    /** 주식 종가(`stck_clpr`) */
-    close: number | undefined;
-    /** 전일대비(`prdy_vrss`) */
-    change: number | undefined;
-    /** 전일대비부호(`prdy_vrss_sign`). KIS 원문 코드 그대로다(뜻은 공식 문서에 없어 확인 못 했다) */
-    changeSign: string | undefined;
-    individual: KisInvestorAmounts;
-    foreign: KisInvestorAmounts;
-    institution: KisInvestorAmounts;
-    info: Dict;
-}
+/** @deprecated `fetchInvestorTrading` 이 공통 타입을 돌려준다. `InvestorTradingRecord` 를 쓴다. 다음 판에서 지운다. */
+export type KisInvestorTradingRecord = InvestorTradingRecord;
 
 /**
  * 체결 하나의 매매손익과 청구된 수수료·거래세(`inquire-period-trade-profit`, TR `TTTC8715R`). 국내만 지원한다
@@ -3713,9 +3698,7 @@ export class kis extends Exchange {
                 fetchStatus: false,
                 fetchTime: false,
                 fetchMarketCalendar: true,
-                fetchStockWarnings: true,
                 fetchInvestorTrading: true,
-                fetchRankings: true,
             },
             // 야후 파이낸스로 받는 봉 주기. 국내 캔들은 KIS 가 당일 분봉과 100행 일봉만 줘서 야후를 쓴다.
             timeframes: { '1m': '1m', '5m': '5m', '15m': '15m', '30m': '30m', '1h': '1h', '4h': '4h', '1d': '1d', '1w': '1w', '1M': '1M' },
@@ -4929,11 +4912,11 @@ export class kis extends Exchange {
      * 변동성완화장치(VI) 발동 현황(`inquire-vi-status`). 오늘(한국 날짜) 이 종목의 VI 가 발동한 기록을 돌려준다. 조회일은 늘 오늘이고 `params.until`은 읽지 않는다.
      * 발동한 적이 없으면 빈 배열이다. 국내만 지원한다(공식 API 목록에 해외 종목 VI 조회가 없다).
      *
-     * 토스가 함께 주는 유의사항 여섯 종류 중 발동 기록은 VI 만 준다. 정리매매, 단기과열, 시장경고의 현재 상태는 `fetchStockStatus`에 있다.
+     * 토스의 유의사항(`fetchStockWarnings`) 여섯 종류 중 발동 기록은 VI 만 준다. 정리매매, 단기과열, 시장경고의 현재 상태는 `fetchStockStatus`에 있다.
      */
-    async fetchStockWarnings(symbol: string, params: Dict = {}): Promise<KisStockWarning[]> {
+    async fetchVolatilityInterruptions(symbol: string, params: Dict = {}): Promise<KisStockWarning[]> {
         const instrument = this.instrumentOf(symbol);
-        if (instrument.overseas) throw new BadSymbol(`${this.id} fetchStockWarnings() 은 국내 종목만 지원한다: ${symbol}`);
+        if (instrument.overseas) throw new BadSymbol(`${this.id} fetchVolatilityInterruptions() 은 국내 종목만 지원한다: ${symbol}`);
         const response = await this.privateGetUapiDomesticStockV1QuotationsInquireViStatus(this.extend({
             FID_DIV_CLS_CODE: '0',
             FID_COND_SCR_DIV_CODE: VI_STATUS_SCREEN_CODE,
@@ -4958,39 +4941,47 @@ export class kis extends Exchange {
         }));
     }
 
+    /** @deprecated `fetchVolatilityInterruptions` 의 옛 이름이다. `fetchStockWarnings` 는 토스증권의 유의사항 조회 이름으로 남는다. 다음 판에서 지운다. */
+    async fetchStockWarnings(symbol: string, params: Dict = {}): Promise<KisStockWarning[]> {
+        this.warnDeprecated('kis.fetchStockWarnings()', 'fetchVolatilityInterruptions()');
+        return this.fetchVolatilityInterruptions(symbol, params);
+    }
+
     /**
-     * 종목의 투자자별(개인·외국인·기관계) 매매동향(`inquire-investor`)을 최근 영업일 순으로 돌려준다. 국내만 지원한다
+     * 종목의 투자자별 매매동향(`inquire-investor`)을 최근 영업일 순으로 돌려준다. 세 증권사 공통 모양이다(`InvestorTradingRecord`).
+     * 개인, 외국인, 기관계의 순매수 대금을 싣고, 매수·매도 수량과 대금은 `info` 의 원문에 있다. 국내만 지원한다
      * (공식 API 목록에 해외 종목 투자자 매매동향이 없다). 당일 값은 장 종료 후에 채워진다(공식 문서 유의사항).
      *
-     * 토스의 같은 이름 메서드는 시장(KOSPI·KOSDAQ) 단위인데, 이 메서드는 종목 단위다 — 범위가 다르다.
+     * 조회 기간을 받는 입력이 없어 받은 영업일을 `since`, `params.until`, `limit` 으로 거른다.
+     * 둘째 인자로 `params` 를 넘기던 옛 호출은 한 판 동안 경고를 남기고 받는다.
      */
-    async fetchInvestorTrading(symbol: string, params: Dict = {}): Promise<KisInvestorTradingRecord[]> {
-        const instrument = this.instrumentOf(symbol);
-        if (instrument.overseas) throw new BadSymbol(`${this.id} fetchInvestorTrading() 은 국내 종목만 지원한다: ${symbol}`);
+    fetchInvestorTrading(symbol: string, since?: Int, limit?: Int, params?: Dict): Promise<InvestorTradingRecord[]>;
+    /** @deprecated 둘째 인자로 `params` 를 넘기던 옛 호출이다. `fetchInvestorTrading(symbol, undefined, undefined, params)` 로 바꾼다. 다음 판에서 지운다. */
+    fetchInvestorTrading(symbol: string, params: Dict): Promise<InvestorTradingRecord[]>;
+    async fetchInvestorTrading(symbol: string, since: Int | Dict = undefined, limit: Int = undefined, params: Dict = {}): Promise<InvestorTradingRecord[]> {
+        if (typeof since === 'object' && since !== null) {
+            this.warnDeprecated('kis.fetchInvestorTrading(symbol, params)', 'fetchInvestorTrading(symbol, since, limit, params)');
+            [since, params] = [undefined, since];
+        }
+        const [until, query] = this.handleUntilParam('fetchInvestorTrading', limit, params);
+        const { code } = this.domesticInstrument(symbol, 'fetchInvestorTrading');
         const response = await this.privateGetUapiDomesticStockV1QuotationsInquireInvestor(this.extend({
             FID_COND_MRKT_DIV_CODE: 'J',
-            FID_INPUT_ISCD: instrument.code,
+            FID_INPUT_ISCD: code,
             tr_id: 'FHKST01010900',
-        }, params));
-        const amounts = (row: Dict, prefix: string): KisInvestorAmounts => ({
-            netBuyVolume: this.safeNumber(row, `${prefix}_ntby_qty`),
-            netBuyAmount: this.safeNumber(row, `${prefix}_ntby_tr_pbmn`),
-            buyVolume: this.safeNumber(row, `${prefix}_shnu_vol`),
-            buyAmount: this.safeNumber(row, `${prefix}_shnu_tr_pbmn`),
-            sellVolume: this.safeNumber(row, `${prefix}_seln_vol`),
-            sellAmount: this.safeNumber(row, `${prefix}_seln_tr_pbmn`),
-        });
-        return multiRowsOf(this.safeValue(response, 'output')).map((row) => ({
+        }, query));
+        const records: InvestorTradingRecord[] = multiRowsOf(this.safeValue(response, 'output')).map((row) => ({
             ...this.kstStamp(this.safeString(row, 'stck_bsop_date')),
-            businessDate: this.safeString(row, 'stck_bsop_date', ''),
+            date: this.safeString(row, 'stck_bsop_date', '') as string,
             close: this.safeNumber(row, 'stck_clpr'),
             change: this.safeNumber(row, 'prdy_vrss'),
-            changeSign: this.safeString(row, 'prdy_vrss_sign') || undefined,
-            individual: amounts(row, 'prsn'),
-            foreign: amounts(row, 'frgn'),
-            institution: amounts(row, 'orgn'),
+            individual: this.safeNumber(row, 'prsn_ntby_tr_pbmn'),
+            foreign: this.safeNumber(row, 'frgn_ntby_tr_pbmn'),
+            institution: this.safeNumber(row, 'orgn_ntby_tr_pbmn'),
             info: row,
         }));
+        const upToUntil = until === undefined ? records : records.filter((r) => r.timestamp !== undefined && r.timestamp <= until);
+        return this.filterBySinceLimit(upToUntil, since, limit) as InvestorTradingRecord[];
     }
 
     /** 국내 종목만 받는 조회의 종목. 해외 심볼이면 `BadSymbol`이다. */
@@ -10408,8 +10399,12 @@ export class kis extends Exchange {
      * 국내 휴장일 캘린더(`chk-holiday`). 기준일자부터 이후 날짜의 개장·영업·거래·결제 여부를 준다. 실전 계좌에서만 쓸 수 있다.
      * 지난 영업일을 세는 코드(결제 지연 등)가 지난 연휴를 알도록 30일 전 기준일과 오늘 기준일을 함께 조회한다.
      * KIS 는 원장 연동 서비스라 하루 한 번 호출을 권한다. 주기 호출은 `refreshMarketCalendar` 가 맡는다.
+     *
+     * 세 증권사 공통 모양이다. `params.market` 은 `'KR'`(기본)만 받고, `'US'` 는 요청 없이 `NotSupported` 다.
      */
     async fetchMarketCalendar(params: Dict = {}): Promise<KisCalendarDay[]> {
+        const query = this.omit(params, 'market');
+        if (this.calendarMarket(params) === 'US') throw new NotSupported(`${this.id} fetchMarketCalendar() 는 국내 휴장일만 준다`);
         if (this.isSandboxModeEnabled) throw new NotSupported(`${this.id} 휴장일 조회(chk-holiday)는 실전 계좌에서만 쓸 수 있다`);
         const now = this.milliseconds();
         const days = new Map<string, KisCalendarDay>();
@@ -10419,7 +10414,7 @@ export class kis extends Exchange {
                 CTX_AREA_FK: '',
                 CTX_AREA_NK: '',
                 tr_id: 'CTCA0903R',
-            }, params));
+            }, query));
             const rows: unknown = response.output;
             for (const row of Array.isArray(rows) ? rows : [rows]) {
                 const date = this.safeString(row, 'bass_dt');

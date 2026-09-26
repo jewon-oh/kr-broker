@@ -7414,7 +7414,51 @@
             ]
         },
         {
-            "description": "fetchMarketCalendar 는 장 운영 캘린더 원본을 돌려준다",
+            "description": "fetchMarketCalendar 는 장 운영 캘린더를 세 증권사 공통 모양(날짜별 개장 여부)으로 돌려준다",
+            "method": "fetchMarketCalendar",
+            "args": [{ "market": "US" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/market-calendar/US",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "previousBusinessDay": {
+                                    "date": "2026-03-24",
+                                    "dayMarket": { "startTime": "2026-03-24T09:00:00+09:00", "endTime": "2026-03-24T16:50:00+09:00" },
+                                    "preMarket": { "startTime": "2026-03-24T17:00:00+09:00", "endTime": "2026-03-24T22:30:00+09:00" },
+                                    "regularMarket": { "startTime": "2026-03-24T22:30:00+09:00", "endTime": "2026-03-25T05:00:00+09:00" },
+                                    "afterMarket": { "startTime": "2026-03-25T05:00:00+09:00", "endTime": "2026-03-25T07:00:00+09:00" }
+                                },
+                                "today": {
+                                    "date": "2026-03-25",
+                                    "dayMarket": { "startTime": "2026-03-25T09:00:00+09:00", "endTime": "2026-03-25T16:50:00+09:00" },
+                                    "preMarket": { "startTime": "2026-03-25T17:00:00+09:00", "endTime": "2026-03-25T22:30:00+09:00" },
+                                    "regularMarket": { "startTime": "2026-03-25T22:30:00+09:00", "endTime": "2026-03-26T05:00:00+09:00" },
+                                    "afterMarket": { "startTime": "2026-03-26T05:00:00+09:00", "endTime": "2026-03-26T07:00:00+09:00" }
+                                },
+                                "nextBusinessDay": {
+                                    "date": "2026-03-26",
+                                    "dayMarket": { "startTime": "2026-03-26T09:00:00+09:00", "endTime": "2026-03-26T16:50:00+09:00" },
+                                    "preMarket": { "startTime": "2026-03-26T17:00:00+09:00", "endTime": "2026-03-26T22:30:00+09:00" },
+                                    "regularMarket": { "startTime": "2026-03-26T22:30:00+09:00", "endTime": "2026-03-27T05:00:00+09:00" },
+                                    "afterMarket": { "startTime": "2026-03-27T05:00:00+09:00", "endTime": "2026-03-27T07:00:00+09:00" }
+                                }
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [{ "date": "20260324", "open": true }, { "date": "20260325", "open": true }, { "date": "20260326", "open": true }]
+        },
+        {
+            "description": "시장 문자열을 받던 옛 호출 fetchMarketCalendar('US') 는 한 판 동안 fetchMarketSessions 의 세션 시각 원본을 돌려준다",
             "method": "fetchMarketCalendar",
             "args": ["US"],
             "http": [
@@ -7480,8 +7524,39 @@
             }
         },
         {
-            "description": "fetchMarketCalendar 는 시장 이름의 대소문자를 가리지 않는다('kr' 은 국내 캘린더다)",
+            "description": "fetchMarketCalendar 는 params.market 의 대소문자를 가리지 않는다('kr' 은 국내 캘린더다)",
             "method": "fetchMarketCalendar",
+            "args": [{ "market": "kr" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/market-calendar/KR",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "today": {
+                                    "date": "2026-03-25",
+                                    "integrated": {
+                                        "preMarket": { "startTime": "2026-03-25T08:00:00+09:00", "endTime": "2026-03-25T08:50:00+09:00" },
+                                        "regularMarket": { "startTime": "2026-03-25T09:00:00+09:00", "endTime": "2026-03-25T15:30:00+09:00" },
+                                        "afterMarket": { "startTime": "2026-03-25T15:30:00+09:00", "endTime": "2026-03-25T20:00:00+09:00" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [{ "date": "20260325", "open": true }]
+        },
+        {
+            "description": "fetchMarketSessions 는 세션 시각 원본을 돌려주고 시장 이름의 대소문자를 가리지 않는다('kr' 은 국내 캘린더다)",
+            "method": "fetchMarketSessions",
             "args": ["kr"],
             "http": [
                 {
@@ -7708,9 +7783,9 @@
             "output": null
         },
         {
-            "description": "fetchMarketCalendar 는 KR·US 밖의 시장을 요청 없이 BadRequest 로 막는다",
+            "description": "fetchMarketCalendar 는 params.market 이 KR·US 밖이면 요청 없이 BadRequest 로 막는다",
             "method": "fetchMarketCalendar",
-            "args": ["JP"],
+            "args": [{ "market": "JP" }],
             "http": [],
             "error": { "class": "BadRequest" }
         },
@@ -7735,7 +7810,46 @@
             "output": [{ "warningType": "OVERHEATED", "exchange": "KRX", "startDate": "2026-03-24", "endDate": "2026-03-26" }]
         },
         {
-            "description": "fetchInvestorTrading 은 시장 단위 투자자별 매매대금 기록을 돌려준다",
+            "description": "fetchMarketInvestorTrading 은 시장 단위 투자자별 매매대금 기록을 돌려준다",
+            "method": "fetchMarketInvestorTrading",
+            "args": ["KOSPI", "1d", 2],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/market-indicators/KOSPI/investor-trading?interval=1d&count=2",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "nextUntil": null,
+                                "records": [
+                                    {
+                                        "date": "2026-03-25",
+                                        "updatedAt": "2026-03-25T06:40:00Z",
+                                        "individual": { "buyAmount": "100", "sellAmount": "90" },
+                                        "foreigner": { "buyAmount": "80", "sellAmount": "85" }
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "date": "2026-03-25",
+                    "updatedAt": "2026-03-25T06:40:00Z",
+                    "individual": { "buyAmount": "100", "sellAmount": "90" },
+                    "foreigner": { "buyAmount": "80", "sellAmount": "85" }
+                }
+            ]
+        },
+        {
+            "description": "옛 이름 fetchInvestorTrading 은 한 판 동안 fetchMarketInvestorTrading 과 같은 결과를 준다",
             "method": "fetchInvestorTrading",
             "args": ["KOSPI", "1d", 2],
             "http": [

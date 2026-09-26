@@ -2629,7 +2629,7 @@
       "suggested": "fetchInvestorTrend",
       "proposal": "확장",
       "verified": "real",
-      "note": "TR FHKST01010900, 모의: FHKST01010900; 공개 메서드는 `fetchInvestorTrading`(국내만, 종목 단위). 필드명은 공식 저장소의 chk_inquire_investor.py COLUMN_MAPPING으로 확인했다. 토스의 같은 이름 메서드는 시장 단위라 범위가 다르다",
+      "note": "TR FHKST01010900, 모의: FHKST01010900; 공개 메서드는 `fetchInvestorTrading`(국내만, 종목 단위). 필드명은 공식 저장소의 chk_inquire_investor.py COLUMN_MAPPING으로 확인했다. KB증권과 같은 공통 모양으로 개인, 외국인, 기관계의 순매수 대금만 싣고, 매수·매도 수량과 대금은 `info` 원문에 둔다",
       "spec": "https://github.com/koreainvestment/open-trading-api/blob/b4e6249/examples_llm/domestic_stock/inquire_investor/inquire_investor.py"
     },
     {
@@ -2997,14 +2997,14 @@
         "KR"
       ],
       "status": "extended",
-      "method": "fetchStockWarnings",
+      "method": "fetchVolatilityInterruptions",
       "evidence": [
         "ts/src/kis.ts:4934"
       ],
       "suggested": "fetchVolatilityInterruptions",
       "proposal": "확장",
       "verified": "spec-only",
-      "note": "TR FHPST01390000, 모의: 예제에 env_dv 없음; 공개 메서드는 `fetchStockWarnings`(국내만). 필드명은 공식 저장소의 chk_inquire_vi_status.py COLUMN_MAPPING으로 확인했다. 토스가 함께 주는 유의사항 여섯 종류 중 발동 기록을 주는 API는 VI뿐이다. 정리매매와 단기과열 여부, 시장경고 구분은 inquire-price-2(`fetchStockStatus`)가 현재 상태로만 준다. 신주인수권 항목은 없다 실계좌 호출(2026-09-24)은 오류 없이 끝났지만 자료가 없어 응답 필드는 확인하지 못했다.",
+      "note": "TR FHPST01390000, 모의: 예제에 env_dv 없음; 공개 메서드는 `fetchVolatilityInterruptions`(국내만, 옛 이름 `fetchStockWarnings`는 한 판 동안 별칭). 필드명은 공식 저장소의 chk_inquire_vi_status.py COLUMN_MAPPING으로 확인했다. 토스가 함께 주는 유의사항 여섯 종류 중 발동 기록을 주는 API는 VI뿐이다. 정리매매와 단기과열 여부, 시장경고 구분은 inquire-price-2(`fetchStockStatus`)가 현재 상태로만 준다. 신주인수권 항목은 없다 실계좌 호출(2026-09-24)은 오류 없이 끝났지만 자료가 없어 응답 필드는 확인하지 못했다.",
       "spec": "https://github.com/koreainvestment/open-trading-api/blob/b4e6249/examples_llm/domestic_stock/inquire_vi_status/inquire_vi_status.py"
     },
     {
@@ -6838,7 +6838,7 @@
         "examples_llm/domestic_stock/member_total"
       ],
       "support": "부분",
-      "scope": "종목별 투자자 매매동향은 `fetchInvestorTrading`(개인, 외국인, 기관계)과 `fetchInvestorTradingHistory`(유형 15종), 추정 가집계는 `fetchInvestorEstimates`가 돌려줍니다. 회원사는 `fetchMemberTrading`(상위 5곳), `fetchMemberDailyTrading`(한 곳의 일별), `fetchMemberTradeTicks`(실시간 매매동향)가, 외국계 순매수 추이는 `fetchForeignTradeTicks`가 돌려줍니다. 시장 단위는 `fetchMarketInvestorTrading`(시장별 일별)과 매매종목 가집계 순위(`fetchRankings`의 `FOREIGN_INSTITUTION_ESTIMATE`, `FOREIGN_BROKER_ESTIMATE`), `fetchProgramTradingByInvestor`가 돌려줍니다. 시장별 투자자 동향(시세)은 입력값 목록이 없어 보류했고, 실시간 회원사 세 개는 `createRealtimeStream`의 `subscribe`로 받습니다."
+      "scope": "종목별 투자자 매매동향은 `fetchInvestorTrading`(개인, 외국인, 기관계의 순매수 대금)과 `fetchInvestorTradingHistory`(유형 15종), 추정 가집계는 `fetchInvestorEstimates`가 돌려줍니다. 회원사는 `fetchMemberTrading`(상위 5곳), `fetchMemberDailyTrading`(한 곳의 일별), `fetchMemberTradeTicks`(실시간 매매동향)가, 외국계 순매수 추이는 `fetchForeignTradeTicks`가 돌려줍니다. 시장 단위는 `fetchMarketInvestorTrading`(시장별 일별)과 매매종목 가집계 순위(`fetchRankings`의 `FOREIGN_INSTITUTION_ESTIMATE`, `FOREIGN_BROKER_ESTIMATE`), `fetchProgramTradingByInvestor`가 돌려줍니다. 시장별 투자자 동향(시세)은 입력값 목록이 없어 보류했고, 실시간 회원사 세 개는 `createRealtimeStream`의 `subscribe`로 받습니다."
     },
     {
       "name": "공매도, 대차거래, 신용잔고, 대주, 신용매수 가능",
@@ -7020,7 +7020,7 @@
         "examples_llm/overseas_futureoption/market_time"
       ],
       "support": "지원",
-      "scope": "VI 발동 현황은 `fetchStockWarnings`, 상하한가 포착은 `fetchRankings('PRICE_LIMIT')`, 해외선물옵션 장운영시간은 `fetchOverseasDerivativeMarketHours`가 돌려줍니다. 국내 장운영정보 세 개는 `createRealtimeStream`의 `subscribe`로 받습니다. 장 시각은 코드 상수와 휴장일 API로 판정합니다."
+      "scope": "VI 발동 현황은 `fetchVolatilityInterruptions`, 상하한가 포착은 `fetchRankings('PRICE_LIMIT')`, 해외선물옵션 장운영시간은 `fetchOverseasDerivativeMarketHours`가 돌려줍니다. 국내 장운영정보 세 개는 `createRealtimeStream`의 `subscribe`로 받습니다. 장 시각은 코드 상수와 휴장일 API로 판정합니다."
     },
     {
       "name": "뉴스, 시황, 공시 제목",
