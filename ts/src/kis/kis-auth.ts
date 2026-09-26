@@ -231,8 +231,3 @@ export class KisAuth {
         logger.info('[KISAuth] 토큰 캐시 초기화');
     }
 }
-
-/** @deprecated `KisAuth` 를 쓴다. 다음 판에서 지운다. */
-export const KISAuth = KisAuth;
-/** @deprecated `KisAuth` 를 쓴다. 다음 판에서 지운다. */
-export type KISAuth = KisAuth;

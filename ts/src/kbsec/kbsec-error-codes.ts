@@ -79,6 +79,3 @@ export function kbsecExactExceptions(): Record<string, ErrorClass> {
 export function kbsecErrorDetail(processCode: string): string | undefined {
     return KBSEC_PROCESS_CODES[processCode.trim()]?.detail;
 }
-
-/** @deprecated `KbsecErrorMapping` 을 쓴다. 다음 판에서 지운다. */
-export type KBSecErrorMapping = KbsecErrorMapping;

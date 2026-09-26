@@ -97,10 +97,3 @@ export function kbsecHostAddr(): { ipAddr: string; macAddr: string } {
     cachedHostAddr = { ipAddr, macAddr };
     return cachedHostAddr;
 }
-
-/** @deprecated `KbsecResponseHeader` 를 쓴다. 다음 판에서 지운다. */
-export type KBSecResponseHeader = KbsecResponseHeader;
-/** @deprecated `isKbsecTokenFailure` 를 쓴다. 다음 판에서 지운다. */
-export const isKBSecTokenFailure = isKbsecTokenFailure;
-/** @deprecated `isKbsecBusinessError` 를 쓴다. 다음 판에서 지운다. */
-export const isKBSecBusinessError = isKbsecBusinessError;

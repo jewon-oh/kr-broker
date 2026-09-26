@@ -443,8 +443,3 @@ export class KbsecAuth {
         return accessToken;
     }
 }
-
-/** @deprecated `KbsecAuth` 를 쓴다. 다음 판에서 지운다. */
-export const KBSecAuth = KbsecAuth;
-/** @deprecated `KbsecAuth` 를 쓴다. 다음 판에서 지운다. */
-export type KBSecAuth = KbsecAuth;
