@@ -1,4 +1,4 @@
-"""KB증권 도우미 가운데 요청 픽스처로 재현할 수 없는 동작(`jti` 읽기, 호스트 주소, 토큰 차단기, `price_to_precision`).
+"""KB증권 도우미 가운데 요청 픽스처로 재현할 수 없는 동작(`jti` 읽기, 호스트 주소, 토큰 차단기, `price_to_precision`, `kbsec_num`).
 기대값은 TypeScript 판의 같은 테스트에서 가져왔다."""
 
 import base64
@@ -19,6 +19,7 @@ from kr_broker.kbsec_token_breaker import (
     TOKEN_BREAKER_OPEN_MS, TOKEN_BREAKER_THRESHOLD, kbsec_token_breaker_state, record_kbsec_call_ok, record_token_failure,
     throw_if_token_breaker_open,
 )
+from kr_broker.kbsec_types import kbsec_num
 from kr_broker.testing import reset_kbsec_token_breaker
 
 MASTER: Dict[str, Any] = {
@@ -187,3 +188,13 @@ def test_price_to_precision_rounds_domestic_stock_prices_with_the_krx_table() ->
     assert broker.price_to_precision('005930/KRW', 4997) == '4995'
     assert broker.price_to_precision('069500/KRW', 35005) == '35005'
     assert broker.price_to_precision('AAPL/USD', 229.456) == '229.456'
+
+
+# ============ kbsec_num ============
+
+# 기대값은 TypeScript 판 `kbsecNum` 을 돌려 얻었다. `toFixed` 는 가운데 값을 0 에서 먼 쪽으로 올리고, Python `round` 는 짝수 쪽으로 보낸다.
+@pytest.mark.parametrize('value,decimals,expected', [
+    (30, 0, '30'), (2.5, 0, '3'), (-2.5, 0, '-3'), (0.03125, 4, '0.0313'), (1.005, 2, '1.00'), (1e-7, 8, '0.00000010'), (float('nan'), 0, '0'),
+])
+def test_kbsec_num_rounds_like_javascript_to_fixed(value: float, decimals: int, expected: str) -> None:
+    assert kbsec_num(value, decimals) == expected

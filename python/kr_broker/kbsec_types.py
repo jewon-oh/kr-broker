@@ -4,6 +4,9 @@
 필드가 전부 문자열이라 금액과 수량, 가격도 문자열로 온다.
 """
 
+import math
+from decimal import ROUND_HALF_UP, Decimal
+
 from kr_broker.broker_krx_code import is_krx_domestic_code
 from kr_broker.broker_market_group import symbol_base_code
 
@@ -26,10 +29,28 @@ KBSEC_TR = {
     'QUOTE_KR': 'IVU10140',
     # 주식호가(국내)
     'ORDERBOOK_KR': 'IVU10070',
+    # 통합차트(국내)
+    'CHART_KR': 'IVS11560',
+    # 주식시간대별추이(국내 시간대별 체결)
+    'TRADES_TIMELINE_KR': 'IVU10080',
+    # 장운영상태
+    'MARKET_STATUS': 'SZQM0771',
+    # 종목별투자자
+    'INVESTOR_TRADING': 'IVU10430',
     # 해외 현재가
     'QUOTE_US': 'GSS10030',
     # 해외 호가
     'ORDERBOOK_US': 'GSS10040',
+    # 해외 시간대별체결
+    'TRADES_TIMELINE_US': 'GSA10020',
+}
+
+# 통합차트 차트구분(`chrt_clsf`).
+KBSEC_CHART_KIND = {
+    'DAY': 'D',
+    'WEEK': 'W',
+    'MONTH': 'M',
+    'MINUTE': 'B',
 }
 
 # 해외 거래소코드(`krx_cd`) 후보. 심볼의 상장 거래소를 늘 아는 것이 아니라 이 순서로 시도한다(찾은 값은 증권사 인스턴스가 캐시한다).
@@ -44,3 +65,11 @@ def kbsec_base_symbol(symbol: str) -> str:
 def kbsec_market_of(symbol: str) -> str:
     """심볼 → 시장. 국내 종목코드 모양이면 `'KR'`, 아니면 `'US'` 다."""
     return 'KR' if is_krx_domestic_code(kbsec_base_symbol(symbol)) else 'US'
+
+
+def kbsec_num(value: float, decimals: int = 0) -> str:
+    """KB 는 수량과 가격을 문자열로 받는다. 지수 표기(`1e-7`)나 부동소수 꼬리가 실려 거부되지 않게 고정 소수점 문자열로 바꾼다.
+    JavaScript `toFixed` 처럼 값의 이진 표현을 반올림하고, 가운데 값은 0 에서 먼 쪽으로 올린다. 유한하지 않으면 `'0'` 이다."""
+    if not math.isfinite(value):
+        return '0'
+    return format(Decimal(value).quantize(Decimal(1).scaleb(-decimals), rounding=ROUND_HALF_UP), 'f')

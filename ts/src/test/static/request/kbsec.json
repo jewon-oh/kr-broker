@@ -2133,6 +2133,2321 @@
             "tokenStoreAfter": {
                 "kbsec:token:2f6506bc8b1a20daff3b7300414b5fff": "absent"
             }
+        },
+        {
+            "description": "fetchOHLCV 는 기본 1분봉을 통합차트(IVS11560)에 차트구분 B, 분 단위 1, 조회건수 100 으로 묻고, 시장을 모르면 시장구분 0(코스피)이다. 봉은 한국 시각을 UTC 로 바꿔 오래된 것부터 주고, 시각을 읽을 수 없는 행(240000)은 버린다",
+            "method": "fetchOHLCV",
+            "args": [
+                "005930/KRW"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivs11560",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"info_ccd\":\"1\",\"mkt_clsf\":\"0\",\"chrt_clsf\":\"B\",\"minute_tck_indx\":\"1\",\"is_cd\":\"005930\",\"inq_clsf\":\"2\",\"strt_dy\":\"\",\"inq_cnt\":\"100\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "dt": "20260819",
+                                        "tm": "91000",
+                                        "opn_prc_p2": "70100.00",
+                                        "hgh_prc_p2": "70300.00",
+                                        "lw_prc_p2": "70000.00",
+                                        "cls_prc_p2": "70200.00",
+                                        "vlm": "1500"
+                                    },
+                                    {
+                                        "dt": "20260819",
+                                        "tm": "90000",
+                                        "opn_prc_p2": "70000.00",
+                                        "hgh_prc_p2": "70200.00",
+                                        "lw_prc_p2": "69900.00",
+                                        "cls_prc_p2": "70100.00",
+                                        "vlm": "2500"
+                                    },
+                                    {
+                                        "dt": "20260819",
+                                        "tm": "240000",
+                                        "opn_prc_p2": "1.00",
+                                        "hgh_prc_p2": "1.00",
+                                        "lw_prc_p2": "1.00",
+                                        "cls_prc_p2": "1.00",
+                                        "vlm": "1"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                [
+                    1787097600000,
+                    70000,
+                    70200,
+                    69900,
+                    70100,
+                    2500
+                ],
+                [
+                    1787098200000,
+                    70100,
+                    70300,
+                    70000,
+                    70200,
+                    1500
+                ]
+            ]
+        },
+        {
+            "description": "fetchOHLCV 일봉은 거래일의 00:00 UTC 다. since 가 있으면 지금부터 since 까지 덮을 만큼(10개) 받고 since 부터 limit 개를 준다",
+            "now": 1787119200000,
+            "method": "fetchOHLCV",
+            "args": [
+                "005930/KRW",
+                "1d",
+                1786374000000,
+                2
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivs11560",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"info_ccd\":\"1\",\"mkt_clsf\":\"0\",\"chrt_clsf\":\"D\",\"minute_tck_indx\":\"\",\"is_cd\":\"005930\",\"inq_clsf\":\"2\",\"strt_dy\":\"\",\"inq_cnt\":\"10\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "dt": "20260819",
+                                        "tm": "0",
+                                        "opn_prc_p2": "70950.00",
+                                        "hgh_prc_p2": "71100.00",
+                                        "lw_prc_p2": "70900.00",
+                                        "cls_prc_p2": "71000.00",
+                                        "vlm": "1000000"
+                                    },
+                                    {
+                                        "dt": "20260818",
+                                        "tm": "0",
+                                        "opn_prc_p2": "70850.00",
+                                        "hgh_prc_p2": "71000.00",
+                                        "lw_prc_p2": "70800.00",
+                                        "cls_prc_p2": "70900.00",
+                                        "vlm": "1000001"
+                                    },
+                                    {
+                                        "dt": "20260814",
+                                        "tm": "0",
+                                        "opn_prc_p2": "70750.00",
+                                        "hgh_prc_p2": "70900.00",
+                                        "lw_prc_p2": "70700.00",
+                                        "cls_prc_p2": "70800.00",
+                                        "vlm": "1000002"
+                                    },
+                                    {
+                                        "dt": "20260813",
+                                        "tm": "0",
+                                        "opn_prc_p2": "70650.00",
+                                        "hgh_prc_p2": "70800.00",
+                                        "lw_prc_p2": "70600.00",
+                                        "cls_prc_p2": "70700.00",
+                                        "vlm": "1000003"
+                                    },
+                                    {
+                                        "dt": "20260812",
+                                        "tm": "0",
+                                        "opn_prc_p2": "70550.00",
+                                        "hgh_prc_p2": "70700.00",
+                                        "lw_prc_p2": "70500.00",
+                                        "cls_prc_p2": "70600.00",
+                                        "vlm": "1000004"
+                                    },
+                                    {
+                                        "dt": "20260811",
+                                        "tm": "0",
+                                        "opn_prc_p2": "70450.00",
+                                        "hgh_prc_p2": "70600.00",
+                                        "lw_prc_p2": "70400.00",
+                                        "cls_prc_p2": "70500.00",
+                                        "vlm": "1000005"
+                                    },
+                                    {
+                                        "dt": "20260810",
+                                        "tm": "0",
+                                        "opn_prc_p2": "70350.00",
+                                        "hgh_prc_p2": "70500.00",
+                                        "lw_prc_p2": "70300.00",
+                                        "cls_prc_p2": "70400.00",
+                                        "vlm": "1000006"
+                                    },
+                                    {
+                                        "dt": "20260807",
+                                        "tm": "0",
+                                        "opn_prc_p2": "70250.00",
+                                        "hgh_prc_p2": "70400.00",
+                                        "lw_prc_p2": "70200.00",
+                                        "cls_prc_p2": "70300.00",
+                                        "vlm": "1000007"
+                                    },
+                                    {
+                                        "dt": "20260806",
+                                        "tm": "0",
+                                        "opn_prc_p2": "70150.00",
+                                        "hgh_prc_p2": "70300.00",
+                                        "lw_prc_p2": "70100.00",
+                                        "cls_prc_p2": "70200.00",
+                                        "vlm": "1000008"
+                                    },
+                                    {
+                                        "dt": "20260805",
+                                        "tm": "0",
+                                        "opn_prc_p2": "70050.00",
+                                        "hgh_prc_p2": "70200.00",
+                                        "lw_prc_p2": "70000.00",
+                                        "cls_prc_p2": "70100.00",
+                                        "vlm": "1000009"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                [
+                    1786406400000,
+                    70450,
+                    70600,
+                    70400,
+                    70500,
+                    1000005
+                ],
+                [
+                    1786492800000,
+                    70550,
+                    70700,
+                    70500,
+                    70600,
+                    1000004
+                ]
+            ]
+        },
+        {
+            "description": "fetchOHLCV 는 params.until 을 TR 입력으로 보내지 않고, until 뒤의 봉을 뺀 최근 limit 개를 준다. 조회건수는 limit 에 until 부터 지금까지의 봉 수를 더한다",
+            "now": 1787119200000,
+            "method": "fetchOHLCV",
+            "args": [
+                "005930/KRW",
+                "1d",
+                null,
+                2,
+                {
+                    "until": 1786665600000
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivs11560",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"info_ccd\":\"1\",\"mkt_clsf\":\"0\",\"chrt_clsf\":\"D\",\"minute_tck_indx\":\"\",\"is_cd\":\"005930\",\"inq_clsf\":\"2\",\"strt_dy\":\"\",\"inq_cnt\":\"9\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "dt": "20260819",
+                                        "tm": "0",
+                                        "opn_prc_p2": "70850.00",
+                                        "hgh_prc_p2": "71000.00",
+                                        "lw_prc_p2": "70800.00",
+                                        "cls_prc_p2": "70900.00",
+                                        "vlm": "1000000"
+                                    },
+                                    {
+                                        "dt": "20260818",
+                                        "tm": "0",
+                                        "opn_prc_p2": "70750.00",
+                                        "hgh_prc_p2": "70900.00",
+                                        "lw_prc_p2": "70700.00",
+                                        "cls_prc_p2": "70800.00",
+                                        "vlm": "1000001"
+                                    },
+                                    {
+                                        "dt": "20260814",
+                                        "tm": "0",
+                                        "opn_prc_p2": "70650.00",
+                                        "hgh_prc_p2": "70800.00",
+                                        "lw_prc_p2": "70600.00",
+                                        "cls_prc_p2": "70700.00",
+                                        "vlm": "1000002"
+                                    },
+                                    {
+                                        "dt": "20260813",
+                                        "tm": "0",
+                                        "opn_prc_p2": "70550.00",
+                                        "hgh_prc_p2": "70700.00",
+                                        "lw_prc_p2": "70500.00",
+                                        "cls_prc_p2": "70600.00",
+                                        "vlm": "1000003"
+                                    },
+                                    {
+                                        "dt": "20260812",
+                                        "tm": "0",
+                                        "opn_prc_p2": "70450.00",
+                                        "hgh_prc_p2": "70600.00",
+                                        "lw_prc_p2": "70400.00",
+                                        "cls_prc_p2": "70500.00",
+                                        "vlm": "1000004"
+                                    },
+                                    {
+                                        "dt": "20260811",
+                                        "tm": "0",
+                                        "opn_prc_p2": "70350.00",
+                                        "hgh_prc_p2": "70500.00",
+                                        "lw_prc_p2": "70300.00",
+                                        "cls_prc_p2": "70400.00",
+                                        "vlm": "1000005"
+                                    },
+                                    {
+                                        "dt": "20260810",
+                                        "tm": "0",
+                                        "opn_prc_p2": "70250.00",
+                                        "hgh_prc_p2": "70400.00",
+                                        "lw_prc_p2": "70200.00",
+                                        "cls_prc_p2": "70300.00",
+                                        "vlm": "1000006"
+                                    },
+                                    {
+                                        "dt": "20260807",
+                                        "tm": "0",
+                                        "opn_prc_p2": "70150.00",
+                                        "hgh_prc_p2": "70300.00",
+                                        "lw_prc_p2": "70100.00",
+                                        "cls_prc_p2": "70200.00",
+                                        "vlm": "1000007"
+                                    },
+                                    {
+                                        "dt": "20260806",
+                                        "tm": "0",
+                                        "opn_prc_p2": "70050.00",
+                                        "hgh_prc_p2": "70200.00",
+                                        "lw_prc_p2": "70000.00",
+                                        "cls_prc_p2": "70100.00",
+                                        "vlm": "1000008"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                [
+                    1786579200000,
+                    70550,
+                    70700,
+                    70500,
+                    70600,
+                    1000003
+                ],
+                [
+                    1786665600000,
+                    70650,
+                    70800,
+                    70600,
+                    70700,
+                    1000002
+                ]
+            ]
+        },
+        {
+            "description": "fetchOHLCV 는 마스터 데이터로 코스닥 종목임을 알면 시장구분 1 로 묻는다. 주봉은 차트구분 W 이고 그 주 월요일의 00:00 UTC 다",
+            "config": {
+                "options": {
+                    "masterData": {
+                        "kospi": [
+                            {
+                                "code": "005930",
+                                "name": "삼성전자",
+                                "market": "KOSPI",
+                                "securityType": "STOCK"
+                            }
+                        ],
+                        "kosdaq": [
+                            {
+                                "code": "247540",
+                                "name": "에코프로비엠",
+                                "market": "KOSDAQ",
+                                "securityType": "STOCK"
+                            }
+                        ]
+                    }
+                }
+            },
+            "method": "fetchOHLCV",
+            "args": [
+                "247540/KRW",
+                "1w"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivs11560",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"info_ccd\":\"1\",\"mkt_clsf\":\"1\",\"chrt_clsf\":\"W\",\"minute_tck_indx\":\"\",\"is_cd\":\"247540\",\"inq_clsf\":\"2\",\"strt_dy\":\"\",\"inq_cnt\":\"100\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "dt": "20260818",
+                                        "tm": "0",
+                                        "opn_prc_p2": "250000.00",
+                                        "hgh_prc_p2": "262000.00",
+                                        "lw_prc_p2": "248000.00",
+                                        "cls_prc_p2": "260000.00",
+                                        "vlm": "900000"
+                                    },
+                                    {
+                                        "dt": "20260810",
+                                        "tm": "0",
+                                        "opn_prc_p2": "240000.00",
+                                        "hgh_prc_p2": "252000.00",
+                                        "lw_prc_p2": "238000.00",
+                                        "cls_prc_p2": "250000.00",
+                                        "vlm": "1200000"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                [
+                    1786320000000,
+                    240000,
+                    252000,
+                    238000,
+                    250000,
+                    1200000
+                ],
+                [
+                    1786924800000,
+                    250000,
+                    262000,
+                    248000,
+                    260000,
+                    900000
+                ]
+            ]
+        },
+        {
+            "description": "fetchOHLCV 는 params.mkt_clsf 가 있으면 마스터 데이터보다 그 값을 쓴다. 4시간봉은 분 단위 240 이다",
+            "config": {
+                "options": {
+                    "masterData": {
+                        "kospi": [
+                            {
+                                "code": "005930",
+                                "name": "삼성전자",
+                                "market": "KOSPI",
+                                "securityType": "STOCK"
+                            }
+                        ],
+                        "kosdaq": [
+                            {
+                                "code": "247540",
+                                "name": "에코프로비엠",
+                                "market": "KOSDAQ",
+                                "securityType": "STOCK"
+                            }
+                        ]
+                    }
+                }
+            },
+            "method": "fetchOHLCV",
+            "args": [
+                "247540/KRW",
+                "4h",
+                null,
+                null,
+                {
+                    "mkt_clsf": "0"
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivs11560",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"info_ccd\":\"1\",\"mkt_clsf\":\"0\",\"chrt_clsf\":\"B\",\"minute_tck_indx\":\"240\",\"is_cd\":\"247540\",\"inq_clsf\":\"2\",\"strt_dy\":\"\",\"inq_cnt\":\"100\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "dt": "20260819",
+                                        "tm": "090000",
+                                        "opn_prc_p2": "250000.00",
+                                        "hgh_prc_p2": "255000.00",
+                                        "lw_prc_p2": "249000.00",
+                                        "cls_prc_p2": "254000.00",
+                                        "vlm": "300000"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                [
+                    1787097600000,
+                    250000,
+                    255000,
+                    249000,
+                    254000,
+                    300000
+                ]
+            ]
+        },
+        {
+            "description": "fetchOHLCV 미국 종목은 요청 없이 NotSupported 다(해외 차트는 15분 지연 시세다)",
+            "method": "fetchOHLCV",
+            "args": [
+                "AAPL/USD",
+                "1d"
+            ],
+            "http": [],
+            "error": {
+                "class": "NotSupported",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "fetchTrades 국내는 IVU10080 에 KRX, 정규장, 조회건수 30 을 보내고, 일봉 30개(IVS11560)를 받아 거래량이 있는 가장 최근 날짜를 체결 시각에 붙인다. 장중이면 오늘이고 시계 차이 1분 안의 체결은 받아들인다. 방향과 체결 id 는 비운다",
+            "now": 1774400400000,
+            "method": "fetchTrades",
+            "args": [
+                "005930/KRW"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10080",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"is_cd\":\"005930\",\"ovtm_mkt_clsf\":\"0\",\"inq_cnt\":\"30\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "ccls_tm": "100020",
+                                        "ccls_prc": "71000",
+                                        "ccls_q": "1",
+                                        "sell_buy_ccd": "1"
+                                    },
+                                    {
+                                        "ccls_tm": "095958",
+                                        "ccls_prc": "71000",
+                                        "ccls_q": "1",
+                                        "sell_buy_ccd": "1"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivs11560",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"info_ccd\":\"1\",\"mkt_clsf\":\"0\",\"chrt_clsf\":\"D\",\"minute_tck_indx\":\"\",\"is_cd\":\"005930\",\"inq_clsf\":\"2\",\"strt_dy\":\"\",\"inq_cnt\":\"30\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "dt": "20260325",
+                                        "tm": "0",
+                                        "opn_prc_p2": "71000.00",
+                                        "hgh_prc_p2": "71500.00",
+                                        "lw_prc_p2": "70500.00",
+                                        "cls_prc_p2": "71000.00",
+                                        "vlm": "1520000"
+                                    },
+                                    {
+                                        "dt": "20260324",
+                                        "tm": "0",
+                                        "opn_prc_p2": "71000.00",
+                                        "hgh_prc_p2": "71500.00",
+                                        "lw_prc_p2": "70500.00",
+                                        "cls_prc_p2": "71000.00",
+                                        "vlm": "9800000"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "info": {
+                        "ccls_tm": "100020",
+                        "ccls_prc": "71000",
+                        "ccls_q": "1",
+                        "sell_buy_ccd": "1"
+                    },
+                    "timestamp": 1774400420000,
+                    "datetime": "2026-03-25T01:00:20.000Z",
+                    "symbol": "005930/KRW",
+                    "price": 71000,
+                    "amount": 1,
+                    "cost": 71000,
+                    "fee": {},
+                    "fees": []
+                },
+                {
+                    "info": {
+                        "ccls_tm": "095958",
+                        "ccls_prc": "71000",
+                        "ccls_q": "1",
+                        "sell_buy_ccd": "1"
+                    },
+                    "timestamp": 1774400398000,
+                    "datetime": "2026-03-25T00:59:58.000Z",
+                    "symbol": "005930/KRW",
+                    "price": 71000,
+                    "amount": 1,
+                    "cost": 71000,
+                    "fee": {},
+                    "fees": []
+                }
+            ]
+        },
+        {
+            "description": "fetchTrades 는 장 전이면 거래량이 0 인 오늘 일봉을 건너뛰고 직전 영업일 날짜를 붙인다",
+            "now": 1774393200000,
+            "method": "fetchTrades",
+            "args": [
+                "005930/KRW"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10080",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"is_cd\":\"005930\",\"ovtm_mkt_clsf\":\"0\",\"inq_cnt\":\"30\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "ccls_tm": "153000",
+                                        "ccls_prc": "71000",
+                                        "ccls_q": "1",
+                                        "sell_buy_ccd": "1"
+                                    },
+                                    {
+                                        "ccls_tm": "152959",
+                                        "ccls_prc": "71000",
+                                        "ccls_q": "1",
+                                        "sell_buy_ccd": "1"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivs11560",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"info_ccd\":\"1\",\"mkt_clsf\":\"0\",\"chrt_clsf\":\"D\",\"minute_tck_indx\":\"\",\"is_cd\":\"005930\",\"inq_clsf\":\"2\",\"strt_dy\":\"\",\"inq_cnt\":\"30\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "dt": "20260325",
+                                        "tm": "0",
+                                        "opn_prc_p2": "71000.00",
+                                        "hgh_prc_p2": "71500.00",
+                                        "lw_prc_p2": "70500.00",
+                                        "cls_prc_p2": "71000.00",
+                                        "vlm": "0"
+                                    },
+                                    {
+                                        "dt": "20260324",
+                                        "tm": "0",
+                                        "opn_prc_p2": "71000.00",
+                                        "hgh_prc_p2": "71500.00",
+                                        "lw_prc_p2": "70500.00",
+                                        "cls_prc_p2": "71000.00",
+                                        "vlm": "12000000"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "info": {
+                        "ccls_tm": "153000",
+                        "ccls_prc": "71000",
+                        "ccls_q": "1",
+                        "sell_buy_ccd": "1"
+                    },
+                    "timestamp": 1774333800000,
+                    "datetime": "2026-03-24T06:30:00.000Z",
+                    "symbol": "005930/KRW",
+                    "price": 71000,
+                    "amount": 1,
+                    "cost": 71000,
+                    "fee": {},
+                    "fees": []
+                },
+                {
+                    "info": {
+                        "ccls_tm": "152959",
+                        "ccls_prc": "71000",
+                        "ccls_q": "1",
+                        "sell_buy_ccd": "1"
+                    },
+                    "timestamp": 1774333799000,
+                    "datetime": "2026-03-24T06:29:59.000Z",
+                    "symbol": "005930/KRW",
+                    "price": 71000,
+                    "amount": 1,
+                    "cost": 71000,
+                    "fee": {},
+                    "fees": []
+                }
+            ]
+        },
+        {
+            "description": "fetchTrades 는 주말이면 금요일 날짜를 붙인다",
+            "now": 1774659600000,
+            "method": "fetchTrades",
+            "args": [
+                "005930/KRW"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10080",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"is_cd\":\"005930\",\"ovtm_mkt_clsf\":\"0\",\"inq_cnt\":\"30\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "ccls_tm": "153000",
+                                        "ccls_prc": "71000",
+                                        "ccls_q": "1",
+                                        "sell_buy_ccd": "1"
+                                    },
+                                    {
+                                        "ccls_tm": "152959",
+                                        "ccls_prc": "71000",
+                                        "ccls_q": "1",
+                                        "sell_buy_ccd": "1"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivs11560",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"info_ccd\":\"1\",\"mkt_clsf\":\"0\",\"chrt_clsf\":\"D\",\"minute_tck_indx\":\"\",\"is_cd\":\"005930\",\"inq_clsf\":\"2\",\"strt_dy\":\"\",\"inq_cnt\":\"30\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "dt": "20260327",
+                                        "tm": "0",
+                                        "opn_prc_p2": "71000.00",
+                                        "hgh_prc_p2": "71500.00",
+                                        "lw_prc_p2": "70500.00",
+                                        "cls_prc_p2": "71000.00",
+                                        "vlm": "12000000"
+                                    },
+                                    {
+                                        "dt": "20260326",
+                                        "tm": "0",
+                                        "opn_prc_p2": "71000.00",
+                                        "hgh_prc_p2": "71500.00",
+                                        "lw_prc_p2": "70500.00",
+                                        "cls_prc_p2": "71000.00",
+                                        "vlm": "9000000"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "info": {
+                        "ccls_tm": "153000",
+                        "ccls_prc": "71000",
+                        "ccls_q": "1",
+                        "sell_buy_ccd": "1"
+                    },
+                    "timestamp": 1774593000000,
+                    "datetime": "2026-03-27T06:30:00.000Z",
+                    "symbol": "005930/KRW",
+                    "price": 71000,
+                    "amount": 1,
+                    "cost": 71000,
+                    "fee": {},
+                    "fees": []
+                },
+                {
+                    "info": {
+                        "ccls_tm": "152959",
+                        "ccls_prc": "71000",
+                        "ccls_q": "1",
+                        "sell_buy_ccd": "1"
+                    },
+                    "timestamp": 1774592999000,
+                    "datetime": "2026-03-27T06:29:59.000Z",
+                    "symbol": "005930/KRW",
+                    "price": 71000,
+                    "amount": 1,
+                    "cost": 71000,
+                    "fee": {},
+                    "fees": []
+                }
+            ]
+        },
+        {
+            "description": "fetchTrades 는 저유동 종목이면 거래량이 있는 마지막 일봉(며칠 전)의 날짜를 붙인다",
+            "now": 1774400400000,
+            "method": "fetchTrades",
+            "args": [
+                "247540/KRW"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10080",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"is_cd\":\"247540\",\"ovtm_mkt_clsf\":\"0\",\"inq_cnt\":\"30\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "ccls_tm": "143000",
+                                        "ccls_prc": "71000",
+                                        "ccls_q": "1",
+                                        "sell_buy_ccd": "1"
+                                    },
+                                    {
+                                        "ccls_tm": "110000",
+                                        "ccls_prc": "71000",
+                                        "ccls_q": "1",
+                                        "sell_buy_ccd": "1"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivs11560",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"info_ccd\":\"1\",\"mkt_clsf\":\"0\",\"chrt_clsf\":\"D\",\"minute_tck_indx\":\"\",\"is_cd\":\"247540\",\"inq_clsf\":\"2\",\"strt_dy\":\"\",\"inq_cnt\":\"30\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "dt": "20260325",
+                                        "tm": "0",
+                                        "opn_prc_p2": "71000.00",
+                                        "hgh_prc_p2": "71500.00",
+                                        "lw_prc_p2": "70500.00",
+                                        "cls_prc_p2": "71000.00",
+                                        "vlm": "0"
+                                    },
+                                    {
+                                        "dt": "20260324",
+                                        "tm": "0",
+                                        "opn_prc_p2": "71000.00",
+                                        "hgh_prc_p2": "71500.00",
+                                        "lw_prc_p2": "70500.00",
+                                        "cls_prc_p2": "71000.00",
+                                        "vlm": "0"
+                                    },
+                                    {
+                                        "dt": "20260323",
+                                        "tm": "0",
+                                        "opn_prc_p2": "71000.00",
+                                        "hgh_prc_p2": "71500.00",
+                                        "lw_prc_p2": "70500.00",
+                                        "cls_prc_p2": "71000.00",
+                                        "vlm": "0"
+                                    },
+                                    {
+                                        "dt": "20260320",
+                                        "tm": "0",
+                                        "opn_prc_p2": "71000.00",
+                                        "hgh_prc_p2": "71500.00",
+                                        "lw_prc_p2": "70500.00",
+                                        "cls_prc_p2": "71000.00",
+                                        "vlm": "150"
+                                    },
+                                    {
+                                        "dt": "20260319",
+                                        "tm": "0",
+                                        "opn_prc_p2": "71000.00",
+                                        "hgh_prc_p2": "71500.00",
+                                        "lw_prc_p2": "70500.00",
+                                        "cls_prc_p2": "71000.00",
+                                        "vlm": "80"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "info": {
+                        "ccls_tm": "143000",
+                        "ccls_prc": "71000",
+                        "ccls_q": "1",
+                        "sell_buy_ccd": "1"
+                    },
+                    "timestamp": 1773984600000,
+                    "datetime": "2026-03-20T05:30:00.000Z",
+                    "symbol": "247540/KRW",
+                    "price": 71000,
+                    "amount": 1,
+                    "cost": 71000,
+                    "fee": {},
+                    "fees": []
+                },
+                {
+                    "info": {
+                        "ccls_tm": "110000",
+                        "ccls_prc": "71000",
+                        "ccls_q": "1",
+                        "sell_buy_ccd": "1"
+                    },
+                    "timestamp": 1773972000000,
+                    "datetime": "2026-03-20T02:00:00.000Z",
+                    "symbol": "247540/KRW",
+                    "price": 71000,
+                    "amount": 1,
+                    "cost": 71000,
+                    "fee": {},
+                    "fees": []
+                }
+            ]
+        },
+        {
+            "description": "fetchTrades 는 앞 행보다 시각이 늦은 행이 나오면 날짜가 바뀐 것으로 보고 그 행부터 끝까지 timestamp 를 비운다. since 가 없으면 빈 행도 돌려준다",
+            "now": 1774400400000,
+            "method": "fetchTrades",
+            "args": [
+                "005930/KRW"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10080",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"is_cd\":\"005930\",\"ovtm_mkt_clsf\":\"0\",\"inq_cnt\":\"30\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "ccls_tm": "093500",
+                                        "ccls_prc": "71000",
+                                        "ccls_q": "1",
+                                        "sell_buy_ccd": "1"
+                                    },
+                                    {
+                                        "ccls_tm": "091000",
+                                        "ccls_prc": "71000",
+                                        "ccls_q": "1",
+                                        "sell_buy_ccd": "1"
+                                    },
+                                    {
+                                        "ccls_tm": "152000",
+                                        "ccls_prc": "71000",
+                                        "ccls_q": "1",
+                                        "sell_buy_ccd": "1"
+                                    },
+                                    {
+                                        "ccls_tm": "140000",
+                                        "ccls_prc": "71000",
+                                        "ccls_q": "1",
+                                        "sell_buy_ccd": "1"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivs11560",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"info_ccd\":\"1\",\"mkt_clsf\":\"0\",\"chrt_clsf\":\"D\",\"minute_tck_indx\":\"\",\"is_cd\":\"005930\",\"inq_clsf\":\"2\",\"strt_dy\":\"\",\"inq_cnt\":\"30\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "dt": "20260325",
+                                        "tm": "0",
+                                        "opn_prc_p2": "71000.00",
+                                        "hgh_prc_p2": "71500.00",
+                                        "lw_prc_p2": "70500.00",
+                                        "cls_prc_p2": "71000.00",
+                                        "vlm": "1520000"
+                                    },
+                                    {
+                                        "dt": "20260324",
+                                        "tm": "0",
+                                        "opn_prc_p2": "71000.00",
+                                        "hgh_prc_p2": "71500.00",
+                                        "lw_prc_p2": "70500.00",
+                                        "cls_prc_p2": "71000.00",
+                                        "vlm": "9800000"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "info": {
+                        "ccls_tm": "093500",
+                        "ccls_prc": "71000",
+                        "ccls_q": "1",
+                        "sell_buy_ccd": "1"
+                    },
+                    "timestamp": 1774398900000,
+                    "datetime": "2026-03-25T00:35:00.000Z",
+                    "symbol": "005930/KRW",
+                    "price": 71000,
+                    "amount": 1,
+                    "cost": 71000,
+                    "fee": {},
+                    "fees": []
+                },
+                {
+                    "info": {
+                        "ccls_tm": "091000",
+                        "ccls_prc": "71000",
+                        "ccls_q": "1",
+                        "sell_buy_ccd": "1"
+                    },
+                    "timestamp": 1774397400000,
+                    "datetime": "2026-03-25T00:10:00.000Z",
+                    "symbol": "005930/KRW",
+                    "price": 71000,
+                    "amount": 1,
+                    "cost": 71000,
+                    "fee": {},
+                    "fees": []
+                },
+                {
+                    "info": {
+                        "ccls_tm": "152000",
+                        "ccls_prc": "71000",
+                        "ccls_q": "1",
+                        "sell_buy_ccd": "1"
+                    },
+                    "symbol": "005930/KRW",
+                    "price": 71000,
+                    "amount": 1,
+                    "cost": 71000,
+                    "fee": {},
+                    "fees": []
+                },
+                {
+                    "info": {
+                        "ccls_tm": "140000",
+                        "ccls_prc": "71000",
+                        "ccls_q": "1",
+                        "sell_buy_ccd": "1"
+                    },
+                    "symbol": "005930/KRW",
+                    "price": 71000,
+                    "amount": 1,
+                    "cost": 71000,
+                    "fee": {},
+                    "fees": []
+                }
+            ]
+        },
+        {
+            "description": "fetchTrades 는 since 를 주면 timestamp 가 빈 행을 빼고 since 이후의 체결만 남긴다. limit 은 조회건수로 보낸다",
+            "now": 1774400400000,
+            "method": "fetchTrades",
+            "args": [
+                "005930/KRW",
+                1774398000000,
+                4
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10080",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"is_cd\":\"005930\",\"ovtm_mkt_clsf\":\"0\",\"inq_cnt\":\"4\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "ccls_tm": "093500",
+                                        "ccls_prc": "71000",
+                                        "ccls_q": "1",
+                                        "sell_buy_ccd": "1"
+                                    },
+                                    {
+                                        "ccls_tm": "091000",
+                                        "ccls_prc": "71000",
+                                        "ccls_q": "1",
+                                        "sell_buy_ccd": "1"
+                                    },
+                                    {
+                                        "ccls_tm": "152000",
+                                        "ccls_prc": "71000",
+                                        "ccls_q": "1",
+                                        "sell_buy_ccd": "1"
+                                    },
+                                    {
+                                        "ccls_tm": "140000",
+                                        "ccls_prc": "71000",
+                                        "ccls_q": "1",
+                                        "sell_buy_ccd": "1"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivs11560",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"info_ccd\":\"1\",\"mkt_clsf\":\"0\",\"chrt_clsf\":\"D\",\"minute_tck_indx\":\"\",\"is_cd\":\"005930\",\"inq_clsf\":\"2\",\"strt_dy\":\"\",\"inq_cnt\":\"30\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "dt": "20260325",
+                                        "tm": "0",
+                                        "opn_prc_p2": "71000.00",
+                                        "hgh_prc_p2": "71500.00",
+                                        "lw_prc_p2": "70500.00",
+                                        "cls_prc_p2": "71000.00",
+                                        "vlm": "1520000"
+                                    },
+                                    {
+                                        "dt": "20260324",
+                                        "tm": "0",
+                                        "opn_prc_p2": "71000.00",
+                                        "hgh_prc_p2": "71500.00",
+                                        "lw_prc_p2": "70500.00",
+                                        "cls_prc_p2": "71000.00",
+                                        "vlm": "9800000"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "info": {
+                        "ccls_tm": "093500",
+                        "ccls_prc": "71000",
+                        "ccls_q": "1",
+                        "sell_buy_ccd": "1"
+                    },
+                    "timestamp": 1774398900000,
+                    "datetime": "2026-03-25T00:35:00.000Z",
+                    "symbol": "005930/KRW",
+                    "price": 71000,
+                    "amount": 1,
+                    "cost": 71000,
+                    "fee": {},
+                    "fees": []
+                }
+            ]
+        },
+        {
+            "description": "fetchTrades 는 일봉 조회가 실패하면 던지지 않고 모든 행의 timestamp 를 비운다",
+            "now": 1774400400000,
+            "method": "fetchTrades",
+            "args": [
+                "005930/KRW"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10080",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"is_cd\":\"005930\",\"ovtm_mkt_clsf\":\"0\",\"inq_cnt\":\"30\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "ccls_tm": "095959",
+                                        "ccls_prc": "71000",
+                                        "ccls_q": "1",
+                                        "sell_buy_ccd": "1"
+                                    },
+                                    {
+                                        "ccls_tm": "095958",
+                                        "ccls_prc": "71000",
+                                        "ccls_q": "1",
+                                        "sell_buy_ccd": "1"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivs11560",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"info_ccd\":\"1\",\"mkt_clsf\":\"0\",\"chrt_clsf\":\"D\",\"minute_tck_indx\":\"\",\"is_cd\":\"005930\",\"inq_clsf\":\"2\",\"strt_dy\":\"\",\"inq_cnt\":\"30\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "resultCode": "200",
+                                "resultMessage": "성공",
+                                "processFlag": "B",
+                                "processCode": "9999",
+                                "processMessage": "처리 중 오류가 발생했습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "info": {
+                        "ccls_tm": "095959",
+                        "ccls_prc": "71000",
+                        "ccls_q": "1",
+                        "sell_buy_ccd": "1"
+                    },
+                    "symbol": "005930/KRW",
+                    "price": 71000,
+                    "amount": 1,
+                    "cost": 71000,
+                    "fee": {},
+                    "fees": []
+                },
+                {
+                    "info": {
+                        "ccls_tm": "095958",
+                        "ccls_prc": "71000",
+                        "ccls_q": "1",
+                        "sell_buy_ccd": "1"
+                    },
+                    "symbol": "005930/KRW",
+                    "price": 71000,
+                    "amount": 1,
+                    "cost": 71000,
+                    "fee": {},
+                    "fees": []
+                }
+            ]
+        },
+        {
+            "description": "fetchTrades 는 가장 새 체결이 그 날짜로 보아 지금보다 1분 넘게 늦으면 모든 행의 timestamp 를 비운다",
+            "now": 1774400400000,
+            "method": "fetchTrades",
+            "args": [
+                "005930/KRW"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10080",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"is_cd\":\"005930\",\"ovtm_mkt_clsf\":\"0\",\"inq_cnt\":\"30\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "ccls_tm": "153000",
+                                        "ccls_prc": "71000",
+                                        "ccls_q": "1",
+                                        "sell_buy_ccd": "1"
+                                    },
+                                    {
+                                        "ccls_tm": "152959",
+                                        "ccls_prc": "71000",
+                                        "ccls_q": "1",
+                                        "sell_buy_ccd": "1"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivs11560",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"info_ccd\":\"1\",\"mkt_clsf\":\"0\",\"chrt_clsf\":\"D\",\"minute_tck_indx\":\"\",\"is_cd\":\"005930\",\"inq_clsf\":\"2\",\"strt_dy\":\"\",\"inq_cnt\":\"30\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "dt": "20260325",
+                                        "tm": "0",
+                                        "opn_prc_p2": "71000.00",
+                                        "hgh_prc_p2": "71500.00",
+                                        "lw_prc_p2": "70500.00",
+                                        "cls_prc_p2": "71000.00",
+                                        "vlm": "1520000"
+                                    },
+                                    {
+                                        "dt": "20260324",
+                                        "tm": "0",
+                                        "opn_prc_p2": "71000.00",
+                                        "hgh_prc_p2": "71500.00",
+                                        "lw_prc_p2": "70500.00",
+                                        "cls_prc_p2": "71000.00",
+                                        "vlm": "9800000"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "info": {
+                        "ccls_tm": "153000",
+                        "ccls_prc": "71000",
+                        "ccls_q": "1",
+                        "sell_buy_ccd": "1"
+                    },
+                    "symbol": "005930/KRW",
+                    "price": 71000,
+                    "amount": 1,
+                    "cost": 71000,
+                    "fee": {},
+                    "fees": []
+                },
+                {
+                    "info": {
+                        "ccls_tm": "152959",
+                        "ccls_prc": "71000",
+                        "ccls_q": "1",
+                        "sell_buy_ccd": "1"
+                    },
+                    "symbol": "005930/KRW",
+                    "price": 71000,
+                    "amount": 1,
+                    "cost": 71000,
+                    "fee": {},
+                    "fees": []
+                }
+            ]
+        },
+        {
+            "description": "fetchTrades 는 마스터 데이터로 코스닥 종목임을 알면 일봉을 시장구분 1 로 받아 날짜를 붙인다",
+            "config": {
+                "options": {
+                    "masterData": {
+                        "kospi": [
+                            {
+                                "code": "005930",
+                                "name": "삼성전자",
+                                "market": "KOSPI",
+                                "securityType": "STOCK"
+                            }
+                        ],
+                        "kosdaq": [
+                            {
+                                "code": "247540",
+                                "name": "에코프로비엠",
+                                "market": "KOSDAQ",
+                                "securityType": "STOCK"
+                            }
+                        ]
+                    }
+                }
+            },
+            "now": 1774400400000,
+            "method": "fetchTrades",
+            "args": [
+                "247540/KRW"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10080",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"is_cd\":\"247540\",\"ovtm_mkt_clsf\":\"0\",\"inq_cnt\":\"30\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "ccls_tm": "100020",
+                                        "ccls_prc": "260000",
+                                        "ccls_q": "1",
+                                        "sell_buy_ccd": "1"
+                                    },
+                                    {
+                                        "ccls_tm": "095958",
+                                        "ccls_prc": "260000",
+                                        "ccls_q": "1",
+                                        "sell_buy_ccd": "1"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivs11560",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"info_ccd\":\"1\",\"mkt_clsf\":\"1\",\"chrt_clsf\":\"D\",\"minute_tck_indx\":\"\",\"is_cd\":\"247540\",\"inq_clsf\":\"2\",\"strt_dy\":\"\",\"inq_cnt\":\"30\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "dt": "20260325",
+                                        "tm": "0",
+                                        "opn_prc_p2": "71000.00",
+                                        "hgh_prc_p2": "71500.00",
+                                        "lw_prc_p2": "70500.00",
+                                        "cls_prc_p2": "71000.00",
+                                        "vlm": "150000"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "info": {
+                        "ccls_tm": "100020",
+                        "ccls_prc": "260000",
+                        "ccls_q": "1",
+                        "sell_buy_ccd": "1"
+                    },
+                    "timestamp": 1774400420000,
+                    "datetime": "2026-03-25T01:00:20.000Z",
+                    "symbol": "247540/KRW",
+                    "price": 260000,
+                    "amount": 1,
+                    "cost": 260000,
+                    "fee": {},
+                    "fees": []
+                },
+                {
+                    "info": {
+                        "ccls_tm": "095958",
+                        "ccls_prc": "260000",
+                        "ccls_q": "1",
+                        "sell_buy_ccd": "1"
+                    },
+                    "timestamp": 1774400398000,
+                    "datetime": "2026-03-25T00:59:58.000Z",
+                    "symbol": "247540/KRW",
+                    "price": 260000,
+                    "amount": 1,
+                    "cost": 260000,
+                    "fee": {},
+                    "fees": []
+                }
+            ]
+        },
+        {
+            "description": "fetchTrades 는 체결 행이 없으면(1861) 일봉을 부르지 않고 빈 목록이다",
+            "now": 1774400400000,
+            "method": "fetchTrades",
+            "args": [
+                "005930/KRW"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10080",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"is_cd\":\"005930\",\"ovtm_mkt_clsf\":\"0\",\"inq_cnt\":\"30\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "resultCode": "200",
+                                "resultMessage": "성공",
+                                "processFlag": "B",
+                                "processCode": "1861",
+                                "processMessage": "조회할 자료가 없습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                }
+            ],
+            "output": []
+        },
+        {
+            "description": "fetchTrades 미국은 현재가로 거래소코드를 찾고(NAS 다음 NYS) 그 코드로 GSA10020 을 묻는다. limit 은 레코드수다. 체결구분 1 은 buy, 2 는 sell 이고 시각은 한국 시각 필드(kor_dt, kor_tm)다",
+            "method": "fetchTrades",
+            "args": [
+                "KO/USD",
+                null,
+                3
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/gss10030",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"krx_cd\":\"NAS\",\"is_cd\":\"KO\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "now_prc_p4": "0.0000"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/gss10030",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"krx_cd\":\"NYS\",\"is_cd\":\"KO\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "now_prc_p4": "71.2300",
+                                "b_askprc_p4": "71.2200",
+                                "s_askprc_p4": "71.2400"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/gsa10020",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"krx_cd\":\"NYS\",\"is_cd\":\"KO\",\"rcrd_c\":\"3\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "kor_dt": "20260325",
+                                        "kor_tm": "003015",
+                                        "ccls_clsf": "1",
+                                        "now_prc_p4": "71.2300",
+                                        "ccls_q": "100"
+                                    },
+                                    {
+                                        "kor_dt": "20260325",
+                                        "kor_tm": "003010",
+                                        "ccls_clsf": "2",
+                                        "now_prc_p4": "71.2200",
+                                        "ccls_q": "50"
+                                    },
+                                    {
+                                        "kor_dt": "20260325",
+                                        "kor_tm": "003005",
+                                        "ccls_clsf": "",
+                                        "now_prc_p4": "71.2100",
+                                        "ccls_q": "10"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "info": {
+                        "kor_dt": "20260325",
+                        "kor_tm": "003015",
+                        "ccls_clsf": "1",
+                        "now_prc_p4": "71.2300",
+                        "ccls_q": "100"
+                    },
+                    "timestamp": 1774366215000,
+                    "datetime": "2026-03-24T15:30:15.000Z",
+                    "symbol": "KO/USD",
+                    "side": "buy",
+                    "price": 71.23,
+                    "amount": 100,
+                    "cost": 7123,
+                    "fee": {},
+                    "fees": []
+                },
+                {
+                    "info": {
+                        "kor_dt": "20260325",
+                        "kor_tm": "003010",
+                        "ccls_clsf": "2",
+                        "now_prc_p4": "71.2200",
+                        "ccls_q": "50"
+                    },
+                    "timestamp": 1774366210000,
+                    "datetime": "2026-03-24T15:30:10.000Z",
+                    "symbol": "KO/USD",
+                    "side": "sell",
+                    "price": 71.22,
+                    "amount": 50,
+                    "cost": 3561,
+                    "fee": {},
+                    "fees": []
+                },
+                {
+                    "info": {
+                        "kor_dt": "20260325",
+                        "kor_tm": "003005",
+                        "ccls_clsf": "",
+                        "now_prc_p4": "71.2100",
+                        "ccls_q": "10"
+                    },
+                    "timestamp": 1774366205000,
+                    "datetime": "2026-03-24T15:30:05.000Z",
+                    "symbol": "KO/USD",
+                    "price": 71.21,
+                    "amount": 10,
+                    "cost": 712.1,
+                    "fee": {},
+                    "fees": []
+                }
+            ]
+        },
+        {
+            "description": "fetchTradingFee 는 요청 없이 공시 요율로 추정한다. 국내 매도는 위탁수수료에 그 시각의 증권거래세를 더한다",
+            "now": 1774400400000,
+            "method": "fetchTradingFee",
+            "args": [
+                "005930/KRW",
+                {
+                    "side": "sell"
+                }
+            ],
+            "http": [],
+            "output": {
+                "info": {
+                    "estimated": true,
+                    "side": "sell"
+                },
+                "symbol": "005930/KRW",
+                "maker": 0.00215,
+                "taker": 0.00215,
+                "percentage": true,
+                "tierBased": false
+            }
+        },
+        {
+            "description": "fetchTradingFee 미국은 방향을 생략하면 매수이고 미국 위탁수수료율이다",
+            "now": 1774400400000,
+            "method": "fetchTradingFee",
+            "args": [
+                "KO/USD"
+            ],
+            "http": [],
+            "output": {
+                "info": {
+                    "estimated": true,
+                    "side": "buy"
+                },
+                "symbol": "KO/USD",
+                "maker": 0.001,
+                "taker": 0.001,
+                "percentage": true,
+                "tierBased": false
+            }
+        },
+        {
+            "description": "fetchMarketCalendar 는 장운영상태(SZQM0771)의 전·기준·익영업일을 열린 날로, 그 사이의 평일을 닫힌 날로 준다. params.market 은 본문에 싣지 않는다",
+            "method": "fetchMarketCalendar",
+            "args": [
+                {
+                    "market": "kr"
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/szqm0771",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "bfr_bsns_dt": "20260818",
+                                "std_bsnss_dt": "20260818",
+                                "next_biz_dt": "20260820"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "date": "20260818",
+                    "open": true
+                },
+                {
+                    "date": "20260819",
+                    "open": false
+                },
+                {
+                    "date": "20260820",
+                    "open": true
+                }
+            ]
+        },
+        {
+            "description": "fetchMarketCalendar 는 market 이 US 면 요청 없이 NotSupported 다",
+            "method": "fetchMarketCalendar",
+            "args": [
+                {
+                    "market": "US"
+                }
+            ],
+            "http": [],
+            "error": {
+                "class": "NotSupported",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "refreshMarketCalendar 는 장운영상태를 받아 공용 캘린더에 넣고 true 다",
+            "method": "refreshMarketCalendar",
+            "args": [],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/szqm0771",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "bfr_bsns_dt": "20260818",
+                                "std_bsnss_dt": "20260818",
+                                "next_biz_dt": "20260820"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": true
+        },
+        {
+            "description": "refreshMarketCalendar 는 조회가 실패해도 던지지 않고 false 다",
+            "method": "refreshMarketCalendar",
+            "args": [],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/szqm0771",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "resultCode": "200",
+                                "resultMessage": "성공",
+                                "processFlag": "B",
+                                "processCode": "9999",
+                                "processMessage": "처리 중 오류가 발생했습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                }
+            ],
+            "output": false
+        },
+        {
+            "description": "fetchInvestorTrading 은 IVU10430 에 오늘(한국 날짜) 하루, 금액, 순매수를 보내고 개인·외국인·기관을 공통 모양으로 준다",
+            "now": 1790046000000,
+            "method": "fetchInvestorTrading",
+            "args": [
+                "005930/KRW"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10430",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"is_cd\":\"005930\",\"strt_dt\":\"20260922\",\"end_dt\":\"20260922\",\"amt_q_clsf\":\"1\",\"trd_clsf\":\"1\",\"acml_clsf\":\"0\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "dt": "20260922",
+                                        "cls_prc": "71000",
+                                        "bdy_cmpr": "500",
+                                        "up_dwn_r_p2": "0.71",
+                                        "vlm": "123456",
+                                        "indv": "-1000000",
+                                        "fgnr": "800000",
+                                        "ogn": "200000",
+                                        "scrt": "10000",
+                                        "pgm": "15000"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "timestamp": 1790002800000,
+                    "datetime": "2026-09-21T15:00:00.000Z",
+                    "date": "20260922",
+                    "close": 71000,
+                    "change": 500,
+                    "individual": -1000000,
+                    "foreign": 800000,
+                    "institution": 200000,
+                    "info": {
+                        "dt": "20260922",
+                        "cls_prc": "71000",
+                        "bdy_cmpr": "500",
+                        "up_dwn_r_p2": "0.71",
+                        "vlm": "123456",
+                        "indv": "-1000000",
+                        "fgnr": "800000",
+                        "ogn": "200000",
+                        "scrt": "10000",
+                        "pgm": "15000"
+                    }
+                }
+            ]
+        },
+        {
+            "description": "fetchInvestorTrading 은 since 와 params.until 을 한국 날짜로 보내고 until 은 본문에 싣지 않는다. since 가 있으면 limit 은 오래된 쪽부터다",
+            "now": 1790046000000,
+            "method": "fetchInvestorTrading",
+            "args": [
+                "005930/KRW",
+                1788231600000,
+                2,
+                {
+                    "until": 1790046000000
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10430",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"is_cd\":\"005930\",\"strt_dt\":\"20260901\",\"end_dt\":\"20260922\",\"amt_q_clsf\":\"1\",\"trd_clsf\":\"1\",\"acml_clsf\":\"0\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "dt": "20260922",
+                                        "cls_prc": "71000",
+                                        "bdy_cmpr": "500",
+                                        "up_dwn_r_p2": "0.71",
+                                        "vlm": "123456",
+                                        "indv": "-1000000",
+                                        "fgnr": "800000",
+                                        "ogn": "200000",
+                                        "scrt": "10000",
+                                        "pgm": "15000"
+                                    },
+                                    {
+                                        "dt": "20260921",
+                                        "cls_prc": "71000",
+                                        "bdy_cmpr": "500",
+                                        "up_dwn_r_p2": "0.71",
+                                        "vlm": "123456",
+                                        "indv": "-1000000",
+                                        "fgnr": "800000",
+                                        "ogn": "200000",
+                                        "scrt": "10000",
+                                        "pgm": "15000"
+                                    },
+                                    {
+                                        "dt": "20260918",
+                                        "cls_prc": "71000",
+                                        "bdy_cmpr": "500",
+                                        "up_dwn_r_p2": "0.71",
+                                        "vlm": "123456",
+                                        "indv": "-1000000",
+                                        "fgnr": "800000",
+                                        "ogn": "200000",
+                                        "scrt": "10000",
+                                        "pgm": "15000"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "timestamp": 1789916400000,
+                    "datetime": "2026-09-20T15:00:00.000Z",
+                    "date": "20260921",
+                    "close": 71000,
+                    "change": 500,
+                    "individual": -1000000,
+                    "foreign": 800000,
+                    "institution": 200000,
+                    "info": {
+                        "dt": "20260921",
+                        "cls_prc": "71000",
+                        "bdy_cmpr": "500",
+                        "up_dwn_r_p2": "0.71",
+                        "vlm": "123456",
+                        "indv": "-1000000",
+                        "fgnr": "800000",
+                        "ogn": "200000",
+                        "scrt": "10000",
+                        "pgm": "15000"
+                    }
+                },
+                {
+                    "timestamp": 1789657200000,
+                    "datetime": "2026-09-17T15:00:00.000Z",
+                    "date": "20260918",
+                    "close": 71000,
+                    "change": 500,
+                    "individual": -1000000,
+                    "foreign": 800000,
+                    "institution": 200000,
+                    "info": {
+                        "dt": "20260918",
+                        "cls_prc": "71000",
+                        "bdy_cmpr": "500",
+                        "up_dwn_r_p2": "0.71",
+                        "vlm": "123456",
+                        "indv": "-1000000",
+                        "fgnr": "800000",
+                        "ogn": "200000",
+                        "scrt": "10000",
+                        "pgm": "15000"
+                    }
+                }
+            ]
         }
     ]
 }

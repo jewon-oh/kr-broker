@@ -4,7 +4,7 @@ KB 는 필드가 전부 문자열이라 숫자도 문자열로 오고, 값이 �
 """
 
 import math
-from typing import Any, Optional
+from typing import Any, Mapping, Optional
 
 from kr_broker.base import functions as fn
 
@@ -19,3 +19,13 @@ def kbsec_number_of(value: Any) -> Optional[float]:
     n = fn.js_number(text)
     return n if math.isfinite(n) else None
 
+
+def kbsec_string(raw: Optional[Mapping[str, Any]], *keys: str) -> str:
+    """공백이 아닌 첫 후보 문자열(앞뒤 공백을 뗀 값). 없으면 `''` 이다."""
+    if not raw:
+        return ''
+    for key in keys:
+        value = raw.get(key)
+        if value is not None and fn.js_string(value).strip() != '':
+            return fn.js_string(value).strip()
+    return ''

@@ -1,7 +1,8 @@
 # 이 파일은 scripts/gen-python-sync.mjs 가 python/kr_broker/async_support/kbsec.py 에서 만든다. 직접 고치지 않는다.
 """KB증권 Open API(`class kbsec(Exchange, ImplicitAPI)`). TypeScript 판 `ts/src/kbsec.ts` 와 `ts/src/kbsec/kbsec-auth.ts` 를 옮기는 중이다.
-지금은 인증과 요청 봉투, 오류 처리, 토큰 복구, 시세 두 메서드(`fetch_ticker`, `fetch_order_book`)만 옮겼다. `has` 가 `False` 인 통합 메서드는
-부모 클래스가 `NotSupported` 를 던진다. 모든 TR 은 암묵 메서드로 부를 수 있다.
+지금은 인증과 요청 봉투, 오류 처리, 토큰 복구, 시세(`fetch_ticker`, `fetch_order_book`, `fetch_ohlcv`, `fetch_trades`), 수수료 추정
+(`fetch_trading_fee`), 휴장일(`fetch_market_calendar`, `refresh_market_calendar`), 투자자 매매동향(`fetch_investor_trading`)만 옮겼다.
+`has` 가 `False` 인 통합 메서드는 부모 클래스가 `NotSupported` 를 던진다. 모든 TR 은 암묵 메서드로 부를 수 있다.
 
 .. code-block:: python
 
@@ -24,7 +25,7 @@
     토큰이 무효(HTTP 401, `I445`)면 토큰을 회전하고 한 번만 다시 보낸다. 그 뒤에도 토큰 실패가 이어지면 차단기(`kbsec_token_breaker`)가 호출을 멈춘다.
 
 옵션
-    `tokenStore`(토큰 저장소), `masterData`(국내 종목 유형, `price_to_precision` 이 쓴다), `hostAddr`(TR 본문에 싣는 `{'ipAddr', 'macAddr'}`.
+    `tokenStore`(토큰 저장소), `masterData`(국내 종목 유형과 시장. `price_to_precision` 과 통합차트의 시장구분이 쓴다), `hostAddr`(TR 본문에 싣는 `{'ipAddr', 'macAddr'}`.
     주지 않으면 이 호스트의 주소를 찾아 쓴다. KB 는 빈 값을 받지 않는다)다.
 """
 
@@ -33,33 +34,38 @@ import json
 import logging
 import math
 import re
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, cast
 
 from kr_broker.abstract.kbsec import ImplicitAPI
 from kr_broker.base.exchange import Exchange
 from kr_broker.base.runtime import maybe_await, new_lock
 from kr_broker.base.token_store import refresh_token_with_lock
+from kr_broker.market_calendar import refresh_market_calendar as refresh_shared_market_calendar
 from kr_broker.base import functions as fn
 from kr_broker.base.decimal_to_precision import NO_PADDING, ROUND, TICK_SIZE, decimal_to_precision
 from kr_broker.base.errors import (
     ArgumentsRequired, AuthenticationError, BadResponse, BadSymbol, BaseError, ExchangeError, ExchangeNotAvailable, NetworkError,
     NotSupported, NullResponse, RateLimitExceeded,
 )
-from kr_broker.base.exchange import assert_secure_url
+from kr_broker.base.exchange import assert_secure_url, kst_trade_timestamps
 from kr_broker.base.token_store import BrokerTokenStore, token_store_key
-from kr_broker.base.types import ApiName, Int, Market, MarketInterface, OrderBook, Str, Ticker
+from kr_broker.base.types import ApiName, Int, Market, MarketInterface, Num, OrderBook, Str, Ticker, Trade, TradingFeeInterface
+from kr_broker.broker_time import candle_period_utc_ms, is_daily_or_longer_timeframe, kst_ymd
+from kr_broker.kbsec_chart import KBSEC_CHART_MAX, KBSEC_TIMEFRAMES, kbsec_bar_ms, kbsec_candle_timestamp, kbsec_chart_params
 from kr_broker.kbsec_envelope import is_kbsec_business_error, is_kbsec_token_failure, kbsec_host_addr
 from kr_broker.kbsec_error_codes import KBSEC_ERROR_DETAIL, kbsec_error_detail, kbsec_exact_exceptions
-from kr_broker.kbsec_pick import pick_num, pick_positive_num
+from kr_broker.kbsec_fee import kbsec_estimated_fee_rate
+from kr_broker.kbsec_pick import pick_array, pick_num, pick_positive_num, pick_str
 from kr_broker.kbsec_token_breaker import record_kbsec_call_ok, record_token_failure, throw_if_token_breaker_open
 from kr_broker.kbsec_tr_inputs import fill_tr_inputs
 from kr_broker.kbsec_types import (
     KBSEC_API_BASE, KBSEC_REVOKE_PATH, KBSEC_TOKEN_DEFAULT_TTL_MS, KBSEC_TOKEN_PATH, KBSEC_TOKEN_SAFETY_MARGIN_MS, KBSEC_TR,
-    KBSEC_TR_PATH_PREFIX, KBSEC_US_EXCHANGES, kbsec_base_symbol, kbsec_market_of,
+    KBSEC_TR_PATH_PREFIX, KBSEC_US_EXCHANGES, kbsec_base_symbol, kbsec_market_of, kbsec_num,
 )
 from kr_broker.kis_master_data import master_data_of
 from kr_broker.kis_stock_master import get_krx_stock_by_code
 from kr_broker.krx_tick_size import get_krx_tick_size
+from kr_broker.market_calendar import expand_business_days
 
 logger = logging.getLogger('kr_broker')
 
@@ -75,6 +81,8 @@ AUTH_TIMEOUT_MS = 10_000
 TOKEN_FETCH_LOCK_TTL_MS = 90 * 1000
 # 토큰 폐기 쿨다운. 토큰 장애 중에는 모든 TR 이 I445 로 실패하므로 실패마다 폐기를 부르지 않는다.
 REVOKE_COOLDOWN_MS = 5 * 60 * 1000
+# 휴장일 캘린더를 다시 받기까지의 시간. 장운영상태 TR 은 전·기준·익영업일만 줘서 자주 받아야 한다.
+CALENDAR_TTL_MS = 6 * 60 * 60 * 1000
 # 토큰 저장소 키 앞부분. 뒤에 앱키의 해시가 붙는다.
 KBSEC_TOKEN_KEY_PREFIX = 'kbsec:token:'
 # 발급·폐기 요청의 `dataHeader`. TR 과 달리 빈 주소를 받는다.
@@ -355,7 +363,8 @@ class kbsec(Exchange, ImplicitAPI):
                 'fetchTicker': True,
                 'fetchTickers': False,
                 'fetchOrderBook': True,
-                'fetchOHLCV': False,
+                # 국내만 지원한다. 해외 차트는 15분 지연 시세라 `NotSupported` 다.
+                'fetchOHLCV': True,
                 'fetchBalance': False,
                 'createOrder': False,
                 'createLimitOrder': False,
@@ -370,12 +379,14 @@ class kbsec(Exchange, ImplicitAPI):
                 'fetchClosedOrders': False,
                 'fetchCanceledOrders': False,
                 'fetchMyTrades': False,
-                'fetchTrades': False,
-                'fetchTradingFee': False,
+                'fetchTrades': True,
+                # KB 에 수수료 조회 TR 이 없어 공시 요율로 추정한다.
+                'fetchTradingFee': 'emulated',
                 'fetchStatus': False,
                 'fetchTime': False,
-                'fetchMarketCalendar': False,
-                'fetchInvestorTrading': False,
+                # 주식 고유. 장운영상태 TR 로 전·기준·익영업일을 받아 휴장일 캘린더를 채운다.
+                'fetchMarketCalendar': True,
+                'fetchInvestorTrading': True,
                 'createMarketBuyOrderWithCost': False,
                 'createConditionalOrder': False,
             },
@@ -385,6 +396,7 @@ class kbsec(Exchange, ImplicitAPI):
                 'doc': ['https://openapi.kbsec.com', 'https://github.com/kbsecurities/kb-openapi'],
             },
             'requiredCredentials': {'apiKey': True, 'secret': True, 'uid': False},
+            'timeframes': dict(KBSEC_TIMEFRAMES),
             'fees': {
                 'trading': {'tierBased': False, 'percentage': True},
             },
@@ -566,6 +578,11 @@ class kbsec(Exchange, ImplicitAPI):
         stock = get_krx_stock_by_code(master_data_of(self.options), market['id'] or '')
         return None if stock is None else stock.get('securityType')
 
+    def _is_kosdaq(self, market: MarketInterface) -> bool:
+        """`options['masterData']` 가 코스닥 종목이라고 알려 주는가. 통합차트의 시장구분(`mkt_clsf`)을 고를 때 쓴다."""
+        stock = get_krx_stock_by_code(master_data_of(self.options), market['id'] or '')
+        return stock is not None and stock.get('market') == 'KOSDAQ'
+
     def price_to_precision(self, symbol: Str, price: Any) -> Str:
         """가격을 호가 단위에 맞춘 문자열. 국내는 가격대별 호가 단위 표(`krx_tick_size`)로 반올림하고, `options['masterData']` 가 주식이 아니라고
         알려 주면 표가 달라 그대로 돌려준다. 미국은 부모 클래스를 따른다. 주문 경로는 이 메서드로 가격을 바꾸지 않는다."""
@@ -578,6 +595,36 @@ class kbsec(Exchange, ImplicitAPI):
         if security_type is not None and security_type != 'STOCK':
             return self.number_to_string(price)
         return decimal_to_precision(price, ROUND, get_krx_tick_size(fn.js_number(price)), TICK_SIZE, NO_PADDING)
+
+    def fetch_investor_trading(self, symbol: str, since: Int = None, limit: Int = None,
+                               params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """종목별 투자자 매매동향(`IVU10430`)을 하루 단위로 준다. 세 증권사 공통 모양이다. 국내만 지원한다.
+        개인, 외국인, 기관의 값을 싣고, 등락률과 거래량, 나머지 10개 투자자 유형은 `info` 의 원문에 있다.
+        기본은 오늘(KST) 하루, 순매수(`trd_clsf='1'`), 금액 기준(`amt_q_clsf='1'`)이다. `since` 와 `params['until']` 로 기간을 넓힌다.
+        `params` 로 `trd_clsf`(1 순매수, 2 매수, 3 매도)나 `amt_q_clsf`(1 금액, 2 수량)를 덮어쓰면 세 투자자 필드도 그 값이 된다."""
+        until, query = self.handle_until_param('fetchInvestorTrading', limit, {} if params is None else params)
+        market = self.market(symbol)
+        if self._is_us(market):
+            raise NotSupported(f'{self.id} fetchInvestorTrading() 는 국내 종목만 지원한다: {symbol}')
+        today = kst_ymd(self.milliseconds())
+        body = self._call_tr(KBSEC_TR['INVESTOR_TRADING'], self.extend({
+            'excg_clsf': '1',
+            'is_cd': market['id'],
+            'strt_dt': today if since is None else kst_ymd(since),
+            'end_dt': today if until is None else kst_ymd(until),
+            'amt_q_clsf': '1',
+            'trd_clsf': '1',
+            'acml_clsf': '0',
+        }, query))
+        return self.limit_rows([self.extend(self.kst_stamp(pick_str(row, 'dt')), {
+            'date': pick_str(row, 'dt'),
+            'close': pick_num(row, 'cls_prc'),
+            'change': pick_num(row, 'bdy_cmpr'),
+            'individual': pick_num(row, 'indv'),
+            'foreign': pick_num(row, 'fgnr'),
+            'institution': pick_num(row, 'ogn'),
+            'info': row,
+        }) for row in pick_array(body)], since, limit)
 
     # ============ 시세 ============
 
@@ -678,10 +725,189 @@ class kbsec(Exchange, ImplicitAPI):
             book['asks'] = book['asks'][:limit]
         return book
 
+    def fetch_ohlcv(self, symbol: str, timeframe: str = '1m', since: Int = None, limit: Int = None,
+                    params: Optional[Dict[str, Any]] = None) -> List[List[Num]]:
+        """봉. 국내만 지원한다. 명세(`IVS11560`)의 필드 이름으로 읽으며, 실계좌로 검증한 적은 없다. 해외 차트(`GSC10060`)는 15분 지연 시세라
+        지연 봉을 공통 메서드에 섞지 않으려고 `NotSupported` 를 던진다.
+        시장구분(`mkt_clsf`)은 `options['masterData']` 로 코스닥 종목임을 알면 `'1'`, 그 밖에는 코스피(`'0'`)로 보낸다. `params['mkt_clsf']` 가 있으면 그 값을 쓴다.
+
+        `since` 가 있으면 `since` 부터 `limit`(기본 100) 개이고, 없으면 가장 최근 `limit` 개다. `params['until']`(ms)은 그 시각까지의 봉만 남긴다.
+        명세의 시작일(`strt_dy`)은 뜻을 확인하지 못해 비워 보낸다. 대신 지금부터 `since`(또는 `until`)까지 덮을 만큼 최근 봉을 받아 거른다.
+        조회건수 상한(9999)으로도 `since` 까지 닿지 못하면 경고 로그를 남기고 받은 가장 오래된 봉부터 돌려준다."""
+        timeframe = '1m' if timeframe is None else timeframe
+        params = {} if params is None else params
+        market = self.market(symbol)
+        if self._is_us(market):
+            raise NotSupported(f'{self.id} fetchOHLCV() 는 국내 종목만 지원한다: 해외 차트는 15분 지연 시세다')
+        chrt_clsf, minute = kbsec_chart_params(timeframe)
+        wanted = 100 if limit is None else limit
+        until = self.safe_integer(params, 'until')
+        query = self.omit(params, 'until')
+
+        # 조회는 가장 최근 봉부터 개수로만 하므로, 지금부터 그 시각까지 들어가는 봉 수를 달력 시간으로 넉넉히 센다.
+        def bars_since(start: int) -> int:
+            return math.ceil((self.milliseconds() - start) / kbsec_bar_ms(timeframe)) + 1
+
+        count = wanted
+        if since is not None:
+            count = max(wanted, bars_since(since))
+        elif until is not None:
+            count = wanted + max(0, bars_since(until))
+        count = min(count, KBSEC_CHART_MAX)
+        body = self._call_tr(KBSEC_TR['CHART_KR'], self.extend({
+            'info_ccd': '1',  # 원주가
+            'mkt_clsf': '1' if self._is_kosdaq(market) else '0',  # 명세: 0 KOSPI, 1 KOSDAQ
+            'chrt_clsf': chrt_clsf,
+            'minute_tck_indx': minute,
+            'is_cd': market['id'],
+            'inq_clsf': '2',  # 데이터 수로 조회
+            'inq_cnt': kbsec_num(count),
+        }, query))
+        received = pick_array(body)
+        rows = [row for row in received if kbsec_candle_timestamp(pick_str(row, 'dt'), pick_str(row, 'tm')) is not None]
+        # 일·주·월봉은 KB 가 현지 자정(00:00 KST)으로 주므로 기간 첫날의 00:00 UTC 로 옮긴다(`candle_period_utc_ms`).
+        daily = is_daily_or_longer_timeframe(timeframe)
+        candles = [[candle_period_utc_ms(cast(int, candle[0]), timeframe, 'KR'), *candle[1:]] if daily else candle
+                   for candle in self.parse_ohlcvs(rows, market, timeframe)]
+        candles = [candle for candle in candles if until is None or cast(int, candle[0]) <= until]
+        oldest = candles[0][0] if candles else None
+        if since is not None and len(received) >= count and oldest is not None and oldest > since:
+            logger.warning('[kbsec] 봉 조회건수 상한에 닿아 since 까지 받지 못했다. 받은 가장 오래된 봉부터 돌려준다 '
+                           '(symbol=%s, timeframe=%s, since=%s, oldest=%s, count=%s)', market['symbol'], timeframe, since, oldest, count)
+        return self.filter_by_since_limit(candles, since, wanted, 0)
+
+    def parse_ohlcv(self, ohlcv: Any, market: Market = None) -> List[Num]:
+        return [
+            kbsec_candle_timestamp(pick_str(ohlcv, 'dt'), pick_str(ohlcv, 'tm')),
+            pick_num(ohlcv, 'opn_prc_p2'),
+            pick_num(ohlcv, 'hgh_prc_p2'),
+            pick_num(ohlcv, 'lw_prc_p2'),
+            pick_num(ohlcv, 'cls_prc_p2'),
+            pick_num(ohlcv, 'vlm'),
+        ]
+
+    def fetch_trades(self, symbol: str, since: Int = None, limit: Int = None,
+                     params: Optional[Dict[str, Any]] = None) -> List[Trade]:
+        """시간대별 체결 내역. 국내(`IVU10080`)와 해외(`GSA10020`)를 종목 국가로 가른다.
+
+        국내는 체결가, 체결수량, 체결시각만 채운다. 방향(매도매수구분, `sell_buy_ccd`)과 체결 ID 는 코드값 의미를 확정할 근거가 없어(명세에 설명 없음)
+        채우지 않고, `info` 에 원본이 남아 있다. 체결 행에는 시각(`ccls_tm`, HHMMSS)만 있어서, 일봉(`fetch_ohlcv`)을 한 번 더 받아 거래량이 있는
+        가장 최근 영업일을 가장 새 체결의 날짜로 쓴다. 날짜가 바뀐 행부터 비우는 규칙은 한국투자증권과 같다(`kst_trade_timestamps`).
+        행이 새 것부터 온다는 순서는 명세에 없고 실계좌로 확인하지 못했다. `since` 를 주면 `timestamp` 가 빈 행은 빠진다.
+
+        해외는 체결구분(`ccls_clsf`, `1` 매수자체결, `2` 매도자체결)이 명세에 있어 `side` 를 채운다. 시각은 한국 시각 변환 필드(`kor_dt`·`kor_tm`)를
+        쓴다(국내와 달리 여러 날짜를 한 번에 준다). 거래소코드(`krx_cd`)는 `fetch_ticker` 가 쓰는 캐시를 그대로 쓰고, 없으면 먼저 현재가 조회로 채운다."""
+        params = {} if params is None else params
+        market = self.market(symbol)
+        if self._is_us(market):
+            return self._fetch_overseas_trades_timeline(market, since, limit, params)
+        body = self._call_tr(KBSEC_TR['TRADES_TIMELINE_KR'], self.extend({
+            'excg_clsf': '1', 'is_cd': market['id'], 'ovtm_mkt_clsf': '0', 'inq_cnt': kbsec_num(30 if limit is None else limit),
+        }, params))
+        rows = pick_array(body)
+        if len(rows) == 0:
+            return []
+        stamps = kst_trade_timestamps([pick_str(row, 'ccls_tm') for row in rows], self._last_traded_date(market), self.milliseconds())
+        trades = [self.safe_trade({
+            'info': row,
+            'id': None,
+            'order': None,
+            'timestamp': timestamp,
+            'datetime': self.iso8601(timestamp),
+            'symbol': market['symbol'],
+            'type': None,
+            'side': None,
+            'takerOrMaker': None,
+            'price': pick_num(row, 'ccls_prc'),
+            'amount': pick_num(row, 'ccls_q'),
+            'cost': None,
+            'fee': None,
+        }, market) for row, timestamp in zip(rows, stamps)]
+        return trades if since is None else [trade for trade in trades if (trade['timestamp'] or 0) >= since]
+
+    def _last_traded_date(self, market: MarketInterface) -> Str:
+        """거래량이 있는 가장 최근 영업일(`YYYYMMDD`). 일봉을 받지 못했거나 최근 30개에 그런 날이 없으면 `None` 이다.
+        통합차트의 시장구분은 코스피(`0`)가 기본이고, `options['masterData']` 가 코스닥 종목이라고 알려 주면 코스닥(`1`)으로 조회한다."""
+        symbol = market['symbol']
+        try:
+            candles = self.fetch_ohlcv(symbol, '1d', None, 30, {'mkt_clsf': '1'} if self._is_kosdaq(market) else {})
+        except Exception as err:
+            logger.warning('[kbsec] fetch_trades 의 날짜를 정할 일봉을 받지 못해 체결 시각을 비운다 (symbol=%s, err=%s)', symbol, err)
+            return None
+        days = [cast(int, candle[0]) for candle in candles if (candle[5] or 0) > 0]
+        return kst_ymd(max(days)) if days else None
+
+    def _fetch_overseas_trades_timeline(self, market: MarketInterface, since: Int, limit: Int, params: Dict[str, Any]) -> List[Trade]:
+        base = market['id'] or ''
+        if self._us_exchange_cache.get(base) is None:
+            self._call_us_quote(base, {})
+        krx_code = self._us_exchange_cache.get(base, KBSEC_US_EXCHANGES[0])
+        body = self._call_tr(KBSEC_TR['TRADES_TIMELINE_US'], self.extend({
+            'krx_cd': krx_code, 'is_cd': base, 'rcrd_c': kbsec_num(30 if limit is None else limit),
+        }, params))
+        trades: List[Trade] = []
+        for row in pick_array(body):
+            timestamp = kbsec_candle_timestamp(pick_str(row, 'kor_dt'), pick_str(row, 'kor_tm'))
+            ccls_clsf = pick_str(row, 'ccls_clsf')
+            trades.append(self.safe_trade({
+                'info': row,
+                'id': None,
+                'order': None,
+                'timestamp': timestamp,
+                'datetime': self.iso8601(timestamp),
+                'symbol': market['symbol'],
+                'type': None,
+                'side': 'buy' if ccls_clsf == '1' else 'sell' if ccls_clsf == '2' else None,
+                'takerOrMaker': None,
+                'price': pick_num(row, 'now_prc_p4'),
+                'amount': pick_num(row, 'ccls_q'),
+                'cost': None,
+                'fee': None,
+            }, market))
+        return trades if since is None else [trade for trade in trades if (trade['timestamp'] or 0) >= since]
+
+    # ============ 수수료 ============
+
+    def fetch_trading_fee(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> TradingFeeInterface:
+        """위탁수수료율의 추정이다. KB 에 수수료 조회 TR 이 없어 공시 요율의 근사를 돌려준다(`info['estimated']` 가 `True`).
+        국내 매도(`params['side']` 가 `'sell'`)는 시행일별 증권거래세를 더한 실효율이다."""
+        market = self.market(symbol)
+        side = 'sell' if (params or {}).get('side') == 'sell' else 'buy'
+        rate = kbsec_estimated_fee_rate('US' if self._is_us(market) else 'KR', side)
+        return {'info': {'estimated': True, 'side': side}, 'symbol': market['symbol'], 'maker': rate, 'taker': rate, 'percentage': True,
+                'tierBased': False}
+
+    # ============ 휴장일 ============
+
+    def fetch_market_calendar(self, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """국내 휴장일을 날짜별 개장 여부로 돌려준다. 장운영상태(`SZQM0771`)가 주는 전영업일, 기준영업일, 익영업일을 열린 날로 보고, 그 사이의
+        평일을 닫힌 날로 넓힌다. KB 는 이 세 날짜 밖은 알려 주지 않으므로 넓히는 범위가 앞뒤 며칠이다.
+        세 증권사 공통 모양이다. `params['market']` 은 `'KR'`(기본)만 받고, `'US'` 는 요청 없이 `NotSupported` 다."""
+        if self._calendar_market(params) == 'US':
+            raise NotSupported(f'{self.id} fetchMarketCalendar() 는 국내 휴장일만 준다')
+        body = self._call_tr(KBSEC_TR['MARKET_STATUS'], self.omit(params or {}, 'market'))
+        open_dates = [date for date in (pick_str(body, 'bfr_bsns_dt'), pick_str(body, 'std_bsnss_dt'), pick_str(body, 'next_biz_dt')) if date != '']
+        return expand_business_days(open_dates)
+
+    def refresh_market_calendar(self) -> bool:
+        """`fetch_market_calendar` 의 결과를 공용 휴장일 캘린더(`market_calendar`)에 넣는다. 장 시간 판정이 이 캘린더를 읽는다. 장 시간 판정을
+        주문 밖에서 쓰면 시작할 때 한 번 직접 부른다. 6시간 안에 성공한 호출은 다시 하지 않는다.
+        신선한 캘린더가 있으면 `True` 다. 자격증명이 없으면 부르지 않고 `False` 다. 호출에 실패해도 던지지 않는다."""
+        if self.apiKey is None or self.secret is None:
+            return False
+        return refresh_shared_market_calendar('KR', self.fetch_market_calendar, CALENDAR_TTL_MS)
+
     # 생성자가 붙이는 camelCase 별칭을 타입 검사기에 알린다. 빠지거나 남는 줄은 test_base.py 가 잡는다.
     if TYPE_CHECKING:
         handleErrors = handle_errors
         priceToPrecision = price_to_precision
+        fetchInvestorTrading = fetch_investor_trading
         fetchTicker = fetch_ticker
         parseTicker = parse_ticker
         fetchOrderBook = fetch_order_book
+        fetchOHLCV = fetch_ohlcv
+        parseOHLCV = parse_ohlcv
+        fetchTrades = fetch_trades
+        fetchTradingFee = fetch_trading_fee
+        fetchMarketCalendar = fetch_market_calendar
+        refreshMarketCalendar = refresh_market_calendar

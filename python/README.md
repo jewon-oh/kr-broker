@@ -20,15 +20,15 @@ Python 3.10 이상이 필요하고, 의존성은 `requests`(동기 판), `aiohtt
 - 한국투자증권(`kr_broker.kis`), 토스증권(`kr_broker.toss`), KB증권(`kr_broker.kbsec`)의 인증, 서명, 오류 처리, 호출 간격 조절입니다.
 - 세 증권사의 모든 엔드포인트를 암묵 메서드로 부를 수 있습니다. 한국투자증권 272개, 토스증권 36개, KB증권 83개입니다.
 - 아래 표의 통합 메서드를 부를 수 있습니다. 실시간(`watch_ticker`, `watch_trades`, `watch_order_book`, `watch_orders`)은 `kr_broker.pro`에 있습니다.
-- KB증권은 TypeScript 판에서 옮기는 중입니다. 지금은 시세 두 메서드만 옮겼고, 나머지 통합 메서드는 `has`가 `False`라서 부르면 `NotSupported`입니다. KB증권은 웹소켓을 제공하지 않아서 `kr_broker.pro`에 없습니다.
+- KB증권은 TypeScript 판에서 옮기는 중입니다. 지금은 아래 표의 메서드만 옮겼고, 나머지 통합 메서드는 `has`가 `False`라서 부르면 `NotSupported`입니다. KB증권은 웹소켓을 제공하지 않아서 `kr_broker.pro`에 없습니다.
 
 | 분류 | 한국투자증권 통합 메서드 | 토스증권 통합 메서드 | KB증권 통합 메서드 |
 |---|---|---|---|
-| 종목과 시세 | `fetch_markets`, `fetch_ticker`, `fetch_tickers`, `fetch_order_book`, `fetch_ohlcv` | `fetch_markets`, `fetch_ticker`, `fetch_tickers`, `fetch_order_book`, `fetch_ohlcv` | `fetch_ticker`, `fetch_order_book` |
-| 잔고와 수수료 | `fetch_balance`, `fetch_trading_fee` | `fetch_balance`, `fetch_trading_fee` | 아직 없음 |
+| 종목과 시세 | `fetch_markets`, `fetch_ticker`, `fetch_tickers`, `fetch_order_book`, `fetch_ohlcv` | `fetch_markets`, `fetch_ticker`, `fetch_tickers`, `fetch_order_book`, `fetch_ohlcv` | `fetch_ticker`, `fetch_order_book`, `fetch_ohlcv`, `fetch_trades` |
+| 잔고와 수수료 | `fetch_balance`, `fetch_trading_fee` | `fetch_balance`, `fetch_trading_fee` | `fetch_trading_fee` |
 | 주문 | `create_order`, `create_limit_order`, `create_market_order`, `create_trigger_order`, `edit_order`, `cancel_order`, `cancel_all_orders` | `create_order`, `create_limit_order`, `create_market_order`, `create_market_buy_order_with_cost`, `create_trigger_order`, `edit_order`, `cancel_order`, `cancel_all_orders` | 아직 없음 |
 | 주문 조회 | `fetch_order`, `fetch_orders`, `fetch_open_orders`, `fetch_closed_orders`, `fetch_my_trades` | `fetch_order`, `fetch_open_orders`, `fetch_closed_orders`, `fetch_my_trades` | 아직 없음 |
-| 고유 조회 | `fetch_market_calendar`, `fetch_stock_warnings`, `fetch_investor_trading`, `fetch_rankings` | `fetch_market_calendar`, `fetch_stock_warnings`, `fetch_investor_trading`, `fetch_rankings` | 아직 없음 |
+| 고유 조회 | `fetch_market_calendar`, `fetch_stock_warnings`, `fetch_investor_trading`, `fetch_rankings` | `fetch_market_calendar`, `fetch_stock_warnings`, `fetch_investor_trading`, `fetch_rankings` | `fetch_market_calendar`, `fetch_investor_trading` |
 
 고유 조회는 이름이 같아도 증권사마다 인자와 결과가 다릅니다. 예를 들어 `fetch_investor_trading`은 한국투자증권에서 종목 단위이고 토스증권에서 시장 단위입니다.
 
@@ -104,11 +104,16 @@ kb = kr_broker.kbsec({
 })
 ticker = kb.fetch_ticker('005930/KRW')
 book = kb.fetch_order_book('AAPL/USD')
+candles = kb.fetch_ohlcv('005930/KRW', '1d', limit=30)                 # 국내만 받는다
 holdings = kb.private_post_ssqm1801({'inq_clsf': '1', 'mkt_tm_ccd': '1'})   # 빠진 입력 필드는 빈 문자열로 채워 보낸다
 ```
 
 모든 TR은 `POST /api/v1/{trcode}`이고, 본문은 `{dataHeader, dataBody}` 봉투입니다. KB증권은 TR마다 입력 필드를 모두 받아야 하므로, 빠진 필드는 빈 문자열로 채워 보냅니다.
 업무 오류는 HTTP 200으로도 500으로도 옵니다. 라이브러리는 상태 코드보다 봉투의 `processFlag`를 먼저 보고, `processCode`를 오류의 `broker_code`에 싣습니다.
+
+`fetch_ohlcv`는 국내 종목만 받습니다. 해외 차트는 15분 지연 시세라서 `NotSupported`를 던집니다. 국내 `fetch_trades`는 체결 행에 날짜가 없어 일봉을 한 번 더 조회하고,
+거래량이 있는 가장 최근 거래일을 날짜로 붙입니다. 두 조회는 `options['masterData']`로 코스닥 종목임을 알 때만 코스닥 시장구분으로 보냅니다.
+KB증권에는 수수료 조회 TR이 없어서 `fetch_trading_fee`는 공시 요율로 추정한 값입니다(`info['estimated']`가 `True`).
 
 `dataHeader`에는 호스트의 IP 주소와 MAC 주소를 싣고, KB증권은 빈 값을 받지 않습니다. `options['hostAddr']`로 두 값을 주지 않으면 이 호스트에서 찾아 씁니다.
 TypeScript 판은 네트워크 인터페이스 목록에서 첫 외부 IPv4 주소를 고르고, Python 판은 기본 경로의 주소를 고릅니다. 인터페이스가 여럿인 호스트에서는 두 판이 다른 주소를 보낼 수 있으므로, 운영에서는 `options['hostAddr']`를 줍니다.

@@ -1,9 +1,9 @@
 """KB 응답 행에서 값을 뽑는 함수. TypeScript 판 `ts/src/kbsec/kbsec-pick.ts` 에서 Python 판이 쓰는 것만 옮겼다."""
 
 import logging
-from typing import Any, Mapping, Optional
+from typing import Any, Dict, List, Mapping, Optional
 
-from kr_broker.kbsec_number import kbsec_number_of
+from kr_broker.kbsec_number import kbsec_number_of, kbsec_string
 
 logger = logging.getLogger('kr_broker')
 
@@ -33,3 +33,18 @@ def pick_positive_num(row: Optional[Mapping[str, Any]], *keys: str) -> float:
         if n is not None and n > 0:
             return n
     return 0
+
+
+def pick_str(row: Optional[Mapping[str, Any]], *keys: str) -> str:
+    """공백이 아닌 첫 후보 문자열. 없으면 `''` 이다."""
+    return kbsec_string(row, *keys)
+
+
+def pick_array(body: Optional[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    """응답 `dataBody` 에서 첫 배열을 찾는다. TR 마다 배열 필드 이름이 달라서다. 배열이 하나뿐인 TR 에만 쓴다."""
+    if not body:
+        return []
+    for value in body.values():
+        if isinstance(value, list):
+            return value
+    return []
