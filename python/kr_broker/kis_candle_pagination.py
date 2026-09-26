@@ -8,6 +8,8 @@ import datetime
 import math
 from typing import Dict, Iterable, List, Optional
 
+from kr_broker.broker_time import KST_OFFSET_MS
+
 # 한 응답의 최대 행 수(실측).
 KIS_DAILY_PAGE_ROWS = 100
 # 한 창에 담는 달력일 수. 거래일은 달력일의 68% 쯤이라 100 거래일은 147 달력일쯤이다. 한 창이 100행을 넘지 않게 140일로 좁힌다.
@@ -16,7 +18,6 @@ KIS_DAILY_PAGE_DAYS = 140
 KIS_DAILY_MAX_PAGES = 12
 
 MS_PER_DAY = 86_400_000
-KST_OFFSET_MS = 9 * 60 * 60 * 1000
 _EPOCH = datetime.datetime(1970, 1, 1)
 
 

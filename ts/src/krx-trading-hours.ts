@@ -10,6 +10,7 @@
  * 정규장 밖 확장 거래는 `getNxtSession` / `isNxtExtendedTradable` 참조.
  */
 
+import { KST_OFFSET_MS } from './broker-time';
 import { isMarketClosedDay } from './market-calendar';
 
 // ============ 상수 ============
@@ -22,9 +23,6 @@ const MARKET_OPEN_MINUTE = 0;
 const MARKET_CLOSE_HOUR = 15;
 /** 정규장 종료 시간 (분) */
 const MARKET_CLOSE_MINUTE = 30;
-
-/** 한국 시간대 오프셋 (UTC+9) */
-const KST_OFFSET_HOURS = 9;
 
 // ============ 유틸리티 ============
 
@@ -39,6 +37,8 @@ const KST_OFFSET_HOURS = 9;
  * 3. 정규장 시간 (09:00 ~ 15:30 KST)
  *
  * @returns { tradable, reason } — 거래 가능 여부 + 사유
+ *
+ * @deprecated 라이브러리 안에서 쓰지 않는다. `checkKRXTradingHoursAt(now)` 를 쓴다. 다음 판에서 지운다.
  */
 export function checkKRXTradingHours(): { tradable: boolean; reason?: string } {
     return checkKRXTradingHoursAt(new Date());
@@ -69,7 +69,7 @@ const CLOSING_AUCTION_OPEN_MINUTE = 20;
  * 주말/공휴일 → `closed`. 신규 진입 가드는 `open` 단계만 허용 권장.
  */
 export function getKrxMarketPhase(now: Date = new Date()): KrxMarketPhase {
-    const kstWall = new Date(now.getTime() + KST_OFFSET_HOURS * 60 * 60 * 1000);
+    const kstWall = new Date(now.getTime() + KST_OFFSET_MS);
 
     // 주말 / 공휴일 → closed
     if (kstWall.getUTCDay() === 0 || kstWall.getUTCDay() === 6) return 'closed';
@@ -100,13 +100,13 @@ export function getTimeUntilKrxOpen(now: Date = new Date()): number {
     if (checkKRXTradingHoursAt(now).tradable) return 0;
 
     // 1) 오늘 09:00 KST 의 UTC ms 계산
-    const nowKstWall = new Date(now.getTime() + KST_OFFSET_HOURS * 60 * 60 * 1000);
+    const nowKstWall = new Date(now.getTime() + KST_OFFSET_MS);
     const todayKstY = nowKstWall.getUTCFullYear();
     const todayKstM = nowKstWall.getUTCMonth();
     const todayKstD = nowKstWall.getUTCDate();
 
     let candidate = Date.UTC(todayKstY, todayKstM, todayKstD, MARKET_OPEN_HOUR, MARKET_OPEN_MINUTE)
-        - KST_OFFSET_HOURS * 60 * 60 * 1000;
+        - KST_OFFSET_MS;
 
     // 2) 이미 지났으면 다음 날로
     if (candidate <= now.getTime()) {
@@ -115,7 +115,7 @@ export function getTimeUntilKrxOpen(now: Date = new Date()): number {
 
     // 3) 주말/휴일 skip (최대 14일 안전 루프)
     for (let i = 0; i < 14; i++) {
-        const candKst = new Date(candidate + KST_OFFSET_HOURS * 60 * 60 * 1000);
+        const candKst = new Date(candidate + KST_OFFSET_MS);
         const day = candKst.getUTCDay();
         if (day === 0 || day === 6) {
             candidate += 24 * 60 * 60 * 1000;
@@ -140,7 +140,7 @@ export function getTimeUntilKrxOpen(now: Date = new Date()): number {
  * 사유 문자열은 `tradingHoursBlockReason` 을 거쳐 주문을 막는 오류 메시지에 그대로 실린다.
  */
 export function checkKRXTradingHoursAt(now: Date): { tradable: boolean; reason?: string } {
-    const kstWall = new Date(now.getTime() + KST_OFFSET_HOURS * 60 * 60 * 1000);
+    const kstWall = new Date(now.getTime() + KST_OFFSET_MS);
     if (kstWall.getUTCDay() === 0 || kstWall.getUTCDay() === 6) {
         return { tradable: false, reason: '주말 — KRX 휴장' };
     }
@@ -226,7 +226,7 @@ const NXT_AFTER_CLOSE_MINUTE = 0;
  * 의 UTC 필드로 수행 → 시스템 TZ 무관.
  */
 export function getNxtSession(now: Date = new Date()): NxtSession {
-    const kstWall = new Date(now.getTime() + KST_OFFSET_HOURS * 60 * 60 * 1000);
+    const kstWall = new Date(now.getTime() + KST_OFFSET_MS);
 
     if (kstWall.getUTCDay() === 0 || kstWall.getUTCDay() === 6) return 'closed';
     if (isKRXHolidayUTC(kstWall)) return 'closed';

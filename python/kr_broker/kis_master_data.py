@@ -1,4 +1,4 @@
-"""한국투자증권 종목 마스터 데이터의 모양. TypeScript 판 `ts/src/kis/kis-master-data.ts` 와 같다.
+"""한국투자증권 종목 마스터 데이터의 모양. TypeScript 판 `ts/src/stock-master-data.ts` 와 같다.
 
 종목 검색과 해외 주문의 거래소 판별에는 KIS 공식 마스터 파일(코스피·코스닥, 나스닥·뉴욕·아멕스)이 필요하다. 그 파일은 재배포 조건이
 명시돼 있지 않아 라이브러리에 싣지 않는다. 사용하는 쪽이 내려받아 아래 모양의 사전으로 `options['masterData']` 에 넘긴다.

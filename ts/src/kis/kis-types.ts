@@ -30,7 +30,11 @@ export const KIS_RATE_LIMIT_ERROR_CODE = 'EGW00201';
  * 잔고·캔들 조회가 이 코드로 곧장 실패하면 호출하는 쪽이 잔액 부족으로 오해해 주문을 건너뛸 수 있으므로 조회 재시도 대상에 넣는다.
  */
 export const KIS_LEDGER_RATE_LIMIT_ERROR_CODE = 'EGW00215';
-/** 초당 거래건수 초과 오류 코드 전체. */
+/**
+ * 초당 거래건수 초과 오류 코드 전체.
+ *
+ * @deprecated 라이브러리 안에서 쓰지 않는다. `KIS_RATE_LIMIT_ERROR_CODE` 와 `KIS_LEDGER_RATE_LIMIT_ERROR_CODE` 를 쓴다. 다음 판에서 지운다.
+ */
 export const KIS_RATE_LIMIT_ERROR_CODES = [KIS_RATE_LIMIT_ERROR_CODE, KIS_LEDGER_RATE_LIMIT_ERROR_CODE] as const;
 
 /** 토큰 유효 시간 (시) — KIS 사양: 24시간. **서버가 `expires_in` 을 안 줄 때만** 쓰는 폴백. */
@@ -62,11 +66,15 @@ export { krxSellTaxRate };
 /**
  * `KIS_BROKERAGE_FEE` 의 옛 이름이다. 위탁수수료만 들어 있고 매도 거래세는 빠져 있다.
  *
- * @deprecated `getKisEffectiveFeeRate(side)` 또는 `KIS_BROKERAGE_FEE` 를 쓴다.
+ * @deprecated `KIS_BROKERAGE_FEE` 를 쓰고, 매도라면 `krxSellTaxRate()` 를 더한다. 다음 판에서 지운다.
  */
 export const KIS_DEFAULT_FEE_RATE = KIS_BROKERAGE_FEE;
 
-/** KIS 의 effective 수수료율 — 매수는 위탁수수료, 매도는 위탁수수료에 `at` 시점의 거래세를 더한다. */
+/**
+ * KIS 의 effective 수수료율 — 매수는 위탁수수료, 매도는 위탁수수료에 `at` 시점의 거래세를 더한다.
+ *
+ * @deprecated 라이브러리 안에서 쓰지 않는다. `KIS_BROKERAGE_FEE` 를 쓰고, 매도라면 `krxSellTaxRate(at)` 를 더한다. 다음 판에서 지운다.
+ */
 export function getKisEffectiveFeeRate(side: 'buy' | 'sell', at: Date = new Date()): number {
     return side === 'sell'
         ? KIS_BROKERAGE_FEE + krxSellTaxRate(at)

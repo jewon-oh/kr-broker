@@ -1,4 +1,4 @@
-"""해외 종목 마스터(나스닥·뉴욕·아멕스) 검색. TypeScript 판 `ts/src/kis/kis-overseas-master.ts` 와 같다.
+"""해외 종목 마스터(나스닥·뉴욕·아멕스) 검색. TypeScript 판 `ts/src/overseas-stock-master.ts` 와 같다(`to_order_market_code` 는 `ts/src/kis/kis-overseas-master.ts`).
 
 KIS 는 거래소 코드를 두 가지로 쓴다. 시세 조회는 세 글자(`NAS`, `NYS`, `AMS` …, 요청의 `EXCD`), 주문과 잔고는 네 글자
 (`NASD`, `NYSE`, `AMEX` …, 요청의 `OVRS_EXCG_CD`)다. 마스터 행의 `market` 은 시세 코드이고, 주문 코드는 `to_order_market_code` 로 바꾼다.

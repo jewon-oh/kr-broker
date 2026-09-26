@@ -130,7 +130,10 @@ def us_order_block_reason(now_ms: int, side: Optional[str] = None, block_auction
 
 
 def get_time_until_us_market_open(now_ms: Optional[int] = None) -> int:
-    """다음 미국 정규장 개장(09:30 ET)까지의 밀리초. 정규장이나 동시호가 중이면 0. 14일 안에 개장을 못 찾으면 0 이다."""
+    """다음 미국 정규장 개장(09:30 ET)까지의 밀리초. 정규장이나 동시호가 중이면 0. 14일 안에 개장을 못 찾으면 0 이다.
+
+    라이브러리 안에서 쓰지 않는다. 다음 판에서 지운다.
+    """
     now = fn.milliseconds() if now_ms is None else now_ms
     if get_us_market_phase(now) != 'closed':
         return 0

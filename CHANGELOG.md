@@ -26,6 +26,7 @@
 - `options.blockAuctionBuys`(세 증권사, 기본 꺼짐)를 켜면 종가 동시호가(국내 15:20~15:30, 미국 15:50~16:00 ET)의 신규 매수를 요청 전에 `MarketClosed`로 막습니다.
 - 세 증권사가 함께 쓰는 주문 게이트를 공개합니다. `kr-broker/krx-trading-hours`의 `krxOrderBlockReason`과 `krxAuctionBuyBlockReason`, `kr-broker/us-market-hours`의 `usOrderBlockReason`과 `usAuctionBuyBlockReason`입니다. Python 판 이름은 `krx_order_block_reason` 등입니다. `marketSessionBlockReason`은 다섯째 인자로 `{ side, blockAuctionBuys }`를 받습니다.
 - `kr-broker/krx-tick-size`(Python 판 `kr_broker.krx_tick_size`)에 KRX 주식 호가 단위 표(`KRX_STOCK_TICK_SIZES`)와 `getKrxTickSize`, `krxTickViolation`을 둡니다.
+- `kr-broker/broker-time`에 한국 표준시 오프셋 `KST_OFFSET_MS`와 한국 날짜 `kstYmd`(`YYYYMMDD`), 한국 시각 `kstHms`(`HHMMSS`)를 둡니다. 세 증권사가 이 정의를 함께 씁니다. Python 판은 `kr_broker.broker_time`의 `KST_OFFSET_MS`와 `kst_ymd`입니다.
 
 ### 바뀜
 
@@ -36,6 +37,15 @@
   - `KisPriceWs`는 `start`와 `updateSubs`로 받은 배열을 복사해 둡니다. 옵션의 `url`과 `isVirtual`은 생성할 때 한 번 읽습니다. 넘긴 뒤 배열이나 옵션 객체를 바꿔도 다음 접속에 반영되지 않습니다.
   - Python `KisPriceWs`는 `KisRealtimeStream`을 상속합니다. 그래서 `subscribe`와 `unsubscribe`가 생겼고, 모듈 상수 `RECONNECT_BASE_MS`와 `RECONNECT_MAX_MS`는 없어졌습니다. 재접속 간격은 클래스 속성 `reconnect_base_ms`, `reconnect_max_ms`에 남아 있습니다.
 - `kr-broker/kis/kis-types`의 `getTickSize`(Python 판 `kis_types.get_tick_size`)는 `getKrxTickSize`의 옛 이름으로 남깁니다. 다음 판에서 지웁니다.
+- 라이브러리 안에서 쓰지 않는 공개 이름에 `@deprecated`를 붙였습니다. 다음 판에서 지웁니다. Python 판의 같은 이름(`check_krx_trading_hours`, `get_time_until_us_market_open`, `is_toss_trading_open`, `time_until_toss_open`, `parse_kis_realtime_frame`, `kis_types.KIS_RATE_LIMIT_ERROR_CODES`)도 함께 지웁니다.
+  - `kr-broker/kbsec/kbsec-settlement-match`와 `kr-broker/kbsec/kbsec-overseas-settlement-match`의 모든 이름
+  - `kr-broker/kbsec/kbsec-types`의 `kbsecTodayKst`, `KBSEC_CODE_FUTURE_QUERY_DATE`, `kbsecIsAlgoOrderType`, `KBSEC_OVERSEAS_EXCHANGE`
+  - `kr-broker/kbsec/kbsec-fee`의 `kbsecEstimatedFee`. 비율은 `kbsecEstimatedFeeRate`로 구합니다.
+  - `kr-broker/kis/kis-types`의 `KIS_RATE_LIMIT_ERROR_CODES`와 `getKisEffectiveFeeRate`. 수수료율은 `KIS_BROKERAGE_FEE`이고, 매도라면 `krxSellTaxRate()`를 더합니다.
+  - `kr-broker/kis/kis-realtime-parser`의 `parseKisRealtimeFrame`, `kr-broker/kis/kis-price-ws`의 `isKisWsSupported`와 `isUsingGlobalWebSocket`
+  - `kr-broker/krx-trading-hours`의 `checkKRXTradingHours`. `checkKRXTradingHoursAt(now)`를 씁니다.
+  - `kr-broker/toss/toss-trading-hours`의 `isTossTradingOpen`과 `timeUntilTossOpen`. `kr-broker/trading-hours`의 `isTradingHours('toss', now)`와 `getTimeUntilMarketOpen('toss', now)`를 씁니다.
+  - `kr-broker/us-market-hours`의 `getTimeUntilUsMarketOpen`
 
 ### 고침
 

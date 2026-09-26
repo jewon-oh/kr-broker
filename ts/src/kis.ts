@@ -92,6 +92,7 @@ import { logger } from './logger';
 import { buildExtendedSessionLimit } from './extended-session-limit';
 import { refreshMarketCalendar as refreshSharedMarketCalendar } from './market-calendar';
 import { krxSellTaxRate } from './krx-sell-tax';
+import { KST_OFFSET_MS, kstHms, kstYmd } from './broker-time';
 import { KisAuth } from './kis/kis-auth';
 import { KIS_EXCEPTIONS_EXACT } from './kis/kis-error-codes';
 import { acquireKisSlot } from './kis/kis-rate-limiter';
@@ -112,19 +113,13 @@ import {
 } from './kis/kis-types';
 import { getKrxTickSize, KRX_TICK_INVALID_DETAIL, krxTickViolation } from './krx-tick-size';
 import { assertWholeRemainingEdit, editOrderTotal } from './edit-order-amount';
-import {
-    getOverseasMarketForCode,
-    getOverseasStockByCode,
-    searchOverseasStocks,
-    toOrderMarketCode,
-    type OverseasMarket,
-    type OverseasOrderMarket,
-} from './kis/kis-overseas-master';
-import { getKRXStockByCode, getStockMasterCount, searchKRXStocks } from './kis/kis-stock-master';
+import { getOverseasMarketForCode, getOverseasStockByCode, searchOverseasStocks, type OverseasMarket } from './overseas-stock-master';
+import { toOrderMarketCode, type OverseasOrderMarket } from './kis/kis-overseas-master';
+import { getKRXStockByCode, getStockMasterCount, searchKRXStocks } from './krx-stock-master';
 import { KisCandleService } from './kis/kis-candle-service';
 import { fetchYahooCandles } from './kis/yahoo-finance-candles';
 import { resolveKrMarket } from './kis/kr-market';
-import { masterDataOf, type KisMasterData } from './kis/kis-master-data';
+import { masterDataOf, type KisMasterData } from './stock-master-data';
 import { KisPriceWs, type KisPriceWsOptions } from './kis/kis-price-ws';
 import { KisRealtimeStream, type KisRealtimeRecord } from './kis/kis-realtime-stream';
 import { WatchHub } from './base/watch-hub';
@@ -158,7 +153,6 @@ const READ_RETRY_DELAY_MS = 500;
 /** 연속조회로 받는 최대 쪽 수. 공식 예제의 재귀 상한(10)과 같다. */
 const MAX_CONTINUATION_PAGES = 10;
 
-const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** 지난 영업일을 알기 위해 되돌아 조회하는 기간. */
 const HOLIDAY_LOOKBACK_MS = 30 * DAY_MS;
@@ -3502,16 +3496,6 @@ export interface KisRankingItem {
     /** 누적거래량(`acml_vol`) */
     volume: number | undefined;
     info: Dict;
-}
-
-/** 지금 시각의 KST 달력 날짜 `YYYYMMDD`. */
-function kstYmd(ms: number): string {
-    return new Date(ms + KST_OFFSET_MS).toISOString().slice(0, 10).replace(/-/g, '');
-}
-
-/** 한국 시각 `HHMMSS`. */
-function kstHms(ms: number): string {
-    return new Date(ms + KST_OFFSET_MS).toISOString().slice(11, 19).replace(/:/g, '');
 }
 
 /** `YYYYMMDD` + `HHMMSS`(KST) → 밀리초. 읽는 규칙은 `kstStamp` 와 같다(`kstTimestampOf`). */

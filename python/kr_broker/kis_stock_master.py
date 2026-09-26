@@ -1,4 +1,4 @@
-"""국내(KRX) 종목 마스터 검색. TypeScript 판 `ts/src/kis/kis-stock-master.ts` 와 같다.
+"""국내(KRX) 종목 마스터 검색. TypeScript 판 `ts/src/krx-stock-master.ts` 와 같다.
 
 데이터는 인스턴스의 `options['masterData']` 로 받아 함수의 첫 인자로 넘긴다(`kis_master_data` 참고).
 """

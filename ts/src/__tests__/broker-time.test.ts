@@ -1,9 +1,9 @@
 /**
- * 타임프레임 → 밀리초.
+ * 타임프레임 → 밀리초, 봉 시각 규칙, 한국 시각 도우미.
  */
 import { describe, expect, it } from 'vitest';
 
-import { candlePeriodUtcMs, isDailyOrLongerTimeframe, timeframeToMs } from '../broker-time';
+import { KST_OFFSET_MS, candlePeriodUtcMs, isDailyOrLongerTimeframe, kstHms, kstYmd, timeframeToMs } from '../broker-time';
 
 describe('timeframeToMs', () => {
     it('분·시·일·주 타임프레임을 밀리초로 바꾼다', () => {
@@ -38,5 +38,15 @@ describe('candlePeriodUtcMs — 일·주·월·연봉은 기간 첫날의 00:00 
     it('일봉 이상인지 가린다', () => {
         expect(['1d', '1w', '1W', '1M', '1y'].map(isDailyOrLongerTimeframe)).toEqual([true, true, true, true, true]);
         expect(['1m', '4h', '30m'].map(isDailyOrLongerTimeframe)).toEqual([false, false, false]);
+    });
+});
+
+describe('한국 시각 도우미', () => {
+    it('15:00 UTC 부터 다음 날이다', () => {
+        expect(KST_OFFSET_MS).toBe(9 * 3_600_000);
+        expect(kstYmd(Date.parse('2026-09-25T14:59:59Z'))).toBe('20260925');
+        expect(kstYmd(Date.parse('2026-09-25T15:00:00Z'))).toBe('20260926');
+        expect(kstHms(Date.parse('2026-09-25T00:30:05Z'))).toBe('093005');
+        expect(kstHms(Date.parse('2026-09-25T15:00:00Z'))).toBe('000000');
     });
 });

@@ -25,11 +25,12 @@ from typing import Any, Callable, Dict, List, Optional, Set
 import kr_broker.async_support
 from kr_broker.async_support.base.ws.client import session_connector
 from kr_broker.async_support.base.ws.watch_hub import WatchHub
-from kr_broker.async_support.kis import _tpl, kst_ymd
+from kr_broker.async_support.kis import _tpl
 from kr_broker.base import functions as fn
 from kr_broker.base.errors import ArgumentsRequired, BadSymbol, ExchangeClosedByUser, ExchangeError
 from kr_broker.base.precise import Precise
 from kr_broker.base.types import Int, Str
+from kr_broker.broker_time import kst_ymd
 from kr_broker.kis_types import KIS_WS_PATH
 from kr_broker.pro.kis_price_ws import KisPriceWs, OnOrderbook, OnSubscribeError, OnTrade
 from kr_broker.pro.kis_realtime_stream import KisRealtimeRecord, KisRealtimeStream

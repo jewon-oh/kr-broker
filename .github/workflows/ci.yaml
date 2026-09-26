@@ -94,6 +94,13 @@ jobs:
       - name: 타입 검사(pyright 오류 수가 기준선과 같은지)
         if: matrix.python == '3.13'
         run: node scripts/check-python-types.mjs --python python
+      # 운영 의존성(pyproject.toml 의 dependencies)을 PyPI 최신판으로 풀어 알려진 취약점을 본다. 선택 의존성(dev)은 보지 않는다.
+      # 매트릭스마다 돌리지 않고 3.13 에서 푼 판만 본다.
+      - name: Python 운영 의존성의 알려진 취약점(pip-audit)
+        if: matrix.python == '3.13'
+        run: |
+          python -m pip install pip-audit==2.10.1
+          python -m pip_audit --progress-spinner off ./python
 
   # 운영 의존성만 검사한다. 개발 의존성의 취약점은 배포물에 실리지 않는다.
   audit:

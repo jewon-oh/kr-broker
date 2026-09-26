@@ -9,8 +9,8 @@
 import { logger } from '../logger';
 import type { BrokerStockDirectory } from '../options';
 import { isKrxDomesticCode } from './kis-types';
-import type { KisMasterData } from './kis-master-data';
-import { getKRXStockByCode } from './kis-stock-master';
+import type { KisMasterData } from '../stock-master-data';
+import { getKRXStockByCode } from '../krx-stock-master';
 
 /** 시장 구분을 찾는 곳. 디렉터리가 우선이고, 없으면 마스터 데이터를 본다. */
 export interface KrMarketSources {

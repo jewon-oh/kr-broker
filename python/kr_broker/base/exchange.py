@@ -45,6 +45,7 @@ from kr_broker.base.precise import Precise
 from kr_broker.base.throttler import Throttler
 from kr_broker.base.token_store import BrokerTokenStore, resolve_token_store
 from kr_broker.base.types import ApiName, Int, Num, Str, Strings
+from kr_broker.broker_time import KST_OFFSET_MS
 from kr_broker.execution_confirm import resolve_confirm_budget
 
 logger = logging.getLogger('kr_broker')
@@ -94,7 +95,6 @@ DEFAULT_CURRENCY_DECIMALS = 8
 RATIO_TO_PERCENT = '100'
 # 이보다 큰 limit 은 쓰일 일이 없다. 이런 값은 옛 위치 인자 until(ms)이 limit 자리로 들어온 것이다.
 LIMIT_LOOKS_LIKE_MS = 1_000_000_000
-KST_OFFSET_MS = 9 * 60 * 60 * 1000
 
 
 _LOOPBACK_HOSTS = frozenset(['localhost', '127.0.0.1', '::1'])

@@ -42,8 +42,8 @@
 import { candlePeriodUtcMs, isDailyOrLongerTimeframe } from './broker-time';
 import { logger } from './logger';
 import type { UsdKrwRateOption } from './options';
-import { masterDataOf } from './kis/kis-master-data';
-import { getKRXStockByCode } from './kis/kis-stock-master';
+import { masterDataOf } from './stock-master-data';
+import { getKRXStockByCode } from './krx-stock-master';
 import { getKrxTickSize, KRX_TICK_INVALID_DETAIL, krxTickViolation } from './krx-tick-size';
 import { assertWholeRemainingEdit } from './edit-order-amount';
 import {
