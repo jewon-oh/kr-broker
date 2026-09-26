@@ -518,13 +518,6 @@ export function kbsecBusinessDateUsEastern(stepsBack = 0, now: Date = new Date()
     return d.toISOString().slice(0, 10).replace(/-/g, '');
 }
 
-/**
- * `주문일자가 현재일자보다 큽니다` — 조회일자가 KB 영업일보다 앞설 때.
- *
- * @deprecated 라이브러리 안에서 쓰지 않는다. 이 거절은 오류의 `detail`(`KBSEC_ERROR_DETAIL.FUTURE_QUERY_DATE`)로 가린다. 다음 판에서 지운다.
- */
-export const KBSEC_CODE_FUTURE_QUERY_DATE = '2854';
-
 // ── 해외 잔고평가(SPQM2226) 입력 코드
 /** 기준통화여부 — `1` 외화기준. 보유 평가를 외화(USD)로 받아 `quoteCurrency:'USD'` 와 맞춘다. */
 export const KBSEC_STD_CURRENCY_FOREIGN = '1';
@@ -572,32 +565,6 @@ export const KBSEC_ORDER_TYPE_US = {
     STOP_MARKET: 'B',
     /** 스톱지정가 — 조건가격(`frgn_stp_prc_p4`)에 닿으면 `frgn_ordr_prc_p4` 지정가 주문이 된다. */
     STOP_LIMIT: 'C',
-} as const;
-
-/**
- * 해외 알고리즘 주문 유형 판별 — start_tm/end_tm 이 필요한 유형인가.
- *
- * @deprecated 라이브러리 안에서 쓰지 않는다. 다음 판에서 지운다.
- */
-export function kbsecIsAlgoOrderType(t: string): boolean {
-    return ['3', '4', '7', '8'].includes(t);
-}
-
-/**
- * 해외 거래소코드 (`krx_cd`) — 시세 TR 용.
- *
- * @deprecated 라이브러리 안에서 쓰지 않는다. 미국 거래소 코드는 `KBSEC_US_EXCHANGES` 에 있다. 다음 판에서 지운다.
- */
-export const KBSEC_OVERSEAS_EXCHANGE = {
-    NASDAQ: 'NAS',
-    NYSE: 'NYS',
-    AMEX: 'AMX',
-    HONGKONG: 'HKS',
-    SHANGHAI: 'SHS',
-    SHENZHEN: 'SZS',
-    TOKYO: 'TSE',
-    HOCHIMINH: 'HSX',
-    HANOI: 'HNX',
 } as const;
 
 /** 통합차트 차트구분 (`chrt_clsf`). */

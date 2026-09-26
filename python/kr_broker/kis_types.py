@@ -47,11 +47,12 @@ KIS_WS_FIELD = {
     'DOMESTIC_BIDP_RSQN_BASE': 33,
 }
 
+# 아래 속도 제한 코드 셋은 라이브러리 안에서 쓰지 않는다. 이 오류는 `RateLimitExceeded` 로 가리고, 코드는 오류의 `detail` 에 있다.
+# 다음 판에서 지운다.
 # 초당 거래건수 초과. 조회는 다시 보내고 주문은 다시 보내지 않는다(이중 주문 위험).
 KIS_RATE_LIMIT_ERROR_CODE = 'EGW00201'
 # 원장 초당 거래건수 초과. EGW00201 과 같은 계열이고 HTTP 500 으로 온다.
 KIS_LEDGER_RATE_LIMIT_ERROR_CODE = 'EGW00215'
-# 라이브러리 안에서 쓰지 않는다. 앞의 두 상수를 쓴다. 다음 판에서 지운다.
 KIS_RATE_LIMIT_ERROR_CODES = (KIS_RATE_LIMIT_ERROR_CODE, KIS_LEDGER_RATE_LIMIT_ERROR_CODE)
 
 # 국내 위탁수수료율(0.015%, 매수·매도 모두). 등급과 할인은 따로다.

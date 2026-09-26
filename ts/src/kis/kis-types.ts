@@ -23,17 +23,23 @@ export const KIS_API_DOMAINS = {
     VIRTUAL: 'https://openapivts.koreainvestment.com:29443',
 } as const;
 
-/** 초당 거래건수 초과 오류 코드. 조회는 다시 보내고 주문은 다시 보내지 않는다(이중 주문 위험). */
+/**
+ * 초당 거래건수 초과 오류 코드. 조회는 다시 보내고 주문은 다시 보내지 않는다(이중 주문 위험).
+ *
+ * @deprecated 라이브러리 안에서 쓰지 않는다. 이 오류는 `RateLimitExceeded` 로 가리고, 코드는 오류의 `detail` 에 있다. 다음 판에서 지운다.
+ */
 export const KIS_RATE_LIMIT_ERROR_CODE = 'EGW00201';
 /**
  * 원장(ledger) 초당 거래건수 초과. `EGW00201` 과 같은 계열이고 HTTP 500 으로 온다.
  * 잔고·캔들 조회가 이 코드로 곧장 실패하면 호출하는 쪽이 잔액 부족으로 오해해 주문을 건너뛸 수 있으므로 조회 재시도 대상에 넣는다.
+ *
+ * @deprecated 라이브러리 안에서 쓰지 않는다. 이 오류는 `RateLimitExceeded` 로 가리고, 코드는 오류의 `detail` 에 있다. 다음 판에서 지운다.
  */
 export const KIS_LEDGER_RATE_LIMIT_ERROR_CODE = 'EGW00215';
 /**
  * 초당 거래건수 초과 오류 코드 전체.
  *
- * @deprecated 라이브러리 안에서 쓰지 않는다. `KIS_RATE_LIMIT_ERROR_CODE` 와 `KIS_LEDGER_RATE_LIMIT_ERROR_CODE` 를 쓴다. 다음 판에서 지운다.
+ * @deprecated 라이브러리 안에서 쓰지 않는다. 이 오류는 `RateLimitExceeded` 로 가리고, 코드는 오류의 `detail` 에 있다. 다음 판에서 지운다.
  */
 export const KIS_RATE_LIMIT_ERROR_CODES = [KIS_RATE_LIMIT_ERROR_CODE, KIS_LEDGER_RATE_LIMIT_ERROR_CODE] as const;
 
@@ -62,13 +68,6 @@ export const KIS_BROKERAGE_FEE = 0.00015;
 
 /** KRX 매도 거래세 — 매도 시에만 적용. 세율은 `../krx-sell-tax` 한 곳에 두고 체결 시각으로 고른다. 코넥스는 다루지 않는다. */
 export { krxSellTaxRate };
-
-/**
- * `KIS_BROKERAGE_FEE` 의 옛 이름이다. 위탁수수료만 들어 있고 매도 거래세는 빠져 있다.
- *
- * @deprecated `KIS_BROKERAGE_FEE` 를 쓰고, 매도라면 `krxSellTaxRate()` 를 더한다. 다음 판에서 지운다.
- */
-export const KIS_DEFAULT_FEE_RATE = KIS_BROKERAGE_FEE;
 
 /**
  * KIS 의 effective 수수료율 — 매수는 위탁수수료, 매도는 위탁수수료에 `at` 시점의 거래세를 더한다.

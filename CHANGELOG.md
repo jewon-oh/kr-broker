@@ -22,6 +22,11 @@
 - `package.json`의 `exports`에서 다시 내보내기만 하던 경로 `kr-broker/kis/kis-trading-hours`와 `kr-broker/kis/us-market-hours`를 뺐습니다. 같은 함수를 `kr-broker/krx-trading-hours`와 `kr-broker/us-market-hours`에서 가져옵니다.
 - Python 판의 의존성 하한을 알려진 취약점이 없는 판으로 올렸습니다(`requests>=2.33.0`, `aiohttp>=3.14.3`, `cryptography>=50.0.0`). 예전 하한 그대로 설치하면 requests 1건, aiohttp 38건, cryptography 6건의 알려진 취약점이 걸렸습니다. 이보다 낮은 판을 고정해 쓰던 환경은 함께 올려야 설치됩니다.
 - `package.json`의 `exports`에서 증권사 클래스가 안에서만 쓰는 경로 세 개를 뺐습니다. `kr-broker/kis/master-search-rank`, `kr-broker/kbsec/kbsec-fill-warnings`, `kr-broker/kbsec/kbsec-token-breaker`입니다. 테스트 훅 `__resetKbsecTokenBreaker`, `kbsecTokenBreakerState`, `__resetFillSideWarn`은 테스트 전용 경로 `kr-broker/testing`에서 가져옵니다. 이 경로는 호환을 약속하지 않습니다. 나머지 이름(`rankMasterMatches`, `throwIfTokenBreakerOpen`, `recordTokenFailure`, `recordKbsecCallOk`, `warnIfFillSideUnreadable`, `warnIfFillTotalsInconsistent`, `warnFillWithoutPrice`)은 대신할 경로가 없습니다. 검색 결과의 정렬은 종목 검색 함수(`searchKRXStocks`, `searchOverseasStocks`)가 하고, 토큰 차단기와 체결 경고는 `kbsec` 클래스가 처리합니다. 공개 API인 하위 경로는 [버전 정책](docs/versioning.md)에 적었습니다.
+- 라이브러리 안에서 쓰지 않던 공개 이름 넷을 지웠습니다.
+  - `kr-broker/kbsec/kbsec-types`의 `KBSEC_CODE_FUTURE_QUERY_DATE`. 이 거절은 오류의 `detail`이 `KBSEC_ERROR_DETAIL.FUTURE_QUERY_DATE`(`kr-broker/kbsec/kbsec-error-codes`)인지로 가립니다.
+  - `kr-broker/kbsec/kbsec-types`의 `kbsecIsAlgoOrderType`. 대신할 이름은 없습니다.
+  - `kr-broker/kbsec/kbsec-types`의 `KBSEC_OVERSEAS_EXCHANGE`. 미국 거래소 코드는 `KBSEC_US_EXCHANGES`에 있습니다.
+  - `kr-broker/kis/kis-types`의 `KIS_DEFAULT_FEE_RATE`. `KIS_BROKERAGE_FEE`를 쓰고, 매도라면 `krxSellTaxRate()`를 더합니다. Python 판은 0.5.0에서 지웠습니다.
 
 ### 추가
 
@@ -39,11 +44,12 @@
   - `KisPriceWs`는 `start`와 `updateSubs`로 받은 배열을 복사해 둡니다. 옵션의 `url`과 `isVirtual`은 생성할 때 한 번 읽습니다. 넘긴 뒤 배열이나 옵션 객체를 바꿔도 다음 접속에 반영되지 않습니다.
   - Python `KisPriceWs`는 `KisRealtimeStream`을 상속합니다. 그래서 `subscribe`와 `unsubscribe`가 생겼고, 모듈 상수 `RECONNECT_BASE_MS`와 `RECONNECT_MAX_MS`는 없어졌습니다. 재접속 간격은 클래스 속성 `reconnect_base_ms`, `reconnect_max_ms`에 남아 있습니다.
 - `kr-broker/kis/kis-types`의 `getTickSize`(Python 판 `kis_types.get_tick_size`)는 `getKrxTickSize`의 옛 이름으로 남깁니다. 다음 판에서 지웁니다.
-- 라이브러리 안에서 쓰지 않는 공개 이름에 `@deprecated`를 붙였습니다. 다음 판에서 지웁니다. Python 판의 같은 이름(`check_krx_trading_hours`, `get_time_until_us_market_open`, `is_toss_trading_open`, `time_until_toss_open`, `parse_kis_realtime_frame`, `kis_types.KIS_RATE_LIMIT_ERROR_CODES`)도 함께 지웁니다.
-  - `kr-broker/kbsec/kbsec-settlement-match`와 `kr-broker/kbsec/kbsec-overseas-settlement-match`의 모든 이름
-  - `kr-broker/kbsec/kbsec-types`의 `kbsecTodayKst`, `KBSEC_CODE_FUTURE_QUERY_DATE`, `kbsecIsAlgoOrderType`, `KBSEC_OVERSEAS_EXCHANGE`
+- 라이브러리 안에서 쓰지 않는 공개 이름에 `@deprecated`를 붙였습니다. 다음 판에서 지웁니다. Python 판의 같은 이름(`check_krx_trading_hours`, `get_time_until_us_market_open`, `is_toss_trading_open`, `time_until_toss_open`, `parse_kis_realtime_frame`, `kis_types`의 `KIS_RATE_LIMIT_ERROR_CODE`, `KIS_LEDGER_RATE_LIMIT_ERROR_CODE`, `KIS_RATE_LIMIT_ERROR_CODES`)도 함께 지웁니다.
+  - `kr-broker/kbsec/kbsec-settlement-match`와 `kr-broker/kbsec/kbsec-overseas-settlement-match`의 모든 이름. 정산 대조는 호출하는 쪽의 거래 기록을 KB증권의 정산 행과 맞추는 일이므로, 대조 코드를 호출하는 쪽으로 옮깁니다. 정산 행은 `fetchDomesticSettlements`와 `fetchOverseasSettlements`가 계속 돌려줍니다.
+  - `kr-broker/kbsec/kbsec-types`의 `kbsecTodayKst`
   - `kr-broker/kbsec/kbsec-fee`의 `kbsecEstimatedFee`. 비율은 `kbsecEstimatedFeeRate`로 구합니다.
-  - `kr-broker/kis/kis-types`의 `KIS_RATE_LIMIT_ERROR_CODES`와 `getKisEffectiveFeeRate`. 수수료율은 `KIS_BROKERAGE_FEE`이고, 매도라면 `krxSellTaxRate()`를 더합니다.
+  - `kr-broker/kis/kis-types`의 속도 제한 코드 `KIS_RATE_LIMIT_ERROR_CODE`, `KIS_LEDGER_RATE_LIMIT_ERROR_CODE`, `KIS_RATE_LIMIT_ERROR_CODES`. 오류 메시지에서 이 코드를 찾던 코드는 `RateLimitExceeded`로 가릅니다. 증권사가 준 코드는 오류의 `detail`에 있습니다.
+  - `kr-broker/kis/kis-types`의 `getKisEffectiveFeeRate`. 수수료율은 `KIS_BROKERAGE_FEE`이고, 매도라면 `krxSellTaxRate()`를 더합니다.
   - `kr-broker/kis/kis-realtime-parser`의 `parseKisRealtimeFrame`, `kr-broker/kis/kis-price-ws`의 `isKisWsSupported`와 `isUsingGlobalWebSocket`
   - `kr-broker/krx-trading-hours`의 `checkKRXTradingHours`. `checkKRXTradingHoursAt(now)`를 씁니다.
   - `kr-broker/toss/toss-trading-hours`의 `isTossTradingOpen`과 `timeUntilTossOpen`. `kr-broker/trading-hours`의 `isTradingHours('toss', now)`와 `getTimeUntilMarketOpen('toss', now)`를 씁니다.

@@ -4,7 +4,6 @@ import {
     isKrxDomesticCode,
     KIS_BROKERAGE_FEE,
     krxSellTaxRate,
-    KIS_DEFAULT_FEE_RATE,
     getKisEffectiveFeeRate,
 } from '../kis-types';
 
@@ -64,10 +63,6 @@ describe('KIS 수수료/거래세', () => {
         expect(krxSellTaxRate(new Date('2024-06-15T00:00:00Z'))).toBe(0.0018);
         expect(krxSellTaxRate(new Date('2025-06-15T00:00:00Z'))).toBe(0.0015);
         expect(krxSellTaxRate(new Date('2026-06-15T00:00:00Z'))).toBe(0.002);
-    });
-
-    it('KIS_DEFAULT_FEE_RATE 는 호환 alias = 위탁수수료', () => {
-        expect(KIS_DEFAULT_FEE_RATE).toBe(KIS_BROKERAGE_FEE);
     });
 
     it("getKisEffectiveFeeRate('buy') = 위탁수수료만", () => {
