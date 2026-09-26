@@ -17,7 +17,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { KbsecAuth } from '../kbsec-auth';
 import { kbsec } from '../../kbsec';
 import { AuthenticationError, ExchangeNotAvailable, NetworkError, RateLimitExceeded } from '../../base/errors';
-import { __resetKbsecTokenBreaker } from '../kbsec-token-breaker';
+import { __resetKbsecTokenBreaker } from '../../testing';
 
 const CREDS = { appKey: 'AK', appSecret: 'AS' };
 

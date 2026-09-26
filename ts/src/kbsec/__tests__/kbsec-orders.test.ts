@@ -20,8 +20,7 @@ import {
 import { resetMarketCalendar } from '../../market-calendar';
 import { KBSEC_ERROR_DETAIL } from '../kbsec-error-codes';
 import { KBSEC_ORDER_TYPE_US, KBSEC_TR } from '../kbsec-types';
-import { __resetKbsecTokenBreaker } from '../kbsec-token-breaker';
-import { __resetFillSideWarn } from '../kbsec-fill-warnings';
+import { __resetFillSideWarn, __resetKbsecTokenBreaker } from '../../testing';
 import { KIS_MASTER_FIXTURE } from '../../__tests__/support/kis-master-fixture';
 import { CREDS, bizError, calledTrs, routeTr, tokenOk, trBody } from './support/kbsec-fetch';
 

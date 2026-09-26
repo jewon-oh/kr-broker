@@ -11,7 +11,7 @@ global.fetch = mockFetch as unknown as typeof fetch;
 import { kbsec } from '../../kbsec';
 import { ArgumentsRequired, NotSupported } from '../../base/errors';
 import { KBSEC_ORDER_TR_CODES, KBSEC_TR } from '../kbsec-types';
-import { __resetKbsecTokenBreaker } from '../kbsec-token-breaker';
+import { __resetKbsecTokenBreaker } from '../../testing';
 import { CREDS, calledTrs, routeTr, trBody } from './support/kbsec-fetch';
 
 const newExchange = () => new kbsec({ ...CREDS, rateLimit: 0 });

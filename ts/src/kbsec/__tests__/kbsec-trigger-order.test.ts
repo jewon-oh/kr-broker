@@ -12,7 +12,7 @@ import { kbsec } from '../../kbsec';
 import { ArgumentsRequired, MarketClosed } from '../../base/errors';
 import { resetMarketCalendar } from '../../market-calendar';
 import { KBSEC_TR } from '../kbsec-types';
-import { __resetKbsecTokenBreaker } from '../kbsec-token-breaker';
+import { __resetKbsecTokenBreaker } from '../../testing';
 import { KIS_MASTER_FIXTURE } from '../../__tests__/support/kis-master-fixture';
 import { calledTrs, CREDS, routeTr, trBody } from './support/kbsec-fetch';
 

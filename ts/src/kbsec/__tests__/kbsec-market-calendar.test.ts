@@ -12,7 +12,7 @@ global.fetch = mockFetch as unknown as typeof fetch;
 import { kbsec } from '../../kbsec';
 import { isMarketClosedDay, marketDayStatus, resetMarketCalendar } from '../../market-calendar';
 import { KBSEC_TR } from '../kbsec-types';
-import { __resetKbsecTokenBreaker } from '../kbsec-token-breaker';
+import { __resetKbsecTokenBreaker } from '../../testing';
 import { CREDS, calledTrs, routeTr } from './support/kbsec-fetch';
 
 const newExchange = () => new kbsec({ ...CREDS, rateLimit: 0 });

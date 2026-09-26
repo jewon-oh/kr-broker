@@ -17,7 +17,7 @@ import {
 import { KBSEC_ERROR_DETAIL, KBSEC_PROCESS_CODES } from '../kbsec-error-codes';
 import { KBSEC_ORDER_TR_CODES, KBSEC_TR } from '../kbsec-types';
 import { KBSEC_TIMEFRAMES, kbsecChartParams } from '../kbsec-chart';
-import { __resetKbsecTokenBreaker } from '../kbsec-token-breaker';
+import { __resetKbsecTokenBreaker } from '../../testing';
 import { CREDS, bizError, envelope, jsonOk, routeTr, tokenOk, trBody, trHeaders } from './support/kbsec-fetch';
 
 const newExchange = (config: Record<string, unknown> = {}) => new kbsec({ ...CREDS, rateLimit: 0, ...config });

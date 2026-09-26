@@ -10,7 +10,7 @@ import { kbsec } from '../../kbsec';
 import { MarketClosed } from '../../base/errors';
 import { KBSEC_TR, kbsecBusinessDateKst } from '../kbsec-types';
 import { applyMarketCalendar, resetMarketCalendar } from '../../market-calendar';
-import { __resetKbsecTokenBreaker } from '../kbsec-token-breaker';
+import { __resetKbsecTokenBreaker } from '../../testing';
 
 const ok = (body: unknown) => {
     const text = JSON.stringify({ dataHeader: { processFlag: 'A', processCode: '0011' }, dataBody: body });

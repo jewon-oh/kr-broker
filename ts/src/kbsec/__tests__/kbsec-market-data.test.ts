@@ -11,7 +11,7 @@ import { NotSupported, NullResponse } from '../../base/errors';
 import { logger } from '../../logger';
 import { KBSEC_TR } from '../kbsec-types';
 import { kbsecCandleTimestamp } from '../kbsec-chart';
-import { __resetKbsecTokenBreaker } from '../kbsec-token-breaker';
+import { __resetKbsecTokenBreaker } from '../../testing';
 import { CREDS, calledTrs, routeTr, trBody } from './support/kbsec-fetch';
 
 const newExchange = () => new kbsec({ ...CREDS, rateLimit: 0 });
