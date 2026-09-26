@@ -1240,6 +1240,1051 @@
             "error": { "class": "NullResponse" }
         },
         {
+            "description": "fetchTrades 는 장중이면 오늘 일봉(거래량 있음)의 날짜를 체결 시각에 붙이고, 새 것부터 온 행을 오래된 것부터 돌려준다. 시계 차이 1분 안의 체결은 받아들이고, since 없이 limit 을 주면 가장 최근 것을 남긴다",
+            "now": 1774400400000,
+            "method": "fetchTrades",
+            "args": ["005930/KRW", null, 2],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-ccnl?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010300",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [
+                                {
+                                    "stck_cntg_hour": "100020",
+                                    "stck_prpr": "71000",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "cntg_vol": "10",
+                                    "tday_rltv": "101.50",
+                                    "prdy_ctrt": "0.14"
+                                },
+                                {
+                                    "stck_cntg_hour": "095958",
+                                    "stck_prpr": "70900",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "cntg_vol": "5",
+                                    "tday_rltv": "101.50",
+                                    "prdy_ctrt": "0.14"
+                                },
+                                {
+                                    "stck_cntg_hour": "095950",
+                                    "stck_prpr": "71000",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "cntg_vol": "3",
+                                    "tday_rltv": "101.50",
+                                    "prdy_ctrt": "0.14"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-daily-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930&FID_PERIOD_DIV_CODE=D&FID_ORG_ADJ_PRC=1",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010400",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [
+                                {
+                                    "stck_bsop_date": "20260325",
+                                    "stck_oprc": "70000",
+                                    "stck_hgpr": "71500",
+                                    "stck_lwpr": "69800",
+                                    "stck_clpr": "71000",
+                                    "acml_vol": "1520000",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "prdy_ctrt": "0.14"
+                                },
+                                {
+                                    "stck_bsop_date": "20260324",
+                                    "stck_oprc": "70000",
+                                    "stck_hgpr": "71500",
+                                    "stck_lwpr": "69800",
+                                    "stck_clpr": "71000",
+                                    "acml_vol": "9800000",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "prdy_ctrt": "0.14"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "info": {
+                        "stck_cntg_hour": "095958",
+                        "stck_prpr": "70900",
+                        "prdy_vrss": "100",
+                        "prdy_vrss_sign": "2",
+                        "cntg_vol": "5",
+                        "tday_rltv": "101.50",
+                        "prdy_ctrt": "0.14"
+                    },
+                    "timestamp": 1774400398000,
+                    "datetime": "2026-03-25T00:59:58.000Z",
+                    "symbol": "005930/KRW",
+                    "price": 70900,
+                    "amount": 5,
+                    "cost": 354500,
+                    "fee": {},
+                    "fees": []
+                },
+                {
+                    "info": {
+                        "stck_cntg_hour": "100020",
+                        "stck_prpr": "71000",
+                        "prdy_vrss": "100",
+                        "prdy_vrss_sign": "2",
+                        "cntg_vol": "10",
+                        "tday_rltv": "101.50",
+                        "prdy_ctrt": "0.14"
+                    },
+                    "timestamp": 1774400420000,
+                    "datetime": "2026-03-25T01:00:20.000Z",
+                    "symbol": "005930/KRW",
+                    "price": 71000,
+                    "amount": 10,
+                    "cost": 710000,
+                    "fee": {},
+                    "fees": []
+                }
+            ]
+        },
+        {
+            "description": "fetchTrades 는 장 전이면 거래량이 0 인 오늘 일봉을 건너뛰고 직전 영업일 날짜를 붙인다",
+            "now": 1774393200000,
+            "method": "fetchTrades",
+            "args": ["005930/KRW"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-ccnl?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010300",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [
+                                {
+                                    "stck_cntg_hour": "153000",
+                                    "stck_prpr": "71000",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "cntg_vol": "120",
+                                    "tday_rltv": "101.50",
+                                    "prdy_ctrt": "0.14"
+                                },
+                                {
+                                    "stck_cntg_hour": "152959",
+                                    "stck_prpr": "70900",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "cntg_vol": "15",
+                                    "tday_rltv": "101.50",
+                                    "prdy_ctrt": "0.14"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-daily-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930&FID_PERIOD_DIV_CODE=D&FID_ORG_ADJ_PRC=1",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010400",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [
+                                {
+                                    "stck_bsop_date": "20260325",
+                                    "stck_oprc": "70000",
+                                    "stck_hgpr": "71500",
+                                    "stck_lwpr": "69800",
+                                    "stck_clpr": "71000",
+                                    "acml_vol": "0",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "prdy_ctrt": "0.14"
+                                },
+                                {
+                                    "stck_bsop_date": "20260324",
+                                    "stck_oprc": "70000",
+                                    "stck_hgpr": "71500",
+                                    "stck_lwpr": "69800",
+                                    "stck_clpr": "71000",
+                                    "acml_vol": "12000000",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "prdy_ctrt": "0.14"
+                                },
+                                {
+                                    "stck_bsop_date": "20260323",
+                                    "stck_oprc": "70000",
+                                    "stck_hgpr": "71500",
+                                    "stck_lwpr": "69800",
+                                    "stck_clpr": "71000",
+                                    "acml_vol": "9000000",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "prdy_ctrt": "0.14"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "info": {
+                        "stck_cntg_hour": "152959",
+                        "stck_prpr": "70900",
+                        "prdy_vrss": "100",
+                        "prdy_vrss_sign": "2",
+                        "cntg_vol": "15",
+                        "tday_rltv": "101.50",
+                        "prdy_ctrt": "0.14"
+                    },
+                    "timestamp": 1774333799000,
+                    "datetime": "2026-03-24T06:29:59.000Z",
+                    "symbol": "005930/KRW",
+                    "price": 70900,
+                    "amount": 15,
+                    "cost": 1063500,
+                    "fee": {},
+                    "fees": []
+                },
+                {
+                    "info": {
+                        "stck_cntg_hour": "153000",
+                        "stck_prpr": "71000",
+                        "prdy_vrss": "100",
+                        "prdy_vrss_sign": "2",
+                        "cntg_vol": "120",
+                        "tday_rltv": "101.50",
+                        "prdy_ctrt": "0.14"
+                    },
+                    "timestamp": 1774333800000,
+                    "datetime": "2026-03-24T06:30:00.000Z",
+                    "symbol": "005930/KRW",
+                    "price": 71000,
+                    "amount": 120,
+                    "cost": 8520000,
+                    "fee": {},
+                    "fees": []
+                }
+            ]
+        },
+        {
+            "description": "fetchTrades 는 저유동 종목이면 거래량이 있는 마지막 일봉(며칠 전)의 날짜를 붙인다",
+            "now": 1774400400000,
+            "method": "fetchTrades",
+            "args": ["247540/KRW"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-ccnl?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=247540",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010300",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [
+                                {
+                                    "stck_cntg_hour": "143000",
+                                    "stck_prpr": "180000",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "cntg_vol": "3",
+                                    "tday_rltv": "101.50",
+                                    "prdy_ctrt": "0.14"
+                                },
+                                {
+                                    "stck_cntg_hour": "110000",
+                                    "stck_prpr": "179500",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "cntg_vol": "1",
+                                    "tday_rltv": "101.50",
+                                    "prdy_ctrt": "0.14"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-daily-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=247540&FID_PERIOD_DIV_CODE=D&FID_ORG_ADJ_PRC=1",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010400",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [
+                                {
+                                    "stck_bsop_date": "20260325",
+                                    "stck_oprc": "70000",
+                                    "stck_hgpr": "71500",
+                                    "stck_lwpr": "69800",
+                                    "stck_clpr": "71000",
+                                    "acml_vol": "0",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "prdy_ctrt": "0.14"
+                                },
+                                {
+                                    "stck_bsop_date": "20260324",
+                                    "stck_oprc": "70000",
+                                    "stck_hgpr": "71500",
+                                    "stck_lwpr": "69800",
+                                    "stck_clpr": "71000",
+                                    "acml_vol": "0",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "prdy_ctrt": "0.14"
+                                },
+                                {
+                                    "stck_bsop_date": "20260323",
+                                    "stck_oprc": "70000",
+                                    "stck_hgpr": "71500",
+                                    "stck_lwpr": "69800",
+                                    "stck_clpr": "71000",
+                                    "acml_vol": "0",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "prdy_ctrt": "0.14"
+                                },
+                                {
+                                    "stck_bsop_date": "20260320",
+                                    "stck_oprc": "70000",
+                                    "stck_hgpr": "71500",
+                                    "stck_lwpr": "69800",
+                                    "stck_clpr": "71000",
+                                    "acml_vol": "150",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "prdy_ctrt": "0.14"
+                                },
+                                {
+                                    "stck_bsop_date": "20260319",
+                                    "stck_oprc": "70000",
+                                    "stck_hgpr": "71500",
+                                    "stck_lwpr": "69800",
+                                    "stck_clpr": "71000",
+                                    "acml_vol": "80",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "prdy_ctrt": "0.14"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "info": {
+                        "stck_cntg_hour": "110000",
+                        "stck_prpr": "179500",
+                        "prdy_vrss": "100",
+                        "prdy_vrss_sign": "2",
+                        "cntg_vol": "1",
+                        "tday_rltv": "101.50",
+                        "prdy_ctrt": "0.14"
+                    },
+                    "timestamp": 1773972000000,
+                    "datetime": "2026-03-20T02:00:00.000Z",
+                    "symbol": "247540/KRW",
+                    "price": 179500,
+                    "amount": 1,
+                    "cost": 179500,
+                    "fee": {},
+                    "fees": []
+                },
+                {
+                    "info": {
+                        "stck_cntg_hour": "143000",
+                        "stck_prpr": "180000",
+                        "prdy_vrss": "100",
+                        "prdy_vrss_sign": "2",
+                        "cntg_vol": "3",
+                        "tday_rltv": "101.50",
+                        "prdy_ctrt": "0.14"
+                    },
+                    "timestamp": 1773984600000,
+                    "datetime": "2026-03-20T05:30:00.000Z",
+                    "symbol": "247540/KRW",
+                    "price": 180000,
+                    "amount": 3,
+                    "cost": 540000,
+                    "fee": {},
+                    "fees": []
+                }
+            ]
+        },
+        {
+            "description": "fetchTrades 는 앞 행보다 시각이 늦은 행이 나오면 날짜가 바뀐 것으로 보고, 그 행부터 끝까지 timestamp 를 비운다. since 가 없으면 빈 행도 돌려준다",
+            "now": 1774400400000,
+            "method": "fetchTrades",
+            "args": ["005930/KRW"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-ccnl?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010300",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [
+                                {
+                                    "stck_cntg_hour": "093500",
+                                    "stck_prpr": "71000",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "cntg_vol": "10",
+                                    "tday_rltv": "101.50",
+                                    "prdy_ctrt": "0.14"
+                                },
+                                {
+                                    "stck_cntg_hour": "091000",
+                                    "stck_prpr": "70900",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "cntg_vol": "5",
+                                    "tday_rltv": "101.50",
+                                    "prdy_ctrt": "0.14"
+                                },
+                                {
+                                    "stck_cntg_hour": "152000",
+                                    "stck_prpr": "70500",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "cntg_vol": "7",
+                                    "tday_rltv": "101.50",
+                                    "prdy_ctrt": "0.14"
+                                },
+                                {
+                                    "stck_cntg_hour": "140000",
+                                    "stck_prpr": "70400",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "cntg_vol": "2",
+                                    "tday_rltv": "101.50",
+                                    "prdy_ctrt": "0.14"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-daily-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930&FID_PERIOD_DIV_CODE=D&FID_ORG_ADJ_PRC=1",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010400",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [
+                                {
+                                    "stck_bsop_date": "20260325",
+                                    "stck_oprc": "70000",
+                                    "stck_hgpr": "71500",
+                                    "stck_lwpr": "69800",
+                                    "stck_clpr": "71000",
+                                    "acml_vol": "1520000",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "prdy_ctrt": "0.14"
+                                },
+                                {
+                                    "stck_bsop_date": "20260324",
+                                    "stck_oprc": "70000",
+                                    "stck_hgpr": "71500",
+                                    "stck_lwpr": "69800",
+                                    "stck_clpr": "71000",
+                                    "acml_vol": "9800000",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "prdy_ctrt": "0.14"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "info": {
+                        "stck_cntg_hour": "140000",
+                        "stck_prpr": "70400",
+                        "prdy_vrss": "100",
+                        "prdy_vrss_sign": "2",
+                        "cntg_vol": "2",
+                        "tday_rltv": "101.50",
+                        "prdy_ctrt": "0.14"
+                    },
+                    "symbol": "005930/KRW",
+                    "price": 70400,
+                    "amount": 2,
+                    "cost": 140800,
+                    "fee": {},
+                    "fees": []
+                },
+                {
+                    "info": {
+                        "stck_cntg_hour": "152000",
+                        "stck_prpr": "70500",
+                        "prdy_vrss": "100",
+                        "prdy_vrss_sign": "2",
+                        "cntg_vol": "7",
+                        "tday_rltv": "101.50",
+                        "prdy_ctrt": "0.14"
+                    },
+                    "symbol": "005930/KRW",
+                    "price": 70500,
+                    "amount": 7,
+                    "cost": 493500,
+                    "fee": {},
+                    "fees": []
+                },
+                {
+                    "info": {
+                        "stck_cntg_hour": "091000",
+                        "stck_prpr": "70900",
+                        "prdy_vrss": "100",
+                        "prdy_vrss_sign": "2",
+                        "cntg_vol": "5",
+                        "tday_rltv": "101.50",
+                        "prdy_ctrt": "0.14"
+                    },
+                    "timestamp": 1774397400000,
+                    "datetime": "2026-03-25T00:10:00.000Z",
+                    "symbol": "005930/KRW",
+                    "price": 70900,
+                    "amount": 5,
+                    "cost": 354500,
+                    "fee": {},
+                    "fees": []
+                },
+                {
+                    "info": {
+                        "stck_cntg_hour": "093500",
+                        "stck_prpr": "71000",
+                        "prdy_vrss": "100",
+                        "prdy_vrss_sign": "2",
+                        "cntg_vol": "10",
+                        "tday_rltv": "101.50",
+                        "prdy_ctrt": "0.14"
+                    },
+                    "timestamp": 1774398900000,
+                    "datetime": "2026-03-25T00:35:00.000Z",
+                    "symbol": "005930/KRW",
+                    "price": 71000,
+                    "amount": 10,
+                    "cost": 710000,
+                    "fee": {},
+                    "fees": []
+                }
+            ]
+        },
+        {
+            "description": "fetchTrades 는 since 를 주면 timestamp 가 빈 행을 빼고 since 이후의 체결만 남긴다",
+            "now": 1774400400000,
+            "method": "fetchTrades",
+            "args": ["005930/KRW", 1774398000000],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-ccnl?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010300",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [
+                                {
+                                    "stck_cntg_hour": "093500",
+                                    "stck_prpr": "71000",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "cntg_vol": "10",
+                                    "tday_rltv": "101.50",
+                                    "prdy_ctrt": "0.14"
+                                },
+                                {
+                                    "stck_cntg_hour": "091000",
+                                    "stck_prpr": "70900",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "cntg_vol": "5",
+                                    "tday_rltv": "101.50",
+                                    "prdy_ctrt": "0.14"
+                                },
+                                {
+                                    "stck_cntg_hour": "152000",
+                                    "stck_prpr": "70500",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "cntg_vol": "7",
+                                    "tday_rltv": "101.50",
+                                    "prdy_ctrt": "0.14"
+                                },
+                                {
+                                    "stck_cntg_hour": "140000",
+                                    "stck_prpr": "70400",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "cntg_vol": "2",
+                                    "tday_rltv": "101.50",
+                                    "prdy_ctrt": "0.14"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-daily-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930&FID_PERIOD_DIV_CODE=D&FID_ORG_ADJ_PRC=1",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010400",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [
+                                {
+                                    "stck_bsop_date": "20260325",
+                                    "stck_oprc": "70000",
+                                    "stck_hgpr": "71500",
+                                    "stck_lwpr": "69800",
+                                    "stck_clpr": "71000",
+                                    "acml_vol": "1520000",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "prdy_ctrt": "0.14"
+                                },
+                                {
+                                    "stck_bsop_date": "20260324",
+                                    "stck_oprc": "70000",
+                                    "stck_hgpr": "71500",
+                                    "stck_lwpr": "69800",
+                                    "stck_clpr": "71000",
+                                    "acml_vol": "9800000",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "prdy_ctrt": "0.14"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "info": {
+                        "stck_cntg_hour": "093500",
+                        "stck_prpr": "71000",
+                        "prdy_vrss": "100",
+                        "prdy_vrss_sign": "2",
+                        "cntg_vol": "10",
+                        "tday_rltv": "101.50",
+                        "prdy_ctrt": "0.14"
+                    },
+                    "timestamp": 1774398900000,
+                    "datetime": "2026-03-25T00:35:00.000Z",
+                    "symbol": "005930/KRW",
+                    "price": 71000,
+                    "amount": 10,
+                    "cost": 710000,
+                    "fee": {},
+                    "fees": []
+                }
+            ]
+        },
+        {
+            "description": "fetchTrades 는 일봉 조회가 실패하면 던지지 않고 모든 행의 timestamp 를 비운다",
+            "now": 1774400400000,
+            "method": "fetchTrades",
+            "args": ["005930/KRW"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-ccnl?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010300",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [
+                                {
+                                    "stck_cntg_hour": "095959",
+                                    "stck_prpr": "71000",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "cntg_vol": "10",
+                                    "tday_rltv": "101.50",
+                                    "prdy_ctrt": "0.14"
+                                },
+                                {
+                                    "stck_cntg_hour": "095958",
+                                    "stck_prpr": "70900",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "cntg_vol": "5",
+                                    "tday_rltv": "101.50",
+                                    "prdy_ctrt": "0.14"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-daily-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930&FID_PERIOD_DIV_CODE=D&FID_ORG_ADJ_PRC=1",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010400",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "1",
+                            "msg_cd": "OPSQ0002",
+                            "msg1": "없는 서비스 코드 입니다"
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "info": {
+                        "stck_cntg_hour": "095958",
+                        "stck_prpr": "70900",
+                        "prdy_vrss": "100",
+                        "prdy_vrss_sign": "2",
+                        "cntg_vol": "5",
+                        "tday_rltv": "101.50",
+                        "prdy_ctrt": "0.14"
+                    },
+                    "symbol": "005930/KRW",
+                    "price": 70900,
+                    "amount": 5,
+                    "cost": 354500,
+                    "fee": {},
+                    "fees": []
+                },
+                {
+                    "info": {
+                        "stck_cntg_hour": "095959",
+                        "stck_prpr": "71000",
+                        "prdy_vrss": "100",
+                        "prdy_vrss_sign": "2",
+                        "cntg_vol": "10",
+                        "tday_rltv": "101.50",
+                        "prdy_ctrt": "0.14"
+                    },
+                    "symbol": "005930/KRW",
+                    "price": 71000,
+                    "amount": 10,
+                    "cost": 710000,
+                    "fee": {},
+                    "fees": []
+                }
+            ]
+        },
+        {
+            "description": "fetchTrades 는 가장 새 체결이 기준 날짜로 보아 지금보다 1분 넘게 늦으면 날짜가 맞지 않는 것이라 모든 행의 timestamp 를 비운다",
+            "now": 1774400400000,
+            "method": "fetchTrades",
+            "args": ["005930/KRW"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-ccnl?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010300",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [
+                                {
+                                    "stck_cntg_hour": "153000",
+                                    "stck_prpr": "71000",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "cntg_vol": "120",
+                                    "tday_rltv": "101.50",
+                                    "prdy_ctrt": "0.14"
+                                },
+                                {
+                                    "stck_cntg_hour": "152959",
+                                    "stck_prpr": "70900",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "cntg_vol": "15",
+                                    "tday_rltv": "101.50",
+                                    "prdy_ctrt": "0.14"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-daily-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930&FID_PERIOD_DIV_CODE=D&FID_ORG_ADJ_PRC=1",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010400",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [
+                                {
+                                    "stck_bsop_date": "20260325",
+                                    "stck_oprc": "70000",
+                                    "stck_hgpr": "71500",
+                                    "stck_lwpr": "69800",
+                                    "stck_clpr": "71000",
+                                    "acml_vol": "1520000",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "prdy_ctrt": "0.14"
+                                },
+                                {
+                                    "stck_bsop_date": "20260324",
+                                    "stck_oprc": "70000",
+                                    "stck_hgpr": "71500",
+                                    "stck_lwpr": "69800",
+                                    "stck_clpr": "71000",
+                                    "acml_vol": "9800000",
+                                    "prdy_vrss": "100",
+                                    "prdy_vrss_sign": "2",
+                                    "prdy_ctrt": "0.14"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "info": {
+                        "stck_cntg_hour": "152959",
+                        "stck_prpr": "70900",
+                        "prdy_vrss": "100",
+                        "prdy_vrss_sign": "2",
+                        "cntg_vol": "15",
+                        "tday_rltv": "101.50",
+                        "prdy_ctrt": "0.14"
+                    },
+                    "symbol": "005930/KRW",
+                    "price": 70900,
+                    "amount": 15,
+                    "cost": 1063500,
+                    "fee": {},
+                    "fees": []
+                },
+                {
+                    "info": {
+                        "stck_cntg_hour": "153000",
+                        "stck_prpr": "71000",
+                        "prdy_vrss": "100",
+                        "prdy_vrss_sign": "2",
+                        "cntg_vol": "120",
+                        "tday_rltv": "101.50",
+                        "prdy_ctrt": "0.14"
+                    },
+                    "symbol": "005930/KRW",
+                    "price": 71000,
+                    "amount": 120,
+                    "cost": 8520000,
+                    "fee": {},
+                    "fees": []
+                }
+            ]
+        },
+        {
+            "description": "fetchTrades 는 미국 종목이면 요청 없이 NotSupported 다",
+            "method": "fetchTrades",
+            "args": ["AAPL/USD"],
+            "http": [],
+            "error": { "class": "NotSupported", "brokerCode": null }
+        },
+        {
             "description": "fetchOHLCV 국내는 야후(코스피 .KS)에서 받고 거래 없는 봉은 건너뛰며 최신 limit 개만 준다",
             "now": 1774440000000,
             "method": "fetchOHLCV",
@@ -13246,6 +14291,136 @@
                     "remaining": 0,
                     "cost": 852,
                     "status": "closed",
+                    "trades": [],
+                    "fees": []
+                }
+            ]
+        },
+        {
+            "description": "fetchCanceledOrders 는 fetchOrders 결과에서 취소 여부(cncl_yn)가 Y 인 주문만 남기고(일부 체결 뒤 취소 포함), limit 은 거른 뒤에 적용한다",
+            "now": 1774400400000,
+            "method": "fetchCanceledOrders",
+            "args": ["005930/KRW", null, 1],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/trading/inquire-daily-ccld?CANO=12345678&ACNT_PRDT_CD=01&INQR_STRT_DT=20260325&INQR_END_DT=20260325&SLL_BUY_DVSN_CD=00&INQR_DVSN=00&PDNO=005930&CCLD_DVSN=00&ORD_GNO_BRNO=&ODNO=&INQR_DVSN_3=00&INQR_DVSN_1=&CTX_AREA_FK100=&CTX_AREA_NK100=&EXCG_ID_DVSN_CD=ALL",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTC0081R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_fk100": "",
+                            "ctx_area_nk100": "",
+                            "output1": [
+                                {
+                                    "ord_dt": "20260325",
+                                    "ord_gno_brno": "91252",
+                                    "odno": "ORD-0043",
+                                    "orgn_odno": "",
+                                    "ord_dvsn_name": "지정가",
+                                    "sll_buy_dvsn_cd": "02",
+                                    "pdno": "005930",
+                                    "prdt_name": "삼성전자",
+                                    "ord_qty": "5",
+                                    "ord_unpr": "70500",
+                                    "ord_tmd": "095000",
+                                    "tot_ccld_qty": "5",
+                                    "avg_prvs": "70500",
+                                    "cncl_yn": "N",
+                                    "tot_ccld_amt": "352500",
+                                    "rmn_qty": "0",
+                                    "ord_dvsn_cd": "00"
+                                },
+                                {
+                                    "ord_dt": "20260325",
+                                    "ord_gno_brno": "91252",
+                                    "odno": "ORD-0042",
+                                    "orgn_odno": "",
+                                    "ord_dvsn_name": "지정가",
+                                    "sll_buy_dvsn_cd": "01",
+                                    "pdno": "005930",
+                                    "prdt_name": "삼성전자",
+                                    "ord_qty": "10",
+                                    "ord_unpr": "71000",
+                                    "ord_tmd": "094000",
+                                    "tot_ccld_qty": "3",
+                                    "avg_prvs": "71000",
+                                    "cncl_yn": "Y",
+                                    "tot_ccld_amt": "213000",
+                                    "rmn_qty": "0",
+                                    "ord_dvsn_cd": "00"
+                                },
+                                {
+                                    "ord_dt": "20260325",
+                                    "ord_gno_brno": "91252",
+                                    "odno": "ORD-0041",
+                                    "orgn_odno": "",
+                                    "ord_dvsn_name": "지정가",
+                                    "sll_buy_dvsn_cd": "02",
+                                    "pdno": "005930",
+                                    "prdt_name": "삼성전자",
+                                    "ord_qty": "10",
+                                    "ord_unpr": "70000",
+                                    "ord_tmd": "091000",
+                                    "tot_ccld_qty": "0",
+                                    "avg_prvs": "0",
+                                    "cncl_yn": "Y",
+                                    "tot_ccld_amt": "0",
+                                    "rmn_qty": "0",
+                                    "ord_dvsn_cd": "00"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "info": {
+                        "ord_dt": "20260325",
+                        "ord_gno_brno": "91252",
+                        "odno": "ORD-0042",
+                        "orgn_odno": "",
+                        "ord_dvsn_name": "지정가",
+                        "sll_buy_dvsn_cd": "01",
+                        "pdno": "005930",
+                        "prdt_name": "삼성전자",
+                        "ord_qty": "10",
+                        "ord_unpr": "71000",
+                        "ord_tmd": "094000",
+                        "tot_ccld_qty": "3",
+                        "avg_prvs": "71000",
+                        "cncl_yn": "Y",
+                        "tot_ccld_amt": "213000",
+                        "rmn_qty": "0",
+                        "ord_dvsn_cd": "00"
+                    },
+                    "id": "ORD-0042",
+                    "timestamp": 1774399200000,
+                    "datetime": "2026-03-25T00:40:00.000Z",
+                    "symbol": "005930/KRW",
+                    "type": "limit",
+                    "side": "sell",
+                    "price": 71000,
+                    "average": 71000,
+                    "amount": 10,
+                    "filled": 3,
+                    "remaining": 0,
+                    "cost": 213000,
+                    "status": "canceled",
                     "trades": [],
                     "fees": []
                 }

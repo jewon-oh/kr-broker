@@ -160,6 +160,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const HOLIDAY_LOOKBACK_MS = 30 * DAY_MS;
 /** 휴장일 캘린더를 신선하게 보는 시간. KIS 는 하루 한 번 호출을 권하므로 하루에 두 번까지만 부른다. */
 const CALENDAR_TTL_MS = 12 * 60 * 60 * 1000;
+/** 최근 체결의 시각이 지금보다 늦어도 받아들이는 폭. 증권사 서버와 이 컴퓨터의 시계 차이다. */
+const TRADE_CLOCK_SKEW_MS = 60_000;
 
 /** 매도매수구분코드: 체결·미체결 조회 응답에서 `01` 이 매도, `02` 가 매수다. */
 const SIDE_CODE_SELL = '01';
@@ -3688,12 +3690,13 @@ export class kis extends Exchange {
                 fetchTickers: true,
                 fetchOrderBook: true,
                 fetchOHLCV: true,
+                fetchTrades: true,
                 fetchOrder: true,
                 fetchOrders: true,
                 fetchOpenOrders: true,
                 // 부모 클래스가 `fetchOrders` 결과에서 체결 완료만 거른다.
                 fetchClosedOrders: 'emulated',
-                fetchCanceledOrders: false,
+                fetchCanceledOrders: 'emulated',
                 fetchMyTrades: true,
                 fetchTradingFee: true,
                 fetchStatus: false,
@@ -5013,6 +5016,70 @@ export class kis extends Exchange {
             bid: this.safeNumber(row, 'bidp'),
             info: row,
         };
+    }
+
+    /**
+     * 최근 체결 30건(`inquire-ccnl`, TR `FHKST01010300`). 국내만 지원하고, 미국 종목은 요청 없이 `NotSupported`다. 방향과 체결 id 는 응답에 없어 비운다.
+     * 시장구분은 `fetchTicker`와 같다.
+     *
+     * 체결 행에는 시각(HHMMSS)만 있고 날짜가 없으며, 장 밖에서는 직전 거래일의 체결이 온다. 그래서 같은 시장구분으로 일자별 시세(`fetchDailyPrices`)를
+     * 한 번 더 받아, 거래량이 있는 가장 최근 영업일을 가장 새 체결의 날짜로 쓴다. 행은 새 것부터 온다고 보고, 앞 행보다 시각이 늦은 행이 나오면
+     * 날짜가 바뀐 것이므로 그 행부터는 `timestamp`를 비운다. 일자별 시세를 받지 못했거나, 거래량이 있는 날이 없거나, 가장 새 체결이 지금보다
+     * 1분 넘게 늦으면 모든 행의 `timestamp`를 비운다. `since`를 주면 `timestamp`가 빈 행은 빠진다.
+     */
+    async fetchTrades(symbol: string, since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<Trade[]> {
+        const instrument = this.instrumentOf(symbol);
+        if (instrument.overseas) throw new NotSupported(`${this.id} fetchTrades() 는 국내 종목만 지원한다: ${symbol}`);
+        const division = await this.quoteMarketDivision();
+        const response = await this.privateGetUapiDomesticStockV1QuotationsInquireCcnl(this.extend({
+            FID_COND_MRKT_DIV_CODE: division,
+            FID_INPUT_ISCD: instrument.code,
+            tr_id: 'FHKST01010300',
+        }, params));
+        const rows = multiRowsOf(this.safeValue(response, 'output'));
+        if (rows.length === 0) return [];
+        const date = await this.lastTradedDate(instrument.symbol, division);
+        const stamps: Int[] = [];
+        let previous: Int;
+        let known = date !== undefined;
+        for (const row of rows) {
+            const hms = this.safeString(row, 'stck_cntg_hour', '');
+            const stamp = known && hms !== '' ? strictKstTimestampOf(date, hms) : undefined;
+            if (stamp === undefined || (previous !== undefined && stamp > previous)) known = false;
+            stamps.push(known ? stamp : undefined);
+            previous = stamp;
+        }
+        if (stamps[0] !== undefined && stamps[0] > this.milliseconds() + TRADE_CLOCK_SKEW_MS) stamps.fill(undefined);
+        const market = this.marketOf(instrument);
+        const trades = rows.map((row, index) => this.safeTrade({
+            info: row,
+            id: undefined,
+            order: undefined,
+            timestamp: stamps[index],
+            datetime: this.iso8601(stamps[index]),
+            symbol: market.symbol,
+            type: undefined,
+            side: undefined,
+            takerOrMaker: undefined,
+            price: this.safeString(row, 'stck_prpr'),
+            amount: this.safeString(row, 'cntg_vol'),
+            cost: undefined,
+            fee: undefined,
+        }, market)).reverse();
+        return this.filterBySinceLimit(trades as unknown as Dict[], since, limit, 'timestamp', since === undefined) as unknown as Trade[];
+    }
+
+    /** 거래량이 있는 가장 최근 영업일(`YYYYMMDD`). 일자별 시세를 받지 못했거나 그런 날이 없으면 `undefined`다. */
+    private async lastTradedDate(symbol: string, division: QuoteMarketDivision): Promise<Str> {
+        let days: KisDailyPrice[];
+        try {
+            days = await this.fetchDailyPrices(symbol, '1d', { FID_COND_MRKT_DIV_CODE: division });
+        } catch (err) {
+            logger.warn({ err, symbol }, '[kis] fetchTrades 의 날짜를 정할 일자별 시세를 받지 못해 체결 시각을 비운다');
+            return undefined;
+        }
+        const dates = days.filter((day) => day.timestamp !== undefined && (day.volume ?? 0) > 0).map((day) => day.businessDate).sort();
+        return dates[dates.length - 1];
     }
 
     /** 최근 체결(`inquire-ccnl`, TR `FHKST01010300`). 국내만 지원한다. 시장구분은 `fetchTicker`와 같다(`nxtRouting` 옵션과 NXT 확장세션이면 통합). */
@@ -10196,6 +10263,16 @@ export class kis extends Exchange {
         const order = orders.find((candidate) => candidate.id === id);
         if (order === undefined) throw new OrderNotFound(`${this.id} 주문을 찾지 못했다: ${id}`);
         return order;
+    }
+
+    /**
+     * 취소된 주문. `fetchOrders` 결과에서 `status` 가 `canceled` 인 주문만 남기고, `limit` 은 거른 뒤에 적용한다.
+     * 국내는 취소 여부(`cncl_yn`)가 `Y` 인 주문만 `canceled` 다(일부 체결 뒤 취소 포함). 미국 행에는 취소 표시가 없어 상태가 비므로
+     * 미국 주문은 나오지 않는다. 빈 결과가 미국 주문의 취소가 없다는 뜻은 아니다.
+     */
+    override async fetchCanceledOrders(symbol: Str = undefined, since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<Order[]> {
+        const orders = await this.fetchOrders(symbol, since, undefined, params);
+        return this.filterBySinceLimit(this.filterBy(orders, 'status', 'canceled'), since, limit) as Order[];
     }
 
     /**

@@ -61,7 +61,7 @@ from kr_broker.kis_yahoo_candles import fetch_yahoo_candles
 from kr_broker.market_calendar import refresh_market_calendar as refresh_shared_market_calendar
 from kr_broker.base import functions as fn
 from kr_broker.base.decimal_to_precision import NO_PADDING, ROUND, TICK_SIZE, decimal_to_precision
-from kr_broker.base.exchange import kst_timestamp_of
+from kr_broker.base.exchange import kst_timestamp_of, strict_kst_timestamp_of
 from kr_broker.base.errors import (
     ArgumentsRequired, AuthenticationError, BadRequest, BadResponse, BadSymbol, ExchangeError, InvalidOrder, MarketClosed, NotSupported,
     NullResponse, OrderNotFound, RateLimitExceeded, RequestTimeout,
@@ -118,6 +118,8 @@ DAY_MS = 24 * 60 * 60 * 1000
 HOLIDAY_LOOKBACK_MS = 30 * DAY_MS
 # 휴장일 캘린더를 신선하게 보는 시간. KIS 는 하루 한 번 호출을 권하므로 하루에 두 번까지만 부른다.
 CALENDAR_TTL_MS = 12 * 60 * 60 * 1000
+# 최근 체결의 시각이 지금보다 늦어도 받아들이는 폭. 증권사 서버와 이 컴퓨터의 시계 차이다.
+TRADE_CLOCK_SKEW_MS = 60_000
 
 # 매도매수구분코드: 체결·미체결 조회 응답에서 `01` 이 매도, `02` 가 매수다.
 SIDE_CODE_SELL = '01'
@@ -829,12 +831,13 @@ class kis(Exchange, ImplicitAPI):
                 'fetchTickers': True,
                 'fetchOrderBook': True,
                 'fetchOHLCV': True,
+                'fetchTrades': True,
                 'fetchOrder': True,
                 'fetchOrders': True,
                 'fetchOpenOrders': True,
                 # 부모 클래스가 `fetch_orders` 결과에서 체결 완료만 거른다.
                 'fetchClosedOrders': 'emulated',
-                'fetchCanceledOrders': False,
+                'fetchCanceledOrders': 'emulated',
                 'fetchMyTrades': True,
                 'fetchTradingFee': True,
                 'fetchStatus': False,
@@ -1346,6 +1349,66 @@ class kis(Exchange, ImplicitAPI):
             book['bids'] = book['bids'][:limit]
             book['asks'] = book['asks'][:limit]
         return book
+
+    def fetch_trades(self, symbol: str, since: Int = None, limit: Int = None,
+                     params: Optional[Dict[str, Any]] = None) -> List[Trade]:
+        """최근 체결 30건(`inquire-ccnl`, TR `FHKST01010300`). 국내만 지원하고, 미국 종목은 요청 없이 `NotSupported` 다. 방향과 체결 id 는
+        응답에 없어 비운다. 시장구분은 `fetch_ticker` 와 같다.
+
+        체결 행에는 시각(HHMMSS)만 있고 날짜가 없으며, 장 밖에서는 직전 거래일의 체결이 온다. 그래서 같은 시장구분으로 일자별 시세
+        (`inquire-daily-price`, TR `FHKST01010400`)를 한 번 더 받아, 거래량이 있는 가장 최근 영업일을 가장 새 체결의 날짜로 쓴다. 행은 새 것부터
+        온다고 보고, 앞 행보다 시각이 늦은 행이 나오면 날짜가 바뀐 것이므로 그 행부터는 `timestamp` 를 비운다. 일자별 시세를 받지 못했거나,
+        거래량이 있는 날이 없거나, 가장 새 체결이 지금보다 1분 넘게 늦으면 모든 행의 `timestamp` 를 비운다. `since` 를 주면 `timestamp` 가 빈 행은 빠진다."""
+        instrument = self._instrument_of(symbol)
+        if instrument.overseas:
+            raise NotSupported(f'{self.id} fetchTrades() 는 국내 종목만 지원한다: {symbol}')
+        division = self._quote_market_division()
+        response = self.private_get_uapi_domestic_stock_v1_quotations_inquire_ccnl(self.extend({
+            'FID_COND_MRKT_DIV_CODE': division,
+            'FID_INPUT_ISCD': instrument.code,
+            'tr_id': 'FHKST01010300',
+        }, params))
+        rows = multi_rows_of(_field(response, 'output'))
+        if len(rows) == 0:
+            return []
+        date = self._last_traded_date(instrument, division)
+        stamps: List[Int] = []
+        previous: Int = None
+        known = date is not None
+        for row in rows:
+            hms = self.safe_string(row, 'stck_cntg_hour', '')
+            stamp = strict_kst_timestamp_of(date, hms) if known and hms != '' else None
+            if stamp is None or (previous is not None and stamp > previous):
+                known = False
+            stamps.append(stamp if known else None)
+            previous = stamp
+        if stamps[0] is not None and stamps[0] > self.milliseconds() + TRADE_CLOCK_SKEW_MS:
+            stamps = [None] * len(rows)
+        market = self._market_of(instrument)
+        trades = [self.safe_trade({
+            'info': row, 'id': None, 'order': None, 'timestamp': stamp, 'datetime': self.iso8601(stamp), 'symbol': market['symbol'],
+            'type': None, 'side': None, 'takerOrMaker': None, 'price': self.safe_string(row, 'stck_prpr'),
+            'amount': self.safe_string(row, 'cntg_vol'), 'cost': None, 'fee': None,
+        }, market) for row, stamp in zip(rows, stamps)]
+        trades.reverse()
+        return self.filter_by_since_limit(trades, since, limit, 'timestamp', since is None)
+
+    def _last_traded_date(self, instrument: KisInstrument, division: str) -> Str:
+        """거래량이 있는 가장 최근 영업일(`YYYYMMDD`). 일자별 시세를 받지 못했거나 그런 날이 없으면 `None` 이다."""
+        try:
+            response = self.private_get_uapi_domestic_stock_v1_quotations_inquire_daily_price({
+                'FID_COND_MRKT_DIV_CODE': division,
+                'FID_INPUT_ISCD': instrument.code,
+                'FID_PERIOD_DIV_CODE': 'D',
+                'FID_ORG_ADJ_PRC': '1',
+                'tr_id': 'FHKST01010400',
+            })
+        except Exception as err:
+            logger.warning('[kis] fetch_trades 의 날짜를 정할 일자별 시세를 받지 못해 체결 시각을 비운다 (symbol=%s, err=%s)', instrument.symbol, err)
+            return None
+        dates = sorted(cast(str, self.safe_string(row, 'stck_bsop_date')) for row in rows_of(_field(response, 'output'))
+                       if kst_timestamp_of(self.safe_string(row, 'stck_bsop_date')) is not None and to_number(row.get('acml_vol')) > 0)
+        return dates[-1] if dates else None
 
     def fetch_ohlcv(self, symbol: str, timeframe: str = '1m', since: Int = None, limit: Int = None,
                     params: Optional[Dict[str, Any]] = None) -> List[List[Any]]:
@@ -2248,6 +2311,14 @@ class kis(Exchange, ImplicitAPI):
         if order is None:
             raise OrderNotFound(f'{self.id} 주문을 찾지 못했다: {id}')
         return order
+
+    def fetch_canceled_orders(self, symbol: Str = None, since: Int = None, limit: Int = None,
+                              params: Optional[Dict[str, Any]] = None) -> List[Order]:
+        """취소된 주문. `fetch_orders` 결과에서 `status` 가 `canceled` 인 주문만 남기고, `limit` 은 거른 뒤에 적용한다.
+        국내는 취소 여부(`cncl_yn`)가 `Y` 인 주문만 `canceled` 다(일부 체결 뒤 취소 포함). 미국 행에는 취소 표시가 없어 상태가 비므로
+        미국 주문은 나오지 않는다. 빈 결과가 미국 주문의 취소가 없다는 뜻은 아니다."""
+        orders = self.fetch_orders(symbol, since, None, params)
+        return self.filter_by_since_limit(self.filter_by(orders, 'status', 'canceled'), since, limit)
 
     def fetch_my_trades(self, symbol: Str = None, since: Int = None, limit: Int = None,
                         params: Optional[Dict[str, Any]] = None) -> List[Trade]:

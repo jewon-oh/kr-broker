@@ -55,6 +55,8 @@
 - `kr-broker/broker-time`에 한국 표준시 오프셋 `KST_OFFSET_MS`와 한국 날짜 `kstYmd`(`YYYYMMDD`), 한국 시각 `kstHms`(`HHMMSS`)를 둡니다. 세 증권사가 이 정의를 함께 씁니다. Python 판은 `kr_broker.broker_time`의 `KST_OFFSET_MS`와 `kst_ymd`입니다.
 - 오류에 `brokerCode`(Python 판 `broker_code`)를 더합니다. 증권사가 응답에 실어 보낸 원래 오류 코드입니다. 한국투자증권은 `msg_cd`, 토스증권은 오류 코드, KB증권은 `processCode`이고, 코드 표에 없는 코드도 싣습니다. 라이브러리가 요청 전에 막은 오류에는 없습니다. KB증권은 토큰 발급이 업무 코드로 거절된 오류에도 싣습니다. `detail` 값은 그대로이고, 뜻은 라이브러리가 가른 원인 이름으로 정합니다. KB증권의 원래 코드를 오류 메시지에서 꺼내던 코드는 `brokerCode`를 읽습니다.
 - Python 판에 `py.typed`를 싣습니다. 이제 mypy도 이 패키지의 타입을 읽으므로, 통합 메서드의 결과를 반환 타입과 다르게 쓰던 코드는 mypy에서도 오류로 잡힙니다. camelCase 이름(`fetchBalance` 등)을 타입 검사기가 알 수 있게 선언했습니다. `async with`로 받은 인스턴스는 기반 `Exchange`가 아니라 증권사 클래스로 보입니다. 예전에는 pyright(VS Code의 Pylance)가 이 두 경우를 오류로 표시했습니다.
+- 한국투자증권에 `fetchTrades`를 더합니다. 주식현재가 체결(`inquire-ccnl`)의 최근 30건을 오래된 것부터 돌려주고, 국내만 지원합니다. 미국 종목은 요청 없이 `NotSupported`를 던집니다. 체결 행에 날짜가 없어 호출마다 일자별 시세(`inquire-daily-price`)를 한 번 더 조회하고, 거래량이 있는 가장 최근 거래일을 가장 새 체결의 날짜로 붙입니다. 앞 행보다 시각이 늦은 행이 나오면 날짜가 바뀐 것이므로 그 행부터는 `timestamp`를 비웁니다. 일자별 시세를 받지 못했거나, 거래량이 있는 날이 없거나, 가장 새 체결이 지금보다 1분 넘게 늦으면 모든 행의 `timestamp`를 비우고, 던지지는 않습니다. 방향과 체결 id는 응답에 없어 비웁니다. Python 판도 같습니다.
+- 한국투자증권에 `fetchCanceledOrders`를 더합니다. `fetchOrders` 결과에서 `status`가 `canceled`인 주문만 고르고, `limit`은 고른 뒤에 적용합니다. 국내는 취소 여부(`cncl_yn`)가 `Y`인 주문이 나오며, 일부 체결 뒤 취소한 주문도 들어갑니다. 미국 주문은 취소 표시가 없어 나오지 않습니다. Python 판도 같습니다.
 
 ### 바뀜
 
