@@ -12,9 +12,9 @@
 import { refreshTokenWithLock } from '../token-refresh-lock';
 import { logger } from '../logger';
 import type { BrokerTokenStore } from '../options';
-import { legacyTokenStoreKey, tokenStoreKey, withLegacyTokenKeys } from '../token-store-key';
+import { tokenStoreKey } from '../token-store-key';
 
-/** 토큰 저장소 키의 접두사. 클라이언트 ID 앞 12자리로 구분해 전체 ID 가 저장소에 남지 않게 한다. */
+/** 토큰 저장소 키의 접두사. 키 본체는 클라이언트 ID 의 해시다(`tokenStoreKey`). */
 const TOKEN_KEY_PREFIX = 'toss:token:';
 
 /** 만료 직전에 요청이 나가지 않도록 앞당기는 시간. */
@@ -46,22 +46,16 @@ export class TossAuth {
     /**
      * @param clientId 저장소 키를 만드는 데 쓴다.
      * @param issue 토큰을 새로 발급받는 함수. 실패하면 던진다.
-     * @param rawStoreOf 지금 쓸 토큰 저장소를 돌려주는 함수. 저장소가 없으면 `null` 이고, 그러면 프로세스 메모리 캐시만 쓴다.
+     * @param storeOf 지금 쓸 토큰 저장소를 돌려주는 함수. 저장소가 없으면 `null` 이고, 그러면 프로세스 메모리 캐시만 쓴다.
      */
     constructor(
         private readonly clientId: string,
         private readonly issue: () => Promise<TossIssuedToken>,
-        private readonly rawStoreOf: () => BrokerTokenStore | null = () => null,
+        private readonly storeOf: () => BrokerTokenStore | null = () => null,
     ) {}
 
     private get storeKey(): string {
         return tokenStoreKey(TOKEN_KEY_PREFIX, this.clientId);
-    }
-
-    /** 저장소. 옛 키 형식(클라이언트 ID 앞 12자)을 쓰는 판과 함께 도는 동안 두 키를 함께 읽고 쓴다. */
-    private storeOf(): BrokerTokenStore | null {
-        const store = this.rawStoreOf();
-        return store === null ? null : withLegacyTokenKeys(store, { [this.storeKey]: legacyTokenStoreKey(TOKEN_KEY_PREFIX, this.clientId) });
     }
 
     /**

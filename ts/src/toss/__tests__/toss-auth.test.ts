@@ -8,11 +8,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { BrokerTokenStore } from '../../options';
+import { tokenStoreKey } from '../../token-store-key';
 import { TossAuth } from '../toss-auth';
 import { errorReply, installFakeToss, jsonOk, makeToss, tokenOk, type FakeToss } from './support/toss-fake';
 
 const CLIENT = 'toss-client-id-abcdef';
-const STORE_KEY = 'toss:token:toss-client-';
+const STORE_KEY = tokenStoreKey('toss:token:', CLIENT);
 
 /** 두 프로세스가 나눠 쓰는 가짜 토큰 저장소. */
 function makeStore(): BrokerTokenStore & { data: Map<string, string> } {

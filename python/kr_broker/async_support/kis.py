@@ -53,7 +53,7 @@ from typing import Any, Awaitable, Callable, Dict, List, NamedTuple, Optional, c
 from kr_broker.abstract.kis import ImplicitAPI
 from kr_broker.async_support.base.exchange import Exchange
 from kr_broker.async_support.base.runtime import maybe_await, new_lock, sleep_seconds
-from kr_broker.async_support.base.token_store import LegacyKeyTokenStore, refresh_token_with_lock
+from kr_broker.async_support.base.token_store import refresh_token_with_lock
 from kr_broker.async_support.extended_session_limit import build_extended_session_limit
 from kr_broker.async_support.kis_candle_service import KISCandleService
 from kr_broker.async_support.kis_yahoo_candles import fetch_yahoo_candles
@@ -66,7 +66,7 @@ from kr_broker.base.errors import (
     NullResponse, OrderNotFound, RateLimitExceeded, RequestTimeout,
 )
 from kr_broker.base.precise import Precise
-from kr_broker.base.token_store import BrokerTokenStore, legacy_token_store_key, token_store_key
+from kr_broker.base.token_store import BrokerTokenStore, token_store_key
 from kr_broker.base.types import (
     ApiName, Balances, Int, Market, MarketInterface, Num, Order, OrderBook, Str, Strings, Ticker, Tickers, Trade, TradingFeeInterface,
 )
@@ -660,7 +660,7 @@ class KISAuth:
         self.app_key = app_key
         self.request_token = request_token
         self.request_approval_key = request_approval_key
-        self.raw_store_of = store_of
+        self.store_of = store_of
         self.cached_token: Optional[Dict[str, Any]] = None
         self.cached_approval_key: Optional[Dict[str, Any]] = None
         self._lock = new_lock()
@@ -673,14 +673,6 @@ class KISAuth:
     @property
     def approval_store_key(self) -> str:
         return token_store_key(KIS_APPROVAL_KEY_PREFIX, self.app_key)
-
-    def store_of(self) -> Any:
-        """저장소. 옛 키 형식(앱키 앞 12자)을 쓰는 판과 함께 도는 동안 두 키를 함께 읽고 쓴다."""
-        store = self.raw_store_of()
-        return None if store is None else LegacyKeyTokenStore(store, {
-            self.store_key: legacy_token_store_key(KIS_TOKEN_KEY_PREFIX, self.app_key),
-            self.approval_store_key: legacy_token_store_key(KIS_APPROVAL_KEY_PREFIX, self.app_key),
-        })
 
     async def get_access_token(self) -> str:
         cached = self.cached_token

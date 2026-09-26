@@ -18,7 +18,7 @@
 import { refreshTokenWithLock } from '../token-refresh-lock';
 import { logger } from '../logger';
 import type { BrokerTokenStore } from '../options';
-import { legacyTokenStoreKey, tokenStoreKey, withLegacyTokenKeys } from '../token-store-key';
+import { tokenStoreKey } from '../token-store-key';
 import { AuthenticationError, BaseError, ExchangeNotAvailable, NetworkError, RateLimitExceeded, RequestTimeout } from '../base/errors';
 import type { FetchSignal } from '../base/types';
 import { isKbsecBusinessError, type KbsecResponseHeader } from './kbsec-envelope';
@@ -165,20 +165,14 @@ export class KbsecAuth {
 
     /**
      * @param baseUrl API 서버 주소. 생략하면 운영 서버다.
-     * @param rawStoreOf 지금 쓸 토큰 저장소를 돌려주는 함수. 저장소가 없으면 `null` 이고, 그러면 프로세스 메모리 캐시만 쓴다.
+     * @param storeOf 지금 쓸 토큰 저장소를 돌려주는 함수. 저장소가 없으면 `null` 이고, 그러면 프로세스 메모리 캐시만 쓴다.
      */
     constructor(
         credentials: KbsecCredentials,
         readonly baseUrl: string = KBSEC_API_BASE,
-        private readonly rawStoreOf: () => BrokerTokenStore | null = () => null,
+        private readonly storeOf: () => BrokerTokenStore | null = () => null,
     ) {
         this.credentials = credentials;
-    }
-
-    /** 저장소. 옛 키 형식(앱키 앞 12자)을 쓰는 판과 함께 도는 동안 두 키를 함께 읽고 쓴다. */
-    private storeOf(): BrokerTokenStore | null {
-        const store = this.rawStoreOf();
-        return store === null ? null : withLegacyTokenKeys(store, { [this.storeKey]: legacyTokenStoreKey(KBSEC_TOKEN_KEY_PREFIX, this.credentials.appKey) });
     }
 
     get appKey(): string {

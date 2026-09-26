@@ -19,7 +19,7 @@
         }
     },
     "tokenStore": {
-        "kis:token:kis-app-key-": { "accessToken": "tok-stored", "expiresAt": 4102444800000 }
+        "kis:token:e2679f013f5ab3371beb2d9c23807b40": { "accessToken": "tok-stored", "expiresAt": 4102444800000 }
     },
     "cases": [
         {
@@ -128,7 +128,7 @@
                 }
             ],
             "output": { "rt_cd": "0", "output": { "stck_prpr": "71000" } },
-            "tokenStoreAfter": { "kis:token:kis-app-key-": "present" }
+            "tokenStoreAfter": { "kis:token:e2679f013f5ab3371beb2d9c23807b40": "present" }
         },
         {
             "description": "업무 오류(rt_cd 1)는 표에 없는 코드면 ExchangeError 이고 코드를 detail 에 담는다",
@@ -218,7 +218,7 @@
                 }
             ],
             "error": { "class": "AuthenticationError", "detail": "EGW00123", "brokerCode": "EGW00123" },
-            "tokenStoreAfter": { "kis:token:kis-app-key-": "absent" }
+            "tokenStoreAfter": { "kis:token:e2679f013f5ab3371beb2d9c23807b40": "absent" }
         },
         {
             "description": "주문 요청이 시간 초과로 끝나면 OrderOutcomeUnknown 이고 다시 보내지 않는다",
