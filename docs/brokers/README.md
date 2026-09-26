@@ -113,7 +113,7 @@
 | 휴장일 `fetchMarketCalendar` | ⚠️ | ✅ | ⚠️ | `kis` 국내만, 실전만 지원합니다. `params.market`이 `US`면 `NotSupported`입니다.<br>`toss` 세션 시각 원본은 `fetchMarketSessions`로 받습니다.<br>`kbsec` 국내만 지원합니다. `params.market`이 `US`면 `NotSupported`입니다. |
 | 종목 정보 `fetchStocks` | ✅ | ✅ | ✅ | `kis` 해외 종목은 지원하지 않습니다. `BadSymbol`을 던집니다.<br>`toss` 200종목을 초과해도 나누어 호출하지 않습니다.<br>`kbsec` 국내만 지원합니다. 해외 종목코드로도 조회되는지는 명세에 없어 확인 불가입니다. |
 | 거래정지와 경고 `fetchStockWarnings` | ➖ | ✅ | ➖ | `kis` 토스증권과 같은 유의사항 목록이 없습니다. VI 발동 기록은 `fetchVolatilityInterruptions`로, 정리매매와 단기과열 여부, 시장경고 구분은 `fetchStockStatus`로 받습니다.<br>`kbsec` 토스증권과 같은 유의사항 목록이 없습니다. 종목 하나의 매매제한과 위험등급은 `fetchTradingRestriction`으로 받습니다. |
-| 투자자별 매매동향 `fetchInvestorTrading` | ⚠️ | ❌ | ⚠️ | `kis` 국내만 지원합니다. 개인, 외국인, 기관계의 순매수 대금을 싣고 매수·매도 값은 `info`에 있습니다.<br>`toss` 종목 단위 API는 `fetchStockInvestorTrading`이 원문으로 줍니다. 공통 모양으로는 아직 옮기지 않았습니다. 시장 단위는 `fetchMarketInvestorTrading`입니다.<br>`kbsec` 국내만 지원합니다. 13개 투자자 유형 가운데 개인, 외국인, 기관을 싣고 나머지는 `info`에 있습니다. |
+| 투자자별 매매동향 `fetchInvestorTrading` | ⚠️ | ➖ | ⚠️ | `kis` 국내만 지원합니다. 개인, 외국인, 기관계의 순매수 대금을 싣고 매수·매도 값은 `info`에 있습니다.<br>`toss` 종목 단위 API가 거래대금 없이 주식 수만 줘서 공통 모양(순매수 대금)으로 옮기지 않습니다. 순매수 수량은 `fetchStockInvestorTrading` 원문에 있고, 시장 단위 대금은 `fetchMarketInvestorTrading`으로 받습니다.<br>`kbsec` 국내만 지원합니다. 13개 투자자 유형 가운데 개인, 외국인, 기관을 싣고 나머지는 `info`에 있습니다. |
 | 종목 랭킹 `fetchRankings` | ⚠️ | ✅ | ⚠️ | `kis` 국내와 해외, ELW 순위 46종을 받습니다. 종류마다 공식 엔드포인트가 따로 있습니다.<br>`kbsec` 국내 순위 7종(등락률, 거래량, 프로그램매매, 거래대금, 시가대비 등락률, 시간외 등락률, 급등락)을 받습니다. |
 
 ### 판단 근거

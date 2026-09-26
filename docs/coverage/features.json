@@ -1024,11 +1024,8 @@
           ]
         },
         "toss": {
-          "status": "미구현",
-          "constraint": "종목 단위 API는 `fetchStockInvestorTrading`이 원문으로 줍니다. 공통 모양으로는 아직 옮기지 않았습니다. 시장 단위는 `fetchMarketInvestorTrading`입니다",
-          "apis": [
-            "GET /stocks/{symbol}/investor-trading"
-          ]
+          "status": "증권사 없음",
+          "constraint": "종목 단위 API가 거래대금 없이 주식 수만 줘서 공통 모양(순매수 대금)으로 옮기지 않습니다. 순매수 수량은 `fetchStockInvestorTrading` 원문에 있고, 시장 단위 대금은 `fetchMarketInvestorTrading`으로 받습니다"
         },
         "kbsec": {
           "status": "부분",
