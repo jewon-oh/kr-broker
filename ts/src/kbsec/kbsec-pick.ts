@@ -112,6 +112,28 @@ export function pickGrid(
     return { rows: [], seen };
 }
 
+/**
+ * 응답 본문에서 `known` 에 없는 비어 있지 않은 배열을 모두 찾는다. 객체 안에 든 배열도 본다. 그리드를 필드 이름으로 고르지 못한 배열이라
+ * 무엇이 왔는지 남기려고 (길이, 첫 행 키)를 돌려준다.
+ */
+export function unknownGrids(body: Record<string, unknown> | undefined, known: readonly unknown[]): GridSeen[] {
+    const out: GridSeen[] = [];
+    const walk = (value: unknown): void => {
+        if (Array.isArray(value)) {
+            if (value.length > 0 && !known.includes(value)) {
+                const first: unknown = value[0];
+                out.push({ len: value.length, keys: first !== null && typeof first === 'object' ? Object.keys(first).slice(0, 30) : [] });
+            }
+            return;
+        }
+        if (value !== null && typeof value === 'object') {
+            for (const v of Object.values(value)) walk(v);
+        }
+    };
+    walk(body);
+    return out;
+}
+
 /** 해외 잔고평가(`SPQM2226`)의 **종목 그리드**. 종목코드나 보유수량 필드가 있는 배열이다. */
 export function pickHoldingGrid(body: Record<string, unknown> | undefined): GridPick {
     return pickGrid(body, first => 'is_cd' in first || 'frgn_hld_q_p6' in first);
@@ -123,6 +145,14 @@ export function pickHoldingGrid(body: Record<string, unknown> | undefined): Grid
  */
 export function pickCashGrid(body: Record<string, unknown> | undefined): Record<string, unknown>[] {
     return pickGrid(body, first => 'crncy_clsf_nm' in first && !('is_cd' in first)).rows;
+}
+
+/**
+ * 통화별 예수금 그리드의 행이 달러 행인가. 명세에는 통화 코드 필드가 없고 통화구분명(`crncy_clsf_nm`)만 있으며 값의 예시도 없다.
+ * 실계좌 값을 확인하기 전까지는 `USD` 와 같은지(대소문자 무시)만 본다.
+ */
+export function isUsdCashRow(row: Record<string, unknown>): boolean {
+    return pickStr(row, 'crncy_clsf_nm').toUpperCase() === 'USD';
 }
 
 /** 응답 dataBody 에서 배열을 찾는다. TR 마다 배열 필드 이름이 달라 첫 배열을 집는다. 배열이 하나뿐인 TR 에만 쓴다. */
