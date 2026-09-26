@@ -69,6 +69,7 @@
   - 국내 `fetch_trades`는 TypeScript 판처럼 일봉을 한 번 더 조회해 체결 날짜를 붙입니다. 국내 `fetch_ohlcv`와 이 일봉 조회는 `options['masterData']`로 코스닥 종목임을 알면 코스닥 시장구분으로 보냅니다.
   - KB증권은 웹소켓을 제공하지 않아서 ccxt처럼 `kr_broker.pro`에 넣지 않았습니다. 그래서 `kr_broker.pro.exchanges`는 이제 `kr_broker.exchanges`의 일부입니다.
   - 테스트 훅 `reset_kbsec_token_breaker`와 `reset_fill_side_warn`을 `kr_broker.testing`에서 가져옵니다.
+- 테스트 전용 경로 `kr-broker/testing`에서 `tokenStoreKey(prefix, credentialId)`를 내보냅니다. 증권사 인증이 토큰 저장소에 쓰는 키를 테스트가 규칙을 흉내 내지 않고 만들 수 있습니다. 접두사와 자격증명은 증권사마다 다르고, `testing` 모듈 설명에 적었습니다. Python 판은 `kr_broker.testing`에서 `token_store_key`를 가져옵니다.
 
 ### 바뀜
 
