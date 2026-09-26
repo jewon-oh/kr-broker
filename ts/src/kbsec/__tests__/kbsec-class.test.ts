@@ -17,7 +17,7 @@ import {
 import { KBSEC_ERROR_DETAIL, KBSEC_PROCESS_CODES } from '../kbsec-error-codes';
 import { KBSEC_ORDER_TR_CODES, KBSEC_TR } from '../kbsec-types';
 import { KBSEC_TIMEFRAMES, kbsecChartParams } from '../kbsec-chart';
-import { __resetKbsecTokenBreaker } from '../kbsec-token-breaker';
+import { __resetKbsecTokenBreaker } from '../../testing';
 import { CREDS, bizError, envelope, jsonOk, routeTr, tokenOk, trBody, trHeaders } from './support/kbsec-fetch';
 
 const newExchange = (config: Record<string, unknown> = {}) => new kbsec({ ...CREDS, rateLimit: 0, ...config });
@@ -204,13 +204,27 @@ describe('handleErrors — HTTP 200 함정', () => {
         }
     });
 
-    it('표에 없는 코드는 추측하지 않는다 — 클래스 ExchangeError 이고 detail 이 비어 있다', async () => {
+    it('표에 없는 코드는 추측하지 않는다 — 클래스 ExchangeError 이고 detail 이 비어 있다. 원래 코드는 brokerCode 에 있다', async () => {
         routeTr(mockFetch, { SSQM0004: '알 수 없는 거절' });
 
         const error = await call().then(() => null, (e: unknown) => e) as ExchangeError;
 
         expect(Object.getPrototypeOf(error)).toBe(ExchangeError.prototype);
         expect(error.detail).toBeUndefined();
+        expect(error.brokerCode).toBe('9999');
+    });
+
+    it('봉투 없는 HTTP 401 은 토큰 실패(detail TOKEN_INVALID)이고, 증권사 코드가 없으니 brokerCode 도 없다', () => {
+        let error: unknown;
+        try {
+            newExchange().handleErrors(401, 'Unauthorized', 'https://openapi.kbsec.com/api/v1/ssqm0004', 'POST', {}, '', undefined);
+        } catch (e) {
+            error = e;
+        }
+
+        expect(error).toBeInstanceOf(AuthenticationError);
+        expect((error as AuthenticationError).detail).toBe(KBSEC_ERROR_DETAIL.TOKEN_INVALID);
+        expect((error as AuthenticationError).brokerCode).toBeUndefined();
     });
 
     it('플래그가 없으면 판정할 수 없으므로 오류로 보지 않는다', async () => {
@@ -248,7 +262,7 @@ describe('handleErrors — HTTP 200 함정', () => {
     });
 });
 
-describe('processCode 표 — 코드가 오류 클래스와 detail 로 옮겨진다', () => {
+describe('processCode 표 — 코드가 오류 클래스와 detail 로 옮겨지고, 원래 코드는 brokerCode 에 남는다', () => {
     const cases: Array<[string, new (m: string) => Error, string | undefined]> = [
         ['I446', PermissionDenied, undefined],
         ['E021', AuthenticationError, undefined],
@@ -272,6 +286,7 @@ describe('processCode 표 — 코드가 오류 클래스와 detail 로 옮겨진
 
         expect(error).toBeInstanceOf(ErrorClass);
         expect(error.detail).toBe(detail);
+        expect(error.brokerCode).toBe(code);
     });
 
     it('표의 코드는 빈 결과 코드(1861·2149)를 담지 않는다 — 던져지지 않는 항목은 죽은 항목이다', () => {

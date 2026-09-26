@@ -82,10 +82,6 @@
       "types": "./dist/kbsec/kbsec-fee.d.ts",
       "default": "./dist/kbsec/kbsec-fee.js"
     },
-    "./kbsec/kbsec-fill-warnings": {
-      "types": "./dist/kbsec/kbsec-fill-warnings.d.ts",
-      "default": "./dist/kbsec/kbsec-fill-warnings.js"
-    },
     "./kbsec/kbsec-order-body": {
       "types": "./dist/kbsec/kbsec-order-body.d.ts",
       "default": "./dist/kbsec/kbsec-order-body.js"
@@ -105,10 +101,6 @@
     "./kbsec/kbsec-settlement-row": {
       "types": "./dist/kbsec/kbsec-settlement-row.d.ts",
       "default": "./dist/kbsec/kbsec-settlement-row.js"
-    },
-    "./kbsec/kbsec-token-breaker": {
-      "types": "./dist/kbsec/kbsec-token-breaker.d.ts",
-      "default": "./dist/kbsec/kbsec-token-breaker.js"
     },
     "./kbsec/kbsec-tr-inputs": {
       "types": "./dist/kbsec/kbsec-tr-inputs.d.ts",
@@ -162,10 +154,6 @@
       "types": "./dist/kis/kr-market.d.ts",
       "default": "./dist/kis/kr-market.js"
     },
-    "./kis/master-search-rank": {
-      "types": "./dist/kis/master-search-rank.d.ts",
-      "default": "./dist/kis/master-search-rank.js"
-    },
     "./kis/yahoo-finance-candles": {
       "types": "./dist/kis/yahoo-finance-candles.d.ts",
       "default": "./dist/kis/yahoo-finance-candles.js"
@@ -193,6 +181,10 @@
     "./options": {
       "types": "./dist/options.d.ts",
       "default": "./dist/options.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "default": "./dist/testing.js"
     },
     "./token-refresh-lock": {
       "types": "./dist/token-refresh-lock.d.ts",

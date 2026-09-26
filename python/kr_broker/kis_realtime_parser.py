@@ -6,9 +6,10 @@
 
 import json
 import math
-from typing import List, NamedTuple, Tuple, Union
+from typing import List, Mapping, NamedTuple, Optional, Tuple, Union
 
 from kr_broker.base import functions as fn
+from kr_broker.broker_market_group import common_stock_code
 from kr_broker.kis_types import KIS_WS_FIELD, KIS_WS_TR, is_overseas_symbol
 
 __all__ = ['OVERSEAS_STREAM_QUOTE', 'KisTradeRecord', 'KisOrderbookRecord', 'to_stream_symbol', 'parse_kis_realtime_frame', 'parse_kis_realtime_payload',
@@ -39,10 +40,11 @@ class KisOrderbookRecord(NamedTuple):
 KisRealtimeRecord = Union[KisTradeRecord, KisOrderbookRecord]
 
 
-def to_stream_symbol(raw_symbol: str) -> str:
-    """실시간 종목코드를 가격 스트림 키로 바꾼다. 국내(6자리)는 `<코드>/KRW`, 해외는 `<티커>/USD` 다."""
+def to_stream_symbol(raw_symbol: str, codes: Optional[Mapping[str, str]] = None) -> str:
+    """실시간 종목코드를 가격 스트림 키로 바꾼다. 국내(6자리)는 `<코드>/KRW`, 해외는 `<티커>/USD` 다. 현금 코드와 같은 티커는 표(`codes`,
+    없으면 `COMMON_STOCK_CODES`)의 통합 코드를 쓴다(`USD` → `ProShares Ultra Semiconductors/USD`)."""
     code = raw_symbol.upper()
-    return f'{code}/{OVERSEAS_STREAM_QUOTE}' if is_overseas_symbol(code) else f'{code}/KRW'
+    return f'{common_stock_code(code, codes)}/{OVERSEAS_STREAM_QUOTE}' if is_overseas_symbol(code) else f'{code}/KRW'
 
 
 def _number_at(fields: List[str], index: int) -> float:

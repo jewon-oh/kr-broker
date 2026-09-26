@@ -92,7 +92,7 @@ stop = toss.create_trigger_order('005930/KRW', 'market', 'sell', 1, None, 65000,
 
 ### 오류
 
-오류 클래스는 ccxt 계층을 따르고 `kr_broker`에서 바로 가져올 수 있습니다. 증권사 오류 코드는 `error.detail`에 있습니다.
+오류 클래스는 ccxt 계층을 따르고 `kr_broker`에서 바로 가져올 수 있습니다. 증권사가 준 원래 오류 코드는 `error.broker_code`에, 라이브러리가 가른 원인 이름은 `error.detail`에 있습니다.
 
 ```python
 try:

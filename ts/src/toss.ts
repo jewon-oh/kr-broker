@@ -15,6 +15,7 @@
  * ## 심볼
  *
  * 국내는 `005930/KRW`, 미국은 `AAPL/USD` 다. 종목을 아직 불러오지 않았어도(`loadMarkets` 없이) 코드의 모양으로 시장을 판별해 바로 조회하고 주문할 수 있다.
+ * 현금 코드와 같은 티커(`USD`)는 `commonStockCodes` 의 통합 코드로 심볼을 만든다(`ProShares Ultra Semiconductors/USD`). 입력은 `USD/USD` 도 받는다.
  * `loadMarkets()` 를 부르면 토스가 거래할 수 있는 종목 전체(`GET /stocks/all`)가 `markets` 에 들어가고, 종목 유형(`ETF` 등)이 `market.options` 에 실린다.
  *
  * ## 주문
@@ -50,7 +51,7 @@
  *
  * ## 오류
  *
- * 토스의 오류 코드는 ccxt 오류 계층으로 옮겨 던지고, 원래 코드는 `error.detail` 에 둔다. 장 시간 밖은 `MarketClosed`, 주문 요청이 시간 초과로 끝나 접수 여부를
+ * 토스의 오류 코드는 ccxt 오류 계층으로 옮겨 던지고, 원래 코드는 `error.detail` 과 `error.brokerCode` 에 둔다. 장 시간 밖은 `MarketClosed`, 주문 요청이 시간 초과로 끝나 접수 여부를
  * 모르면 `OrderOutcomeUnknown`(다시 보내면 중복 주문이 되므로 재시도하지 않는다), 이미 체결·취소된 주문의 취소는 `OrderNotFound` 다.
  */
 
@@ -116,7 +117,7 @@ import { symbolBaseCode, type StockMarketGroup } from './broker-market-group';
 import { KST_OFFSET_MS, candlePeriodUtcMs, isDailyOrLongerTimeframe } from './broker-time';
 import { logger } from './logger';
 import type { UsdKrwRateOption } from './options';
-import { applyMarketCalendar } from './market-calendar';
+import { applyMarketCalendar, type CalendarDay } from './market-calendar';
 import { krxAuctionBuyBlockReason } from './krx-trading-hours';
 import { usAuctionBuyBlockReason } from './us-market-hours';
 import { getKrxTickSize, KRX_TICK_INVALID_DETAIL, krxTickViolation } from './krx-tick-size';
@@ -444,8 +445,6 @@ export class toss extends Exchange {
                 fetchTrades: true,
                 fetchMarketCalendar: true,
                 fetchStockWarnings: true,
-                fetchInvestorTrading: true,
-                fetchRankings: true,
             },
             urls: {
                 logo: undefined,
@@ -773,7 +772,7 @@ export class toss extends Exchange {
     /**
      * 응답의 오류를 오류 클래스로 던진다. 토스는 실패를 HTTP 상태와 본문의 오류 코드(`error.code` 또는 `error`) 두 층으로 준다.
      * 401·403·429 는 상태가 먼저이고, 그 밖에는 코드 표(`exceptions.exact`)를 본 다음 상태 표(`httpExceptions`)를 본다.
-     * 코드는 `error.detail` 에 담는다.
+     * 코드는 `error.detail` 과 `error.brokerCode` 에 담는다.
      */
     override handleErrors(
         statusCode: number,
@@ -793,7 +792,7 @@ export class toss extends Exchange {
         const description = typeof errorValue === 'string'
             ? this.safeString(response, 'error_description')
             : this.safeString(errorValue, 'message');
-        const options = { detail: code };
+        const options = { detail: code, brokerCode: code };
         const isTokenRequest = url.endsWith('/oauth2/token');
         const feedback = isTokenRequest
             ? `토스 토큰 발급 실패: ${statusCode} ${responseBody}`
@@ -815,7 +814,7 @@ export class toss extends Exchange {
 
         // 호가 단위를 어긴 주문은 `invalid-request` 에 올바른 호가 단위가 `data.tickSize` 로 실려 온다.
         if (code === 'invalid-request' && this.safeValue(this.safeDict(errorValue, 'data'), 'tickSize') !== undefined) {
-            throw new InvalidOrder(feedback, { detail: 'price-tick-invalid' });
+            throw new InvalidOrder(feedback, { detail: 'price-tick-invalid', brokerCode: code });
         }
         const exact = this.exceptions?.exact as Dictionary<ErrorClass> | undefined;
         this.throwExactlyMatchedException(exact, code, feedback, options);
@@ -835,16 +834,17 @@ export class toss extends Exchange {
 
     /**
      * 심볼(`005930`, `005930/KRW`, `AAPL`)에서 종목을 만든다. 종목을 불러오지 않았을 때 코드의 모양으로 시장을 판별한다.
-     * 클래스 주식의 `BRK/B` 는 통합 표기 `BRK.B` 로 바꾼다.
+     * 클래스 주식의 `BRK/B` 는 통합 표기 `BRK.B` 로 바꾼다. `commonStockCodes` 의 통합 코드는 티커로 돌려 id 로 쓴다.
      */
     private marketFromSymbol(symbol: string): MarketInterface {
-        const code = symbolBaseCode(symbol);
+        const code = this.stockTicker(symbolBaseCode(symbol));
         const country = tossMarketCountry(code);
         const quote = country === 'KR' ? 'KRW' : 'USD';
+        const base = this.commonStockCode(code);
         return this.safeMarketStructure({
             id: code,
-            symbol: `${code}/${quote}`,
-            base: code,
+            symbol: `${base}/${quote}`,
+            base,
             quote,
             baseId: code,
             quoteId: quote,
@@ -861,11 +861,14 @@ export class toss extends Exchange {
     /**
      * 통합 심볼(또는 종목 id)로 종목을 찾는다. `loadMarkets` 로 불러온 종목이 있으면 그것을 쓰고, 없으면 심볼의 모양으로 만든다.
      * 토스에 없는 종목이라도 여기서는 막지 않는다. 주문을 보내면 토스가 `stock-not-found`(`BadSymbol`)로 알려 준다.
+     * 옛 심볼(`USD/USD`)처럼 모양으로 만든 심볼이 불러온 종목에 있으면 그 종목을 쓴다.
      */
     override market(symbol: Str): MarketInterface {
         if (symbol === undefined) throw new ArgumentsRequired(`${this.id} market() requires a symbol argument`);
         const loaded = this.markets?.[symbol] ?? this.markets_by_id?.[symbol]?.[0];
-        return loaded ?? this.marketFromSymbol(symbol);
+        if (loaded !== undefined) return loaded;
+        const shaped = this.marketFromSymbol(symbol);
+        return this.markets?.[shaped.symbol] ?? shaped;
     }
 
     override safeMarket(marketId: Str = undefined, market: Market = undefined, _delimiter: Str = undefined, _marketType: Str = undefined): MarketInterface {
@@ -898,10 +901,11 @@ export class toss extends Exchange {
         const country: StockMarketGroup = listedMarket !== undefined && KR_LISTED_MARKETS.has(listedMarket) ? 'KR' : 'US';
         const quote = country === 'KR' ? 'KRW' : 'USD';
         const brokerage = country === 'KR' ? TOSS_BROKERAGE_FEE : TOSS_US_BROKERAGE_FEE;
+        const base = this.commonStockCode(id);
         return this.safeMarketStructure({
             id,
-            symbol: `${id}/${quote}`,
-            base: id,
+            symbol: `${base}/${quote}`,
+            base,
             quote,
             baseId: id,
             quoteId: quote,
@@ -976,9 +980,9 @@ export class toss extends Exchange {
     }
 
     /**
-     * 투자자별 매매대금(개인·외국인·기관·기타법인의 매수·매도 대금). 종목이 아니라 시장(`KOSPI`·`KOSDAQ`) 단위다.
+     * 투자자별 매매대금(개인·외국인·기관·기타법인의 매수·매도 대금). 종목이 아니라 시장(`KOSPI`·`KOSDAQ`) 단위다. 종목 단위는 `fetchStockInvestorTrading` 이다.
      */
-    async fetchInvestorTrading(
+    async fetchMarketInvestorTrading(
         market: 'KOSPI' | 'KOSDAQ',
         interval: '1d' | '1w' | '1mo' | '1y' = '1d',
         limit = 5,
@@ -986,6 +990,20 @@ export class toss extends Exchange {
     ): Promise<TossInvestorTradingRecord[]> {
         const response = await this.privateMarketGetMarketIndicatorsSymbolInvestorTrading(this.extend({ symbol: market, interval, count: limit }, params));
         return this.safeList(this.unwrap(response), 'records', []) as TossInvestorTradingRecord[];
+    }
+
+    /**
+     * @deprecated `fetchMarketInvestorTrading` 의 옛 이름이다. `fetchInvestorTrading` 은 종목 단위 공통 조회(한국투자증권, KB증권)의 이름이라
+     * 토스증권의 `has.fetchInvestorTrading` 은 비어 있다. 다음 판에서 지운다.
+     */
+    async fetchInvestorTrading(
+        market: 'KOSPI' | 'KOSDAQ',
+        interval: '1d' | '1w' | '1mo' | '1y' = '1d',
+        limit = 5,
+        params: Dict = {},
+    ): Promise<TossInvestorTradingRecord[]> {
+        this.warnDeprecated('toss.fetchInvestorTrading()', 'fetchMarketInvestorTrading()');
+        return this.fetchMarketInvestorTrading(market, interval, limit, params);
     }
 
     /** 시장 지표(국내 지수·국채) 현재가(`GET /market-indicators/prices`, 최대 200개). 심볼은 카탈로그 8종만 받고, 그 밖은 서버가 400으로 거절한다. */
@@ -1006,7 +1024,7 @@ export class toss extends Exchange {
     }
 
     /**
-     * 종목 단위 투자자별 매매동향(`GET /stocks/{symbol}/investor-trading`, 국내 전용). 시장 단위인 `fetchInvestorTrading`와 다르다.
+     * 종목 단위 투자자별 매매동향(`GET /stocks/{symbol}/investor-trading`, 국내 전용). 시장 단위인 `fetchMarketInvestorTrading`과 다르다.
      * 당일 기록은 장중 잠정치라 `individual`·`institution.breakdown`·`otherCorporation`·`foreignerHolding`·`cfd`가 `null`일 수 있다.
      * `params.until`에 응답의 `nextUntil`을 넣으면 다음 페이지를 받는다.
      */
@@ -1077,10 +1095,11 @@ export class toss extends Exchange {
     /**
      * 장 운영 캘린더(전일·당일·익일 영업일의 세션 시각)를 받아 온다. 30분 안에 받은 것은 다시 부르지 않는다(`params.refresh` 로 강제).
      * 받은 날짜별 개장 여부는 공용 휴장일 캘린더에도 넣는다. `market` 은 `'KR'`·`'US'` 이고 대소문자를 가리지 않는다. 그 밖의 값은 요청 없이 `BadRequest` 다.
+     * 날짜별 개장 여부만 필요하면 세 증권사 공통인 `fetchMarketCalendar` 를 쓴다.
      */
-    async fetchMarketCalendar(market: StockMarketGroup | Lowercase<StockMarketGroup>, params: Dict = {}): Promise<TossKrMarketCalendar | TossUsMarketCalendar> {
+    async fetchMarketSessions(market: StockMarketGroup | Lowercase<StockMarketGroup>, params: Dict = {}): Promise<TossKrMarketCalendar | TossUsMarketCalendar> {
         const country = String(market).toUpperCase();
-        if (country !== 'KR' && country !== 'US') throw new BadRequest(`${this.id} fetchMarketCalendar() market must be 'KR' or 'US'`);
+        if (country !== 'KR' && country !== 'US') throw new BadRequest(`${this.id} fetchMarketSessions() market must be 'KR' or 'US'`);
         const cached = this.calendars[country];
         const ttl = this.safeInteger(this.options, 'calendarTtl', CALENDAR_TTL_MS) as number;
         if (cached !== undefined && this.safeBool(params, 'refresh', false) !== true && this.milliseconds() - cached.fetchedAt < ttl) return cached.value;
@@ -1097,11 +1116,32 @@ export class toss extends Exchange {
     }
 
     /**
+     * @deprecated 시장 문자열을 받던 옛 호출이다. 세션 시각 원본은 `fetchMarketSessions(market)` 로, 날짜별 개장 여부는
+     * `fetchMarketCalendar({ market })` 로 받는다. 다음 판에서 지운다.
+     */
+    fetchMarketCalendar(market: StockMarketGroup | Lowercase<StockMarketGroup>, params?: Dict): Promise<TossKrMarketCalendar | TossUsMarketCalendar>;
+    /**
+     * 날짜별 개장 여부. 세 증권사 공통 모양이다. `params.market` 은 `'KR'`(기본)·`'US'` 이고 대소문자를 가리지 않는다. 그 밖의 값은 요청 없이 `BadRequest` 다.
+     * 장 운영 캘린더(`fetchMarketSessions`)의 전일·당일·익일 영업일과 그 사이의 평일(닫힌 날)이다. 받은 날짜는 공용 휴장일 캘린더에도 넣는다.
+     * 첫 인자로 시장 문자열을 넘기던 옛 호출은 한 판 동안 경고를 남기고 `fetchMarketSessions` 의 결과를 돌려준다.
+     */
+    fetchMarketCalendar(params?: Dict): Promise<CalendarDay[]>;
+    async fetchMarketCalendar(marketOrParams: string | Dict = {}, params: Dict = {}): Promise<CalendarDay[] | TossKrMarketCalendar | TossUsMarketCalendar> {
+        if (typeof marketOrParams === 'string') {
+            this.warnDeprecated('toss.fetchMarketCalendar(market)', 'fetchMarketCalendar({ market }) 나 fetchMarketSessions(market)');
+            return this.fetchMarketSessions(marketOrParams as StockMarketGroup, params);
+        }
+        const market = this.calendarMarket(marketOrParams);
+        const value = await this.fetchMarketSessions(market, this.omit(marketOrParams, 'market'));
+        return market === 'KR' ? tossKrCalendarDays(value as TossKrMarketCalendar) : tossUsCalendarDays(value as TossUsMarketCalendar);
+    }
+
+    /**
      * 국내 캘린더로 본 지금의 세션. `'closed'` 는 캘린더상 열린 세션이 없다는 뜻이고, `null` 은 캘린더를 받지 못했다는 뜻이다(호출하는 쪽이 정적 시간표로 판정한다).
      */
     async currentKrSession(now: Date = new Date(this.milliseconds())): Promise<TossKrSession | 'closed' | null> {
         try {
-            const calendar = await this.fetchMarketCalendar('KR') as TossKrMarketCalendar;
+            const calendar = await this.fetchMarketSessions('KR') as TossKrMarketCalendar;
             return findKrSession(calendar, now) ?? 'closed';
         } catch (err) {
             logger.warn({ err }, '[toss] 국내 장 운영 캘린더를 받지 못했다. 정적 시간표로 판정한다');
@@ -1112,7 +1152,7 @@ export class toss extends Exchange {
     /** 미국 캘린더로 본 지금의 세션. `'closed'` 와 `null` 의 뜻은 `currentKrSession` 과 같다. */
     async currentUsSession(now: Date = new Date(this.milliseconds())): Promise<TossUsSession | 'closed' | null> {
         try {
-            const calendar = await this.fetchMarketCalendar('US') as TossUsMarketCalendar;
+            const calendar = await this.fetchMarketSessions('US') as TossUsMarketCalendar;
             return findUsSession(calendar, now) ?? 'closed';
         } catch (err) {
             logger.warn({ err }, '[toss] 미국 장 운영 캘린더를 받지 못했다. 정규장 기준으로 판정한다');
@@ -1297,8 +1337,9 @@ export class toss extends Exchange {
 
     /**
      * 잔고. 현금은 통화 키(`KRW`·`USD`)이고 값은 현금 매수 가능 금액이며, 보유 종목은 `market.base` 키(`005930`, `AAPL`)이고 `total` 이 보유 수량이다.
-     * 종목의 평균단가·평가금액·종목명은 `balances[code].info` 에 있다. 조회에 실패하면 던진다. 보유 종목 키가 같은 잔고의 현금 키와 겹치면
-     * (미국 티커 `USD` 와 달러 현금) 한쪽을 덮어쓰지 않고 `NotSupported` 를 던진다. 아래 `symbol` 과 `currency` 로 나눠 받는다.
+     * 종목의 평균단가·평가금액·종목명은 `balances[code].info` 에 있다. 조회에 실패하면 던진다. 미국 티커 `USD` 처럼 현금 코드와 같은 티커는
+     * `commonStockCodes` 의 통합 코드(`ProShares Ultra Semiconductors`)가 키다. 표에 없는 티커가 현금 키와 겹치면 한쪽을 덮어쓰지 않고
+     * `NotSupported` 를 던진다. 아래 `symbol` 과 `currency` 로 나눠 받거나 `commonStockCodes` 에 그 티커를 더한다.
      *
      * `free` 는 지금 주문에 쓸 수 있는 양이다(ccxt 정의). 현금은 매수 가능 금액만 있고 예수금을 주는 API 가 없어 `total` 과 `used` 가 비어 있다.
      * 보유 종목의 `free` 는 `symbol` 로 한 종목만 받을 때 매도 가능 수량으로 채우고, 전체 잔고에서는 비어 있다(종목마다 요청을 더하지 않는다).
@@ -1376,7 +1417,8 @@ export class toss extends Exchange {
         for (const item of holdings?.items ?? []) {
             const quantity = this.safeNumber(item, 'quantity');
             if (quantity === undefined || !(quantity > 0)) continue;
-            held[item.symbol] = { free: sellable?.[item.symbol], used: undefined, total: quantity, info: item };
+            // 키는 `parseMarket` 의 `base` 다(`USD` → `ProShares Ultra Semiconductors`).
+            held[this.commonStockCode(String(item.symbol))] = { free: sellable?.[item.symbol], used: undefined, total: quantity, info: item };
         }
         for (const [code, power] of Object.entries(buyingPower ?? {})) {
             let cash = this.parseCash(power);
@@ -1393,7 +1435,7 @@ export class toss extends Exchange {
             // 겹친 키에 대입하면 보유나 현금 한쪽이 알림 없이 사라진다.
             if (result[code] !== undefined) {
                 throw new NotSupported(`${this.id} fetchBalance() 보유 종목 ${code} 가 현금 ${code} 와 키가 같아 한 잔고에 담을 수 없다. `
-                    + 'params.symbol 로 그 종목의 보유를, params.currency 로 현금을 따로 받는다');
+                    + 'params.symbol 로 그 종목의 보유를, params.currency 로 현금을 따로 받거나 commonStockCodes 에 그 티커의 통합 코드를 더한다');
             }
             result[code] = holding;
         }
@@ -2567,10 +2609,10 @@ export class toss extends Exchange {
         }
     }
 
-    /** 토스 원본 코드 → 통합 심볼. 종목 목록에 없으면 시장의 통화를 붙인다. */
+    /** 토스 원본 코드 → 통합 심볼. 종목 목록에 없으면 `commonStockCodes` 를 거친 코드에 시장의 통화를 붙인다. */
     private watchSymbolOf(market: 'us' | 'kr', code: string): string {
         const known = this.markets_by_id?.[code]?.[0]?.symbol;
-        return known ?? `${code}/${market === 'us' ? 'USD' : 'KRW'}`;
+        return known ?? `${this.commonStockCode(code)}/${market === 'us' ? 'USD' : 'KRW'}`;
     }
 
     private watchMarketSub(channel: 'trade' | 'orderbook', symbol: string): string {

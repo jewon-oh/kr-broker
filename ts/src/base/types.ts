@@ -270,6 +270,26 @@ export interface Status {
     info: any;
 }
 
+/**
+ * 종목의 투자자별 매매동향 하루치(`fetchInvestorTrading`). `timestamp` 는 그 영업일의 00:00 KST 다.
+ * 세 투자자 필드는 순매수 대금이다. 다른 투자자 유형과 매수·매도 값은 `info` 의 원문에 있다.
+ */
+export interface InvestorTradingRecord extends KrTimestamped {
+    /** 영업일 `YYYYMMDD`(한국 날짜) */
+    date: string;
+    /** 종가 */
+    close: Num;
+    /** 전일 대비 */
+    change: Num;
+    /** 개인 순매수 대금. 단위는 증권사 응답 그대로다. 증권사마다 다를 수 있으므로 증권사를 섞어 더하지 않는다. */
+    individual: Num;
+    /** 외국인 순매수 대금. 단위는 증권사 응답 그대로다. 증권사마다 다를 수 있으므로 증권사를 섞어 더하지 않는다. */
+    foreign: Num;
+    /** 기관 순매수 대금. 단위는 증권사 응답 그대로다. 증권사마다 다를 수 있으므로 증권사를 섞어 더하지 않는다. */
+    institution: Num;
+    info: Dict;
+}
+
 // ---- 생성자 인자 ----
 
 /** `new 증권사(config)` 가 받는 설정. 여기 없는 키도 그대로 인스턴스에 얹는다(`describe()` 를 덮어쓰는 값이다). */

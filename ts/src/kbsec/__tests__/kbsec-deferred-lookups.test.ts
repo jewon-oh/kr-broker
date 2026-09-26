@@ -12,7 +12,7 @@ import { kbsec } from '../../kbsec';
 import { ArgumentsRequired, NotSupported } from '../../base/errors';
 import { kbsecCandleTimestamp, kbsecUsCandleTimestamp } from '../kbsec-chart';
 import { KBSEC_ORDER_TR_CODES, KBSEC_TR } from '../kbsec-types';
-import { __resetKbsecTokenBreaker } from '../kbsec-token-breaker';
+import { __resetKbsecTokenBreaker } from '../../testing';
 import { CREDS, calledTrs, routeTr, trBody } from './support/kbsec-fetch';
 
 const newExchange = () => new kbsec({ ...CREDS, rateLimit: 0 });

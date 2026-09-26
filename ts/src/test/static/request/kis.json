@@ -152,7 +152,7 @@
                     "response": { "status": 200, "body": { "rt_cd": "1", "msg_cd": "APBK0919 ", "msg1": "장운영일자가 주문일과 상이합니다" } }
                 }
             ],
-            "error": { "class": "ExchangeError", "detail": "APBK0919" }
+            "error": { "class": "ExchangeError", "detail": "APBK0919", "brokerCode": "APBK0919" }
         },
         {
             "description": "초당 거래건수 초과(HTTP 500, EGW00201)는 RateLimitExceeded 이고 조회는 설정한 횟수만큼 다시 보낸다",
@@ -217,7 +217,7 @@
                     "response": { "status": 500, "body": { "rt_cd": "1", "msg_cd": "EGW00123", "msg1": "기간이 만료된 token 입니다." } }
                 }
             ],
-            "error": { "class": "AuthenticationError", "detail": "EGW00123" },
+            "error": { "class": "AuthenticationError", "detail": "EGW00123", "brokerCode": "EGW00123" },
             "tokenStoreAfter": { "kis:token:kis-app-key-": "absent" }
         },
         {
@@ -772,6 +772,93 @@
             }
         },
         {
+            "description": "fetchTicker 는 옛 심볼(USD/USD)을 티커 USD 로 조회하고 표의 통합 코드 심볼로 돌려준다",
+            "config": {
+                "options": {
+                    "masterData": {
+                        "amex": [{ "code": "USD", "name": "PROSHARES ULTRA SEMICONDUCTORS", "nameKr": "프로셰어즈 울트라 반도체", "market": "AMS", "currency": "USD" }]
+                    }
+                }
+            },
+            "now": 1774450800000,
+            "method": "fetchTicker",
+            "args": ["USD/USD"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-price/v1/quotations/price?AUTH=&EXCD=AMS&SYMB=USD",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "HHDFS00000300",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": {
+                                "rsym": "DAMSUSD",
+                                "zdiv": "4",
+                                "base": "44.0000",
+                                "pvol": "900000",
+                                "last": "45.0000",
+                                "sign": "2",
+                                "diff": "1.0000",
+                                "rate": "+2.27",
+                                "tvol": "800000",
+                                "tamt": "36000000",
+                                "ordy": "매도불가",
+                                "open": "44.2000",
+                                "high": "45.3000",
+                                "low": "44.1000"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "symbol": "ProShares Ultra Semiconductors/USD",
+                "timestamp": 1774450800000,
+                "datetime": "2026-03-25T15:00:00.000Z",
+                "high": 45.3,
+                "low": 44.1,
+                "open": 44.2,
+                "close": 45,
+                "last": 45,
+                "previousClose": 44,
+                "change": 1,
+                "percentage": 2.27,
+                "baseVolume": 800000,
+                "quoteVolume": 36000000,
+                "info": {
+                    "rsym": "DAMSUSD",
+                    "zdiv": "4",
+                    "base": "44.0000",
+                    "pvol": "900000",
+                    "last": "45.0000",
+                    "sign": "2",
+                    "diff": "1.0000",
+                    "rate": "+2.27",
+                    "tvol": "800000",
+                    "tamt": "36000000",
+                    "ordy": "매도불가",
+                    "open": "44.2000",
+                    "high": "45.3000",
+                    "low": "44.1000"
+                },
+                "average": 44.6,
+                "vwap": 45
+            }
+        },
+        {
             "description": "fetchTicker 해외 마스터에 없는 종목은 요청 전에 BadSymbol 이다",
             "method": "fetchTicker",
             "args": ["MSFT/USD"],
@@ -834,7 +921,7 @@
                     "response": { "status": 200, "body": { "rt_cd": "1", "msg_cd": "OPSQ0002", "msg1": "없는 서비스 코드 입니다" } }
                 }
             ],
-            "error": { "class": "ExchangeError", "detail": "OPSQ0002" }
+            "error": { "class": "ExchangeError", "detail": "OPSQ0002", "brokerCode": "OPSQ0002" }
         },
         {
             "description": "fetchTickers 는 종목마다 시장구분과 종목코드를 번호 붙여 한 번에 묻고, 묻지 않은 행은 버린다",
@@ -1508,6 +1595,55 @@
             ]
         },
         {
+            "description": "fetchOHLCV 는 표의 통합 코드 심볼(ProShares Ultra Semiconductors/USD)을 야후에 티커 USD 로 묻는다",
+            "config": {
+                "options": {
+                    "masterData": {
+                        "amex": [{ "code": "USD", "name": "PROSHARES ULTRA SEMICONDUCTORS", "nameKr": "프로셰어즈 울트라 반도체", "market": "AMS", "currency": "USD" }]
+                    }
+                }
+            },
+            "now": 1774440000000,
+            "method": "fetchOHLCV",
+            "args": ["ProShares Ultra Semiconductors/USD", "1d", null, 2],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://query1.finance.yahoo.com/v8/finance/chart/USD?interval=1d&range=5y",
+                        "headers": { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "chart": {
+                                "result": [
+                                    {
+                                        "meta": { "symbol": "USD", "currency": "USD", "exchangeTimezoneName": "America/New_York", "regularMarketPrice": 45 },
+                                        "timestamp": [1774272600, 1774359000],
+                                        "indicators": {
+                                            "quote": [
+                                                {
+                                                    "open": [44.1, 44.2],
+                                                    "high": [44.8, 45.3],
+                                                    "low": [43.9, 44.1],
+                                                    "close": [44, 45],
+                                                    "volume": [850000, 800000]
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ],
+                                "error": null
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [[1774224000000, 44.1, 44.8, 43.9, 44, 850000], [1774310400000, 44.2, 45.3, 44.1, 45, 800000]]
+        },
+        {
             "description": "fetchOHLCV 미국 일봉은 야후가 없는 심볼로 답하면 KIS 해외 기간별 시세로 다시 받는다",
             "now": 1774440000000,
             "method": "fetchOHLCV",
@@ -2007,6 +2143,48 @@
             "error": { "class": "NotSupported" }
         },
         {
+            "description": "fetchOHLCV 는 timeframe 을 주지 않으면 ccxt 기본값인 1분봉(1m)을 받는다",
+            "now": 1774440000000,
+            "method": "fetchOHLCV",
+            "args": ["005930/KRW", null, null, 2],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://query1.finance.yahoo.com/v8/finance/chart/005930.KS?interval=1m&range=1d",
+                        "headers": { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "chart": {
+                                "result": [
+                                    {
+                                        "meta": { "symbol": "005930.KS", "currency": "KRW", "exchangeTimezoneName": "Asia/Seoul", "regularMarketPrice": 70300 },
+                                        "timestamp": [1774400400, 1774400460, 1774400520],
+                                        "indicators": {
+                                            "quote": [
+                                                {
+                                                    "open": [70000, 70100, 70200],
+                                                    "high": [70100, 70200, 70300],
+                                                    "low": [70000, 70100, 70200],
+                                                    "close": [70100, 70200, 70300],
+                                                    "volume": [10, 11, 12]
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ],
+                                "error": null
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [[1774400460000, 70100, 70200, 70100, 70200, 11], [1774400520000, 70200, 70300, 70200, 70300, 12]]
+        },
+        {
             "description": "fetchTradingFee 국내는 위탁수수료 0.015% 와 그해의 증권거래세율이다",
             "now": 1774400400000,
             "method": "fetchTradingFee",
@@ -2226,7 +2404,150 @@
             "error": { "class": "NotSupported" }
         },
         {
-            "description": "fetchStockWarnings 는 오늘(한국 날짜) 이 종목의 VI 발동 기록을 준다",
+            "description": "fetchMarketCalendar 는 params.market 이 US 면 요청 없이 NotSupported 다(국내 휴장일만 준다)",
+            "method": "fetchMarketCalendar",
+            "args": [{ "market": "US" }],
+            "http": [],
+            "error": { "class": "NotSupported" }
+        },
+        {
+            "description": "fetchVolatilityInterruptions 는 오늘(한국 날짜) 이 종목의 VI 발동 기록을 준다",
+            "now": 1774400400000,
+            "method": "fetchVolatilityInterruptions",
+            "args": ["005930/KRW"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-vi-status?FID_DIV_CLS_CODE=0&FID_COND_SCR_DIV_CODE=20139&FID_MRKT_CLS_CODE=0&FID_INPUT_ISCD=005930&FID_RANK_SORT_CLS_CODE=0&FID_INPUT_DATE_1=20260325&FID_TRGT_CLS_CODE=&FID_TRGT_EXLS_CLS_CODE=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHPST01390000",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [
+                                {
+                                    "hts_kor_isnm": "삼성전자",
+                                    "mksc_shrn_iscd": "005930",
+                                    "vi_cls_code": "Y",
+                                    "bsop_date": "20260325",
+                                    "cntg_vi_hour": "093015",
+                                    "vi_cncl_hour": "093215",
+                                    "vi_kind_code": "1",
+                                    "vi_prc": "78100",
+                                    "vi_stnd_prc": "71000",
+                                    "vi_dprt": "10.00",
+                                    "vi_count": "1"
+                                },
+                                {
+                                    "hts_kor_isnm": "삼성전자",
+                                    "mksc_shrn_iscd": "005930",
+                                    "vi_cls_code": "Y",
+                                    "bsop_date": "20260325",
+                                    "cntg_vi_hour": "101500",
+                                    "vi_cncl_hour": "",
+                                    "vi_kind_code": "2",
+                                    "vi_prc": "77000",
+                                    "vi_count": "2"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "timestamp": 1774364400000,
+                    "datetime": "2026-03-24T15:00:00.000Z",
+                    "businessDate": "20260325",
+                    "statusCode": "Y",
+                    "kindCode": "1",
+                    "triggeredAt": "093015",
+                    "canceledAt": "093215",
+                    "price": 78100,
+                    "count": 1,
+                    "info": {
+                        "hts_kor_isnm": "삼성전자",
+                        "mksc_shrn_iscd": "005930",
+                        "vi_cls_code": "Y",
+                        "bsop_date": "20260325",
+                        "cntg_vi_hour": "093015",
+                        "vi_cncl_hour": "093215",
+                        "vi_kind_code": "1",
+                        "vi_prc": "78100",
+                        "vi_stnd_prc": "71000",
+                        "vi_dprt": "10.00",
+                        "vi_count": "1"
+                    }
+                },
+                {
+                    "timestamp": 1774364400000,
+                    "datetime": "2026-03-24T15:00:00.000Z",
+                    "businessDate": "20260325",
+                    "statusCode": "Y",
+                    "kindCode": "2",
+                    "triggeredAt": "101500",
+                    "price": 77000,
+                    "count": 2,
+                    "info": {
+                        "hts_kor_isnm": "삼성전자",
+                        "mksc_shrn_iscd": "005930",
+                        "vi_cls_code": "Y",
+                        "bsop_date": "20260325",
+                        "cntg_vi_hour": "101500",
+                        "vi_cncl_hour": "",
+                        "vi_kind_code": "2",
+                        "vi_prc": "77000",
+                        "vi_count": "2"
+                    }
+                }
+            ]
+        },
+        {
+            "description": "fetchVolatilityInterruptions 는 발동 기록이 없으면(빈 사전) 빈 목록이다",
+            "now": 1774400400000,
+            "method": "fetchVolatilityInterruptions",
+            "args": ["005930"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-vi-status?FID_DIV_CLS_CODE=0&FID_COND_SCR_DIV_CODE=20139&FID_MRKT_CLS_CODE=0&FID_INPUT_ISCD=005930&FID_RANK_SORT_CLS_CODE=0&FID_INPUT_DATE_1=20260325&FID_TRGT_CLS_CODE=&FID_TRGT_EXLS_CLS_CODE=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHPST01390000",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": { "status": 200, "body": { "rt_cd": "0", "msg_cd": "MCA00000", "msg1": "정상처리 되었습니다.", "output": {} } }
+                }
+            ],
+            "output": []
+        },
+        {
+            "description": "fetchVolatilityInterruptions 는 해외 종목을 받지 않는다(BadSymbol)",
+            "method": "fetchVolatilityInterruptions",
+            "args": ["AAPL/USD"],
+            "http": [],
+            "error": { "class": "BadSymbol" }
+        },
+        {
+            "description": "옛 이름 fetchStockWarnings 는 한 판 동안 fetchVolatilityInterruptions 와 같은 요청과 결과다",
             "now": 1774400400000,
             "method": "fetchStockWarnings",
             "args": ["005930/KRW"],
@@ -2330,39 +2651,7 @@
             ]
         },
         {
-            "description": "fetchStockWarnings 는 발동 기록이 없으면(빈 사전) 빈 목록이다",
-            "now": 1774400400000,
-            "method": "fetchStockWarnings",
-            "args": ["005930"],
-            "http": [
-                {
-                    "request": {
-                        "method": "GET",
-                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-vi-status?FID_DIV_CLS_CODE=0&FID_COND_SCR_DIV_CODE=20139&FID_MRKT_CLS_CODE=0&FID_INPUT_ISCD=005930&FID_RANK_SORT_CLS_CODE=0&FID_INPUT_DATE_1=20260325&FID_TRGT_CLS_CODE=&FID_TRGT_EXLS_CLS_CODE=",
-                        "headers": {
-                            "Content-Type": "application/json; charset=UTF-8",
-                            "authorization": "Bearer tok-stored",
-                            "appkey": "kis-app-key-abcdefgh",
-                            "appsecret": "kis-app-secret",
-                            "tr_id": "FHPST01390000",
-                            "custtype": "P"
-                        },
-                        "body": null
-                    },
-                    "response": { "status": 200, "body": { "rt_cd": "0", "msg_cd": "MCA00000", "msg1": "정상처리 되었습니다.", "output": {} } }
-                }
-            ],
-            "output": []
-        },
-        {
-            "description": "fetchStockWarnings 는 해외 종목을 받지 않는다(BadSymbol)",
-            "method": "fetchStockWarnings",
-            "args": ["AAPL/USD"],
-            "http": [],
-            "error": { "class": "BadSymbol" }
-        },
-        {
-            "description": "fetchInvestorTrading 은 종목의 개인·외국인·기관 매매동향을 영업일마다 준다",
+            "description": "fetchInvestorTrading 은 종목의 개인·외국인·기관 순매수 대금을 세 증권사 공통 모양으로 영업일마다 준다. 매수·매도 값은 info 원문에 있다",
             "now": 1774400400000,
             "method": "fetchInvestorTrading",
             "args": ["005930/KRW"],
@@ -2430,13 +2719,9 @@
                 {
                     "timestamp": 1774364400000,
                     "datetime": "2026-03-24T15:00:00.000Z",
-                    "businessDate": "20260325",
+                    "date": "20260325",
                     "close": 71000,
                     "change": -1500,
-                    "changeSign": "5",
-                    "individual": {},
-                    "foreign": {},
-                    "institution": {},
                     "info": {
                         "stck_bsop_date": "20260325",
                         "stck_clpr": "71000",
@@ -2450,34 +2735,12 @@
                 {
                     "timestamp": 1774278000000,
                     "datetime": "2026-03-23T15:00:00.000Z",
-                    "businessDate": "20260324",
+                    "date": "20260324",
                     "close": 72500,
                     "change": 500,
-                    "changeSign": "2",
-                    "individual": {
-                        "netBuyVolume": -120000,
-                        "netBuyAmount": -8700,
-                        "buyVolume": 3000000,
-                        "buyAmount": 217500,
-                        "sellVolume": 3120000,
-                        "sellAmount": 226200
-                    },
-                    "foreign": {
-                        "netBuyVolume": 150000,
-                        "netBuyAmount": 10875,
-                        "buyVolume": 2500000,
-                        "buyAmount": 181250,
-                        "sellVolume": 2350000,
-                        "sellAmount": 170375
-                    },
-                    "institution": {
-                        "netBuyVolume": -30000,
-                        "netBuyAmount": -2175,
-                        "buyVolume": 900000,
-                        "buyAmount": 65250,
-                        "sellVolume": 930000,
-                        "sellAmount": 67425
-                    },
+                    "individual": -8700,
+                    "foreign": 10875,
+                    "institution": -2175,
                     "info": {
                         "stck_bsop_date": "20260324",
                         "stck_clpr": "72500",
@@ -2511,6 +2774,93 @@
             "args": ["AAPL/USD"],
             "http": [],
             "error": { "class": "BadSymbol" }
+        },
+        {
+            "description": "fetchInvestorTrading 은 받은 영업일을 since 와 params.until 로 거르고, since 가 있으면 가장 이른 것부터 limit 개를 준다",
+            "method": "fetchInvestorTrading",
+            "args": ["005930/KRW", 1774191600000, 1, { "until": 1774321200000 }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-investor?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010900",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [
+                                { "stck_bsop_date": "20260325", "stck_clpr": "71000", "prdy_vrss": "-1500", "prsn_ntby_tr_pbmn": "10" },
+                                { "stck_bsop_date": "20260324", "stck_clpr": "72500", "prdy_vrss": "500", "prsn_ntby_tr_pbmn": "20" },
+                                { "stck_bsop_date": "20260323", "stck_clpr": "72000", "prdy_vrss": "300", "prsn_ntby_tr_pbmn": "30" }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "timestamp": 1774191600000,
+                    "datetime": "2026-03-22T15:00:00.000Z",
+                    "date": "20260323",
+                    "close": 72000,
+                    "change": 300,
+                    "individual": 30,
+                    "info": { "stck_bsop_date": "20260323", "stck_clpr": "72000", "prdy_vrss": "300", "prsn_ntby_tr_pbmn": "30" }
+                }
+            ]
+        },
+        {
+            "description": "둘째 인자로 params 를 넘기던 옛 호출 fetchInvestorTrading(symbol, params) 는 한 판 동안 받고 params 를 요청에 싣는다",
+            "method": "fetchInvestorTrading",
+            "args": ["005930/KRW", { "FID_COND_MRKT_DIV_CODE": "NX" }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-investor?FID_COND_MRKT_DIV_CODE=NX&FID_INPUT_ISCD=005930",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "FHKST01010900",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": [{ "stck_bsop_date": "20260325", "stck_clpr": "71000", "prdy_vrss": "-1500" }]
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "timestamp": 1774364400000,
+                    "datetime": "2026-03-24T15:00:00.000Z",
+                    "date": "20260325",
+                    "close": 71000,
+                    "change": -1500,
+                    "info": { "stck_bsop_date": "20260325", "stck_clpr": "71000", "prdy_vrss": "-1500" }
+                }
+            ]
         },
         {
             "description": "fetchRankings FLUCTUATION 은 등락률 순위를 공통 필드로 정리하고 params 로 정렬을 바꾼다",
@@ -4315,7 +4665,7 @@
             }
         },
         {
-            "description": "fetchBalance 는 보유 종목 키가 현금 키와 겹치면(미국 티커 USD 와 달러 현금) 한쪽을 덮어쓰지 않고 NotSupported 를 던진다",
+            "description": "fetchBalance 는 미국 티커 USD 보유를 표의 통합 코드(ProShares Ultra Semiconductors) 키에 싣고 달러 현금은 USD 키에 둔다",
             "method": "fetchBalance",
             "args": [{ "scope": ["us", "usd"] }],
             "http": [
@@ -4391,10 +4741,92 @@
                     }
                 }
             ],
-            "error": { "class": "NotSupported" }
+            "output": {
+                "info": {
+                    "overseas": {
+                        "holdings": [
+                            {
+                                "cano": "12345678",
+                                "acnt_prdt_cd": "01",
+                                "ovrs_pdno": "USD",
+                                "ovrs_item_name": "PROSHARES ULTRA SEMICONDUCTORS",
+                                "ovrs_cblc_qty": "2",
+                                "ord_psbl_qty": "2",
+                                "pchs_avg_pric": "40.0000",
+                                "ovrs_excg_cd": "AMEX",
+                                "tr_crcy_cd": "USD"
+                            }
+                        ]
+                    },
+                    "usd": {
+                        "stocks": [
+                            {
+                                "pdno": "USD",
+                                "prdt_name": "PROSHARES ULTRA SEMICONDUCTORS",
+                                "cblc_qty13": "2",
+                                "buy_crcy_cd": "USD",
+                                "frcr_evlu_amt2": "90.00"
+                            }
+                        ],
+                        "currencies": [{ "crcy_cd": "USD", "crcy_cd_name": "미국 달러", "frcr_dncl_amt_2": "1000.50", "frcr_buy_mgn_amt": "0" }]
+                    }
+                },
+                "USD": {
+                    "free": 1000.5,
+                    "used": 0,
+                    "total": 1000.5,
+                    "info": {
+                        "deposit": 1000.5,
+                        "buyMargin": 0,
+                        "stockValue": 90,
+                        "currencies": [{ "crcy_cd": "USD", "crcy_cd_name": "미국 달러", "frcr_dncl_amt_2": "1000.50", "frcr_buy_mgn_amt": "0" }],
+                        "stocks": [
+                            {
+                                "pdno": "USD",
+                                "prdt_name": "PROSHARES ULTRA SEMICONDUCTORS",
+                                "cblc_qty13": "2",
+                                "buy_crcy_cd": "USD",
+                                "frcr_evlu_amt2": "90.00"
+                            }
+                        ]
+                    }
+                },
+                "ProShares Ultra Semiconductors": {
+                    "free": 2,
+                    "used": 0,
+                    "total": 2,
+                    "info": {
+                        "cano": "12345678",
+                        "acnt_prdt_cd": "01",
+                        "ovrs_pdno": "USD",
+                        "ovrs_item_name": "PROSHARES ULTRA SEMICONDUCTORS",
+                        "ovrs_cblc_qty": "2",
+                        "ord_psbl_qty": "2",
+                        "pchs_avg_pric": "40.0000",
+                        "ovrs_excg_cd": "AMEX",
+                        "tr_crcy_cd": "USD",
+                        "rows": [
+                            {
+                                "cano": "12345678",
+                                "acnt_prdt_cd": "01",
+                                "ovrs_pdno": "USD",
+                                "ovrs_item_name": "PROSHARES ULTRA SEMICONDUCTORS",
+                                "ovrs_cblc_qty": "2",
+                                "ord_psbl_qty": "2",
+                                "pchs_avg_pric": "40.0000",
+                                "ovrs_excg_cd": "AMEX",
+                                "tr_crcy_cd": "USD"
+                            }
+                        ]
+                    }
+                },
+                "free": { "USD": 1000.5, "ProShares Ultra Semiconductors": 2 },
+                "used": { "USD": 0, "ProShares Ultra Semiconductors": 0 },
+                "total": { "USD": 1000.5, "ProShares Ultra Semiconductors": 2 }
+            }
         },
         {
-            "description": "fetchBalance 는 scope 로 보유만 받으면 미국 티커 USD 보유를 USD 키에 싣는다",
+            "description": "fetchBalance 는 scope 로 보유만 받아도 미국 티커 USD 보유를 표의 통합 코드 키에 싣는다",
             "method": "fetchBalance",
             "args": [{ "scope": "us" }],
             "http": [
@@ -4455,7 +4887,7 @@
                         ]
                     }
                 },
-                "USD": {
+                "ProShares Ultra Semiconductors": {
                     "free": 2,
                     "used": 0,
                     "total": 2,
@@ -4484,10 +4916,82 @@
                         ]
                     }
                 },
-                "free": { "USD": 2 },
-                "used": { "USD": 0 },
-                "total": { "USD": 2 }
+                "free": { "ProShares Ultra Semiconductors": 2 },
+                "used": { "ProShares Ultra Semiconductors": 0 },
+                "total": { "ProShares Ultra Semiconductors": 2 }
             }
+        },
+        {
+            "description": "fetchBalance 는 표에 없는 티커가 현금 키와 겹치면(미국 티커 KRW 와 원화 현금) 한쪽을 덮어쓰지 않고 NotSupported 를 던진다",
+            "method": "fetchBalance",
+            "args": [{ "scope": ["kr", "us"], "orderable": false }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/trading/inquire-balance?CANO=12345678&ACNT_PRDT_CD=01&AFHR_FLPR_YN=N&OFL_YN=&INQR_DVSN=02&UNPR_DVSN=01&FUND_STTL_ICLD_YN=N&FNCG_AMT_AUTO_RDPT_YN=N&PRCS_DVSN=01&CTX_AREA_FK100=&CTX_AREA_NK100=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTC8434R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_fk100": "",
+                            "ctx_area_nk100": "",
+                            "output1": [],
+                            "output2": [{ "dnca_tot_amt": "500000" }]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/trading/inquire-balance?CANO=12345678&ACNT_PRDT_CD=01&OVRS_EXCG_CD=NASD&TR_CRCY_CD=USD&CTX_AREA_FK200=&CTX_AREA_NK200=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTS3012R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_fk200": "",
+                            "ctx_area_nk200": "",
+                            "output1": [
+                                {
+                                    "cano": "12345678",
+                                    "acnt_prdt_cd": "01",
+                                    "ovrs_pdno": "KRW",
+                                    "ovrs_item_name": "TEST KRW TICKER",
+                                    "ovrs_cblc_qty": "1",
+                                    "ord_psbl_qty": "1",
+                                    "ovrs_excg_cd": "NASD",
+                                    "tr_crcy_cd": "USD"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "error": { "class": "NotSupported" }
         },
         {
             "description": "fetchBalance 는 조회가 하나라도 실패하면 던진다(원장 초당 거래건수 초과는 RateLimitExceeded)",
@@ -4561,7 +5065,7 @@
                     "response": { "status": 500, "body": { "rt_cd": "1", "msg_cd": "EGW00215", "msg1": "초당 거래건수를 초과하였습니다." } }
                 }
             ],
-            "error": { "class": "RateLimitExceeded", "detail": "EGW00215" }
+            "error": { "class": "RateLimitExceeded", "detail": "EGW00215", "brokerCode": "EGW00215" }
         },
         {
             "description": "createOrder 국내 지정가 매수는 휴장일 캘린더를 받은 뒤 정규장 TR 로 내고, 소수 수량은 내린다",
@@ -6351,7 +6855,7 @@
             "method": "createOrder",
             "args": ["005930/KRW", "limit", "buy", 1, 70030],
             "http": [],
-            "error": { "class": "InvalidOrder", "detail": "price-tick-invalid" }
+            "error": { "class": "InvalidOrder", "detail": "price-tick-invalid", "brokerCode": null }
         },
         {
             "description": "createOrder session 이 nxt 여도 NXT 가 닫힌 새벽에는 주문을 보내지 않고 MarketClosed 다",
@@ -6563,7 +7067,7 @@
                     "response": { "status": 200, "body": { "rt_cd": "1", "msg_cd": "APBK0952", "msg1": "주문가능금액을 초과 했습니다" } }
                 }
             ],
-            "error": { "class": "ExchangeError", "detail": "APBK0952" }
+            "error": { "class": "ExchangeError", "detail": "APBK0952", "brokerCode": "APBK0952" }
         },
         {
             "description": "createOrder 국내 주문 요청이 시간 초과로 끝나면 캘린더 뒤 주문을 한 번만 보내고 OrderOutcomeUnknown 이다",
@@ -6694,6 +7198,122 @@
                 "type": "limit",
                 "side": "buy",
                 "price": 170.5,
+                "amount": 2,
+                "status": "open",
+                "trades": [],
+                "fees": []
+            }
+        },
+        {
+            "description": "createOrder 는 옛 심볼(USD/USD)로 불러도 KIS 에 티커 USD 를 보내고 결과 심볼은 표의 통합 코드다",
+            "config": {
+                "options": {
+                    "masterData": {
+                        "amex": [{ "code": "USD", "name": "PROSHARES ULTRA SEMICONDUCTORS", "nameKr": "프로셰어즈 울트라 반도체", "market": "AMS", "currency": "USD" }]
+                    }
+                }
+            },
+            "now": 1774450800000,
+            "method": "createOrder",
+            "args": ["USD/USD", "limit", "buy", 2, 40.5],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/trading/order",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTT1002U",
+                            "custtype": "P"
+                        },
+                        "body": "{\"CANO\":\"12345678\",\"ACNT_PRDT_CD\":\"01\",\"OVRS_EXCG_CD\":\"AMEX\",\"PDNO\":\"USD\",\"ORD_QTY\":\"2\",\"OVRS_ORD_UNPR\":\"40.5\",\"CTAC_TLNO\":\"\",\"MGCO_APTM_ODNO\":\"\",\"SLL_TYPE\":\"\",\"ORD_SVR_DVSN_CD\":\"0\",\"ORD_DVSN\":\"00\"}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "APBK0013",
+                            "msg1": "주문 전송 완료 되었습니다.",
+                            "output": { "KRX_FWDG_ORD_ORGNO": "01790", "ODNO": "ORD-0201", "ORD_TMD": "000001" }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "info": {
+                    "rt_cd": "0",
+                    "msg_cd": "APBK0013",
+                    "msg1": "주문 전송 완료 되었습니다.",
+                    "output": { "KRX_FWDG_ORD_ORGNO": "01790", "ODNO": "ORD-0201", "ORD_TMD": "000001" }
+                },
+                "id": "ORD-0201",
+                "timestamp": 1774450801000,
+                "datetime": "2026-03-25T15:00:01.000Z",
+                "symbol": "ProShares Ultra Semiconductors/USD",
+                "type": "limit",
+                "side": "buy",
+                "price": 40.5,
+                "amount": 2,
+                "status": "open",
+                "trades": [],
+                "fees": []
+            }
+        },
+        {
+            "description": "createOrder 는 표의 통합 코드 심볼(ProShares Ultra Semiconductors/USD)로 불러도 KIS 에 티커 USD 를 보낸다",
+            "config": {
+                "options": {
+                    "masterData": {
+                        "amex": [{ "code": "USD", "name": "PROSHARES ULTRA SEMICONDUCTORS", "nameKr": "프로셰어즈 울트라 반도체", "market": "AMS", "currency": "USD" }]
+                    }
+                }
+            },
+            "now": 1774450800000,
+            "method": "createOrder",
+            "args": ["ProShares Ultra Semiconductors/USD", "limit", "buy", 2, 40.5],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/trading/order",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTT1002U",
+                            "custtype": "P"
+                        },
+                        "body": "{\"CANO\":\"12345678\",\"ACNT_PRDT_CD\":\"01\",\"OVRS_EXCG_CD\":\"AMEX\",\"PDNO\":\"USD\",\"ORD_QTY\":\"2\",\"OVRS_ORD_UNPR\":\"40.5\",\"CTAC_TLNO\":\"\",\"MGCO_APTM_ODNO\":\"\",\"SLL_TYPE\":\"\",\"ORD_SVR_DVSN_CD\":\"0\",\"ORD_DVSN\":\"00\"}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "APBK0013",
+                            "msg1": "주문 전송 완료 되었습니다.",
+                            "output": { "KRX_FWDG_ORD_ORGNO": "01790", "ODNO": "ORD-0201", "ORD_TMD": "000001" }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "info": {
+                    "rt_cd": "0",
+                    "msg_cd": "APBK0013",
+                    "msg1": "주문 전송 완료 되었습니다.",
+                    "output": { "KRX_FWDG_ORD_ORGNO": "01790", "ODNO": "ORD-0201", "ORD_TMD": "000001" }
+                },
+                "id": "ORD-0201",
+                "timestamp": 1774450801000,
+                "datetime": "2026-03-25T15:00:01.000Z",
+                "symbol": "ProShares Ultra Semiconductors/USD",
+                "type": "limit",
+                "side": "buy",
+                "price": 40.5,
                 "amount": 2,
                 "status": "open",
                 "trades": [],
@@ -8505,7 +9125,7 @@
                     "response": { "status": 200, "body": { "rt_cd": "1", "msg_cd": "APBK1683", "msg1": "정정/취소할 수량이 없습니다." } }
                 }
             ],
-            "error": { "class": "ExchangeError", "detail": "APBK1683" }
+            "error": { "class": "ExchangeError", "detail": "APBK1683", "brokerCode": "APBK1683" }
         },
         {
             "description": "cancelAllOrders 는 종목의 미체결을 모두 차례로 취소하고 행의 주문채번지점번호(ord_gno_brno)를 원주문 조직번호로 싣는다",

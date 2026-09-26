@@ -28,7 +28,7 @@ TypeScript 판이 실계좌로 확인한 기준 구현이므로, 새 케이스�
                 { "request": { }, "network": "timeout" }                                         // 응답 대신 시간 초과("timeout")나 연결 끊김("reset")
             ],
             "output": { },                  // 돌려받을 값. error 와 함께 쓰지 않는다
-            "error": { "class": "InsufficientFunds", "detail": "insufficient-buying-power" },   // 던질 오류(클래스 이름은 정확히 같아야 한다)
+            "error": { "class": "InsufficientFunds", "detail": "insufficient-buying-power", "brokerCode": "insufficient-buying-power" },   // 던질 오류(클래스 이름은 정확히 같아야 한다)
             "tokenStoreAfter": { "<키>": "present" }   // (선택) 끝난 뒤 저장소에 키가 있는지("present")·없는지("absent")
         }
     ]
@@ -42,6 +42,8 @@ TypeScript 판이 실계좌로 확인한 기준 구현이므로, 새 케이스�
   주문 접수처럼 결과에 현재 시각이 실리는 케이스는 `now`를 적는다.
 - 결과(`output`)는 객체에서 값이 `null`인 키를 없는 키와 같게 보고 비교한다. JSON에는 `undefined`가 없고 Python 판에는 `null`과
   `undefined`의 구분이 없기 때문이다. 그래서 `output`에는 값이 있는 키만 적는다.
+- 오류(`error`)는 클래스 이름을 비교하고, `detail`과 `brokerCode`는 적은 것만 비교한다. Python 판은 `brokerCode`를 `broker_code`로 읽는다.
+  `brokerCode`의 `null`은 그 필드가 없어야 한다는 뜻이다(증권사 응답 없이 막은 오류).
 - `args`의 `null`은 TypeScript 판에서 `undefined`로 넘긴다. Python 판에서 인자의 기본값이 `None`인 것과 맞춘다.
 - 요청 본문은 문자열 그대로 비교한다. 두 판 모두 JavaScript의 `JSON.stringify`와 같은 모양(공백 없음, 한글 그대로, 정수 값의 실수는 소수점 없이)으로 보낸다.
 - `http` 목록보다 요청이 많거나 적으면 실패한다.

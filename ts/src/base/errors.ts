@@ -38,8 +38,16 @@
  */
 
 export interface BaseErrorOptions extends ErrorOptions {
-    /** 증권사가 알려 준 세부 원인 코드. 어댑터가 종류보다 구체적인 원인을 알 때만 채운다. */
+    /**
+     * 라이브러리가 가른 원인 이름. 어댑터가 종류보다 구체적인 원인을 알 때만 채운다. 값 체계는 증권사마다 다르다. 한국투자증권과 토스증권은
+     * 대개 증권사 오류 코드와 같고, KB증권은 정규화한 이름(`TOKEN_INVALID` 등)이다. 요청 전에 막은 오류는 라이브러리가 정한 이름(`price-tick-invalid` 등)이다.
+     */
     detail?: string | undefined;
+    /**
+     * 증권사가 응답에 실어 보낸 원래 오류 코드. 한국투자증권은 `msg_cd`, 토스증권은 오류 코드, KB증권은 `processCode` 이고 코드 표에 없는 코드도 싣는다.
+     * 증권사 응답 없이 라이브러리가 막은 오류에는 없다.
+     */
+    brokerCode?: string | undefined;
     /** 같은 요청을 다시 보내도 되는가. `undefined` 는 이 클래스만으로는 판정하지 않는다는 뜻이다. */
     retryable?: boolean | undefined;
 }
@@ -47,6 +55,7 @@ export interface BaseErrorOptions extends ErrorOptions {
 export class BaseError extends Error {
     override name = 'BaseError';
     detail?: string | undefined;
+    brokerCode?: string | undefined;
     retryable?: boolean | undefined;
 
     constructor(message: string, options: BaseErrorOptions = {}) {
@@ -54,6 +63,7 @@ export class BaseError extends Error {
         // 컴파일 대상이 낮아도 `instanceof` 가 깨지지 않게 프로토타입을 고정한다.
         Object.setPrototypeOf(this, new.target.prototype);
         this.detail = options.detail;
+        this.brokerCode = options.brokerCode;
         this.retryable = options.retryable;
     }
 }

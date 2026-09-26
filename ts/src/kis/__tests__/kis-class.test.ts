@@ -167,7 +167,7 @@ describe('fetchOHLCV — 야후 우선, 미국 일봉은 KIS 폴백', () => {
         const candles = await newKis().fetchOHLCV('005930/KRW', '1h', 5, 100, { until: 1_800_000_000_000 });
 
         expect(candles).toEqual(daily);
-        expect(mockYahoo).toHaveBeenCalledWith('005930/KRW', '1h', 100, 5, 1_800_000_000_000, 'KOSPI', expect.anything()); // 마스터가 KOSPI 로 알려 준 시장 구분이 야후 티커 접미사(.KS)가 된다
+        expect(mockYahoo).toHaveBeenCalledWith('005930', '1h', 100, 5, 1_800_000_000_000, 'KOSPI', expect.anything()); // 마스터가 KOSPI 로 알려 준 시장 구분이 야후 티커 접미사(.KS)가 된다
         expect(mockFetch).not.toHaveBeenCalled();
     });
 
@@ -211,13 +211,17 @@ describe('fetchOHLCV — 야후 우선, 미국 일봉은 KIS 폴백', () => {
         expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it('★야후에는 통합 심볼을 넘긴다 — KIS 표기(BRK/B)로 불러도 BRK.B/USD 다', async () => {
+    it('★야후에는 통합 심볼이 아니라 티커를 넘긴다 — BRK.B/USD 는 KIS 표기 BRK/B, 표의 통합 코드 심볼은 USD 다', async () => {
         const nyse = [...KIS_MASTER_FIXTURE.nyse, { code: 'BRK/B', name: 'BERKSHIRE HATHAWAY INC-CL B', market: 'NYS' as const, currency: 'USD' }];
-        mockYahoo.mockResolvedValueOnce(daily);
+        const amex = [{ code: 'USD', name: 'PROSHARES ULTRA SEMICONDUCTORS', market: 'AMS' as const, currency: 'USD' }];
+        mockYahoo.mockResolvedValue(daily);
 
-        await newKis({ masterData: { ...KIS_MASTER_FIXTURE, nyse } }).fetchOHLCV('BRK/B', '1d', undefined, 2);
+        const broker = newKis({ masterData: { ...KIS_MASTER_FIXTURE, nyse, amex } });
+        await broker.fetchOHLCV('BRK.B/USD', '1d', undefined, 2);
+        await broker.fetchOHLCV('ProShares Ultra Semiconductors/USD', '1d', undefined, 2);
 
-        expect(mockYahoo.mock.calls[0]![0]).toBe('BRK.B/USD');
+        // 야후 표기(BRK-B)는 야후 모듈이 티커에서 만든다. 요청 주소는 요청 픽스처가 고정한다.
+        expect(mockYahoo.mock.calls.map((call) => call[0])).toEqual(['BRK/B', 'USD']);
     });
 
     it('★미국 일봉 KIS 폴백도 since 부터 until 까지의 봉을 앞에서부터 limit 개 준다', async () => {

@@ -3,9 +3,11 @@
  *
  * 타입 비교(`expectTypeOf`)는 실행 시 아무것도 하지 않고 `pnpm typecheck` 가 검사한다.
  */
-import { describe, expect, expectTypeOf, it } from 'vitest';
+import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 
+import type { InvestorTradingRecord } from '../base/types';
 import type { StockMarketGroup } from '../broker-market-group';
+import { kbsec, type KbsecInvestorTradingRecord } from '../kbsec';
 import { KbsecAuth, KBSecAuth } from '../kbsec/kbsec-auth';
 import {
     isKbsecBusinessError,
@@ -35,6 +37,7 @@ import {
     type KbsecTokenResponse,
     type KBSecTokenResponse,
 } from '../kbsec/kbsec-types';
+import { kis, type KisInvestorTradingRecord } from '../kis';
 import { KisAuth, KISAuth } from '../kis/kis-auth';
 import { KisCandleService, KISCandleService } from '../kis/kis-candle-service';
 import type {
@@ -52,7 +55,12 @@ import type {
 import { getTickSize } from '../kis/kis-types';
 import { getKrxTickSize } from '../krx-tick-size';
 import type { CalendarMarket } from '../market-calendar';
+import { toss } from '../toss';
 import type { TossMarketCountry } from '../toss/toss-types';
+
+afterEach(() => {
+    vi.restoreAllMocks();
+});
 
 describe('옛 이름 별칭', () => {
     it('클래스와 함수의 옛 이름은 새 이름과 같은 값이다', () => {
@@ -92,6 +100,8 @@ describe('옛 이름 별칭', () => {
         expectTypeOf<KBSecCommonOutput>().toEqualTypeOf<KbsecCommonOutput>();
         expectTypeOf<KBSecTokenResponse>().toEqualTypeOf<KbsecTokenResponse>();
         expectTypeOf<KBSecCachedToken>().toEqualTypeOf<KbsecCachedToken>();
+        expectTypeOf<KisInvestorTradingRecord>().toEqualTypeOf<InvestorTradingRecord>();
+        expectTypeOf<KbsecInvestorTradingRecord>().toEqualTypeOf<InvestorTradingRecord>();
     });
 
     it("'KR' | 'US' 의 옛 이름은 모두 StockMarketGroup 이다", () => {
@@ -99,5 +109,32 @@ describe('옛 이름 별칭', () => {
         expectTypeOf<KBSecMarketCountry>().toEqualTypeOf<StockMarketGroup>();
         expectTypeOf<TossMarketCountry>().toEqualTypeOf<StockMarketGroup>();
         expectTypeOf<CalendarMarket>().toEqualTypeOf<StockMarketGroup>();
+    });
+});
+
+describe('옛 메서드 이름', () => {
+    it('옛 이름은 새 이름과 같은 인자와 결과 타입이다', () => {
+        expectTypeOf<kis['fetchStockWarnings']>().toEqualTypeOf<kis['fetchVolatilityInterruptions']>();
+        expectTypeOf<kbsec['fetchStockWarnings']>().toEqualTypeOf<kbsec['fetchTradingRestriction']>();
+        expectTypeOf<toss['fetchInvestorTrading']>().toEqualTypeOf<toss['fetchMarketInvestorTrading']>();
+    });
+
+    it('옛 이름과 옛 호출 모양은 받은 인자를 그대로 새 이름에 넘기고 그 결과를 돌려준다', async () => {
+        const result = [{ marker: 'new' }];
+        const params = { extra: 'x' };
+        const kisNew = vi.spyOn(kis.prototype, 'fetchVolatilityInterruptions').mockResolvedValue(result as never);
+        const kbsecNew = vi.spyOn(kbsec.prototype, 'fetchTradingRestriction').mockResolvedValue(result as never);
+        const tossNew = vi.spyOn(toss.prototype, 'fetchMarketInvestorTrading').mockResolvedValue(result as never);
+        const tossSessions = vi.spyOn(toss.prototype, 'fetchMarketSessions').mockResolvedValue(result as never);
+
+        expect(await new kis().fetchStockWarnings('005930/KRW', params)).toBe(result);
+        expect(await new kbsec().fetchStockWarnings('005930/KRW', params)).toBe(result);
+        expect(await new toss().fetchInvestorTrading('KOSDAQ', '1w', 3, params)).toBe(result);
+        expect(await new toss().fetchMarketCalendar('kr', params)).toBe(result);
+
+        expect(kisNew).toHaveBeenCalledWith('005930/KRW', params);
+        expect(kbsecNew).toHaveBeenCalledWith('005930/KRW', params);
+        expect(tossNew).toHaveBeenCalledWith('KOSDAQ', '1w', 3, params);
+        expect(tossSessions).toHaveBeenCalledWith('kr', params);
     });
 });

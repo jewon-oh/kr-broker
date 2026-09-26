@@ -8,7 +8,7 @@ global.fetch = mockFetch as unknown as typeof fetch;
 
 import { kbsec } from '../../kbsec';
 import { KBSEC_TR } from '../kbsec-types';
-import { __resetKbsecTokenBreaker } from '../kbsec-token-breaker';
+import { __resetKbsecTokenBreaker } from '../../testing';
 import { CREDS, calledTrs, routeTr, trBody } from './support/kbsec-fetch';
 
 const newExchange = (options: Record<string, unknown> = {}) => new kbsec({ ...CREDS, rateLimit: 0, options });

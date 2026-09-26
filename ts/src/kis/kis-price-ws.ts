@@ -25,6 +25,8 @@ export interface KisPriceWsOptions {
     onOrderbook?: ((streamSymbol: string, bids: [number, number][], asks: [number, number][]) => void) | undefined;
     /** 구독 응답이 실패(`rt_cd`가 `0`이 아님)면 부른다. 없으면 로그만 남긴다 */
     onSubscribeError?: ((trId: string, trKey: string, message: string) => void) | undefined;
+    /** 콜백 심볼에 쓸 종목 통합 코드 표(`toStreamSymbol`). 없으면 `COMMON_STOCK_CODES` 다. `createPriceStream` 은 인스턴스의 표를 넘긴다 */
+    commonStockCodes?: Readonly<Record<string, string>> | undefined;
 }
 
 /** 체결가와 호가만 읽는 연결. `KisPriceWs`만 쓴다. */
@@ -52,7 +54,7 @@ class KisPriceStream extends KisRealtimeStream {
 
     protected override onFrame(trId: string, countText: string, payload: string): void {
         for (const rec of parseKisRealtimePayload(trId, countText, payload)) {
-            const streamSymbol = toStreamSymbol(rec.symbol);
+            const streamSymbol = toStreamSymbol(rec.symbol, this.priceOpts.commonStockCodes);
             // 한 건의 콜백이 던져도 나머지 건과 연결은 계속 처리한다.
             try {
                 if (rec.kind === 'trade') this.priceOpts.onTrade?.(streamSymbol, rec.last, rec.changePct);

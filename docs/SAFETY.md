@@ -164,7 +164,7 @@ KB증권의 미국 주문은 `fetchOpenOrders`가 조회하지 않으므로 `fet
 1. 실전 환경에서 `verbose`를 켜지 않습니다. `verbose`는 기본이 `false`입니다. TypeScript 판은 `setLogger`로 로거를 전달했을 때만 로그를 출력합니다. Python 판은 표준 `logging`의 `kr_broker` 로거로 남기므로, 앱이 `logging.basicConfig(level=logging.DEBUG)`만 해도 출력됩니다.
 2. `setLogger`에 전달하는 로거(Python 판은 `kr_broker` 로거의 핸들러)에서 `headers`, `body`, `err` 필드를 제외하거나 마스킹합니다. 라이브러리는 알려진 비밀 필드만 가리고 나머지는 그대로 전달합니다.
 3. 기본 로거는 아무것도 출력하지 않습니다. `setLogger`를 호출하지 않으면 라이브러리는 로그를 남기지 않습니다.
-4. 오류를 로그에 남길 때는 `error.name`, `error.detail`, 정리한 메시지만 씁니다. `error.message`에는 요청 주소와 응답 본문이 들어 있을 수 있고, `error.cause`는 하위 오류를 그대로 담습니다.
+4. 오류를 로그에 남길 때는 `error.name`, `error.detail`, `error.brokerCode`, 정리한 메시지만 씁니다. `error.message`에는 요청 주소와 응답 본문이 들어 있을 수 있고, `error.cause`는 하위 오류를 그대로 담습니다.
 5. `last_request_*`와 `last_http_response`를 로그, 오류 보고 도구, 크래시 덤프에 넣지 않습니다.
 6. 앱키와 시크릿은 환경 변수나 비밀 저장소에서 읽습니다. 코드와 저장소에 넣지 않습니다. 방법은 [앱키 발급 가이드](guides/credentials.md)에 있습니다.
 7. `tokenStore`로 쓰는 저장소는 앱키와 같은 수준으로 접근을 제한합니다.

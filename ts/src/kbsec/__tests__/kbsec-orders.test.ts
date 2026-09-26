@@ -20,8 +20,7 @@ import {
 import { resetMarketCalendar } from '../../market-calendar';
 import { KBSEC_ERROR_DETAIL } from '../kbsec-error-codes';
 import { KBSEC_ORDER_TYPE_US, KBSEC_TR } from '../kbsec-types';
-import { __resetKbsecTokenBreaker } from '../kbsec-token-breaker';
-import { __resetFillSideWarn } from '../kbsec-fill-warnings';
+import { __resetFillSideWarn, __resetKbsecTokenBreaker } from '../../testing';
 import { KIS_MASTER_FIXTURE } from '../../__tests__/support/kis-master-fixture';
 import { CREDS, bizError, calledTrs, routeTr, tokenOk, trBody } from './support/kbsec-fetch';
 
@@ -154,6 +153,7 @@ describe('createOrder — 국내', () => {
 
         expect(error).toBeInstanceOf(InvalidOrder);
         expect(error.detail).toBe(KBSEC_ERROR_DETAIL.QUANTITY_INVALID);
+        expect(error.brokerCode).toBeUndefined();
         expect(calledTrs(mockFetch)).not.toContain(TR_BUY.toLowerCase());
     });
 
@@ -268,6 +268,20 @@ describe('createOrder — 해외', () => {
         expect(trBody(mockFetch, KBSEC_TR.ORDER_US).dataBody).toMatchObject({
             trd_dl_ccd: '02', is_cd: 'AAPL', frgn_ordr_typ_cd: KBSEC_ORDER_TYPE_US.LIMIT, frgn_ordr_q: '2', frgn_ordr_prc_p4: '231.5000',
         });
+    });
+
+    it('현금 코드와 같은 티커는 옛 심볼과 표의 통합 코드 심볼 모두 티커 USD 로 내고, 결과 심볼은 표의 통합 코드다', async () => {
+        routeTr(mockFetch, { [KBSEC_TR.ORDER_US]: { ordr_no: 'U2' } });
+        const amex = [{ code: 'USD', name: 'PROSHARES ULTRA SEMICONDUCTORS', market: 'AMS' as const, currency: 'USD' }];
+        const broker = new kbsec({ ...CREDS, rateLimit: 0, options: { masterData: { ...MASTER_DATA, amex }, confirmBudget: { intervalMs: 0 } } });
+
+        for (const symbol of ['USD/USD', 'ProShares Ultra Semiconductors/USD']) {
+            const order = await broker.createOrder(symbol, 'limit', 'buy', 2, 40.5);
+
+            // 세션 게이트도 티커로 상장 거래소(AMEX)를 찾는다. 통합 코드로 찾으면 거래소를 몰라 MarketClosed 다.
+            expect(trBody(mockFetch, KBSEC_TR.ORDER_US).dataBody).toMatchObject({ is_cd: 'USD', frgn_ordr_q: '2', frgn_ordr_prc_p4: '40.5000' });
+            expect(order.symbol).toBe('ProShares Ultra Semiconductors/USD');
+        }
     });
 
     it('시장가 매수는 체결 가능 지정가로 바꿔 보낸다 — 매도호가 100.20 × 1.005 를 센트로 올린 100.71', async () => {

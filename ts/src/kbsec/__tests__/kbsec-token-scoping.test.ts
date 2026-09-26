@@ -12,7 +12,7 @@ global.fetch = mockFetch as unknown as typeof fetch;
 
 import { kbsec } from '../../kbsec';
 import { BadRequest, ExchangeNotAvailable } from '../../base/errors';
-import { __resetKbsecTokenBreaker, kbsecTokenBreakerState } from '../kbsec-token-breaker';
+import { __resetKbsecTokenBreaker, kbsecTokenBreakerState } from '../../testing';
 
 const envelope = (header: Record<string, unknown>, body: unknown, status = 200) => {
     const text = JSON.stringify({ dataHeader: header, dataBody: body });

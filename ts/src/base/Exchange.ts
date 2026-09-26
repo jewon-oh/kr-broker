@@ -29,6 +29,7 @@
  * `maxRetriesOnFailure` 번까지 다시 보낸다.
  */
 
+import { COMMON_STOCK_CODES, commonStockCode, stockTicker } from '../broker-market-group';
 import { KST_OFFSET_MS } from '../broker-time';
 import { logger } from '../logger';
 import { resolveFlag, resolveTokenStore, type BrokerTokenStore } from '../options';
@@ -292,6 +293,8 @@ export class Exchange {
     exceptions: ExceptionTable | Dictionary<ErrorClass> | undefined = undefined;
     httpExceptions: Dictionary<ErrorClass> = {};
     commonCurrencies: Dictionary<string> = {};
+    /** 현금 코드와 같은 티커의 통합 코드(티커 → 통합 코드). 기본은 `COMMON_STOCK_CODES` 이고 생성자 인자로 덮는다. */
+    commonStockCodes: Dictionary<string> = {};
     timeframes: Dictionary<string> | undefined = undefined;
     status: Dict = {};
     /** 요청 버킷 이름 → `{ rateLimit }`. 엔드포인트의 `bucket` 이 가리킨다. */
@@ -343,6 +346,7 @@ export class Exchange {
 
     private throttler: Throttler | undefined = undefined;
     private bucketThrottlers: Dictionary<Throttler | undefined> = {};
+    private readonly deprecationWarned = new Set<string>();
 
     constructor(userConfig: ConstructorArgs = {}) {
         Object.assign(this, boundFunctions);
@@ -431,6 +435,7 @@ export class Exchange {
                 511: AuthenticationError,
             },
             commonCurrencies: {},
+            commonStockCodes: { ...COMMON_STOCK_CODES },
             precisionMode: TICK_SIZE,
             paddingMode: NO_PADDING,
             limits: {
@@ -905,6 +910,20 @@ export class Exchange {
         return resolveFlag(this.options[name]);
     }
 
+    /** `fetchMarketCalendar` 의 `params.market`. 대소문자를 가리지 않고 기본은 `'KR'` 이다. `'KR'`·`'US'` 밖의 값은 요청 없이 `BadRequest` 다. */
+    protected calendarMarket(params: Dict): 'KR' | 'US' {
+        const market = (safeString(params, 'market') ?? 'KR').toUpperCase();
+        if (market !== 'KR' && market !== 'US') throw new BadRequest(`${this.id} fetchMarketCalendar() 의 params.market 은 'KR' 이나 'US' 다: ${market}`);
+        return market;
+    }
+
+    /** 옛 이름이나 옛 호출 모양으로 부른 것을 인스턴스마다 한 번 경고로 남긴다. 그 모양은 다음 판에서 지운다. */
+    protected warnDeprecated(usage: string, replacement: string): void {
+        if (this.deprecationWarned.has(usage)) return;
+        this.deprecationWarned.add(usage);
+        logger.warn({ usage, replacement }, `[${this.id}] ${usage} 는 다음 판에서 지운다. ${replacement} 로 바꾼다`);
+    }
+
     /**
      * 접수 뒤 체결을 확정할 때 쓰는 조회 예산. `options.confirmBudget`(객체이거나 객체를 돌려주는 함수)이 증권사가 정한 기본값 `defaults` 를
      * 이긴다. 범위를 벗어난 값은 무시하고 아래 층의 값을 쓴다.
@@ -997,6 +1016,10 @@ export class Exchange {
             this.currencies,
         );
         this.currencies_by_id = indexBy(this.currencies, 'id') as Dictionary<CurrencyInterface>;
+        // `commonStockCodes` 로 코드를 바꾼 종목은 같은 id 의 현금(`USD`)과 id 가 겹친다. id 로 찾으면 코드를 바꾸지 않은 쪽을 준다.
+        for (const currency of Object.values(this.currencies)) {
+            if (currency.id !== undefined && currency.code === currency.id) this.currencies_by_id[currency.id] = currency;
+        }
         this.codes = Object.keys(keysort(this.currencies));
         return this.markets;
     }
@@ -1133,6 +1156,19 @@ export class Exchange {
 
     commonCurrencyCode(code: string): string {
         return safeString(this.commonCurrencies, code, code);
+    }
+
+    /** 티커 → 종목의 통합 코드(`market.base`). `commonStockCodes` 에 없으면 티커 그대로다. 현금 코드에는 쓰지 않는다. */
+    commonStockCode(ticker: string): string {
+        return commonStockCode(ticker, this.commonStockCodes);
+    }
+
+    /**
+     * 종목의 통합 코드 → 티커. 통합 코드가 아니면 그대로 돌려준다. 기본 표(`COMMON_STOCK_CODES`)의 통합 코드도 받는다. 인스턴스 없이 도는 공용
+     * 도우미(`symbolBaseCode` 등)는 기본 표를 쓰므로, 생성자로 표를 덮어도 그 심볼이 같은 종목을 가리켜야 한다.
+     */
+    stockTicker(code: string): string {
+        return stockTicker(stockTicker(code, this.commonStockCodes));
     }
 
     safeCurrency(currencyId: Str, currency: Currency = undefined): CurrencyInterface {

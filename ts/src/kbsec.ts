@@ -20,7 +20,8 @@
  * ## 심볼
  *
  * `005930/KRW`(국내), `AAPL/USD`(미국). KB 는 TR 마다 종목코드를 직접 받아서 종목 목록을 내려받지 않는다. `market(symbol)` 이 심볼 모양으로
- * 종목을 그때그때 만든다(`market.info.country` 가 `KR` 또는 `US`).
+ * 종목을 그때그때 만든다(`market.info.country` 가 `KR` 또는 `US`). 현금 코드와 같은 티커(`USD`)는 `commonStockCodes` 의 통합 코드로 심볼을 만든다
+ * (`ProShares Ultra Semiconductors/USD`). 입력은 `USD/USD` 도 받는다.
  *
  * ## 옵션
  *
@@ -71,7 +72,7 @@ import {
     safeString,
 } from './base';
 import type {
-    Balances, Dict, Dictionary, Int, KrTimestamped, MarketInterface, Num, OHLCV, Order, OrderBook, OrderSide, OrderType, Str, Ticker, Trade,
+    Balances, Dict, Dictionary, Int, InvestorTradingRecord, KrTimestamped, MarketInterface, Num, OHLCV, Order, OrderBook, OrderSide, OrderType, Str, Ticker, Trade,
     TradingFeeInterface,
 } from './base';
 import { assertSecureUrl, implicitMethodName } from './base/Exchange';
@@ -761,6 +762,8 @@ export interface KbsecStockWarning {
 /**
  * 투자자 유형별 매매(`IVU10430`)의 한 값 축(기본은 순매수). 13개 유형을 준다 — 다른 증권사보다 세분화됐다.
  * 수량은 `amt_q_clsf` 파라미터로 대금 대신 받을 수 있다.
+ *
+ * @deprecated `fetchInvestorTrading` 이 공통 타입(`InvestorTradingRecord`)을 돌려주면서 쓰지 않는다. 13개 유형은 `info` 의 원문 필드로 읽는다. 다음 판에서 지운다.
  */
 export interface KbsecInvestorAmounts {
     individual: number;
@@ -780,21 +783,8 @@ export interface KbsecInvestorAmounts {
     foreignBrokerTotal: number;
 }
 
-/** 종목별 투자자 매매동향 하루치(`IVU10430`). 국내만 지원한다. */
-export interface KbsecInvestorTradingRecord extends KrTimestamped {
-    /** 일자 `YYYYMMDD`(`dt`) */
-    date: string;
-    /** 종가(`cls_prc`) */
-    close: number;
-    /** 전일대비(`bdy_cmpr`) */
-    change: number;
-    /** 등락율(`up_dwn_r_p2`) */
-    percentage: number;
-    /** 거래량(`vlm`) */
-    volume: number;
-    amounts: KbsecInvestorAmounts;
-    info: Dict;
-}
+/** @deprecated `fetchInvestorTrading` 이 공통 타입을 돌려준다. `InvestorTradingRecord` 를 쓴다. 다음 판에서 지운다. */
+export type KbsecInvestorTradingRecord = InvestorTradingRecord;
 
 /** 외국계 거래원 한 곳의 매도 또는 매수 현황(`IVU10420`). */
 export interface KbsecBrokerFlow {
@@ -1747,9 +1737,7 @@ export class kbsec extends Exchange {
                 fetchTime: false,
                 // 주식 고유. 장운영상태 TR 로 전·기준·익영업일을 받아 휴장일 캘린더를 채운다.
                 fetchMarketCalendar: true,
-                fetchStockWarnings: true,
                 fetchInvestorTrading: true,
-                fetchRankings: true,
                 createMarketBuyOrderWithCost: true,
                 createConditionalOrder: false,
             },
@@ -1948,12 +1936,13 @@ export class kbsec extends Exchange {
             const processCode = String(header?.processCode ?? '').trim();
             const processMessage = String(header?.processMessage ?? '').trim();
             const feedback = `KB증권 업무 오류 (${trCode}): ${processMessage} [processCode=${processCode}]`;
-            const detail = kbsecErrorDetail(processCode);
-            this.throwExactlyMatchedException((this.exceptions as Dict).exact, processCode, feedback, { detail });
-            throw new ExchangeError(feedback);
+            const brokerCode = processCode || undefined;
+            this.throwExactlyMatchedException((this.exceptions as Dict).exact, processCode, feedback, { detail: kbsecErrorDetail(processCode), brokerCode });
+            throw new ExchangeError(feedback, { brokerCode });
         }
         if (isKbsecTokenFailure(statusCode, header)) {
-            throw new AuthenticationError(`${this.id} ${method} ${url} ${statusCode} 토큰이 무효다`, { detail: KBSEC_ERROR_DETAIL.TOKEN_INVALID });
+            const brokerCode = String(header?.processCode ?? '').trim() || undefined;
+            throw new AuthenticationError(`${this.id} ${method} ${url} ${statusCode} 토큰이 무효다`, { detail: KBSEC_ERROR_DETAIL.TOKEN_INVALID, brokerCode });
         }
         if (statusCode >= 200 && statusCode < 300 && response === undefined) {
             throw new BadResponse(`KB증권 응답이 JSON 이 아님 (${trCode}): ${responseBody.slice(0, 200)}`);
@@ -1973,22 +1962,24 @@ export class kbsec extends Exchange {
 
     /**
      * KB 는 종목 목록 TR 을 쓰지 않는다. 심볼 모양으로 종목을 만든다. `005930/KRW`·`005930` 은 국내, 그 밖은 미국이다.
-     * 이미 `markets` 를 넣어 두었으면 그것을 먼저 찾는다.
+     * 이미 `markets` 를 넣어 두었으면 그것을 먼저 찾는다. 현금 코드와 같은 티커(`USD`)는 `commonStockCodes` 의 통합 코드로 심볼을 만들고
+     * (`ProShares Ultra Semiconductors/USD`), 그 통합 코드와 옛 심볼(`USD/USD`)도 받는다.
      */
     override market(symbol: Str): MarketInterface {
         if (symbol === undefined) throw new ArgumentsRequired(`${this.id} market() requires a symbol argument`);
         const known = this.markets?.[symbol];
         if (known !== undefined) return known;
-        const base = kbsecBaseSymbol(symbol).toUpperCase();
-        if (base === '') throw new BadSymbol(`${this.id} does not have market symbol ${symbol}`);
-        const country = kbsecMarketOf(base);
+        const id = this.stockTicker(kbsecBaseSymbol(symbol)).toUpperCase();
+        if (id === '') throw new BadSymbol(`${this.id} does not have market symbol ${symbol}`);
+        const country = kbsecMarketOf(id);
         const quote = country === 'KR' ? 'KRW' : 'USD';
+        const base = this.commonStockCode(id);
         return this.safeMarketStructure({
-            id: base,
+            id,
             symbol: `${base}/${quote}`,
             base,
             quote,
-            baseId: base,
+            baseId: id,
             quoteId: quote,
             type: 'spot',
             spot: true,
@@ -2037,7 +2028,7 @@ export class kbsec extends Exchange {
         if (violation !== null) throw new InvalidOrder(`${this.id} ${method}() ${violation} (${market.symbol})`, { detail: KRX_TICK_INVALID_DETAIL });
     }
 
-    /** 종목기본정보(`SIQM4900`) 원문 한 행. `fetchStocks`·`fetchStockWarnings`가 함께 쓴다. 국내만 지원한다. */
+    /** 종목기본정보(`SIQM4900`) 원문 한 행. `fetchStocks`·`fetchTradingRestriction`이 함께 쓴다. 국내만 지원한다. */
     private async fetchSecurityInfo(symbol: string, params: Dict = {}): Promise<Dict> {
         const market = this.market(symbol);
         if (this.isUs(market)) throw new NotSupported(`${this.id} fetchStocks() 는 국내 종목만 지원한다: ${symbol}`);
@@ -2063,7 +2054,7 @@ export class kbsec extends Exchange {
     }
 
     /** 매매제한·위험등급. `fetchStocks`와 같은 TR(`SIQM4900`)을 다시 부른다. 국내만 지원한다. */
-    async fetchStockWarnings(symbol: string, params: Dict = {}): Promise<KbsecStockWarning> {
+    async fetchTradingRestriction(symbol: string, params: Dict = {}): Promise<KbsecStockWarning> {
         const row = await this.fetchSecurityInfo(symbol, params);
         return {
             tradingRestriction: safeString(row, 'trd_rstn_clsf_nm') || undefined,
@@ -2076,12 +2067,19 @@ export class kbsec extends Exchange {
         };
     }
 
+    /** @deprecated `fetchTradingRestriction` 의 옛 이름이다. `fetchStockWarnings` 는 토스증권의 유의사항 조회 이름으로 남는다. 다음 판에서 지운다. */
+    async fetchStockWarnings(symbol: string, params: Dict = {}): Promise<KbsecStockWarning> {
+        this.warnDeprecated('kbsec.fetchStockWarnings()', 'fetchTradingRestriction()');
+        return this.fetchTradingRestriction(symbol, params);
+    }
+
     /**
-     * 종목별 투자자 매매동향(`IVU10430`). 개인·외국인·기관 등 13개 유형을 하루 단위로 준다. 국내만 지원한다.
-     * 기본은 오늘(KST) 하루, 순매수(`trd_clsf='1'`), 금액 기준(`amt_q_clsf='1'`)이다. `since`와 `params.until`로 기간을 넓히고,
-     * `params`로 `trd_clsf`(1순매수·2매수·3매도)나 `amt_q_clsf`(1금액·2수량)를 덮어쓸 수 있다.
+     * 종목별 투자자 매매동향(`IVU10430`)을 하루 단위로 준다. 세 증권사 공통 모양이다(`InvestorTradingRecord`). 국내만 지원한다.
+     * 개인, 외국인, 기관의 값을 싣고, 등락률과 거래량, 나머지 10개 투자자 유형은 `info` 의 원문에 있다.
+     * 기본은 오늘(KST) 하루, 순매수(`trd_clsf='1'`), 금액 기준(`amt_q_clsf='1'`)이다. `since`와 `params.until`로 기간을 넓힌다.
+     * `params`로 `trd_clsf`(1순매수·2매수·3매도)나 `amt_q_clsf`(1금액·2수량)를 덮어쓰면 세 투자자 필드도 그 값이 된다.
      */
-    async fetchInvestorTrading(symbol: string, since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<KbsecInvestorTradingRecord[]> {
+    async fetchInvestorTrading(symbol: string, since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<InvestorTradingRecord[]> {
         const [until, query] = this.handleUntilParam('fetchInvestorTrading', limit, params);
         const market = this.market(symbol);
         if (this.isUs(market)) throw new NotSupported(`${this.id} fetchInvestorTrading() 는 국내 종목만 지원한다: ${symbol}`);
@@ -2101,25 +2099,9 @@ export class kbsec extends Exchange {
             date: pickStr(row, 'dt'),
             close: pickNum(row, 'cls_prc'),
             change: pickNum(row, 'bdy_cmpr'),
-            percentage: pickNum(row, 'up_dwn_r_p2'),
-            volume: pickNum(row, 'vlm'),
-            amounts: {
-                individual: pickNum(row, 'indv'),
-                foreign: pickNum(row, 'fgnr'),
-                institution: pickNum(row, 'ogn'),
-                securities: pickNum(row, 'scrt'),
-                insurance: pickNum(row, 'insr'),
-                investmentTrust: pickNum(row, 'invst_trst'),
-                merchantBank: pickNum(row, 'invst_bnk'),
-                bank: pickNum(row, 'bnk'),
-                fund: pickNum(row, 'fnd'),
-                privateFund: pickNum(row, 'prv_o_fnd'),
-                otherCorporate: pickNum(row, 'etc_corp'),
-                government: pickNum(row, 'ntn'),
-                nativeForeign: pickNum(row, 'ntv_fgnr'),
-                program: pickNum(row, 'pgm'),
-                foreignBrokerTotal: pickNum(row, 'frgn_afflt_dl_orgn_sum'),
-            },
+            individual: pickNum(row, 'indv'),
+            foreign: pickNum(row, 'fgnr'),
+            institution: pickNum(row, 'ogn'),
             info: row,
         })), since, limit);
     }
@@ -2690,7 +2672,7 @@ export class kbsec extends Exchange {
      * 조회건수 상한(9999)으로도 `since` 까지 닿지 못하면 경고 로그를 남기고 받은 가장 오래된 봉부터 돌려준다.
      */
     override async fetchOHLCV(
-        symbol: string, timeframe = '1d', since: Int = undefined, limit: Int = undefined, params: Dict = {},
+        symbol: string, timeframe = '1m', since: Int = undefined, limit: Int = undefined, params: Dict = {},
     ): Promise<OHLCV[]> {
         const market = this.market(symbol);
         if (this.isUs(market)) {
@@ -2864,8 +2846,9 @@ export class kbsec extends Exchange {
 
     /**
      * 통화와 보유 종목의 잔고. 현금은 통화 키(`KRW`, `USD`), 보유 종목은 `market.base` 키(종목 코드)이며 `total` 이 **수량**이다. 평균 단가·평가금액·종목명은
-     * 각 항목의 `info` 에 있다(`averagePrice`, `marketValue`, `name`, `quoteCurrency`). 보유 종목 키가 현금 키와 겹치면(미국 티커 `USD` 와 달러 현금)
-     * 한쪽을 덮어쓰지 않고 `NotSupported` 를 던진다. KB증권은 보유와 현금을 나눠 받는 인자가 없어 그런 계좌는 잔고를 조회할 수 없다.
+     * 각 항목의 `info` 에 있다(`averagePrice`, `marketValue`, `name`, `quoteCurrency`). 미국 티커 `USD` 처럼 현금 코드와 같은 티커는 `commonStockCodes` 의
+     * 통합 코드(`ProShares Ultra Semiconductors`)가 키다. 표에 없는 티커가 현금 키와 겹치면 한쪽을 덮어쓰지 않고 `NotSupported` 를 던진다. KB증권은
+     * 보유와 현금을 나눠 받는 인자가 없어서, 그런 계좌는 `commonStockCodes` 에 그 티커를 더해야 잔고를 조회할 수 있다.
      *
      * 예수금을 읽지 못하면 던진다. 보유를 일부만 읽었으면 던지지 않고 `info.readStatus` 가 `PARTIAL`, 못 읽은 시장(`KR`, `US`)이
      * `info.unreadMarkets` 다. **이때 그 시장에서 목록에 없는 종목은 미보유가 아니라 미확인이다.**
@@ -2957,7 +2940,7 @@ export class kbsec extends Exchange {
         }
         const held: Dict = {};
         for (const holding of response.holdings as HoldingRow[]) {
-            held[holding.code] = {
+            held[this.commonStockCode(holding.code)] = {
                 free: holding.orderableQuantity,
                 used: undefined,
                 total: holding.quantity,
@@ -2973,7 +2956,7 @@ export class kbsec extends Exchange {
             // 겹친 키에 대입하면 현금이 알림 없이 보유 수량으로 바뀐다.
             if (result[code] !== undefined) {
                 throw new NotSupported(`${this.id} fetchBalance() 보유 종목 ${code} 가 현금 ${code} 와 키가 같아 한 잔고에 담을 수 없다. `
-                    + 'KB증권은 보유 종목과 현금을 나눠 받는 인자가 없다');
+                    + 'KB증권은 보유 종목과 현금을 나눠 받는 인자가 없다. commonStockCodes 에 그 티커의 통합 코드를 더한다');
             }
             result[code] = holding;
         }
@@ -3410,7 +3393,7 @@ export class kbsec extends Exchange {
         const body = await this.callTr(KBSEC_TR.ONEMARKET_BUYABLE, {
             crncy_cd: '',
             iso_cd: '',
-            stnd_is_cd: kbsecBaseSymbol(symbol),
+            stnd_is_cd: this.stockTicker(kbsecBaseSymbol(symbol)),
             frgn_ordr_prc_p4: price !== undefined ? kbsecNum(price, 4) : '',
             ordr_prc: price !== undefined ? kbsecNum(price, 4) : '',
         });
@@ -4458,7 +4441,7 @@ export class kbsec extends Exchange {
         // 세션 게이트. 거래시간 밖 주문은 KB 로 보내지 않고 `MarketClosed` 로 막는다.
         // KRX 판정은 시장이 아는 사실이라 이 클래스가 자기 시간표를 갖지 않고 공용 술어에 맡긴다.
         if (isKr) await this.refreshMarketCalendar();
-        const closed = marketSessionBlockReason('kbsec', symbol, new Date(this.milliseconds()), masterDataOf(this.options), {
+        const closed = marketSessionBlockReason('kbsec', base, new Date(this.milliseconds()), masterDataOf(this.options), {
             side, blockAuctionBuys: await this.isOptionEnabled('blockAuctionBuys'),
         });
         if (closed !== null) {
@@ -4544,7 +4527,7 @@ export class kbsec extends Exchange {
         this.checkOrderArguments(market, 'limit', side, amount, price, params);
 
         if (isKr) await this.refreshMarketCalendar();
-        const closed = marketSessionBlockReason('kbsec', symbol, new Date(this.milliseconds()), masterDataOf(this.options), {
+        const closed = marketSessionBlockReason('kbsec', base, new Date(this.milliseconds()), masterDataOf(this.options), {
             side, blockAuctionBuys: await this.isOptionEnabled('blockAuctionBuys'),
         });
         if (closed !== null) {
@@ -4657,7 +4640,7 @@ export class kbsec extends Exchange {
         if (!this.isUs(market)) throw new NotSupported(`${this.id} createMarketBuyOrderWithCost() 는 미국 종목만 지원한다: ${symbol}`);
         if (!(cost > 0)) throw new ArgumentsRequired(`${this.id} createMarketBuyOrderWithCost() requires a cost argument above 0`);
 
-        const closed = marketSessionBlockReason('kbsec', symbol, new Date(this.milliseconds()), masterDataOf(this.options), {
+        const closed = marketSessionBlockReason('kbsec', market.id as string, new Date(this.milliseconds()), masterDataOf(this.options), {
             side: 'buy', blockAuctionBuys: await this.isOptionEnabled('blockAuctionBuys'),
         });
         if (closed !== null) {
@@ -4756,7 +4739,7 @@ export class kbsec extends Exchange {
                 throw new NotSupported(`${this.id} editOrder() 는 해외 주문의 amount 를 받지 않는다. 원주문의 체결 수량을 믿을 만한 조회로 확인할 수 없다. `
                     + 'amount 를 빼면 잔량 전부의 가격만 정정하고, 수량을 바꾸려면 취소한 뒤 다시 주문한다');
             }
-            await this.assertEditSessionOpen(symbol, false);
+            await this.assertEditSessionOpen(symbol, base, false);
             const response = await this.callTr(KBSEC_TR.AMEND_CANCEL_US, {
                 is_cd: base,
                 orgn_ordr_no: id,
@@ -4767,7 +4750,7 @@ export class kbsec extends Exchange {
             return this.editedOrder(response, market, price, undefined);
         }
         this.assertKrxTickAligned(market, price, 'editOrder');
-        await this.assertEditSessionOpen(symbol, true);
+        await this.assertEditSessionOpen(symbol, base, true);
         let sor: string;
         if (!isPartial && amount !== undefined) {
             // 수량을 대조하므로 원주문 조회 실패를 발주 정책으로 덮지 않고 던진다.
@@ -4788,9 +4771,9 @@ export class kbsec extends Exchange {
     }
 
     /** 정정 게이트. `createOrder` 와 같은 판정이고, 방향을 넘기지 않아 동시호가 매수 차단은 걸지 않는다. 국내는 휴장일 캘린더를 먼저 받는다. */
-    private async assertEditSessionOpen(symbol: string, isKr: boolean): Promise<void> {
+    private async assertEditSessionOpen(symbol: string, ticker: string, isKr: boolean): Promise<void> {
         if (isKr) await this.refreshMarketCalendar();
-        const closed = marketSessionBlockReason('kbsec', symbol, new Date(this.milliseconds()), masterDataOf(this.options));
+        const closed = marketSessionBlockReason('kbsec', ticker, new Date(this.milliseconds()), masterDataOf(this.options));
         if (closed !== null) {
             logger.info({ symbol, reason: closed }, '[kbsec] 거래시간 외 정정 차단');
             throw new MarketClosed(closed);
@@ -5262,9 +5245,12 @@ export class kbsec extends Exchange {
     /**
      * 국내 휴장일을 날짜별 개장 여부로 돌려준다. 장운영상태(`SZQM0771`)가 주는 전영업일·기준영업일·익영업일을 열린 날로 보고, 그 사이의 평일을
      * 닫힌 날로 넓힌다. KB 는 이 세 날짜 밖은 알려 주지 않으므로 넓히는 범위가 앞뒤 며칠이다.
+     *
+     * 세 증권사 공통 모양이다. `params.market` 은 `'KR'`(기본)만 받고, `'US'` 는 요청 없이 `NotSupported` 다.
      */
     async fetchMarketCalendar(params: Dict = {}): Promise<CalendarDay[]> {
-        const body = await this.callTr(KBSEC_TR.MARKET_STATUS, { ...params });
+        if (this.calendarMarket(params) === 'US') throw new NotSupported(`${this.id} fetchMarketCalendar() 는 국내 휴장일만 준다`);
+        const body = await this.callTr(KBSEC_TR.MARKET_STATUS, this.omit(params, 'market'));
         const openDates = [pickStr(body, 'bfr_bsns_dt'), pickStr(body, 'std_bsnss_dt'), pickStr(body, 'next_biz_dt')].filter(date => date !== '');
         return expandBusinessDays(openDates);
     }

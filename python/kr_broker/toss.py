@@ -14,7 +14,8 @@ ccxt 와 같은 모양으로 다룬다. 실시간(`watch_*`)은 이 클래스를
     `GET /accounts` 의 첫 계좌로 채운다. 토스에는 모의투자 환경이 없다.
 
 심볼
-    국내는 `005930/KRW`, 미국은 `AAPL/USD` 다. `load_markets()` 없이도 코드의 모양으로 시장을 판별한다. `load_markets()` 를 부르면
+    국내는 `005930/KRW`, 미국은 `AAPL/USD` 다. `load_markets()` 없이도 코드의 모양으로 시장을 판별한다. 현금 코드와 같은 티커(`USD`)는
+    `commonStockCodes` 의 통합 코드로 심볼을 만든다(`ProShares Ultra Semiconductors/USD`). 입력은 `USD/USD` 도 받는다. `load_markets()` 를 부르면
     토스가 거래할 수 있는 종목 전체(`GET /stocks/all`)가 `markets` 에 들어가고, 종목 유형(`ETF` 등)이 `market['options']` 에 실린다.
 
 주문
@@ -407,8 +408,6 @@ class toss(Exchange, ImplicitAPI):
                 'fetchTrades': True,
                 'fetchMarketCalendar': True,
                 'fetchStockWarnings': True,
-                'fetchInvestorTrading': True,
-                'fetchRankings': True,
             },
             'urls': {
                 'logo': None,
@@ -654,7 +653,7 @@ class toss(Exchange, ImplicitAPI):
     def handle_errors(self, code: int, reason: str, url: str, method: str, headers: Dict[str, str], body: str, response: Any,
                       request_headers: Optional[Dict[str, str]], request_body: Str) -> Optional[bool]:
         """토스는 실패를 HTTP 상태와 본문의 오류 코드(`error.code` 또는 `error`) 두 층으로 준다. 401·403·429 는 상태가 먼저이고,
-        그 밖에는 코드 표(`exceptions['exact']`)를 본 다음 상태 표(`httpExceptions`)를 본다. 코드는 오류의 `detail` 에 담는다."""
+        그 밖에는 코드 표(`exceptions['exact']`)를 본 다음 상태 표(`httpExceptions`)를 본다. 코드는 오류의 `detail` 과 `broker_code` 에 담는다."""
         error_value = self.safe_value(response, 'error')
         if code < 400 and error_value is None:
             return None
@@ -671,24 +670,25 @@ class toss(Exchange, ImplicitAPI):
             feedback = f'토스 API 비즈니스 오류 [{error_code}]: {description or ""}'
         if code == 401:
             if is_token_request:
-                raise AuthenticationError(feedback, detail=error_code)
+                raise AuthenticationError(feedback, detail=error_code, broker_code=error_code)
             authorization = self.safe_string(request_headers, 'Authorization')
             failed_token = authorization[len('Bearer '):] if authorization is not None and authorization.startswith('Bearer ') else None
-            raise TossTokenRejected(feedback, detail=error_code, failed_token=failed_token)
+            raise TossTokenRejected(feedback, detail=error_code, failed_token=failed_token, broker_code=error_code)
         if code == 403:
-            raise PermissionDenied(feedback, detail=error_code)
+            raise PermissionDenied(feedback, detail=error_code, broker_code=error_code)
         if code == 429:
             retry_after = self.safe_number(headers, 'Retry-After')
-            raise TossRateLimited(feedback, detail=error_code, retry_after_ms=None if retry_after is None else retry_after * 1000)
+            raise TossRateLimited(feedback, detail=error_code, retry_after_ms=None if retry_after is None else retry_after * 1000,
+                                  broker_code=error_code)
         # 호가 단위를 어긴 주문은 invalid-request 에 올바른 호가 단위가 data.tickSize 로 실려 온다.
         if error_code == 'invalid-request' and self.safe_value(self.safe_dict(error_value, 'data'), 'tickSize') is not None:
-            raise InvalidOrder(feedback, detail='price-tick-invalid')
-        self.throw_exactly_matched_exception(self.exceptions.get('exact'), error_code, feedback, detail=error_code)
+            raise InvalidOrder(feedback, detail='price-tick-invalid', broker_code=error_code)
+        self.throw_exactly_matched_exception(self.exceptions.get('exact'), error_code, feedback, detail=error_code, broker_code=error_code)
         # 코드 표에 없는 응답은 상태로만 분류한다. 주문 요청의 5xx 는 접수 미상이 된다(`is_outcome_unknown`).
         by_status = self.httpExceptions.get(str(code)) or (ExchangeNotAvailable if code >= 500 else None)
         if by_status is not None:
-            raise self.http_status_error(code, by_status, feedback, detail=error_code)
-        raise ExchangeError(feedback, detail=error_code)
+            raise self.http_status_error(code, by_status, feedback, detail=error_code, broker_code=error_code)
+        raise ExchangeError(feedback, detail=error_code, broker_code=error_code)
 
     def unwrap(self, response: Any) -> Any:
         """응답의 `result` 봉투를 벗긴다. 봉투가 없으면 원본을, 본문이 비어 있으면 `None` 을 돌려준다."""
@@ -700,14 +700,15 @@ class toss(Exchange, ImplicitAPI):
 
     def _market_from_symbol(self, symbol: str) -> Dict[str, Any]:
         """심볼(`005930`, `005930/KRW`, `AAPL`)에서 종목을 만든다. 종목을 불러오지 않았을 때 코드의 모양으로 시장을 판별한다.
-        클래스 주식의 `BRK/B` 는 통합 표기 `BRK.B` 로 바꾼다."""
-        code = symbol_base_code(symbol)
+        클래스 주식의 `BRK/B` 는 통합 표기 `BRK.B` 로 바꾼다. `commonStockCodes` 의 통합 코드는 티커로 돌려 id 로 쓴다."""
+        code = self.stock_ticker(symbol_base_code(symbol))
         country = toss_market_country(code)
         quote = 'KRW' if country == 'KR' else 'USD'
+        base = self.common_stock_code(code)
         return self.safe_market_structure({
             'id': code,
-            'symbol': f'{code}/{quote}',
-            'base': code,
+            'symbol': f'{base}/{quote}',
+            'base': base,
             'quote': quote,
             'baseId': code,
             'quoteId': quote,
@@ -722,14 +723,18 @@ class toss(Exchange, ImplicitAPI):
 
     def market(self, symbol: Str) -> Dict[str, Any]:
         """통합 심볼(또는 종목 id)로 종목을 찾는다. 불러온 종목이 있으면 그것을, 없으면 심볼의 모양으로 만든다.
-        토스에 없는 종목도 여기서는 막지 않는다. 주문을 보내면 토스가 `stock-not-found`(`BadSymbol`)로 알려 준다."""
+        토스에 없는 종목도 여기서는 막지 않는다. 주문을 보내면 토스가 `stock-not-found`(`BadSymbol`)로 알려 준다.
+        옛 심볼(`USD/USD`)처럼 모양으로 만든 심볼이 불러온 종목에 있으면 그 종목을 쓴다."""
         if symbol is None:
             raise ArgumentsRequired(f'{self.id} market() requires a symbol argument')
         loaded = (self.markets or {}).get(symbol)
         if loaded is None:
             candidates = (self.markets_by_id or {}).get(symbol)
             loaded = candidates[0] if candidates else None
-        return loaded if loaded is not None else self._market_from_symbol(symbol)
+        if loaded is not None:
+            return loaded
+        shaped = self._market_from_symbol(symbol)
+        return (self.markets or {}).get(shaped['symbol'], shaped)
 
     def safe_market(self, market_id: Str = None, market: Optional[Dict[str, Any]] = None, delimiter: Str = None,
                     market_type: Str = None) -> Dict[str, Any]:
@@ -766,10 +771,11 @@ class toss(Exchange, ImplicitAPI):
         quote = 'KRW' if country == 'KR' else 'USD'
         # 시장별 기본 위탁수수료율이다. 실제 요율은 `fetch_trading_fee`(`GET /commissions`)가 정한다.
         brokerage = TOSS_BROKERAGE_FEE if country == 'KR' else TOSS_US_BROKERAGE_FEE
+        base = self.common_stock_code(market_id)
         return self.safe_market_structure({
             'id': market_id,
-            'symbol': f'{market_id}/{quote}',
-            'base': market_id,
+            'symbol': f'{base}/{quote}',
+            'base': base,
             'quote': quote,
             'baseId': market_id,
             'quoteId': quote,
@@ -829,12 +835,19 @@ class toss(Exchange, ImplicitAPI):
         response = self.private_market_get_stocks_symbol_warnings(self.extend({'symbol': self.market(symbol)['id']}, params))
         return self.to_array(self.unwrap(response))
 
-    def fetch_investor_trading(self, market: str, interval: str = '1d', limit: int = 5,
-                               params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def fetch_market_investor_trading(self, market: str, interval: str = '1d', limit: int = 5,
+                                      params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """투자자별 매매대금(개인·외국인·기관·기타법인의 매수·매도 대금). 종목이 아니라 시장(`KOSPI`·`KOSDAQ`) 단위다."""
         response = self.private_market_get_market_indicators_symbol_investor_trading(
             self.extend({'symbol': market, 'interval': interval, 'count': limit}, params))
         return self.safe_list(self.unwrap(response), 'records', [])
+
+    def fetch_investor_trading(self, market: str, interval: str = '1d', limit: int = 5,
+                               params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """`fetch_market_investor_trading` 의 옛 이름이다(한 판 뒤에 지운다). `fetch_investor_trading` 은 종목 단위 공통 조회
+        (한국투자증권, KB증권)의 이름이라 토스증권의 `has['fetchInvestorTrading']` 은 비어 있다."""
+        self._warn_deprecated('toss.fetchInvestorTrading()', 'fetchMarketInvestorTrading()')
+        return self.fetch_market_investor_trading(market, interval, limit, params)
 
     def fetch_rankings(self, type: str, market_country: str = 'KR', duration: str = '1d', count: int = 100,
                        params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
@@ -845,13 +858,13 @@ class toss(Exchange, ImplicitAPI):
 
     # ============ 장 운영 캘린더와 세션 ============
 
-    def fetch_market_calendar(self, market: str, params: Optional[Dict[str, Any]] = None) -> Any:
+    def fetch_market_sessions(self, market: str, params: Optional[Dict[str, Any]] = None) -> Any:
         """장 운영 캘린더(전일·당일·익일 영업일의 세션 시각) 원본. 30분 안에 받은 것은 다시 부르지 않는다(`params['refresh']` 로 강제).
         받은 날짜별 개장 여부는 공용 휴장일 캘린더에도 넣는다. `market` 은 `'KR'`·`'US'` 이고 대소문자를 가리지 않는다.
-        그 밖의 값은 요청 없이 `BadRequest` 다."""
+        그 밖의 값은 요청 없이 `BadRequest` 다. 날짜별 개장 여부만 필요하면 세 증권사 공통인 `fetch_market_calendar` 를 쓴다."""
         country = market.upper() if isinstance(market, str) else None
         if country not in ('KR', 'US'):
-            raise BadRequest(f"{self.id} fetchMarketCalendar() market must be 'KR' or 'US'")
+            raise BadRequest(f"{self.id} fetchMarketSessions() market must be 'KR' or 'US'")
         cached = self._calendars.get(country)
         ttl = self.safe_integer(self.options, 'calendarTtl', CALENDAR_TTL_MS)
         if cached is not None and self.safe_bool(params, 'refresh', False) is not True and _now_ms() - cached['fetchedAt'] < ttl:
@@ -866,10 +879,22 @@ class toss(Exchange, ImplicitAPI):
         apply_market_calendar('US', toss_us_calendar_days(value))
         return value
 
+    def fetch_market_calendar(self, params: Any = None, legacy_params: Optional[Dict[str, Any]] = None) -> Any:
+        """날짜별 개장 여부. 세 증권사 공통 모양이다. `params['market']` 은 `'KR'`(기본)·`'US'` 이고 대소문자를 가리지 않는다.
+        장 운영 캘린더(`fetch_market_sessions`)의 전일·당일·익일 영업일과 그 사이의 평일(닫힌 날)이다. 받은 날짜는 공용 휴장일 캘린더에도 넣는다.
+        첫 인자로 시장 문자열을 넘기던 옛 호출(`fetch_market_calendar('KR', params)`)은 한 판 동안 경고를 남기고
+        `fetch_market_sessions` 의 결과를 돌려준다. 둘째 인자 `legacy_params` 는 그 옛 호출의 `params` 자리다."""
+        if isinstance(params, str):
+            self._warn_deprecated('toss.fetchMarketCalendar(market)', 'fetchMarketCalendar({ market }) 나 fetchMarketSessions(market)')
+            return self.fetch_market_sessions(params, legacy_params)
+        market = self._calendar_market(params)
+        value = self.fetch_market_sessions(market, self.omit(params or {}, 'market'))
+        return toss_kr_calendar_days(value) if market == 'KR' else toss_us_calendar_days(value)
+
     def current_kr_session(self, now_ms: Optional[int] = None) -> Optional[str]:
         """국내 캘린더로 본 지금의 세션. `'closed'` 는 열린 세션이 없다는 뜻이고, `None` 은 캘린더를 받지 못했다는 뜻이다."""
         try:
-            session = find_kr_session(self.fetch_market_calendar('KR'), now_ms)
+            session = find_kr_session(self.fetch_market_sessions('KR'), now_ms)
             return session if session is not None else 'closed'
         except Exception:
             logger.warning('[toss] 국내 장 운영 캘린더를 받지 못했다. 정적 시간표로 판정한다', exc_info=True)
@@ -878,7 +903,7 @@ class toss(Exchange, ImplicitAPI):
     def current_us_session(self, now_ms: Optional[int] = None) -> Optional[str]:
         """미국 캘린더로 본 지금의 세션. `'closed'` 와 `None` 의 뜻은 `current_kr_session` 과 같다."""
         try:
-            session = find_us_session(self.fetch_market_calendar('US'), now_ms)
+            session = find_us_session(self.fetch_market_sessions('US'), now_ms)
             return session if session is not None else 'closed'
         except Exception:
             logger.warning('[toss] 미국 장 운영 캘린더를 받지 못했다. 정규장 기준으로 판정한다', exc_info=True)
@@ -950,6 +975,7 @@ class toss(Exchange, ImplicitAPI):
         `since` 가 있으면 `since` 부터 `limit` 개이고, 없으면 가장 최근 `limit` 개다. 최신 봉부터 200봉씩 10쪽까지 거슬러 받으므로,
         그 안에 `since` 까지 닿지 못하면 경고 로그를 남기고 받은 가장 오래된 봉부터 돌려준다."""
         params = {} if params is None else params
+        timeframe = '1m' if timeframe is None else timeframe
         interval = self.safe_string(self.timeframes, timeframe)
         if interval is None:
             raise NotSupported(f"{self.id} 미지원 타임프레임 '{timeframe}'. 지원: 1m, 1d")
@@ -1022,8 +1048,9 @@ class toss(Exchange, ImplicitAPI):
 
         `params['symbol']` 을 주면 그 종목의 보유만, `params['currency']`(`KRW`·`USD`)를 주면 그 현금만 받는다. 둘 다 주면 그 종목의 보유와
         그 통화의 현금을 함께 받는다. 달러 현금을 받을 때 `options['krwIntegratedMargin']` 이 켜져 있으면 원화 예수금을 참고 환율로 환산해 더한다
-        (전체 잔고에는 이중 계상이라 더하지 않는다). 보유 종목 키가 같은 잔고의 현금 키와 겹치면(미국 티커 `USD` 와 달러 현금) 한쪽을
-        덮어쓰지 않고 `NotSupported` 를 던진다. `symbol` 과 `currency` 로 나눠 받는다.
+        (전체 잔고에는 이중 계상이라 더하지 않는다). 미국 티커 `USD` 처럼 현금 코드와 같은 티커는 `commonStockCodes` 의 통합 코드
+        (`ProShares Ultra Semiconductors`)가 키다. 표에 없는 티커가 현금 키와 겹치면 한쪽을 덮어쓰지 않고 `NotSupported` 를 던진다.
+        `symbol` 과 `currency` 로 나눠 받거나 `commonStockCodes` 에 그 티커를 더한다.
 
         `free` 는 지금 주문에 쓸 수 있는 양이다(ccxt 정의). 현금은 매수 가능 금액만 있고 예수금을 주는 API 가 없어 `total` 과 `used` 가 비어 있다.
         보유 종목의 `free` 는 `symbol` 로 한 종목만 받을 때 매도 가능 수량(`GET /sellable-quantity`)으로 채우고, 전체 잔고에서는 비어 있다.
@@ -1093,7 +1120,10 @@ class toss(Exchange, ImplicitAPI):
             quantity = self.safe_number(item, 'quantity')
             if quantity is None or not quantity > 0:
                 continue
-            held[item.get('symbol')] = {'free': sellable.get(item.get('symbol')), 'used': None, 'total': quantity, 'info': item}
+            # 키는 `parse_market` 의 `base` 다(`USD` → `ProShares Ultra Semiconductors`).
+            symbol = item.get('symbol')
+            key = self.common_stock_code(symbol) if isinstance(symbol, str) else symbol
+            held[key] = {'free': sellable.get(symbol), 'used': None, 'total': quantity, 'info': item}
         for code, power in (buying_power or {}).items():
             cash = self._parse_cash(power)
             info = dict(power) if isinstance(power, dict) else {}
@@ -1107,7 +1137,7 @@ class toss(Exchange, ImplicitAPI):
             # 겹친 키에 대입하면 보유나 현금 한쪽이 알림 없이 사라진다.
             if result.get(code) is not None:
                 raise NotSupported(f'{self.id} fetchBalance() 보유 종목 {code} 가 현금 {code} 와 키가 같아 한 잔고에 담을 수 없다. '
-                                   'params.symbol 로 그 종목의 보유를, params.currency 로 현금을 따로 받는다')
+                                   'params.symbol 로 그 종목의 보유를, params.currency 로 현금을 따로 받거나 commonStockCodes 에 그 티커의 통합 코드를 더한다')
             result[code] = holding
         return self.safe_balance(result)
 

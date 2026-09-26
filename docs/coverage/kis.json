@@ -67,7 +67,7 @@
       "status": "integrated",
       "method": "authenticate",
       "evidence": [
-        "ts/src/kis.ts:3887"
+        "ts/src/kis.ts:3871"
       ],
       "suggested": null,
       "proposal": null,
@@ -87,8 +87,8 @@
       "status": "extended",
       "method": "getApprovalKey",
       "evidence": [
-        "ts/src/kis.ts:3900",
-        "ts/src/kis.ts:3921"
+        "ts/src/kis.ts:3884",
+        "ts/src/kis.ts:3905"
       ],
       "suggested": null,
       "proposal": null,
@@ -127,7 +127,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:41"
       ],
       "suggested": "watchOrderBook",
@@ -147,7 +147,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:47"
       ],
       "suggested": "watchTrades",
@@ -167,7 +167,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:35"
       ],
       "suggested": "watchIndexTicker",
@@ -468,7 +468,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:59"
       ],
       "suggested": "watchTrades",
@@ -488,7 +488,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:52"
       ],
       "suggested": "watchOrderBook",
@@ -608,7 +608,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:132"
       ],
       "suggested": "watchMyTrades",
@@ -628,7 +628,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:380"
       ],
       "suggested": "watchExpectedExecutions",
@@ -648,7 +648,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:137"
       ],
       "suggested": "watchTrades",
@@ -668,7 +668,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:125"
       ],
       "suggested": "watchOrderBook",
@@ -688,7 +688,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:153"
       ],
       "suggested": "watchTrades",
@@ -708,7 +708,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:146"
       ],
       "suggested": "watchOrderBook",
@@ -1028,7 +1028,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:162"
       ],
       "suggested": "watchOrderBook",
@@ -1048,7 +1048,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:174"
       ],
       "suggested": "watchTrades",
@@ -1068,7 +1068,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:169"
       ],
       "suggested": "watchMyTrades",
@@ -1088,7 +1088,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:70"
       ],
       "suggested": "watchOrderBook",
@@ -1108,7 +1108,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:82"
       ],
       "suggested": "watchTrades",
@@ -1128,7 +1128,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:68"
       ],
       "suggested": "watchExpectedExecutions",
@@ -1148,7 +1148,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:77"
       ],
       "suggested": "watchMyTrades",
@@ -1188,7 +1188,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:400"
       ],
       "suggested": "watchExpectedExecutions",
@@ -1249,7 +1249,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:391"
       ],
       "suggested": "watchTrades",
@@ -1269,7 +1269,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:382"
       ],
       "suggested": "watchOrderBook",
@@ -1289,7 +1289,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:402"
       ],
       "suggested": "watchOrderBook",
@@ -1309,7 +1309,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:412"
       ],
       "suggested": "watchTrades",
@@ -1328,7 +1328,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:45", "ts/src/kis.ts:3153", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
+      "evidence": ["ts/src/spec/kis.json:45", "ts/src/kis.ts:3139", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
       "suggested": "fetchRanking('afterHourBalance')",
       "proposal": "확장",
       "verified": "real",
@@ -1346,7 +1346,7 @@
       "status": "extended",
       "method": "createPriceStream",
       "evidence": [
-        "ts/src/kis/kis-realtime-parser.ts:83"
+        "ts/src/kis/kis-realtime-parser.ts:84"
       ],
       "suggested": null,
       "proposal": null,
@@ -1365,7 +1365,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:192"
       ],
       "suggested": "watchOrderBook({market:'NXT'})",
@@ -1385,7 +1385,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:307"
       ],
       "suggested": "watchOrderBook({market:'UN'})",
@@ -1404,7 +1404,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:46", "ts/src/kis.ts:3158", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
+      "evidence": ["ts/src/spec/kis.json:46", "ts/src/kis.ts:3144", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
       "suggested": "fetchRanking('bulkTransNum')",
       "proposal": "확장",
       "verified": "real",
@@ -1423,8 +1423,8 @@
       "method": "fetchRankings",
       "evidence": [
         "ts/src/spec/kis.json:184",
-        "ts/src/kis.ts:3335",
-        "ts/src/kis.ts:3118",
+        "ts/src/kis.ts:3321",
+        "ts/src/kis.ts:3104",
         "ts/src/kis.ts:9712",
         "ts/src/kis.ts:9725"
       ],
@@ -1445,7 +1445,7 @@
       "status": "extended",
       "method": "createPriceStream",
       "evidence": [
-        "ts/src/kis/kis-realtime-parser.ts:65"
+        "ts/src/kis/kis-realtime-parser.ts:66"
       ],
       "suggested": null,
       "proposal": null,
@@ -1464,7 +1464,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:242"
       ],
       "suggested": "watchMyTrades",
@@ -1484,7 +1484,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:201"
       ],
       "suggested": "watchTrades({market:'NXT'})",
@@ -1504,7 +1504,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:316"
       ],
       "suggested": "watchTrades({market:'UN'})",
@@ -1524,7 +1524,7 @@
       "status": "extended",
       "method": "fetchMarketCalendar",
       "evidence": [
-        "ts/src/kis.ts:10417"
+        "ts/src/kis.ts:10421"
       ],
       "suggested": null,
       "proposal": null,
@@ -1602,7 +1602,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:56", "ts/src/kis.ts:3233", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
+      "evidence": ["ts/src/spec/kis.json:56", "ts/src/kis.ts:3219", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
       "suggested": "fetchRanking('creditBalance')",
       "proposal": "확장",
       "verified": "real",
@@ -1699,7 +1699,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:47", "ts/src/kis.ts:3167", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
+      "evidence": ["ts/src/spec/kis.json:47", "ts/src/kis.ts:3153", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
       "suggested": "fetchRanking('disparity')",
       "proposal": "확장",
       "verified": "real",
@@ -1716,7 +1716,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:57", "ts/src/kis.ts:3241", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
+      "evidence": ["ts/src/spec/kis.json:57", "ts/src/kis.ts:3227", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
       "suggested": "fetchRanking('dividendRate')",
       "proposal": "확장",
       "verified": "real",
@@ -1754,7 +1754,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:234"
       ],
       "suggested": "watchExpectedExecutions",
@@ -1774,7 +1774,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:183"
       ],
       "suggested": "watchExpectedExecutions",
@@ -1794,7 +1794,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:298"
       ],
       "suggested": "watchExpectedExecutions",
@@ -1815,7 +1815,7 @@
       "method": "fetchRankings",
       "evidence": [
         "ts/src/spec/kis.json:66",
-        "ts/src/kis.ts:3307",
+        "ts/src/kis.ts:3293",
         "ts/src/kis.ts:9712",
         "ts/src/kis.ts:9725"
       ],
@@ -1897,7 +1897,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:48", "ts/src/kis.ts:3172", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
+      "evidence": ["ts/src/spec/kis.json:48", "ts/src/kis.ts:3158", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
       "suggested": "fetchRanking('expectedUpdown')",
       "proposal": "확장",
       "verified": "real",
@@ -1916,7 +1916,7 @@
       "method": "fetchFinancials",
       "evidence": [
         "ts/src/spec/kis.json:195",
-        "ts/src/kis.ts:3410",
+        "ts/src/kis.ts:3396",
         "ts/src/kis.ts:7949"
       ],
       "suggested": "fetchFinancials('balanceSheet')",
@@ -1937,7 +1937,7 @@
       "method": "fetchFinancials",
       "evidence": [
         "ts/src/spec/kis.json:197",
-        "ts/src/kis.ts:3427",
+        "ts/src/kis.ts:3413",
         "ts/src/kis.ts:7949"
       ],
       "suggested": "fetchFinancials('financialRatio')",
@@ -1958,7 +1958,7 @@
       "method": "fetchFinancials",
       "evidence": [
         "ts/src/spec/kis.json:201",
-        "ts/src/kis.ts:3450",
+        "ts/src/kis.ts:3436",
         "ts/src/kis.ts:7949"
       ],
       "suggested": "fetchFinancials('growthRatio')",
@@ -1979,7 +1979,7 @@
       "method": "fetchFinancials",
       "evidence": [
         "ts/src/spec/kis.json:196",
-        "ts/src/kis.ts:3418",
+        "ts/src/kis.ts:3404",
         "ts/src/kis.ts:7949"
       ],
       "suggested": "fetchFinancials('incomeStatement')",
@@ -2000,7 +2000,7 @@
       "method": "fetchFinancials",
       "evidence": [
         "ts/src/spec/kis.json:199",
-        "ts/src/kis.ts:3440",
+        "ts/src/kis.ts:3426",
         "ts/src/kis.ts:7949"
       ],
       "suggested": "fetchFinancials('otherMajorRatios')",
@@ -2021,7 +2021,7 @@
       "method": "fetchFinancials",
       "evidence": [
         "ts/src/spec/kis.json:198",
-        "ts/src/kis.ts:3435",
+        "ts/src/kis.ts:3421",
         "ts/src/kis.ts:7949"
       ],
       "suggested": "fetchFinancials('profitRatio')",
@@ -2040,7 +2040,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:58", "ts/src/kis.ts:3249", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
+      "evidence": ["ts/src/spec/kis.json:58", "ts/src/kis.ts:3235", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
       "suggested": "fetchRanking('financeRatio')",
       "proposal": "확장",
       "verified": "real",
@@ -2059,7 +2059,7 @@
       "method": "fetchFinancials",
       "evidence": [
         "ts/src/spec/kis.json:200",
-        "ts/src/kis.ts:3445",
+        "ts/src/kis.ts:3431",
         "ts/src/kis.ts:7949"
       ],
       "suggested": "fetchFinancials('stabilityRatio')",
@@ -2101,7 +2101,7 @@
       "method": "fetchRankings",
       "evidence": [
         "ts/src/spec/kis.json:182",
-        "ts/src/kis.ts:3317",
+        "ts/src/kis.ts:3303",
         "ts/src/kis.ts:9712",
         "ts/src/kis.ts:9725"
       ],
@@ -2143,7 +2143,7 @@
       "method": "fetchRankings",
       "evidence": [
         "ts/src/spec/kis.json:183",
-        "ts/src/kis.ts:3325",
+        "ts/src/kis.ts:3311",
         "ts/src/kis.ts:9712",
         "ts/src/kis.ts:9725"
       ],
@@ -2183,7 +2183,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:59", "ts/src/kis.ts:3254", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
+      "evidence": ["ts/src/spec/kis.json:59", "ts/src/kis.ts:3240", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
       "suggested": "fetchRanking('htsTopView')",
       "proposal": "확장",
       "verified": "real",
@@ -2201,7 +2201,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:356"
       ],
       "suggested": "watchIndexTicker",
@@ -2221,7 +2221,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:349"
       ],
       "suggested": "watchIndexTicker",
@@ -2241,7 +2241,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:363"
       ],
       "suggested": "watchProgramTrades",
@@ -2281,7 +2281,7 @@
       "status": "integrated",
       "method": "fetchOrderBook",
       "evidence": [
-        "ts/src/kis.ts:4533"
+        "ts/src/kis.ts:4521"
       ],
       "suggested": null,
       "proposal": null,
@@ -2300,7 +2300,7 @@
       "status": "integrated",
       "method": "fetchBalance",
       "evidence": [
-        "ts/src/kis.ts:4627"
+        "ts/src/kis.ts:4617"
       ],
       "suggested": null,
       "proposal": null,
@@ -2362,7 +2362,7 @@
       "evidence": [
         "ts/src/spec/kis.json:263",
         "ts/src/kis.ts:9007",
-        "ts/src/kis.ts:3043"
+        "ts/src/kis.ts:3029"
       ],
       "suggested": "fetchCreditBuyingPower",
       "proposal": "확장",
@@ -2624,12 +2624,12 @@
       "method": "fetchInvestorTrading",
       "evidence": [
         "ts/src/spec/kis.json:40",
-        "ts/src/kis.ts:4967"
+        "ts/src/kis.ts:4970"
       ],
       "suggested": "fetchInvestorTrend",
       "proposal": "확장",
       "verified": "real",
-      "note": "TR FHKST01010900, 모의: FHKST01010900; 공개 메서드는 `fetchInvestorTrading`(국내만, 종목 단위). 필드명은 공식 저장소의 chk_inquire_investor.py COLUMN_MAPPING으로 확인했다. 토스의 같은 이름 메서드는 시장 단위라 범위가 다르다",
+      "note": "TR FHKST01010900, 모의: FHKST01010900; 공개 메서드는 `fetchInvestorTrading`(국내만, 종목 단위). 필드명은 공식 저장소의 chk_inquire_investor.py COLUMN_MAPPING으로 확인했다. KB증권과 같은 공통 모양으로 개인, 외국인, 기관계의 순매수 대금만 싣고, 매수·매도 수량과 대금은 `info` 원문에 둔다",
       "spec": "https://github.com/koreainvestment/open-trading-api/blob/b4e6249/examples_llm/domestic_stock/inquire_investor/inquire_investor.py"
     },
     {
@@ -2801,7 +2801,7 @@
       "status": "integrated",
       "method": "fetchTicker",
       "evidence": [
-        "ts/src/kis.ts:4426"
+        "ts/src/kis.ts:4414"
       ],
       "suggested": null,
       "proposal": null,
@@ -2840,7 +2840,7 @@
       "status": "integrated",
       "method": "fetchBalance",
       "evidence": [
-        "ts/src/kis.ts:4645"
+        "ts/src/kis.ts:4635"
       ],
       "suggested": "fetchBuyingPower",
       "proposal": "확장",
@@ -2997,14 +2997,14 @@
         "KR"
       ],
       "status": "extended",
-      "method": "fetchStockWarnings",
+      "method": "fetchVolatilityInterruptions",
       "evidence": [
-        "ts/src/kis.ts:4934"
+        "ts/src/kis.ts:4926"
       ],
       "suggested": "fetchVolatilityInterruptions",
       "proposal": "확장",
       "verified": "spec-only",
-      "note": "TR FHPST01390000, 모의: 예제에 env_dv 없음; 공개 메서드는 `fetchStockWarnings`(국내만). 필드명은 공식 저장소의 chk_inquire_vi_status.py COLUMN_MAPPING으로 확인했다. 토스가 함께 주는 유의사항 여섯 종류 중 발동 기록을 주는 API는 VI뿐이다. 정리매매와 단기과열 여부, 시장경고 구분은 inquire-price-2(`fetchStockStatus`)가 현재 상태로만 준다. 신주인수권 항목은 없다 실계좌 호출(2026-09-24)은 오류 없이 끝났지만 자료가 없어 응답 필드는 확인하지 못했다.",
+      "note": "TR FHPST01390000, 모의: 예제에 env_dv 없음; 공개 메서드는 `fetchVolatilityInterruptions`(국내만, 옛 이름 `fetchStockWarnings`는 한 판 동안 별칭). 필드명은 공식 저장소의 chk_inquire_vi_status.py COLUMN_MAPPING으로 확인했다. 토스가 함께 주는 유의사항 여섯 종류 중 발동 기록을 주는 API는 VI뿐이다. 정리매매와 단기과열 여부, 시장경고 구분은 inquire-price-2(`fetchStockStatus`)가 현재 상태로만 준다. 신주인수권 항목은 없다 실계좌 호출(2026-09-24)은 오류 없이 끝났지만 자료가 없어 응답 필드는 확인하지 못했다.",
       "spec": "https://github.com/koreainvestment/open-trading-api/blob/b4e6249/examples_llm/domestic_stock/inquire_vi_status/inquire_vi_status.py"
     },
     {
@@ -3060,7 +3060,7 @@
       "method": "fetchTickers",
       "evidence": [
         "ts/src/spec/kis.json:36",
-        "ts/src/kis.ts:4490"
+        "ts/src/kis.ts:4478"
       ],
       "suggested": "fetchTickers",
       "proposal": "통합",
@@ -3164,7 +3164,7 @@
       "evidence": [
         "ts/src/spec/kis.json:176",
         "ts/src/kis.ts:7478",
-        "ts/src/kis.ts:3599"
+        "ts/src/kis.ts:3585"
       ],
       "suggested": "fetchInvestorTrend",
       "proposal": "확장",
@@ -3204,7 +3204,7 @@
       "method": "fetchCorporateSchedules",
       "evidence": [
         "ts/src/spec/kis.json:203",
-        "ts/src/kis.ts:3463",
+        "ts/src/kis.ts:3449",
         "ts/src/kis.ts:7973"
       ],
       "suggested": "fetchCorporateActions('bonusIssue')",
@@ -3225,7 +3225,7 @@
       "method": "fetchCorporateSchedules",
       "evidence": [
         "ts/src/spec/kis.json:208",
-        "ts/src/kis.ts:3469",
+        "ts/src/kis.ts:3455",
         "ts/src/kis.ts:7973"
       ],
       "suggested": "fetchCorporateActions('capitalReduction')",
@@ -3246,7 +3246,7 @@
       "method": "fetchCorporateSchedules",
       "evidence": [
         "ts/src/spec/kis.json:204",
-        "ts/src/kis.ts:3464",
+        "ts/src/kis.ts:3450",
         "ts/src/kis.ts:7973"
       ],
       "suggested": "fetchCorporateActions('dividend')",
@@ -3267,7 +3267,7 @@
       "method": "fetchCorporateSchedules",
       "evidence": [
         "ts/src/spec/kis.json:211",
-        "ts/src/kis.ts:3473",
+        "ts/src/kis.ts:3459",
         "ts/src/kis.ts:7973"
       ],
       "suggested": "fetchCorporateActions('forfeit')",
@@ -3288,7 +3288,7 @@
       "method": "fetchCorporateSchedules",
       "evidence": [
         "ts/src/spec/kis.json:209",
-        "ts/src/kis.ts:3471",
+        "ts/src/kis.ts:3457",
         "ts/src/kis.ts:7973"
       ],
       "suggested": "fetchCorporateActions('listing')",
@@ -3309,7 +3309,7 @@
       "method": "fetchCorporateSchedules",
       "evidence": [
         "ts/src/spec/kis.json:212",
-        "ts/src/kis.ts:3474",
+        "ts/src/kis.ts:3460",
         "ts/src/kis.ts:7973"
       ],
       "suggested": "fetchCorporateActions('mandatoryDeposit')",
@@ -3330,7 +3330,7 @@
       "method": "fetchCorporateSchedules",
       "evidence": [
         "ts/src/spec/kis.json:206",
-        "ts/src/kis.ts:3467",
+        "ts/src/kis.ts:3453",
         "ts/src/kis.ts:7973"
       ],
       "suggested": "fetchCorporateActions('mergerSplit')",
@@ -3351,7 +3351,7 @@
       "method": "fetchCorporateSchedules",
       "evidence": [
         "ts/src/spec/kis.json:202",
-        "ts/src/kis.ts:3462",
+        "ts/src/kis.ts:3448",
         "ts/src/kis.ts:7973"
       ],
       "suggested": "fetchCorporateActions('paidInCapital')",
@@ -3372,7 +3372,7 @@
       "method": "fetchCorporateSchedules",
       "evidence": [
         "ts/src/spec/kis.json:210",
-        "ts/src/kis.ts:3472",
+        "ts/src/kis.ts:3458",
         "ts/src/kis.ts:7973"
       ],
       "suggested": "fetchCorporateActions('publicOffering')",
@@ -3393,7 +3393,7 @@
       "method": "fetchCorporateSchedules",
       "evidence": [
         "ts/src/spec/kis.json:205",
-        "ts/src/kis.ts:3465",
+        "ts/src/kis.ts:3451",
         "ts/src/kis.ts:7973"
       ],
       "suggested": "fetchCorporateActions('appraisalRight')",
@@ -3414,7 +3414,7 @@
       "method": "fetchCorporateSchedules",
       "evidence": [
         "ts/src/spec/kis.json:207",
-        "ts/src/kis.ts:3468",
+        "ts/src/kis.ts:3454",
         "ts/src/kis.ts:7973"
       ],
       "suggested": "fetchCorporateActions('parValueChange')",
@@ -3435,7 +3435,7 @@
       "method": "fetchCorporateSchedules",
       "evidence": [
         "ts/src/spec/kis.json:213",
-        "ts/src/kis.ts:3475",
+        "ts/src/kis.ts:3461",
         "ts/src/kis.ts:7973"
       ],
       "suggested": "fetchCorporateActions('shareholderMeeting')",
@@ -3474,7 +3474,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:49", "ts/src/kis.ts:3181", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
+      "evidence": ["ts/src/spec/kis.json:49", "ts/src/kis.ts:3167", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
       "suggested": "fetchRanking('marketCap')",
       "proposal": "확장",
       "verified": "real",
@@ -3492,7 +3492,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:262"
       ],
       "suggested": "watchMarketStatus",
@@ -3512,7 +3512,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:224"
       ],
       "suggested": "watchMarketStatus",
@@ -3532,7 +3532,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:339"
       ],
       "suggested": "watchMarketStatus",
@@ -3571,7 +3571,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:60", "ts/src/kis.ts:3259", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
+      "evidence": ["ts/src/spec/kis.json:60", "ts/src/kis.ts:3245", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
       "suggested": "fetchRanking('marketValue')",
       "proposal": "확장",
       "verified": "real",
@@ -3589,7 +3589,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:248"
       ],
       "suggested": "watchMemberTrades",
@@ -3609,7 +3609,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:210"
       ],
       "suggested": "watchMemberTrades",
@@ -3629,7 +3629,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:325"
       ],
       "suggested": "watchMemberTrades",
@@ -3668,7 +3668,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:50", "ts/src/kis.ts:3186", "ts/src/kis.ts:3195", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
+      "evidence": ["ts/src/spec/kis.json:50", "ts/src/kis.ts:3172", "ts/src/kis.ts:3181", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
       "suggested": "fetchRanking('nearNewHighLow')",
       "proposal": "확장",
       "verified": "real",
@@ -3706,8 +3706,8 @@
       "status": "integrated",
       "method": "createOrder",
       "evidence": [
-        "ts/src/kis.ts:4856",
-        "ts/src/kis.ts:4865"
+        "ts/src/kis.ts:4848",
+        "ts/src/kis.ts:4857"
       ],
       "suggested": null,
       "proposal": null,
@@ -3827,7 +3827,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:269"
       ],
       "suggested": "watchOrderBook",
@@ -3847,7 +3847,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:285"
       ],
       "suggested": "watchTrades",
@@ -3867,7 +3867,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:277"
       ],
       "suggested": "watchExpectedExecutions",
@@ -3886,7 +3886,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:61", "ts/src/kis.ts:3264", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
+      "evidence": ["ts/src/spec/kis.json:61", "ts/src/kis.ts:3250", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
       "suggested": "fetchRanking('overtimeExpectedFluctuation')",
       "proposal": "확장",
       "verified": "spec-only",
@@ -3903,7 +3903,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:62", "ts/src/kis.ts:3273", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
+      "evidence": ["ts/src/spec/kis.json:62", "ts/src/kis.ts:3259", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
       "suggested": "fetchRanking('overtimeFluctuation')",
       "proposal": "확장",
       "verified": "spec-only",
@@ -3920,7 +3920,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:63", "ts/src/kis.ts:3282", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
+      "evidence": ["ts/src/spec/kis.json:63", "ts/src/kis.ts:3268", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
       "suggested": "fetchRanking('overtimeVolume')",
       "proposal": "확장",
       "verified": "real",
@@ -4077,7 +4077,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:51", "ts/src/kis.ts:3204", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
+      "evidence": ["ts/src/spec/kis.json:51", "ts/src/kis.ts:3190", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
       "suggested": "fetchRanking('preferredDisparity')",
       "proposal": "확장",
       "verified": "real",
@@ -4094,7 +4094,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:64", "ts/src/kis.ts:3291", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
+      "evidence": ["ts/src/spec/kis.json:64", "ts/src/kis.ts:3277", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
       "suggested": "fetchRanking('profitAssetIndex')",
       "proposal": "확장",
       "verified": "real",
@@ -4154,7 +4154,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:293"
       ],
       "suggested": "watchProgramTrades",
@@ -4174,7 +4174,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:229"
       ],
       "suggested": "watchProgramTrades",
@@ -4194,7 +4194,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:344"
       ],
       "suggested": "watchProgramTrades",
@@ -4255,7 +4255,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:52", "ts/src/kis.ts:3209", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
+      "evidence": ["ts/src/spec/kis.json:52", "ts/src/kis.ts:3195", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
       "suggested": "fetchRanking('quoteBalance')",
       "proposal": "확장",
       "verified": "real",
@@ -4293,7 +4293,7 @@
       "status": "extended",
       "method": "fetchStocks",
       "evidence": [
-        "ts/src/kis.ts:4897",
+        "ts/src/kis.ts:4889",
         "ts/src/kis.ts:9819"
       ],
       "suggested": "fetchStockInfo",
@@ -4312,7 +4312,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:65", "ts/src/kis.ts:3296", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
+      "evidence": ["ts/src/spec/kis.json:65", "ts/src/kis.ts:3282", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
       "suggested": "fetchRanking('shortSale')",
       "proposal": "확장",
       "verified": "real",
@@ -4329,7 +4329,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:53", "ts/src/kis.ts:3214", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
+      "evidence": ["ts/src/spec/kis.json:53", "ts/src/kis.ts:3200", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
       "suggested": "fetchRanking('topInterest')",
       "proposal": "확장",
       "verified": "real",
@@ -4346,7 +4346,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:54", "ts/src/kis.ts:3219", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
+      "evidence": ["ts/src/spec/kis.json:54", "ts/src/kis.ts:3205", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
       "suggested": "fetchRanking('tradedByCompany')",
       "proposal": "확장",
       "verified": "spec-only",
@@ -4383,7 +4383,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:55", "ts/src/kis.ts:3228", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
+      "evidence": ["ts/src/spec/kis.json:55", "ts/src/kis.ts:3214", "ts/src/kis.ts:9712", "ts/src/kis.ts:9725"],
       "suggested": "fetchRanking('volumePower')",
       "proposal": "확장",
       "verified": "real",
@@ -4462,7 +4462,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:100"
       ],
       "suggested": "watchOrderBook",
@@ -4482,7 +4482,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:110"
       ],
       "suggested": "watchTrades",
@@ -4502,7 +4502,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:91"
       ],
       "suggested": "watchExpectedExecutions",
@@ -4543,8 +4543,8 @@
       "method": "fetchRankings",
       "evidence": [
         "ts/src/spec/kis.json:88",
-        "ts/src/kis.ts:3386",
-        "ts/src/kis.ts:3138",
+        "ts/src/kis.ts:3372",
+        "ts/src/kis.ts:3124",
         "ts/src/kis.ts:9712",
         "ts/src/kis.ts:9725"
       ],
@@ -4666,8 +4666,8 @@
       "method": "fetchRankings",
       "evidence": [
         "ts/src/spec/kis.json:90",
-        "ts/src/kis.ts:3392",
-        "ts/src/kis.ts:3138",
+        "ts/src/kis.ts:3378",
+        "ts/src/kis.ts:3124",
         "ts/src/kis.ts:9712",
         "ts/src/kis.ts:9725"
       ],
@@ -4689,8 +4689,8 @@
       "method": "fetchRankings",
       "evidence": [
         "ts/src/spec/kis.json:89",
-        "ts/src/kis.ts:3388",
-        "ts/src/kis.ts:3138",
+        "ts/src/kis.ts:3374",
+        "ts/src/kis.ts:3124",
         "ts/src/kis.ts:9712",
         "ts/src/kis.ts:9725"
       ],
@@ -4792,8 +4792,8 @@
       "method": "fetchRankings",
       "evidence": [
         "ts/src/spec/kis.json:86",
-        "ts/src/kis.ts:3375",
-        "ts/src/kis.ts:3138",
+        "ts/src/kis.ts:3361",
+        "ts/src/kis.ts:3124",
         "ts/src/kis.ts:9712",
         "ts/src/kis.ts:9725"
       ],
@@ -4895,8 +4895,8 @@
       "method": "fetchRankings",
       "evidence": [
         "ts/src/spec/kis.json:87",
-        "ts/src/kis.ts:3382",
-        "ts/src/kis.ts:3138",
+        "ts/src/kis.ts:3368",
+        "ts/src/kis.ts:3124",
         "ts/src/kis.ts:9712",
         "ts/src/kis.ts:9725"
       ],
@@ -4917,7 +4917,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:267"
       ],
       "suggested": "watchEtfNav",
@@ -5037,7 +5037,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:421"
       ],
       "suggested": "watchOrderBook",
@@ -5057,7 +5057,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:428"
       ],
       "suggested": "watchTrades",
@@ -5077,7 +5077,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:441"
       ],
       "suggested": "watchMyTrades",
@@ -5594,7 +5594,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:434"
       ],
       "suggested": "watchOrders",
@@ -5755,7 +5755,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:447"
       ],
       "suggested": "watchOrderBook",
@@ -5795,7 +5795,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:120"
       ],
       "suggested": "watchMyTrades",
@@ -5817,7 +5817,7 @@
       "evidence": [
         "ts/src/spec/kis.json:251",
         "ts/src/kis.ts:8778",
-        "ts/src/kis.ts:3073"
+        "ts/src/kis.ts:3059"
       ],
       "suggested": "fetchLoanableStocks",
       "proposal": "확장",
@@ -5856,7 +5856,7 @@
       "status": "integrated",
       "method": "fetchOHLCV",
       "evidence": [
-        "ts/src/kis.ts:4582",
+        "ts/src/kis.ts:4571",
         "ts/src/kis/kis-candle-service.ts:302"
       ],
       "suggested": null,
@@ -5917,7 +5917,7 @@
       "status": "extended",
       "method": "createRealtimeStream",
       "evidence": [
-        "ts/src/kis.ts:3941",
+        "ts/src/kis.ts:3926",
         "ts/src/kis/kis-realtime-columns.ts:449"
       ],
       "suggested": "watchOrderBook",
@@ -5937,7 +5937,7 @@
       "status": "extended",
       "method": "createPriceStream",
       "evidence": [
-        "ts/src/kis/kis-realtime-parser.ts:65"
+        "ts/src/kis/kis-realtime-parser.ts:66"
       ],
       "suggested": null,
       "proposal": null,
@@ -6059,7 +6059,7 @@
       "status": "integrated",
       "method": "fetchBalance",
       "evidence": [
-        "ts/src/kis.ts:4667"
+        "ts/src/kis.ts:4657"
       ],
       "suggested": null,
       "proposal": null,
@@ -6196,7 +6196,7 @@
       "status": "integrated",
       "method": "fetchBalance",
       "evidence": [
-        "ts/src/kis.ts:4681"
+        "ts/src/kis.ts:4671"
       ],
       "suggested": null,
       "proposal": null,
@@ -6237,7 +6237,7 @@
       "evidence": [
         "ts/src/spec/kis.json:250",
         "ts/src/kis.ts:8744",
-        "ts/src/kis.ts:3058"
+        "ts/src/kis.ts:3044"
       ],
       "suggested": "fetchScreenerResult",
       "proposal": "확장",
@@ -6298,8 +6298,8 @@
       "method": "fetchRankings",
       "evidence": [
         "ts/src/spec/kis.json:229",
-        "ts/src/kis.ts:3349",
-        "ts/src/kis.ts:3078",
+        "ts/src/kis.ts:3335",
+        "ts/src/kis.ts:3064",
         "ts/src/kis.ts:9712",
         "ts/src/kis.ts:9725"
       ],
@@ -6321,9 +6321,9 @@
       "method": "fetchRankings",
       "evidence": [
         "ts/src/spec/kis.json:230",
-        "ts/src/kis.ts:3351",
-        "ts/src/kis.ts:3353",
-        "ts/src/kis.ts:3078",
+        "ts/src/kis.ts:3337",
+        "ts/src/kis.ts:3339",
+        "ts/src/kis.ts:3064",
         "ts/src/kis.ts:9712",
         "ts/src/kis.ts:9725"
       ],
@@ -6483,7 +6483,7 @@
       "status": "integrated",
       "method": "fetchTicker",
       "evidence": [
-        "ts/src/kis.ts:4419"
+        "ts/src/kis.ts:4407"
       ],
       "suggested": null,
       "proposal": null,
@@ -6524,9 +6524,9 @@
       "method": "fetchRankings",
       "evidence": [
         "ts/src/spec/kis.json:231",
-        "ts/src/kis.ts:3355",
-        "ts/src/kis.ts:3357",
-        "ts/src/kis.ts:3078",
+        "ts/src/kis.ts:3341",
+        "ts/src/kis.ts:3343",
+        "ts/src/kis.ts:3064",
         "ts/src/kis.ts:9712",
         "ts/src/kis.ts:9725"
       ],
@@ -6570,7 +6570,7 @@
       "evidence": [
         "ts/src/spec/kis.json:253",
         "ts/src/kis.ts:8859",
-        "ts/src/kis.ts:3068"
+        "ts/src/kis.ts:3054"
       ],
       "suggested": "fetchCorporateActions",
       "proposal": "확장",
@@ -6591,7 +6591,7 @@
       "evidence": [
         "ts/src/spec/kis.json:254",
         "ts/src/kis.ts:8885",
-        "ts/src/kis.ts:3063"
+        "ts/src/kis.ts:3049"
       ],
       "suggested": "fetchInstrumentInfo",
       "proposal": "확장",
@@ -6611,8 +6611,8 @@
       "method": "fetchRankings",
       "evidence": [
         "ts/src/spec/kis.json:235",
-        "ts/src/kis.ts:3367",
-        "ts/src/kis.ts:3078",
+        "ts/src/kis.ts:3353",
+        "ts/src/kis.ts:3064",
         "ts/src/kis.ts:9712",
         "ts/src/kis.ts:9725"
       ],
@@ -6634,8 +6634,8 @@
       "method": "fetchRankings",
       "evidence": [
         "ts/src/spec/kis.json:234",
-        "ts/src/kis.ts:3365",
-        "ts/src/kis.ts:3078",
+        "ts/src/kis.ts:3351",
+        "ts/src/kis.ts:3064",
         "ts/src/kis.ts:9712",
         "ts/src/kis.ts:9725"
       ],
@@ -6657,8 +6657,8 @@
       "method": "fetchRankings",
       "evidence": [
         "ts/src/spec/kis.json:236",
-        "ts/src/kis.ts:3369",
-        "ts/src/kis.ts:3078",
+        "ts/src/kis.ts:3355",
+        "ts/src/kis.ts:3064",
         "ts/src/kis.ts:9712",
         "ts/src/kis.ts:9725"
       ],
@@ -6680,8 +6680,8 @@
       "method": "fetchRankings",
       "evidence": [
         "ts/src/spec/kis.json:233",
-        "ts/src/kis.ts:3363",
-        "ts/src/kis.ts:3078",
+        "ts/src/kis.ts:3349",
+        "ts/src/kis.ts:3064",
         "ts/src/kis.ts:9712",
         "ts/src/kis.ts:9725"
       ],
@@ -6703,9 +6703,9 @@
       "method": "fetchRankings",
       "evidence": [
         "ts/src/spec/kis.json:232",
-        "ts/src/kis.ts:3359",
-        "ts/src/kis.ts:3361",
-        "ts/src/kis.ts:3078",
+        "ts/src/kis.ts:3345",
+        "ts/src/kis.ts:3347",
+        "ts/src/kis.ts:3064",
         "ts/src/kis.ts:9712",
         "ts/src/kis.ts:9725"
       ],
@@ -6727,8 +6727,8 @@
       "method": "fetchRankings",
       "evidence": [
         "ts/src/spec/kis.json:237",
-        "ts/src/kis.ts:3371",
-        "ts/src/kis.ts:3078",
+        "ts/src/kis.ts:3357",
+        "ts/src/kis.ts:3064",
         "ts/src/kis.ts:9712",
         "ts/src/kis.ts:9725"
       ],
@@ -6750,8 +6750,8 @@
       "method": "fetchRankings",
       "evidence": [
         "ts/src/spec/kis.json:238",
-        "ts/src/kis.ts:3373",
-        "ts/src/kis.ts:3078",
+        "ts/src/kis.ts:3359",
+        "ts/src/kis.ts:3064",
         "ts/src/kis.ts:9712",
         "ts/src/kis.ts:9725"
       ],
@@ -6838,7 +6838,7 @@
         "examples_llm/domestic_stock/member_total"
       ],
       "support": "부분",
-      "scope": "종목별 투자자 매매동향은 `fetchInvestorTrading`(개인, 외국인, 기관계)과 `fetchInvestorTradingHistory`(유형 15종), 추정 가집계는 `fetchInvestorEstimates`가 돌려줍니다. 회원사는 `fetchMemberTrading`(상위 5곳), `fetchMemberDailyTrading`(한 곳의 일별), `fetchMemberTradeTicks`(실시간 매매동향)가, 외국계 순매수 추이는 `fetchForeignTradeTicks`가 돌려줍니다. 시장 단위는 `fetchMarketInvestorTrading`(시장별 일별)과 매매종목 가집계 순위(`fetchRankings`의 `FOREIGN_INSTITUTION_ESTIMATE`, `FOREIGN_BROKER_ESTIMATE`), `fetchProgramTradingByInvestor`가 돌려줍니다. 시장별 투자자 동향(시세)은 입력값 목록이 없어 보류했고, 실시간 회원사 세 개는 `createRealtimeStream`의 `subscribe`로 받습니다."
+      "scope": "종목별 투자자 매매동향은 `fetchInvestorTrading`(개인, 외국인, 기관계의 순매수 대금)과 `fetchInvestorTradingHistory`(유형 15종), 추정 가집계는 `fetchInvestorEstimates`가 돌려줍니다. 회원사는 `fetchMemberTrading`(상위 5곳), `fetchMemberDailyTrading`(한 곳의 일별), `fetchMemberTradeTicks`(실시간 매매동향)가, 외국계 순매수 추이는 `fetchForeignTradeTicks`가 돌려줍니다. 시장 단위는 `fetchMarketInvestorTrading`(시장별 일별)과 매매종목 가집계 순위(`fetchRankings`의 `FOREIGN_INSTITUTION_ESTIMATE`, `FOREIGN_BROKER_ESTIMATE`), `fetchProgramTradingByInvestor`가 돌려줍니다. 시장별 투자자 동향(시세)은 입력값 목록이 없어 보류했고, 실시간 회원사 세 개는 `createRealtimeStream`의 `subscribe`로 받습니다."
     },
     {
       "name": "공매도, 대차거래, 신용잔고, 대주, 신용매수 가능",
@@ -7020,7 +7020,7 @@
         "examples_llm/overseas_futureoption/market_time"
       ],
       "support": "지원",
-      "scope": "VI 발동 현황은 `fetchStockWarnings`, 상하한가 포착은 `fetchRankings('PRICE_LIMIT')`, 해외선물옵션 장운영시간은 `fetchOverseasDerivativeMarketHours`가 돌려줍니다. 국내 장운영정보 세 개는 `createRealtimeStream`의 `subscribe`로 받습니다. 장 시각은 코드 상수와 휴장일 API로 판정합니다."
+      "scope": "VI 발동 현황은 `fetchVolatilityInterruptions`, 상하한가 포착은 `fetchRankings('PRICE_LIMIT')`, 해외선물옵션 장운영시간은 `fetchOverseasDerivativeMarketHours`가 돌려줍니다. 국내 장운영정보 세 개는 `createRealtimeStream`의 `subscribe`로 받습니다. 장 시각은 코드 상수와 휴장일 API로 판정합니다."
     },
     {
       "name": "뉴스, 시황, 공시 제목",

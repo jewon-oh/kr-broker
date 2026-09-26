@@ -98,10 +98,10 @@ class toss(kr_broker.async_support.toss):
             self._watch_hub.push(f"orders:{parsed['symbol']}", parsed)
 
     def _watch_symbol_of(self, market: str, code: str) -> str:
-        """토스 원본 코드 → 통합 심볼. 종목 목록에 없으면 시장의 통화를 붙인다."""
+        """토스 원본 코드 → 통합 심볼. 종목 목록에 없으면 `commonStockCodes` 를 거친 코드에 시장의 통화를 붙인다."""
         candidates = (self.markets_by_id or {}).get(code) or []
         known = candidates[0].get('symbol') if candidates else None
-        return known if known is not None else f"{code}/{'USD' if market == 'us' else 'KRW'}"
+        return known if known is not None else f"{self.common_stock_code(code)}/{'USD' if market == 'us' else 'KRW'}"
 
     def _watch_market_sub(self, channel: str, symbol: str) -> str:
         market = self.market(symbol)

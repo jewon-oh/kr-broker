@@ -120,6 +120,7 @@ const harness: BrokerContractHarness = {
         { ovrs_pdno: 'BRK/B', ovrs_cblc_qty: '1', ord_psbl_qty: '1' },
     ]),
     fetchBalanceWithCollidingKey: () => fetchBalanceWith([{ ovrs_pdno: 'USD', ovrs_cblc_qty: '2', ord_psbl_qty: '2' }]),
+    fetchBalanceWithUnlistedCollidingKey: () => fetchBalanceWith([{ ovrs_pdno: 'KRW', ovrs_cblc_qty: '1', ord_psbl_qty: '1' }]),
     market: (symbol) => newKis().market(symbol),
 };
 

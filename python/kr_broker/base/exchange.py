@@ -28,7 +28,7 @@ import time
 import types
 import urllib.parse
 from collections.abc import Mapping
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 import requests
 
@@ -45,6 +45,7 @@ from kr_broker.base.precise import Precise
 from kr_broker.base.throttler import Throttler
 from kr_broker.base.token_store import BrokerTokenStore, resolve_token_store
 from kr_broker.base.types import ApiName, Int, Num, Str, Strings
+from kr_broker.broker_market_group import COMMON_STOCK_CODES, common_stock_code, stock_ticker
 from kr_broker.broker_time import KST_OFFSET_MS
 from kr_broker.execution_confirm import resolve_confirm_budget
 
@@ -188,6 +189,8 @@ class Exchange:
     exceptions: Dict[str, Any] = {}
     httpExceptions: Dict[str, Any] = {}
     commonCurrencies: Dict[str, str] = {}
+    # 현금 코드와 같은 티커의 통합 코드(티커 → 통합 코드). 기본은 `COMMON_STOCK_CODES` 이고 생성자 인자로 덮는다.
+    commonStockCodes: Dict[str, str] = {}
     timeframes: Optional[Dict[str, str]] = None
     status: Dict[str, Any] = {}
     rateLimitBuckets: Dict[str, Dict[str, float]] = {}
@@ -324,6 +327,7 @@ class Exchange:
                     setattr(self, key, value)
         self._throttler: Optional[Throttler] = None
         self._bucket_throttlers: Dict[str, Optional[Throttler]] = {}
+        self._deprecation_warned: Set[str] = set()
         self._define_camelcase_aliases()
         if self.session is None and self.synchronous:
             self.session = self._new_requests_session()
@@ -396,6 +400,7 @@ class Exchange:
                 '511': AuthenticationError,
             },
             'commonCurrencies': {},
+            'commonStockCodes': dict(COMMON_STOCK_CODES),
             'precisionMode': TICK_SIZE,
             'paddingMode': NO_PADDING,
             'limits': {
@@ -736,6 +741,20 @@ class Exchange:
             overrides.close()
         return resolve_confirm_budget(defaults, overrides if isinstance(overrides, Mapping) else None)
 
+    def _calendar_market(self, params: Optional[Dict[str, Any]]) -> str:
+        """`fetch_market_calendar` 의 `params['market']`. 대소문자를 가리지 않고 기본은 `'KR'` 이다. `'KR'`·`'US'` 밖의 값은 요청 없이 `BadRequest` 다."""
+        market = (fn.safe_string(params, 'market') or 'KR').upper()
+        if market not in ('KR', 'US'):
+            raise BadRequest(f"{self.id} fetchMarketCalendar() 의 params.market 은 'KR' 이나 'US' 다: {market}")
+        return market
+
+    def _warn_deprecated(self, usage: str, replacement: str) -> None:
+        """옛 이름이나 옛 호출 모양으로 부른 것을 인스턴스마다 한 번 경고로 남긴다. 그 모양은 다음 판에서 지운다."""
+        if usage in self._deprecation_warned:
+            return
+        self._deprecation_warned.add(usage)
+        logger.warning('[%s] %s 는 다음 판에서 지운다. %s 로 바꾼다', self.id, usage, replacement)
+
     # ============ 종목 ============
 
     def load_markets(self, reload: bool = False, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -782,6 +801,10 @@ class Exchange:
         base_currencies = currencies if currencies else self._currencies_from_markets(values)
         self.currencies = fn.deep_extend(base_currencies, self.currencies)
         self.currencies_by_id = fn.index_by(self.currencies, 'id')
+        # `commonStockCodes` 로 코드를 바꾼 종목은 같은 id 의 현금(`USD`)과 id 가 겹친다. id 로 찾으면 코드를 바꾸지 않은 쪽을 준다.
+        for currency in self.currencies.values():
+            if currency.get('id') is not None and currency.get('code') == currency['id']:
+                self.currencies_by_id[currency['id']] = currency
         self.codes = sorted(self.currencies.keys())
         return self.markets
 
@@ -905,6 +928,15 @@ class Exchange:
 
     def common_currency_code(self, code: str) -> str:
         return fn.safe_string(self.commonCurrencies, code, code)
+
+    def common_stock_code(self, ticker: str) -> str:
+        """티커 → 종목의 통합 코드(`market['base']`). `commonStockCodes` 에 없으면 티커 그대로다. 현금 코드에는 쓰지 않는다."""
+        return common_stock_code(ticker, self.commonStockCodes)
+
+    def stock_ticker(self, code: str) -> str:
+        """종목의 통합 코드 → 티커. 통합 코드가 아니면 그대로 돌려준다. 기본 표(`COMMON_STOCK_CODES`)의 통합 코드도 받는다. 인스턴스 없이 도는
+        공용 도우미(`symbol_base_code` 등)는 기본 표를 쓰므로, 생성자로 표를 덮어도 그 심볼이 같은 종목을 가리켜야 한다."""
+        return stock_ticker(stock_ticker(code, self.commonStockCodes))
 
     def safe_currency(self, currency_id: Str, currency: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         if currency_id is None and currency is not None:

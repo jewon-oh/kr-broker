@@ -36,7 +36,8 @@ interface FixtureCase {
     args: unknown[];
     http: FixtureExchange[];
     output?: unknown;
-    error?: { class: string; detail?: string };
+    /** `brokerCode` 의 `null` 은 "없어야 한다"이다(요청 전에 막은 오류). */
+    error?: { class: string; detail?: string; brokerCode?: string | null };
     tokenStoreAfter?: Record<string, 'present' | 'absent'>;
 }
 interface FixtureFile { broker: string; config: Dict; tokenStore?: Record<string, unknown>; cases: FixtureCase[] }
@@ -154,6 +155,7 @@ describe.each(files)('test/static/request/%s', (file) => {
             expect(error, '오류를 던져야 한다').toBeInstanceOf(Error);
             expect((error as Error).name).toBe(c.error.class);
             if (c.error.detail !== undefined) expect((error as { detail?: string }).detail).toBe(c.error.detail);
+            if (c.error.brokerCode !== undefined) expect((error as { brokerCode?: string }).brokerCode ?? null).toBe(c.error.brokerCode);
         } else {
             if (error !== undefined) throw error;
             expect(comparable(result)).toEqual(comparable(c.output));

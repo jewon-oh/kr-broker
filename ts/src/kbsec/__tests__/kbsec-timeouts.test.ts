@@ -14,7 +14,7 @@ global.fetch = mockFetch as unknown as typeof fetch;
 
 import { kbsec } from '../../kbsec';
 import { OrderOutcomeUnknown, RequestTimeout } from '../../base/errors';
-import { __resetKbsecTokenBreaker } from '../kbsec-token-breaker';
+import { __resetKbsecTokenBreaker } from '../../testing';
 
 const READ_TIMEOUT_MS = 20_000;
 const ORDER_TIMEOUT_MS = 25_000;

@@ -12,8 +12,9 @@ global.fetch = mockFetch as unknown as typeof fetch;
 import { kbsec } from '../../kbsec';
 import { isMarketClosedDay, marketDayStatus, resetMarketCalendar } from '../../market-calendar';
 import { KBSEC_TR } from '../kbsec-types';
-import { __resetKbsecTokenBreaker } from '../kbsec-token-breaker';
-import { CREDS, calledTrs, routeTr } from './support/kbsec-fetch';
+import { __resetKbsecTokenBreaker } from '../../testing';
+import { BadRequest, NotSupported } from '../../base/errors';
+import { CREDS, calledTrs, routeTr, trBody } from './support/kbsec-fetch';
 
 const newExchange = () => new kbsec({ ...CREDS, rateLimit: 0 });
 
@@ -65,6 +66,18 @@ describe('fetchMarketCalendar', () => {
         routeTr(mockFetch, { [KBSEC_TR.MARKET_STATUS]: {} });
 
         expect(await newExchange().fetchMarketCalendar()).toEqual([]);
+    });
+
+    it('params.market 은 KR 만 받고 본문에 싣지 않는다. US 는 NotSupported, 그 밖은 BadRequest 이고 TR 을 부르지 않는다', async () => {
+        routeTr(mockFetch, { [KBSEC_TR.MARKET_STATUS]: ORDINARY_WEDNESDAY });
+        const exchange = newExchange();
+
+        await exchange.fetchMarketCalendar({ market: 'kr' });
+        await expect(exchange.fetchMarketCalendar({ market: 'US' })).rejects.toThrow(NotSupported);
+        await expect(exchange.fetchMarketCalendar({ market: 'JP' })).rejects.toThrow(BadRequest);
+
+        expect(trBody(mockFetch, KBSEC_TR.MARKET_STATUS).dataBody).not.toHaveProperty('market');
+        expect(calledTrs(mockFetch).filter((tr) => tr === KBSEC_TR.MARKET_STATUS.toLowerCase())).toHaveLength(1);
     });
 });
 

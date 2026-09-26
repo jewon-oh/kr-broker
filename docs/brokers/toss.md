@@ -101,7 +101,7 @@
 | 종목 기본 정보(200건까지) | `GET /api/v1/stocks` | 국내, 미국 | 확장 | `fetchStocks` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1stocks/get) | 200종목을 초과해도 나누지 않습니다. 국내는 거래정지, NXT 지원 여부가 실립니다. |
 | 마켓별 전체 종목 | `GET /api/v1/stocks/all` | 국내, 미국 | 통합 | `fetchMarkets` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1stocks~1all/get) | 마켓 7개를 1회씩 호출합니다. `status`, `securityType`는 `params`로 전달됩니다. `taker`와 `maker`는 시장별 기본 위탁수수료율(국내 0.00015, 미국 0.001)입니다. |
 | 매수 유의사항 | `GET /api/v1/stocks/{symbol}/warnings` | 국내, 미국 | 확장 | `fetchStockWarnings` | `spec-only` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1stocks~1{symbol}~1warnings/get) | 시장 범위는 스펙에 명시가 없습니다. 실계좌 호출(2026-09-24)은 오류 없이 끝났지만 자료가 없어 응답 필드는 확인하지 못했다. |
-| 종목 투자자별 매매동향 | `GET /api/v1/stocks/{symbol}/investor-trading` | 국내 | 확장 | `fetchStockInvestorTrading` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1stocks~1{symbol}~1investor-trading/get) | 국내 전용이며 미국 종목은 400 unsupported-market입니다. 기존 `fetchInvestorTrading`은 시장 단위입니다. |
+| 종목 투자자별 매매동향 | `GET /api/v1/stocks/{symbol}/investor-trading` | 국내 | 확장 | `fetchStockInvestorTrading` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1stocks~1{symbol}~1investor-trading/get) | 국내 전용이며 미국 종목은 400 unsupported-market입니다. 시장 단위는 `fetchMarketInvestorTrading`입니다. 한국투자증권과 KB증권의 `fetchInvestorTrading`(종목 단위 공통 모양)으로는 아직 옮기지 않았습니다. |
 | 프로그램매매 동향 | `GET /api/v1/stocks/{symbol}/program-trades` | 국내 | 확장 | `fetchProgramTrades` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1stocks~1{symbol}~1program-trades/get) | 국내 전용이며 KRX 거래만 집계합니다. |
 | 공매도 동향 | `GET /api/v1/stocks/{symbol}/short-selling` | 국내 | 확장 | `fetchShortSelling` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1stocks~1{symbol}~1short-selling/get) | 국내 전용입니다. 비중의 분모(정규장 외 세션 포함 누적 거래량·거래대금)가 없는 날짜는 비중이 null입니다. |
 | 신용거래 동향 | `GET /api/v1/stocks/{symbol}/credit-trades` | 국내 | 확장 | `fetchCreditTrades` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1stocks~1{symbol}~1credit-trades/get) | 국내 전용입니다. 신용대주(개인)는 대차거래(기관)와 다른 데이터입니다. |
@@ -112,8 +112,8 @@
 | API 이름 | 엔드포인트 | 시장 | 상태 | 메서드 | 검증 | 제안 | 명세 | 비고 |
 |---|---|---|---|---|---|---|---|---|
 | 환율 조회 | `GET /api/v1/exchange-rate` | 국내, 미국 | 암묵 | `privateMarketGetExchangeRate` | `spec-only` | `fetchExchangeRate` (확장) | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1exchange-rate/get) | 내부 `usdKrwRate`가 부르고 공개 래퍼는 없습니다. 참고용 표시 환율입니다. |
-| 국내 장 운영 정보 | `GET /api/v1/market-calendar/KR` | 국내 | 확장 | `fetchMarketCalendar` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1market-calendar~1KR/get) | `date`를 전달하지 못합니다. `currentKrSession`도 같은 API를 씁니다. |
-| 해외 장 운영 정보 | `GET /api/v1/market-calendar/US` | 미국 | 확장 | `fetchMarketCalendar` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1market-calendar~1US/get) | `date`를 전달하지 못합니다. 4세션(데이마켓 포함)이며 `currentUsSession`도 같은 API를 씁니다. |
+| 국내 장 운영 정보 | `GET /api/v1/market-calendar/KR` | 국내 | 확장 | `fetchMarketSessions` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1market-calendar~1KR/get) | `date`를 전달하지 못합니다. 세션 시각 원본을 돌려줍니다. 날짜별 개장 여부는 `fetchMarketCalendar`가 이 결과로 만들고, `currentKrSession`도 같은 API를 씁니다. |
+| 해외 장 운영 정보 | `GET /api/v1/market-calendar/US` | 미국 | 확장 | `fetchMarketSessions` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1market-calendar~1US/get) | `date`를 전달하지 못합니다. 4세션(데이마켓 포함)의 시각 원본을 돌려줍니다. 날짜별 개장 여부는 `fetchMarketCalendar`가 이 결과로 만들고, `currentUsSession`도 같은 API를 씁니다. |
 
 ### Ranking
 
@@ -127,7 +127,7 @@
 |---|---|---|---|---|---|---|---|---|
 | 시장 지표 현재가(지수, 국채 8종) | `GET /api/v1/market-indicators/prices` | 국내 | 확장 | `fetchMarketIndicators` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1market-indicators~1prices/get) | 심볼은 KOSPI, KOSDAQ, KR_BOND_2Y, 3Y, 5Y, 10Y, 20Y, 30Y 8종입니다. |
 | 시장 지표 캔들 | `GET /api/v1/market-indicators/{symbol}/candles` | 국내 | 확장 | `fetchMarketIndicatorOHLCV` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1market-indicators~1{symbol}~1candles/get) | 분봉은 지수만, 국채는 일봉만 됩니다. `fetchOHLCV('KOSPI')`는 심볼 판정이 미국이라 일반 `/candles`를 부릅니다. |
-| 투자자별 매매대금(KOSPI, KOSDAQ) | `GET /api/v1/market-indicators/{symbol}/investor-trading` | 국내 | 확장 | `fetchInvestorTrading` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1market-indicators~1{symbol}~1investor-trading/get) | 시장 단위(KOSPI, KOSDAQ)이며 종목 단위가 아닙니다. |
+| 투자자별 매매대금(KOSPI, KOSDAQ) | `GET /api/v1/market-indicators/{symbol}/investor-trading` | 국내 | 확장 | `fetchMarketInvestorTrading` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1market-indicators~1{symbol}~1investor-trading/get) | 시장 단위(KOSPI, KOSDAQ)이며 종목 단위가 아닙니다. |
 
 ### Account
 
@@ -202,7 +202,7 @@ ccxt의 통합 메서드로 표현하기 어려운 증권사 고유 기능입니
 | 국내 확장 세션과 미국 4세션 캘린더 | 부분 | 2개 | 캘린더 조회, 세션 판정, 세션별 주문 형태 사전 검사를 지원합니다. 시장가를 지정가로 바꾸는 옵션도 있습니다. `date`를 지정한 조회는 지원하지 않습니다. |
 | 종목 유의사항(정리매매, 투자경고, 단기과열, VI) | 지원 | 1개 | `fetchStockWarnings`로 조회합니다. 주문 경로는 조회 결과를 미리 확인하지 않습니다. |
 | 거래정지, NXT 지원, 정리매매 여부 | 부분 | 1개 | `fetchStocks`가 원본을 반환합니다. 200종목을 초과해도 나누어 호출하지 않습니다. |
-| 투자자별 매매대금(시장 단위) | 지원 | 1개 | `fetchInvestorTrading`으로 코스피와 코스닥 단위를 조회합니다. |
+| 투자자별 매매대금(시장 단위) | 지원 | 1개 | `fetchMarketInvestorTrading`으로 코스피와 코스닥 단위를 조회합니다. |
 | 종목 단위 수급 5종(국내 전용) | 지원 | 5개 | 투자자별 매매동향(`fetchStockInvestorTrading`), 프로그램매매 동향(`fetchProgramTrades`), 공매도 동향(`fetchShortSelling`), 신용거래 동향(`fetchCreditTrades`), 대차거래 동향(`fetchSecuritiesLending`)을 모두 지원합니다. |
 | 랭킹 | 지원 | 1개 | `fetchRankings`로 시장 전체 랭킹을 조회합니다. 토스증권 체결 기준이며 기간은 실시간부터 1년까지입니다. |
 | 시장 지표(코스피, 코스닥, 국채 시세와 캔들) | 지원 | 2개 | 현재가(`fetchMarketIndicators`)와 캔들(`fetchMarketIndicatorOHLCV`)을 모두 지원합니다. |

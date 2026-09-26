@@ -18,6 +18,7 @@
 
 심볼
     국내는 `005930/KRW`, 미국은 `AAPL/USD` 다. 슬래시가 든 티커(`BRK/B`)는 `BRK.B/USD` 로 쓰고 `market['id']` 에 KIS 표기를 둔다.
+    현금 코드와 같은 티커(`USD`)는 `commonStockCodes` 의 통합 코드로 심볼을 만든다(`ProShares Ultra Semiconductors/USD`). 입력은 `USD/USD` 도 받는다.
     접미사를 뺀 `005930`, `AAPL` 도 받는다. 국내 종목은 종목코드 모양(6자리)만으로 가르고, 해외 종목의 거래소는 종목 마스터
     (`options['masterData']`, `kis_master_data` 참고)에서 찾는다. `load_markets()` 는 마스터 데이터로 종목 목록을 만들 뿐이고 주문과 시세 호출에는 필요 없다.
 
@@ -844,9 +845,7 @@ class kis(Exchange, ImplicitAPI):
                 'fetchStatus': False,
                 'fetchTime': False,
                 'fetchMarketCalendar': True,
-                'fetchStockWarnings': True,
                 'fetchInvestorTrading': True,
-                'fetchRankings': True,
             },
             # 야후 파이낸스로 받는 봉 주기. 국내 캔들은 KIS 가 당일 분봉과 100행 일봉만 줘서 야후를 쓴다.
             'timeframes': {'1m': '1m', '5m': '5m', '15m': '15m', '30m': '30m', '1h': '1h', '4h': '4h', '1d': '1d', '1w': '1w', '1M': '1M'},
@@ -1031,11 +1030,11 @@ class kis(Exchange, ImplicitAPI):
             feedback = f'KIS API 오류: {code} [{msg_cd}] {msg}'
         else:
             feedback = f'KIS API 비즈니스 오류 [{msg_cd}]: {msg}'
-        # 증권사 오류 코드는 어떤 오류 클래스로 던지든 detail 에 남긴다.
+        # 증권사 오류 코드는 어떤 오류 클래스로 던지든 detail 과 broker_code 에 남긴다.
         detail = None if msg_cd is None else msg_cd.strip()
-        self.throw_exactly_matched_exception(self.exceptions.get('exact'), detail, feedback, detail=detail)
-        self.throw_broadly_matched_exception(self.exceptions.get('broad'), msg, feedback, detail=detail)
-        raise ExchangeError(feedback, detail=detail)
+        self.throw_exactly_matched_exception(self.exceptions.get('exact'), detail, feedback, detail=detail, broker_code=detail)
+        self.throw_broadly_matched_exception(self.exceptions.get('broad'), msg, feedback, detail=detail, broker_code=detail)
+        raise ExchangeError(feedback, detail=detail, broker_code=detail)
 
     def _record_tr_cont(self, headers: Optional[Dict[str, str]], response: Any) -> None:
         """다음 쪽이 있다는 응답 헤더 `tr_cont` 를 응답 객체의 id 에 적는다. 없으면 같은 id 의 옛 기록(해제된 객체의 id 재사용)을 지운다."""
@@ -1096,7 +1095,7 @@ class kis(Exchange, ImplicitAPI):
             raise ExchangeError(f'{self.id} parseMarket() missing code')
         overseas = self.safe_string(market, 'currency') is not None or not is_krx_domestic_code(market_id)
         quote = 'USD' if overseas else 'KRW'
-        base = market_id.replace('/', '.', 1)
+        base = self.common_stock_code(market_id.replace('/', '.', 1))
         exchange_code = self.safe_string(market, 'market')
         fee = KIS_OVERSEAS_DEFAULT_FEE_RATE if overseas else KIS_BROKERAGE_FEE
         return self.safe_market_structure({
@@ -1165,9 +1164,10 @@ class kis(Exchange, ImplicitAPI):
             raise InvalidOrder(f'{self.id} {method}() {violation} ({instrument.symbol})', detail=KRX_TICK_INVALID_DETAIL)
 
     def _instrument_of(self, symbol: str) -> KisInstrument:
-        """심볼(또는 종목코드)을 종목 식별 결과로 바꾼다. 국내는 마스터 없이도 되고, 해외는 마스터에서 거래소를 찾는다."""
+        """심볼(또는 종목코드)을 종목 식별 결과로 바꾼다. 국내는 마스터 없이도 되고, 해외는 마스터에서 거래소를 찾는다.
+        `commonStockCodes` 의 통합 코드(`ProShares Ultra Semiconductors/USD`)는 티커(`USD`)로 돌려 찾고, 심볼은 통합 코드로 만든다."""
         suffixed = _SUFFIXED_SYMBOL.fullmatch(symbol)
-        base = (suffixed.group(1) if suffixed else symbol).strip()
+        base = self.stock_ticker((suffixed.group(1) if suffixed else symbol).strip())
         if is_krx_domestic_code(base):
             return KisInstrument(f'{base}/KRW', base, False, 'KRW', None, None)
         # 통합 심볼의 점(`BRK.B`)을 KIS 표기의 슬래시(`BRK/B`)로 돌린다. 마스터가 그 표기를 가질 때만 바꾼다.
@@ -1177,7 +1177,8 @@ class kis(Exchange, ImplicitAPI):
         use_slashed = get_overseas_stock_by_code(master, upper) is None and get_overseas_stock_by_code(master, slashed) is not None
         code = slashed if use_slashed else upper
         quote_exchange = get_overseas_market_for_code(master, code)
-        return KisInstrument(f"{code.replace('/', '.', 1)}/USD", code, True, 'USD', quote_exchange, to_order_market_code(quote_exchange))
+        return KisInstrument(f"{self.common_stock_code(code.replace('/', '.', 1))}/USD", code, True, 'USD', quote_exchange,
+                             to_order_market_code(quote_exchange))
 
     def market(self, symbol: Str) -> Dict[str, Any]:
         """종목. `load_markets` 로 받은 종목에 있으면 그것을, 없으면 심볼 모양으로 만든 종목을 돌려준다. 시세와 주문 메서드와 같은 판별이라
@@ -1351,15 +1352,15 @@ class kis(Exchange, ImplicitAPI):
             book['asks'] = book['asks'][:limit]
         return book
 
-    async def fetch_ohlcv(self, symbol: str, timeframe: str = '1d', since: Int = None, limit: Int = 100,
+    async def fetch_ohlcv(self, symbol: str, timeframe: str = '1m', since: Int = None, limit: Int = None,
                     params: Optional[Dict[str, Any]] = None) -> List[List[Any]]:
         """봉. 국내는 항상 야후 파이낸스로 받는다(KIS 는 분봉이 당일뿐이고 일봉도 100행이다). 미국 일·주·월봉은 야후를 먼저 부르고,
         야후가 비거나 실패하면 KIS 로 다시 받는다. 둘 다 실패하면 던진다.
 
-        `since <= 시각 <= params['until']` 인 봉을 ccxt 규칙대로 `limit` 개 준다(`since` 가 있으면 가장 이른 것부터, 없으면 가장 최근 것부터).
+        `since <= 시각 <= params['until']` 인 봉을 ccxt 규칙대로 `limit`(기본 100) 개 준다(`since` 가 있으면 가장 이른 것부터, 없으면 가장 최근 것부터).
         `since` 가 없으면 야후의 타임프레임별 기본 기간(일봉 5년, 1분봉 1일 등) 안에서 고른다. 야후 분봉과 시간봉은 조회 폭 상한(1분봉 6일,
         5분봉~30분봉 59일, 시간봉 729일)보다 오래된 `since` 를 상한까지 줄여 받고 경고를 남긴다."""
-        timeframe = '1d' if timeframe is None else timeframe
+        timeframe = '1m' if timeframe is None else timeframe
         limit = 100 if limit is None else limit
         instrument = self._instrument_of(symbol)
         until = self.safe_integer(params, 'until')
@@ -1372,7 +1373,8 @@ class kis(Exchange, ImplicitAPI):
         yahoo: List[List[Any]] = []
         yahoo_error: Optional[BaseException] = None
         try:
-            yahoo = await fetch_yahoo_candles(instrument.symbol, timeframe, limit, since, until, kr_market, exchange=self)
+            # 통합 심볼이 아니라 티커로 묻는다. `commonStockCodes` 로 바꾼 통합 코드는 야후 티커가 아니다.
+            yahoo = await fetch_yahoo_candles(instrument.code, timeframe, limit, since, until, kr_market, exchange=self)
         except Exception as e:
             if fallback_exchange is None:
                 raise
@@ -1409,12 +1411,12 @@ class kis(Exchange, ImplicitAPI):
 
     # ============ 고유 조회 ============
 
-    async def fetch_stock_warnings(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    async def fetch_volatility_interruptions(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """변동성완화장치(VI) 발동 현황(`inquire-vi-status`). 오늘(한국 날짜) 이 종목의 VI 가 발동한 기록이다. `params.until` 은 읽지 않는다.
         발동한 적이 없으면 빈 목록이다. 국내만 받는다."""
         instrument = self._instrument_of(symbol)
         if instrument.overseas:
-            raise BadSymbol(f'{self.id} fetchStockWarnings() 은 국내 종목만 지원한다: {symbol}')
+            raise BadSymbol(f'{self.id} fetchVolatilityInterruptions() 은 국내 종목만 지원한다: {symbol}')
         response = await self.private_get_uapi_domestic_stock_v1_quotations_inquire_vi_status(self.extend({
             'FID_DIV_CLS_CODE': '0',
             'FID_COND_SCR_DIV_CODE': VI_STATUS_SCREEN_CODE,
@@ -1437,9 +1439,22 @@ class kis(Exchange, ImplicitAPI):
             'info': row,
         }) for row in multi_rows_of(self.safe_value(response, 'output'))]
 
-    async def fetch_investor_trading(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        """종목의 투자자별(개인·외국인·기관계) 매매동향(`inquire-investor`)을 최근 영업일 순으로 돌려준다. 국내만 받는다.
-        당일 값은 장 종료 뒤에 채워진다. 토스증권의 같은 이름 메서드는 시장 단위라서 범위가 다르다."""
+    async def fetch_stock_warnings(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """`fetch_volatility_interruptions` 의 옛 이름이다(한 판 뒤에 지운다). `fetch_stock_warnings` 는 토스증권의 유의사항 조회 이름으로 남는다."""
+        self._warn_deprecated('kis.fetchStockWarnings()', 'fetchVolatilityInterruptions()')
+        return await self.fetch_volatility_interruptions(symbol, params)
+
+    async def fetch_investor_trading(self, symbol: str, since: Any = None, limit: Int = None,
+                               params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """종목의 투자자별 매매동향(`inquire-investor`)을 최근 영업일 순으로 돌려준다. 세 증권사 공통 모양이다.
+        개인, 외국인, 기관계의 순매수 대금을 싣고, 매수·매도 수량과 대금은 `info` 의 원문에 있다. 국내만 받는다. 당일 값은 장 종료 뒤에 채워진다.
+        대금의 단위는 증권사 응답 그대로다. 증권사마다 다를 수 있으므로 증권사를 섞어 더하지 않는다.
+        조회 기간을 받는 입력이 없어 받은 영업일을 `since`, `params['until']`, `limit` 으로 거른다.
+        둘째 인자로 `params` 를 넘기던 옛 호출은 한 판 동안 경고를 남기고 받는다."""
+        if isinstance(since, dict):
+            self._warn_deprecated('kis.fetchInvestorTrading(symbol, params)', 'fetchInvestorTrading(symbol, since, limit, params)')
+            since, params = None, since
+        until, query = self.handle_until_param('fetchInvestorTrading', limit, params or {})
         instrument = self._instrument_of(symbol)
         if instrument.overseas:
             raise BadSymbol(f'{self.id} fetchInvestorTrading() 은 국내 종목만 지원한다: {symbol}')
@@ -1447,28 +1462,19 @@ class kis(Exchange, ImplicitAPI):
             'FID_COND_MRKT_DIV_CODE': 'J',
             'FID_INPUT_ISCD': instrument.code,
             'tr_id': 'FHKST01010900',
-        }, params))
-
-        def amounts(row: Dict[str, Any], prefix: str) -> Dict[str, Any]:
-            return {
-                'netBuyVolume': self.safe_number(row, f'{prefix}_ntby_qty'),
-                'netBuyAmount': self.safe_number(row, f'{prefix}_ntby_tr_pbmn'),
-                'buyVolume': self.safe_number(row, f'{prefix}_shnu_vol'),
-                'buyAmount': self.safe_number(row, f'{prefix}_shnu_tr_pbmn'),
-                'sellVolume': self.safe_number(row, f'{prefix}_seln_vol'),
-                'sellAmount': self.safe_number(row, f'{prefix}_seln_tr_pbmn'),
-            }
-
-        return [self.extend(self.kst_stamp(self.safe_string(row, 'stck_bsop_date')), {
-            'businessDate': self.safe_string(row, 'stck_bsop_date', ''),
+        }, query))
+        records = [self.extend(self.kst_stamp(self.safe_string(row, 'stck_bsop_date')), {
+            'date': self.safe_string(row, 'stck_bsop_date', ''),
             'close': self.safe_number(row, 'stck_clpr'),
             'change': self.safe_number(row, 'prdy_vrss'),
-            'changeSign': _or_none(self.safe_string(row, 'prdy_vrss_sign')),
-            'individual': amounts(row, 'prsn'),
-            'foreign': amounts(row, 'frgn'),
-            'institution': amounts(row, 'orgn'),
+            'individual': self.safe_number(row, 'prsn_ntby_tr_pbmn'),
+            'foreign': self.safe_number(row, 'frgn_ntby_tr_pbmn'),
+            'institution': self.safe_number(row, 'orgn_ntby_tr_pbmn'),
             'info': row,
         }) for row in multi_rows_of(self.safe_value(response, 'output'))]
+        if until is not None:
+            records = [record for record in records if record['timestamp'] is not None and record['timestamp'] <= until]
+        return self.filter_by_since_limit(records, since, limit)
 
     async def fetch_rankings(self, type: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """종목 순위. 국내 순위, 해외 순위(`OVERSEAS_*`, `params['exchange']` 로 거래소를 반드시 고른다), ELW 순위(`ELW_*`)를 받는다.
@@ -1498,7 +1504,7 @@ class kis(Exchange, ImplicitAPI):
         def symbol_of(row: Dict[str, Any]) -> str:
             # 해외 슬래시 티커(`BRK/B`)는 다른 메서드처럼 점 심볼(`BRK.B/USD`)로 옮긴다.
             code = self.safe_string(row, spec['symbolKey'], '')
-            return f"{code.replace('/', '.', 1) if overseas else code}/{currency}"
+            return f"{self.common_stock_code(code.replace('/', '.', 1)) if overseas else code}/{currency}"
 
         return [{
             'rank': self.safe_number(row, f.get('rank', 'data_rank')),
@@ -1566,7 +1572,11 @@ class kis(Exchange, ImplicitAPI):
 
     async def fetch_market_calendar(self, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """국내 휴장일 캘린더(`chk-holiday`). 기준일부터 이후 날짜의 개장·영업·거래·결제 여부를 준다. 실전 계좌에서만 쓸 수 있다.
-        지난 영업일을 세는 코드가 지난 연휴를 알도록 30일 전 기준일과 오늘 기준일을 함께 조회한다. KIS 는 하루 한 번 호출을 권한다."""
+        지난 영업일을 세는 코드가 지난 연휴를 알도록 30일 전 기준일과 오늘 기준일을 함께 조회한다. KIS 는 하루 한 번 호출을 권한다.
+        세 증권사 공통 모양이다. `params['market']` 은 `'KR'`(기본)만 받고, `'US'` 는 요청 없이 `NotSupported` 다."""
+        if self._calendar_market(params) == 'US':
+            raise NotSupported(f'{self.id} fetchMarketCalendar() 는 국내 휴장일만 준다')
+        query = self.omit(params or {}, 'market')
         if self.isSandboxModeEnabled:
             raise NotSupported(f'{self.id} 휴장일 조회(chk-holiday)는 실전 계좌에서만 쓸 수 있다')
         now = self.milliseconds()
@@ -1577,7 +1587,7 @@ class kis(Exchange, ImplicitAPI):
                 'CTX_AREA_FK': '',
                 'CTX_AREA_NK': '',
                 'tr_id': 'CTCA0903R',
-            }, params))
+            }, query))
             rows = _field(response, 'output')
             for row in (rows if isinstance(rows, list) else [rows]):
                 date = self.safe_string(row, 'bass_dt')
@@ -1619,8 +1629,8 @@ class kis(Exchange, ImplicitAPI):
     async def fetch_balance(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """잔고. 현금은 통화 키(`KRW`, `USD`), 보유 종목은 `market['base']` 키(국내 `005930`, 미국 `AAPL`, 클래스 주식 `BRK.B`)이고 종목의
         `total` 이 보유 수량이다. 평가금액·평균단가 같은 KIS 고유 값은 각 항목의 `info` 에 있다. 조회가 하나라도 실패하면 던진다(빈 잔고와 구분한다).
-        보유 종목 키가 같은 잔고의 현금 키와 겹치면(미국 티커 `USD` 와 달러 현금) 한쪽을 덮어쓰지 않고 `NotSupported` 를 던진다.
-        `params['scope']` 로 나눠 받는다.
+        미국 티커 `USD` 처럼 현금 코드와 같은 티커는 `commonStockCodes` 의 통합 코드(`ProShares Ultra Semiconductors`)가 키다. 표에 없는
+        티커가 현금 키와 겹치면 한쪽을 덮어쓰지 않고 `NotSupported` 를 던진다. `params['scope']` 로 나눠 받거나 `commonStockCodes` 에 그 티커를 더한다.
 
         `params['scope']` 로 읽을 범위를 좁힌다. 기본은 전부(`'all'`)이고 목록으로 골라도 된다.
         `'kr'` 는 국내 잔고(`KRW` 와 국내 보유 종목), `'us'` 는 미국 보유 종목(실전은 `NASD` 한 번이 미국 전체이고 모의는 거래소마다 부른다),
@@ -1712,7 +1722,8 @@ class kis(Exchange, ImplicitAPI):
         크면(매도 대금이 결제되기 전) 예수금은 정산 뒤 현금이 아니라서 `total` 과 `used` 를 비운다. 예수금은 `info['summary']` 에 있다.
         `USD` 는 `total` 이 예수금, `free` 가 예수금에서 미결제 매수증거금을 뺀 값이고, 종목 평가금액 합계는 `info['stockValue']` 에 있다.
         달러 행이 없으면 싣지 않는다.
-        종목은 `total` 이 보유수량, `free` 가 주문가능수량(없으면 보유수량)이다. 키는 `market['base']` 라 해외 슬래시 티커(`BRK/B`)는 `BRK.B` 다.
+        종목은 `total` 이 보유수량, `free` 가 주문가능수량(없으면 보유수량)이다. 키는 `market['base']` 라 해외 슬래시 티커(`BRK/B`)는 `BRK.B`,
+        미국 티커 `USD` 는 `ProShares Ultra Semiconductors` 다.
         같은 종목이 매매구분이나 대출일자별로 여러 행이면 수량을 더하고, `info` 는 첫 행에 원문 행 전부(`rows`)를 더한 것이다.
         """
         result: Dict[str, Any] = {'info': response, 'timestamp': None, 'datetime': None}
@@ -1755,14 +1766,14 @@ class kis(Exchange, ImplicitAPI):
             # 겹친 키에 대입하면 보유나 현금 한쪽이 알림 없이 사라진다.
             if result.get(code) is not None:
                 raise NotSupported(f"{self.id} fetchBalance() 보유 종목 {code} 가 현금 {code} 와 키가 같아 한 잔고에 담을 수 없다. "
-                                   "params.scope 로 미국 보유 종목('us')과 현금('kr', 'usd')을 따로 받는다")
+                                   "params.scope 로 미국 보유 종목('us')과 현금('kr', 'usd')을 따로 받거나 commonStockCodes 에 그 티커의 통합 코드를 더한다")
             result[code] = holding
         return self.safe_balance(result)
 
     def _add_holding(self, result: Dict[str, Any], item: Dict[str, Any], code_key: str, quantity_key: str) -> None:
-        # 키는 `parse_market` 의 `base` 와 같은 표기다(`BRK/B` → `BRK.B`).
+        # 키는 `parse_market` 의 `base` 와 같은 표기다(`BRK/B` → `BRK.B`, `USD` → `ProShares Ultra Semiconductors`).
         code = self.safe_string(item, code_key)
-        code = None if code is None else code.replace('/', '.', 1)
+        code = None if code is None else self.common_stock_code(code.replace('/', '.', 1))
         quantity = self.safe_string(item, quantity_key)
         if code is None or quantity is None or not fn.js_number(quantity) > 0:
             return

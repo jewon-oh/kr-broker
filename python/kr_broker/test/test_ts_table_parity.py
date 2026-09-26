@@ -83,3 +83,6 @@ def test_market_group_tables_match() -> None:
     assert exchanges and exchanges == set(broker_market_group.STOCK_BROKER_EXCHANGES)
     assert _pairs(_literal(text, 'BROKER_MARKET_CODE_TO_MARKET', '{', '}')) == broker_market_group.BROKER_MARKET_CODE_TO_MARKET
     assert _pairs(_literal(text, 'MARKET_TO_GROUP', '{', '};')) == broker_market_group._MARKET_TO_GROUP
+    # 종목 통합 코드는 공백이 든 이름이라 `_pairs` 대신 따옴표 안을 통째로 읽는다.
+    stock_codes = dict(re.findall(r"(\w+):\s*'([^']+)'\s*,", _literal(text, 'COMMON_STOCK_CODES', '{', '};')))
+    assert stock_codes and stock_codes == dict(broker_market_group.COMMON_STOCK_CODES)

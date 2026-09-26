@@ -125,7 +125,7 @@ describe('실제로 기다린다', () => {
         await second;
         expect(secondDone).toBe(true);
         // 다른 그룹은 시세 그룹의 대기에 걸리지 않는다.
-        await limited.fetchMarketCalendar('KR');
+        await limited.fetchMarketSessions('KR');
     });
 
     it('그룹 한도가 느슨해도 계정 전체 상한(rateLimit)이 함께 걸린다', async () => {

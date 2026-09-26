@@ -21,7 +21,7 @@ import { kbsec } from '../kbsec';
 import { kis } from '../kis';
 import { toss } from '../toss';
 import { OrderOutcomeUnknown, RequestTimeout, type Exchange } from '../base';
-import { __resetKbsecTokenBreaker } from '../kbsec/kbsec-token-breaker';
+import { __resetKbsecTokenBreaker } from '../testing';
 
 // 메서드 문법이라 각 증권사 칸이 자기 클래스를 인자로 받아도 된다(암묵 메서드는 증권사 클래스에만 있다).
 interface BrokerCase {

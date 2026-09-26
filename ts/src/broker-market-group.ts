@@ -16,11 +16,37 @@ export function isStockBrokerExchange(exchangeId: string): boolean {
 }
 
 /**
- * 심볼에서 종목코드를 꺼낸다. 끝의 `/KRW`·`/USD` 만 떼고, 남은 `/` 는 클래스 주식 표기로 보고 통합 표기의 `.` 로 바꾼다
- * (`BRK/B` → `BRK.B`, `BRK.B/USD` → `BRK.B`). 대소문자와 공백은 그대로 둔다.
+ * 현금 코드와 같은 티커의 통합 코드(티커 → 통합 코드). ccxt `commonCurrencies` 처럼 한쪽의 통합 코드를 바꾸되 종목 코드에만 적용해서,
+ * 같은 코드의 현금(`USD`)은 그대로 둔다. 종목의 `id` 와 `baseId` 는 티커로 남는다. 증권사 인스턴스는 생성자 인자 `commonStockCodes` 로 덮는다.
+ */
+export const COMMON_STOCK_CODES: Readonly<Record<string, string>> = {
+    USD: 'ProShares Ultra Semiconductors',
+};
+
+/** 티커 → 통합 코드. 표에 없으면 티커 그대로다. 대소문자는 가리지 않는다. */
+export function commonStockCode(ticker: string, codes: Readonly<Record<string, string>> = COMMON_STOCK_CODES): string {
+    const upper = ticker.toUpperCase();
+    for (const [key, code] of Object.entries(codes)) {
+        if (key.toUpperCase() === upper) return code;
+    }
+    return ticker;
+}
+
+/** 통합 코드 → 티커. 표의 통합 코드가 아니면(티커를 받았으면) 그대로 돌려준다. 대소문자는 가리지 않는다. */
+export function stockTicker(code: string, codes: Readonly<Record<string, string>> = COMMON_STOCK_CODES): string {
+    const upper = code.toUpperCase();
+    for (const [ticker, common] of Object.entries(codes)) {
+        if (common.toUpperCase() === upper) return ticker;
+    }
+    return code;
+}
+
+/**
+ * 심볼에서 종목코드(티커)를 꺼낸다. 끝의 `/KRW`·`/USD` 만 떼고, `COMMON_STOCK_CODES` 의 통합 코드는 티커로 돌리고, 남은 `/` 는 클래스 주식 표기로
+ * 보고 통합 표기의 `.` 로 바꾼다(`BRK/B` → `BRK.B`, `BRK.B/USD` → `BRK.B`, `ProShares Ultra Semiconductors/USD` → `USD`). 대소문자와 공백은 그대로 둔다.
  */
 export function symbolBaseCode(symbol: string): string {
-    return symbol.replace(/\/(KRW|USD)$/, '').replaceAll('/', '.');
+    return stockTicker(symbol.replace(/\/(KRW|USD)$/, '')).replaceAll('/', '.');
 }
 
 /**
