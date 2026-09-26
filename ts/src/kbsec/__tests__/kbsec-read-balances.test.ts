@@ -305,6 +305,8 @@ describe('KB fetchBalance — 해외 보유 0 건과 응답 모양', () => {
 
         expect(b.info.readStatus).toBe('PARTIAL');
         expect(b.info.unreadMarkets).toEqual(['US']);
+        // 종목 그리드의 `crncy_clsf_nm: 'USD'` 행을 예수금으로 읽어 달러 잔고를 0 으로 싣지 않는다. 모르는 현금은 비운다.
+        expect(b.USD).toBeUndefined();
     });
 
     it('★객체 안에 든 배열도 알아보지 못한 배열로 센다', async () => {

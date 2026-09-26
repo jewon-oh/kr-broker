@@ -140,11 +140,11 @@ export function pickHoldingGrid(body: Record<string, unknown> | undefined): Grid
 }
 
 /**
- * 해외 잔고평가(`SPQM2226`)의 **통화별 예수금 그리드**. 종목 그리드와 달리 통화 이름(`crncy_clsf_nm`)이 있고 종목코드(`is_cd`)는 없다.
- * 못 찾으면 빈 배열이다.
+ * 해외 잔고평가(`SPQM2226`)의 **통화별 예수금 그리드**. 통화 이름(`crncy_clsf_nm`)과 예수금(`tfnd`)이 있고 종목코드(`is_cd`)는 없다.
+ * 명세상 종목 그리드에도 통화 이름이 있으므로 예수금 필드까지 본다. 못 찾으면 빈 배열이다.
  */
 export function pickCashGrid(body: Record<string, unknown> | undefined): Record<string, unknown>[] {
-    return pickGrid(body, first => 'crncy_clsf_nm' in first && !('is_cd' in first)).rows;
+    return pickGrid(body, first => 'crncy_clsf_nm' in first && 'tfnd' in first && !('is_cd' in first)).rows;
 }
 
 /**
