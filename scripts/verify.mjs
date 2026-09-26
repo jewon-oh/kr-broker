@@ -3,6 +3,7 @@
  * @fileoverview CI 가 돌리는 검사를 로컬에서 한 번에 돌린다(`pnpm verify`).
  *
  * 순서는 CI 와 같다. 하나라도 실패하면 거기서 멈추고 종료 코드 1 로 끝난다. 네트워크가 필요한 의존성 감사(`pnpm audit --prod`, `pip-audit`)는 돌리지 않는다.
+ * 커밋 이력 검사는 `HEAD` 에 닿는 커밋을 보고, 얕은 클론이면 받아 둔 커밋만 본다(CI 는 얕은 클론이면 실패한다).
  * pyright 는 처음 한 번 `npx` 로 내려받는다.
  *
  * Python 단계(`pytest`, 예제 문법 검사, pyright 기준선 검사)는 `KR_BROKER_PYTHON`, `python/.venv` 의 Python, PATH 의 `python3`·`python` 순서로
@@ -53,12 +54,14 @@ const skipPython = process.argv.includes('--no-python');
 pnpm('typecheck');
 node('scripts/gen-ts-abstract.mjs', '--check');
 pnpm('hygiene:check');
+node('scripts/check-hygiene.mjs', '--history', '--allow-shallow');
 pnpm('test');
 pnpm('docs:check');
 pnpm('build');
 node('scripts/check-dist-imports.mjs');
 node('scripts/gen-python-abstract.mjs', '--check');
 node('scripts/gen-python-sync.mjs', '--check');
+node('scripts/python-lock.mjs', '--check');
 
 if (skipPython) {
     process.stdout.write('\n--no-python: pytest 와 예제 문법 검사, pyright 기준선 검사를 건너뛴다\n');

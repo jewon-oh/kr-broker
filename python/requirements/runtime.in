@@ -1,0 +1,4 @@
+# 운영 의존성. pyproject.toml 의 [project] dependencies 와 같아야 한다(node scripts/python-lock.mjs --check).
+requests>=2.33.0
+aiohttp>=3.14.3
+cryptography>=50.0.0
