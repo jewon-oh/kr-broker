@@ -52,7 +52,7 @@ from kr_broker.base.exchange import assert_secure_url, kst_trade_timestamps
 from kr_broker.base.precise import Precise
 from kr_broker.base.token_store import BrokerTokenStore, token_store_key
 from kr_broker.base.types import ApiName, Int, Market, MarketInterface, Num, Order, OrderBook, Str, Ticker, Trade, TradingFeeInterface
-from kr_broker.broker_time import candle_period_utc_ms, is_daily_or_longer_timeframe, kst_ymd
+from kr_broker.broker_time import candle_period_utc_ms, kst_ymd
 from kr_broker.kbsec_chart import KBSEC_CHART_MAX, KBSEC_TIMEFRAMES, kbsec_bar_ms, kbsec_candle_timestamp, kbsec_chart_params
 from kr_broker.kbsec_envelope import is_kbsec_business_error, is_kbsec_token_failure, kbsec_host_addr
 from kr_broker.kbsec_error_codes import KBSEC_ERROR_DETAIL, kbsec_error_detail, kbsec_exact_exceptions
@@ -63,7 +63,7 @@ from kr_broker.kbsec_pick import pick_array, pick_num, pick_positive_num, pick_s
 from kr_broker.kbsec_token_breaker import record_kbsec_call_ok, record_token_failure, throw_if_token_breaker_open
 from kr_broker.kbsec_tr_inputs import fill_tr_inputs
 from kr_broker.kbsec_types import (
-    KBSEC_API_BASE, KBSEC_CCLS_ALL, KBSEC_CCLS_FILLED, KBSEC_CCLS_PENDING, KBSEC_CONT_FIRST, KBSEC_CONT_NEXT, KBSEC_INQ_STOCK,
+    KBSEC_API_BASE, KBSEC_CCLS_ALL, KBSEC_CCLS_FILLED, KBSEC_CCLS_PENDING, KBSEC_CHART_KIND, KBSEC_CONT_FIRST, KBSEC_CONT_NEXT, KBSEC_INQ_STOCK,
     KBSEC_ORDER_TYPE_KR, KBSEC_REVOKE_PATH, KBSEC_TOKEN_DEFAULT_TTL_MS, KBSEC_TOKEN_PATH, KBSEC_TOKEN_SAFETY_MARGIN_MS, KBSEC_TR,
     KBSEC_TR_PATH_PREFIX, KBSEC_US_EXCHANGES, kbsec_base_symbol, kbsec_business_date_kst, kbsec_business_date_us_eastern, kbsec_market_of,
     kbsec_num,
@@ -94,6 +94,8 @@ CALENDAR_TTL_MS = 6 * 60 * 60 * 1000
 KBSEC_TOKEN_KEY_PREFIX = 'kbsec:token:'
 # 발급·폐기 요청의 `dataHeader`. TR 과 달리 빈 주소를 받는다.
 _EMPTY_HOST = {'ipAddr': '', 'macAddr': ''}
+# 국내 통합차트(`IVS11560`)의 차트구분 가운데 기간 봉의 타임프레임. 분봉은 없다. `'1mo'` 로 불러도 월봉(M)을 보내므로 `'1M'` 의 규칙을 쓴다.
+KBSEC_CHART_PERIOD = {KBSEC_CHART_KIND['DAY']: '1d', KBSEC_CHART_KIND['WEEK']: '1w', KBSEC_CHART_KIND['MONTH']: '1M'}
 
 
 def _now_ms() -> int:
@@ -780,9 +782,9 @@ class kbsec(Exchange, ImplicitAPI):
         }, query))
         received = pick_array(body)
         rows = [row for row in received if kbsec_candle_timestamp(pick_str(row, 'dt'), pick_str(row, 'tm')) is not None]
-        # 일·주·월봉은 KB 가 현지 자정(00:00 KST)으로 주므로 기간 첫날의 00:00 UTC 로 옮긴다(`candle_period_utc_ms`).
-        daily = is_daily_or_longer_timeframe(timeframe)
-        candles = [[candle_period_utc_ms(cast(int, candle[0]), timeframe, 'KR'), *candle[1:]] if daily else candle
+        # 일·주·월봉은 KB 가 현지 자정(00:00 KST)으로 주므로 기간 첫날의 00:00 UTC 로 옮긴다(`candle_period_utc_ms`). 규칙은 보낸 차트구분으로 고른다.
+        period = KBSEC_CHART_PERIOD.get(chrt_clsf)
+        candles = [[candle_period_utc_ms(cast(int, candle[0]), period, 'KR'), *candle[1:]] if period is not None else candle
                    for candle in self.parse_ohlcvs(rows, market, timeframe)]
         candles = [candle for candle in candles if until is None or cast(int, candle[0]) <= until]
         oldest = candles[0][0] if candles else None

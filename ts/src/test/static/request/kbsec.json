@@ -2597,6 +2597,78 @@
             ]
         },
         {
+            "description": "fetchOHLCV 월봉은 '1mo' 로 불러도 '1M' 처럼 차트구분 M 이고 그 달 1일의 00:00 UTC 다",
+            "method": "fetchOHLCV",
+            "args": [
+                "005930/KRW",
+                "1mo"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivs11560",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"info_ccd\":\"1\",\"mkt_clsf\":\"0\",\"chrt_clsf\":\"M\",\"minute_tck_indx\":\"\",\"is_cd\":\"005930\",\"inq_clsf\":\"2\",\"strt_dy\":\"\",\"inq_cnt\":\"100\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "dt": "20260803",
+                                        "tm": "0",
+                                        "opn_prc_p2": "71000.00",
+                                        "hgh_prc_p2": "74000.00",
+                                        "lw_prc_p2": "70000.00",
+                                        "cls_prc_p2": "73000.00",
+                                        "vlm": "20000000"
+                                    },
+                                    {
+                                        "dt": "20260701",
+                                        "tm": "0",
+                                        "opn_prc_p2": "68000.00",
+                                        "hgh_prc_p2": "72000.00",
+                                        "lw_prc_p2": "67000.00",
+                                        "cls_prc_p2": "71000.00",
+                                        "vlm": "25000000"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                [
+                    1782864000000,
+                    68000,
+                    72000,
+                    67000,
+                    71000,
+                    25000000
+                ],
+                [
+                    1785542400000,
+                    71000,
+                    74000,
+                    70000,
+                    73000,
+                    20000000
+                ]
+            ]
+        },
+        {
             "description": "fetchOHLCV 는 params.mkt_clsf 가 있으면 마스터 데이터보다 그 값을 쓴다. 4시간봉은 분 단위 240 이다",
             "config": {
                 "options": {

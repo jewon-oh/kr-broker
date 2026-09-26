@@ -40,7 +40,7 @@
  * - KB 는 "잘못된 조회의 과도한 반복"을 계정 제한 사유로 든다. 영구 실패(권한 없음 등)한 조회는 이 인스턴스에서 다시 부르지 않는다.
  */
 
-import { candlePeriodUtcMs, isDailyOrLongerTimeframe, kstYmd } from './broker-time';
+import { candlePeriodUtcMs, kstYmd } from './broker-time';
 import { logger } from './logger';
 import type { UsdKrwRateOption } from './options';
 import { masterDataOf } from './stock-master-data';
@@ -114,6 +114,7 @@ import {
     KBSEC_CCLS_ALL,
     KBSEC_CCLS_FILLED,
     KBSEC_CCLS_PENDING,
+    KBSEC_CHART_KIND,
     KBSEC_CONT_FIRST,
     KBSEC_CONT_NEXT,
     KBSEC_CREDIT_CASH,
@@ -1228,6 +1229,9 @@ function kbsecSectorIndex(row: Dict): KbsecSectorIndex {
         info: row,
     };
 }
+
+/** 국내 통합차트(`IVS11560`)의 차트구분 가운데 기간 봉의 타임프레임. 분봉은 없다. `'1mo'` 로 불러도 월봉(M)을 보내므로 `'1M'` 의 규칙을 쓴다. */
+const KBSEC_CHART_PERIOD: Partial<Record<string, string>> = { [KBSEC_CHART_KIND.DAY]: '1d', [KBSEC_CHART_KIND.WEEK]: '1w', [KBSEC_CHART_KIND.MONTH]: '1M' };
 
 /** 해외 차트(`GSC10060`)의 차트구분. */
 export type KbsecOverseasChartType = 'tick' | 'minute' | 'day' | 'week' | 'month' | 'year';
@@ -2700,10 +2704,10 @@ export class kbsec extends Exchange {
         });
         const received = pickArray(body);
         const rows = received.filter(row => kbsecCandleTimestamp(pickStr(row, 'dt'), pickStr(row, 'tm')) !== undefined);
-        // 일·주·월봉은 KB 가 현지 자정(00:00 KST)으로 주므로 기간 첫날의 00:00 UTC 로 옮긴다(`candlePeriodUtcMs`).
-        const daily = isDailyOrLongerTimeframe(timeframe);
+        // 일·주·월봉은 KB 가 현지 자정(00:00 KST)으로 주므로 기간 첫날의 00:00 UTC 로 옮긴다(`candlePeriodUtcMs`). 규칙은 보낸 차트구분으로 고른다.
+        const period = KBSEC_CHART_PERIOD[chrt_clsf];
         const candles = this.parseOHLCVs(rows, market, timeframe)
-            .map((candle) => (daily ? [candlePeriodUtcMs(candle[0] as number, timeframe, 'KR'), ...candle.slice(1)] as OHLCV : candle))
+            .map((candle) => (period !== undefined ? [candlePeriodUtcMs(candle[0] as number, period, 'KR'), ...candle.slice(1)] as OHLCV : candle))
             .filter((candle) => until === undefined || (candle[0] as number) <= until);
         const oldest = candles[0]?.[0];
         if (since !== undefined && received.length >= count && oldest !== undefined && oldest > since) {
