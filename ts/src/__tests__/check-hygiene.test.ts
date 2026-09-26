@@ -352,3 +352,26 @@ describe('check-hygiene 커밋 이력', () => {
         expect(await hygiene.scanHistory({ cwd: shallow })).toEqual({ shallow: true, commits: 1, findings: [] });
     }, 30_000);
 });
+
+describe('check-hygiene PR 제목', () => {
+    const run = (title: string): { status: number; out: string } => {
+        try {
+            return { status: 0, out: execFileSync('node', [SCRIPT, '--pr-title'], { env: { ...process.env, PR_TITLE: title }, encoding: 'utf8', stdio: 'pipe' }) };
+        } catch (err) {
+            const e = err as { status: number; stderr: string };
+            return { status: e.status, out: e.stderr };
+        }
+    };
+
+    it('걸리는 값이 있으면 실패하고 패턴 이름만 알린다', () => {
+        const address = join('alice', '@', 'corp', '.com');
+        const r = run(`fix: ${address} 로 보낸다`);
+        expect(r.status).toBe(1);
+        expect(r.out).toContain('이메일 주소');
+        expect(r.out).not.toContain(address);
+    });
+
+    it('걸리는 값이 없으면 통과한다', () => {
+        expect(run('fix: KB 해외 잔고의 읽음 판정을 넓힌다 (#80)').status).toBe(0);
+    });
+});

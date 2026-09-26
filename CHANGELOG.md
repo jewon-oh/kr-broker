@@ -63,7 +63,7 @@
   - `kr-broker/toss/toss-trading-hours`의 `isTossTradingOpen`과 `timeUntilTossOpen`. `kr-broker/trading-hours`의 `isTradingHours('toss', now)`와 `getTimeUntilMarketOpen('toss', now)`를 씁니다.
   - `kr-broker/us-market-hours`의 `getTimeUntilUsMarketOpen`
 - 휴장일 캘린더를 채우고 비우는 `applyMarketCalendar`와 `resetMarketCalendar`를 테스트 전용 경로 `kr-broker/testing`으로 옮깁니다. 두 함수는 프로세스 전체의 캘린더를 바꾸므로 테스트에서만 씁니다. `kr-broker/market-calendar`의 두 이름은 `@deprecated`를 붙여 한 판 동안 남기고, 다음 판에서 뺍니다. Python 판은 `kr_broker.testing`에서 `apply_market_calendar`와 `reset_market_calendar`를 가져옵니다. `kr_broker.market_calendar`의 두 이름도 다음 판에서 뺍니다.
-- 이 저장소의 CI가 커밋 이력도 검사합니다. `pnpm hygiene:history`는 위생 검사의 패턴으로 모든 커밋의 메시지와 추가된 줄을 봅니다. 작성자 이메일은 GitHub noreply 주소(`…@users.noreply.github.com`)만 받습니다. 커미터 이메일은 웹에서 병합할 때 GitHub이 적는 서비스 주소도 받습니다. PR에서는 PR 브랜치의 커밋도 봅니다. 위생 검사의 이메일 규칙은 `example.*` 도메인에 더해 GitHub noreply 주소와 `noreply@anthropic.com`(공동 작성자 트레일러)을 허용합니다.
+- 이 저장소의 CI가 커밋 이력도 검사합니다. `pnpm hygiene:history`는 위생 검사의 패턴으로 모든 커밋의 메시지와 추가된 줄을 봅니다. 작성자 이메일은 GitHub noreply 주소(`…@users.noreply.github.com`)만 받습니다. 커미터 이메일은 웹에서 병합할 때 GitHub이 적는 서비스 주소도 받습니다. PR에서는 PR 브랜치의 커밋과, 스쿼시 병합 커밋의 제목이 될 PR 제목도 봅니다. 위생 검사의 이메일 규칙은 `example.*` 도메인에 더해 GitHub noreply 주소와 `noreply@anthropic.com`(공동 작성자 트레일러)을 허용합니다.
 - 이 저장소의 CI가 Python 의존성을 해시를 고정한 잠금 파일(`python/requirements/*.txt`)로 설치하고, `pip-audit`도 운영 의존성의 잠금 파일을 감사합니다. 예전에는 PyPI 최신판을 해시 없이 받아 감사했습니다. Dependabot은 Python 의존성을 `uv` 생태계로 올립니다. 사용하는 쪽의 설치와 `pyproject.toml`의 하한은 그대로입니다.
 
 ### 고침

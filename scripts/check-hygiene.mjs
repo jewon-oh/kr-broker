@@ -14,6 +14,8 @@
  * 작성자와 커미터 이메일은 칸마다 허용하는 주소(`EMAIL_ALLOWED`)만 받는다. 얕은 클론이면 이력이 잘려 있으므로 실패한다.
  * `--allow-shallow` 를 주면 알리기만 하고 남은 커밋을 본다.
  *
+ * `--pr-title` 은 환경 변수 `PR_TITLE` 을 같은 패턴으로 본다. 스쿼시 병합 커밋의 제목은 PR 제목이라, PR 에서 보지 않으면 main 에 들어간 뒤에야 걸린다.
+ *
  * 주문번호처럼 패턴으로 가릴 수 없는 값은 PR 템플릿의 "픽스처와 비밀" 항목으로 사람이 확인한다.
  * 걸린 값은 출력하지 않고 파일, 줄, 패턴 이름만 알린다. 출력한 값도 CI 로그에 남기 때문이다.
  *
@@ -244,8 +246,19 @@ async function mainHistory(args) {
     process.stdout.write(`커밋 ${commits}개의 메시지, 추가된 줄, 이메일에서 비밀이나 사설 식별자로 보이는 값을 찾지 못했다.\n`);
 }
 
+function mainPrTitle() {
+    const names = scanLine(process.env.PR_TITLE ?? '');
+    if (names.length > 0) {
+        process.stderr.write(`PR 제목에 공개하면 안 되는 것으로 보이는 값이 있다(값은 출력하지 않는다): ${names.join(', ')}\n`
+            + '스쿼시 병합 커밋의 제목이 되므로 병합 전에 제목을 고친다.\n');
+        process.exit(1);
+    }
+    process.stdout.write('PR 제목에서 비밀이나 사설 식별자로 보이는 값을 찾지 못했다.\n');
+}
+
 async function main() {
     if (process.argv.includes('--history')) return mainHistory(process.argv.slice(2));
+    if (process.argv.includes('--pr-title')) return mainPrTitle();
     const files = execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], { cwd: ROOT, encoding: 'utf8' })
         .split('\0')
         .filter(Boolean);
