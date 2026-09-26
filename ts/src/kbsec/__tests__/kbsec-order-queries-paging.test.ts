@@ -129,8 +129,8 @@ describe('체결 id', () => {
         const range = await exchange.fetchMyTrades('005930/KRW', Date.parse('2026-09-22T00:00:00+09:00'));   // 22일(화)과 23일(수)
         const single = await exchange.fetchMyTrades('005930/KRW', undefined, undefined, { date: '20260923' });
 
-        expect(range.map((t) => t.id)).toEqual(['0000000001#0', '0000000002#0']);
-        expect(single.map((t) => t.id)).toEqual(['0000000002#0']);
+        expect(range.map((t) => t.id)).toEqual(['0000000001#20260922#0', '0000000002#20260923#0']);
+        expect(single.map((t) => t.id)).toEqual(['0000000002#20260923#0']);
     });
 });
 
