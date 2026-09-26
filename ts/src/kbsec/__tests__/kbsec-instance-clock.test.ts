@@ -9,8 +9,7 @@ global.fetch = mockFetch as unknown as typeof fetch;
 import { kbsec } from '../../kbsec';
 import { MarketClosed } from '../../base/errors';
 import { KBSEC_TR, kbsecBusinessDateKst } from '../kbsec-types';
-import { applyMarketCalendar, resetMarketCalendar } from '../../market-calendar';
-import { __resetKbsecTokenBreaker } from '../../testing';
+import { __resetKbsecTokenBreaker, applyMarketCalendar, resetMarketCalendar } from '../../testing';
 
 const ok = (body: unknown) => {
     const text = JSON.stringify({ dataHeader: { processFlag: 'A', processCode: '0011' }, dataBody: body });

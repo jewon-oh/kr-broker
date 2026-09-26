@@ -1,5 +1,5 @@
 /**
- * @fileoverview 이름을 바꾼 공개 이름의 옛 별칭이 새 이름과 같은 값과 타입을 가리키는지 본다. 별칭은 다음 판에서 지운다.
+ * @fileoverview 이름이나 경로를 바꾼 공개 이름의 옛 별칭이 새 이름과 같은 값과 타입을 가리키는지 본다. 별칭은 다음 판에서 지운다.
  *
  * 타입 비교(`expectTypeOf`)는 실행 시 아무것도 하지 않고 `pnpm typecheck` 가 검사한다.
  */
@@ -54,12 +54,19 @@ import type {
 } from '../kis/kis-types';
 import { getTickSize } from '../kis/kis-types';
 import { getKrxTickSize } from '../krx-tick-size';
-import type { CalendarMarket } from '../market-calendar';
+import {
+    applyMarketCalendar as applyMarketCalendarOldPath,
+    marketDayStatus,
+    resetMarketCalendar as resetMarketCalendarOldPath,
+    type CalendarMarket,
+} from '../market-calendar';
+import { applyMarketCalendar, resetMarketCalendar } from '../testing';
 import { toss } from '../toss';
 import type { TossMarketCountry } from '../toss/toss-types';
 
 afterEach(() => {
     vi.restoreAllMocks();
+    resetMarketCalendar();
 });
 
 describe('옛 이름 별칭', () => {
@@ -102,6 +109,20 @@ describe('옛 이름 별칭', () => {
         expectTypeOf<KBSecCachedToken>().toEqualTypeOf<KbsecCachedToken>();
         expectTypeOf<KisInvestorTradingRecord>().toEqualTypeOf<InvestorTradingRecord>();
         expectTypeOf<KbsecInvestorTradingRecord>().toEqualTypeOf<InvestorTradingRecord>();
+    });
+
+    it('kr-broker/market-calendar 에 남긴 캘린더 훅은 kr-broker/testing 의 훅과 같은 캘린더를 바꾼다', () => {
+        expectTypeOf(applyMarketCalendarOldPath).toEqualTypeOf(applyMarketCalendar);
+        expectTypeOf(resetMarketCalendarOldPath).toEqualTypeOf(resetMarketCalendar);
+
+        applyMarketCalendarOldPath('KR', [{ date: '20261005', open: false }]);
+        expect(marketDayStatus('KR', '20261005')).toBe('closed');
+        resetMarketCalendar();
+        expect(marketDayStatus('KR', '20261005')).toBe('unknown');
+
+        applyMarketCalendar('KR', [{ date: '20261005', open: false }]);
+        resetMarketCalendarOldPath();
+        expect(marketDayStatus('KR', '20261005')).toBe('unknown');
     });
 
     it("'KR' | 'US' 의 옛 이름은 모두 StockMarketGroup 이다", () => {

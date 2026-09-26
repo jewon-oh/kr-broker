@@ -12,9 +12,9 @@ from kr_broker.krx_trading_hours import (
     is_nxt_extended_tradable, krx_order_block_reason,
 )
 from kr_broker.market_calendar import (
-    apply_market_calendar, expand_business_days, is_market_closed_day, market_calendar_status, market_day_status,
-    refresh_market_calendar, reset_market_calendar,
+    expand_business_days, is_market_closed_day, market_calendar_status, market_day_status, refresh_market_calendar,
 )
+from kr_broker.testing import apply_market_calendar, reset_market_calendar
 from kr_broker.trading_hours import get_time_until_market_open, is_trading_hours, market_session_block_reason, trading_hours_block_reason
 from kr_broker.us_market_hours import (
     et_wall_clock_to_utc_ms, format_et_wall_clock, get_time_until_us_market_open, get_us_market_phase, us_order_block_reason,

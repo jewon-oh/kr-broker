@@ -21,7 +21,7 @@ import kr_broker
 import kr_broker.async_support
 from kr_broker.base import functions as fn
 from kr_broker.base.functions import deep_extend
-from kr_broker.market_calendar import reset_market_calendar
+from kr_broker.testing import reset_market_calendar
 
 FIXTURES = Path(__file__).resolve().parents[3] / 'ts' / 'src' / 'test' / 'static' / 'request'
 

@@ -47,7 +47,10 @@ def _is_weekend(d: datetime.date) -> bool:
 
 
 def apply_market_calendar(market: str, days: Iterable[Dict[str, Any]]) -> None:
-    """증권사 API 가 알려 준 날짜별 개장 여부를 넣는다. 같은 날짜는 새 값으로 덮어쓰고, 형식이 틀린 날짜와 주말은 버린다."""
+    """증권사 API 가 알려 준 날짜별 개장 여부를 넣는다. 같은 날짜는 새 값으로 덮어쓰고, 형식이 틀린 날짜와 주말은 버린다.
+
+    라이브러리 밖에서는 테스트에서만 쓴다. `kr_broker.testing` 에서 가져온다. 다음 판에서 이 모듈의 공개 이름에서 뺀다.
+    """
     target = _known_days[market]
     for day in days:
         d = _parse_ymd(day.get('date'))
@@ -154,7 +157,10 @@ def _record_refresh_failure(market: str, now: int) -> bool:
 
 
 def reset_market_calendar() -> None:
-    """캘린더와 갱신 상태를 비운다. 테스트 전용이다."""
+    """캘린더와 갱신 상태를 비운다.
+
+    테스트 전용이다. `kr_broker.testing` 에서 가져온다. 다음 판에서 이 모듈의 공개 이름에서 뺀다.
+    """
     for market in _MARKETS:
         _known_days[market].clear()
         _refresh_state[market] = {'okAtMs': None, 'failedAtMs': None}

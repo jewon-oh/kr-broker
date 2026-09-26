@@ -62,6 +62,7 @@
   - `kr-broker/krx-trading-hours`의 `checkKRXTradingHours`. `checkKRXTradingHoursAt(now)`를 씁니다.
   - `kr-broker/toss/toss-trading-hours`의 `isTossTradingOpen`과 `timeUntilTossOpen`. `kr-broker/trading-hours`의 `isTradingHours('toss', now)`와 `getTimeUntilMarketOpen('toss', now)`를 씁니다.
   - `kr-broker/us-market-hours`의 `getTimeUntilUsMarketOpen`
+- 휴장일 캘린더를 채우고 비우는 `applyMarketCalendar`와 `resetMarketCalendar`를 테스트 전용 경로 `kr-broker/testing`으로 옮깁니다. 두 함수는 프로세스 전체의 캘린더를 바꾸므로 테스트에서만 씁니다. `kr-broker/market-calendar`의 두 이름은 `@deprecated`를 붙여 한 판 동안 남기고, 다음 판에서 뺍니다. Python 판은 `kr_broker.testing`에서 `apply_market_calendar`와 `reset_market_calendar`를 가져옵니다. `kr_broker.market_calendar`의 두 이름도 다음 판에서 뺍니다.
 
 ### 고침
 

@@ -5,7 +5,7 @@
  * UTC 시각 기준 입력 → ET wall-clock 변환의 정확성을 검증.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { applyMarketCalendar, resetMarketCalendar } from '../market-calendar';
+import { applyMarketCalendar, resetMarketCalendar } from '../testing';
 import { getUsMarketPhase, formatEtWallClock, getTimeUntilUsMarketOpen, usOrderBlockReason } from '../us-market-hours';
 
 /** 증권사 캘린더 API 가 알려 준 2026년 평일 휴장일(Memorial Day, 독립기념일 관측일, 크리스마스). */

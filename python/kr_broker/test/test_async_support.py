@@ -38,6 +38,7 @@ from kr_broker.base import token_store as sync_token_store
 from kr_broker.base.errors import AuthenticationError, NetworkError, RequestTimeout
 from kr_broker.base.exchange import Exchange as SyncExchange
 from kr_broker.base.types import Entry
+from kr_broker.testing import reset_market_calendar
 
 PACKAGE = Path(kr_broker.__file__).resolve().parent
 ASYNC_ROOT = PACKAGE / 'async_support'
@@ -350,7 +351,7 @@ def test_async_refresh_token_with_lock() -> None:
 
 
 def test_async_refresh_market_calendar_shares_state_with_sync() -> None:
-    market_calendar.reset_market_calendar()
+    reset_market_calendar()
     calls = {'n': 0}
 
     async def fetch_ok() -> Any:
@@ -371,7 +372,7 @@ def test_async_refresh_market_calendar_shares_state_with_sync() -> None:
         assert asyncio.run(async_market_calendar.refresh_market_calendar('US', fetch_ok, 60_000, now_ms=2_000)) is False
         assert calls['n'] == 1
     finally:
-        market_calendar.reset_market_calendar()
+        reset_market_calendar()
 
 
 # ============ HTTP ============
