@@ -11,7 +11,7 @@ const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 global.fetch = mockFetch as unknown as typeof fetch;
 
 import { kbsec } from '../../kbsec';
-import { InvalidOrder, OrderNotFound } from '../../base/errors';
+import { BadRequest, InvalidOrder, OrderNotFound } from '../../base/errors';
 import { KBSEC_TR } from '../kbsec-types';
 import { __resetKbsecTokenBreaker } from '../../testing';
 import { KIS_MASTER_FIXTURE } from '../../__tests__/support/kis-master-fixture';
@@ -101,6 +101,17 @@ describe('해외 체결 조회(SPQM2103)의 날짜 축', () => {
 
         expect(seen[KBSEC_TR.ORDERS_US]!.map((b) => b.ordr_dt)).toEqual(['20260922', '20260921']);
         expect(seen[KBSEC_TR.TRADES_KR]!.map((b) => b.ordr_dt)).toEqual(['20260923']);
+    });
+
+    it('되감기 상한을 오늘 이미 되감은 칸 수보다 작게 줄이면 undefined 가 아니라 BadRequest 를 요청 없이 던진다', async () => {
+        vi.setSystemTime(new Date('2026-09-21T01:00:00Z'));   // 월 10:00 KST
+        const seen = serve({ [KBSEC_TR.TRADES_KR]: (b) => b.ordr_dt === '20260921' ? futureDate() : ok({ nxt_key: '', Record1: [] }) });
+        const exchange = newExchange();
+        await exchange.fetchOpenOrders();   // 월요일이 2854 라 금요일로 한 칸 되감고, 그 칸 수를 그날 캐시한다
+        exchange.options.businessDateMaxBackoff = 0;
+
+        await expect(exchange.fetchOpenOrders()).rejects.toBeInstanceOf(BadRequest);
+        expect(seen[KBSEC_TR.TRADES_KR]!.map((b) => b.ordr_dt)).toEqual(['20260921', '20260918']);
     });
 });
 

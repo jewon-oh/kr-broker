@@ -195,6 +195,21 @@ def test_overseas_fills_latch_after_a_business_rejection_but_not_after_a_transie
     assert broker.session.seen == ['token', 'spqm2103', 'spqm2103']
 
 
+# ============ 영업일 되감기 ============
+
+def test_a_backoff_limit_below_the_steps_cached_today_raises_bad_request_without_a_request(monkeypatch: pytest.MonkeyPatch) -> None:
+    """한 인스턴스를 두 번 부르는 동작이라 픽스처로 볼 수 없다. 상한을 오늘 되감은 칸 수보다 작게 줄이면 `TypeError` 가 아니라 `BadRequest` 다."""
+    monkeypatch.setattr(fn, 'milliseconds', lambda: 1789952400000)   # 2026-09-21(월) 10:00 KST
+    future_date = {'status': 200, 'body': {'dataHeader': {'processFlag': 'B', 'processCode': '2854'}, 'dataBody': {}}}
+    no_rows = {'status': 200, 'body': {'dataHeader': {'processFlag': 'B', 'processCode': '1861'}, 'dataBody': {}}}
+    broker = _broker([TOKEN, future_date, no_rows])
+    assert broker.fetch_open_orders() == []   # 월요일이 2854 라 금요일로 한 칸 되감고, 그 칸 수를 그날 캐시한다
+    broker.options['businessDateMaxBackoff'] = 0
+    with pytest.raises(kr_broker.BadRequest):
+        broker.fetch_open_orders()
+    assert broker.session.seen == ['token', 'ssqm2341', 'ssqm2341']
+
+
 # ============ price_to_precision ============
 
 def test_price_to_precision_rounds_domestic_stock_prices_with_the_krx_table() -> None:

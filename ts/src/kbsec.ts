@@ -4954,6 +4954,10 @@ export class kbsec extends Exchange {
                 lastErr = err;
             }
         }
+        // 한 칸도 부르지 않았다. 상한을 오늘 이미 되감은 칸 수보다 작게 줬을 때다.
+        if (lastErr === undefined) {
+            throw new BadRequest(`${this.id} 조회일자를 영업일로 맞추지 못했다: options.businessDateMaxBackoff(${String(this.options.businessDateMaxBackoff)})가 오늘 되감은 칸 수(${startSteps})보다 작다`);
+        }
         throw lastErr;
     }
 

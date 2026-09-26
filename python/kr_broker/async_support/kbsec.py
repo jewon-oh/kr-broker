@@ -978,7 +978,11 @@ class kbsec(Exchange, ImplicitAPI):
                 logger.warning('[kbsec] 조회일자를 영업일보다 더 되감아 성공 — 미등록 휴장일로 보임: ordrDt=%s steps=%s country=%s', ordr_dt, steps, country)
                 self._business_date_backoff[country] = {'day': today, 'steps': steps}
             return result
-        raise cast(BaseException, last_err)
+        # 한 칸도 부르지 않았다. 상한을 오늘 이미 되감은 칸 수보다 작게 줬을 때다.
+        if last_err is None:
+            raise BadRequest(f"{self.id} 조회일자를 영업일로 맞추지 못했다: options.businessDateMaxBackoff({self.options['businessDateMaxBackoff']})가 "
+                             f'오늘 되감은 칸 수({start_steps})보다 작다')
+        raise last_err
 
     async def _fetch_domestic_order_rows(self, ccls_clsf: str, market: Optional[MarketInterface], date: Str,
                                          params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:

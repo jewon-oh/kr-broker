@@ -4907,6 +4907,22 @@
             ]
         },
         {
+            "description": "영업일 되감기 상한(businessDateMaxBackoff)이 되감을 칸을 하나도 남기지 않으면 요청 없이 BadRequest 다",
+            "now": 1790038800000,
+            "config": {
+                "options": {
+                    "businessDateMaxBackoff": -1
+                }
+            },
+            "method": "fetchOpenOrders",
+            "args": [],
+            "http": [],
+            "error": {
+                "class": "BadRequest",
+                "brokerCode": null
+            }
+        },
+        {
             "description": "fetchOrders 는 분할체결 연속 행을 앞 헤더 주문에 더해 전량 체결을 closed 로 보고, 헤더 없이 온 연속 행은 버린다. params.date 로 조회일을 정한다",
             "method": "fetchOrders",
             "args": [
