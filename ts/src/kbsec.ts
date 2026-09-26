@@ -5082,11 +5082,12 @@ export class kbsec extends Exchange {
     }
 
     /**
-     * 주문 한 건을 조회한다. 국내는 미체결 목록에 있으면 `open`(체결분이 있으면 반영), 체결내역에만 있으면 `closed` 다.
+     * 주문 한 건을 조회한다. 국내는 체결내역과 같은 날의 전체 주문 목록(`SSQM2341` 체결구분 0)에서 주문을 찾아 `fetchOrders` 와 같은 규칙으로
+     * 상태를 정한다. 미체결수량이 남았으면 `open`, 전량 체결이면 `closed`, 남지 않았는데 덜 체결됐으면 `canceled` 다. 체결수량과 금액은 체결내역의 합이다.
      * 미국은 체결내역과 해외 체결현황(`SPQM2204`, 최근 사흘)을 함께 보고 잔량으로 상태를 정한다. 어디에도 없을 때만 `OrderNotFound` 다.
      *
-     * `params.date`(`YYYYMMDD`)를 주면 그날의 체결내역을 조회하고 실패를 던진다(국내는 한국 날짜, 미국은 미국 현지 날짜). 국내는 미체결 목록도 그날을 조회한다.
-     * 생략하면 가장 최근 영업일이다.
+     * `params.date`(`YYYYMMDD`)를 주면 그날의 체결내역을 조회하고 실패를 던진다(국내는 한국 날짜, 미국은 미국 현지 날짜). 국내는 주문 목록도 그날을 조회한다.
+     * 생략하면 가장 최근 영업일이다. 지난 날짜의 목록에 그날 끝까지 남은 미체결수량이 오는지는 실계좌로 확인하지 못했다. 온다면 그 주문은 `open` 이다.
      */
     override async fetchOrder(id: string, symbol: Str = undefined, params: Dict = {}): Promise<Order> {
         if (symbol === undefined) throw new ArgumentsRequired(`${this.id} fetchOrder() requires a symbol argument`);
@@ -5098,24 +5099,20 @@ export class kbsec extends Exchange {
         const cost = sum((trade) => trade.cost);
         const tradeInfo = trades.map(trade => trade.info);
         if (this.isUs(market)) return this.overseasOrderOf(id, market, trades, filled, cost);
-        // 미체결 목록도 체결내역과 같은 날을 조회한다. 다른 날의 목록에서 같은 주문번호를 찾으면 다른 주문을 합친다.
-        const pending = await this.fetchDomesticOrderRows(KBSEC_CCLS_PENDING, market, safeString(params, 'date'));
-        const open = this.ordersFromRows(pending, market, undefined).find(order => order.id === id);
-        if (open === undefined && trades.length === 0) {
-            throw new OrderNotFound(`${this.id} fetchOrder() ${symbol} 주문 ${id} 을 체결내역과 미체결 목록에서 찾지 못했다`);
+        // 주문 목록도 체결내역과 같은 날을 조회한다. 다른 날의 목록에서 같은 주문번호를 찾으면 다른 주문을 합친다.
+        const rows = await this.fetchDomesticOrderRows(KBSEC_CCLS_ALL, market, safeString(params, 'date'));
+        const order = this.ordersFromRows(rows, market, undefined).find(row => row.id === id);
+        if (order === undefined && trades.length === 0) {
+            throw new OrderNotFound(`${this.id} fetchOrder() ${symbol} 주문 ${id} 을 체결내역과 주문 목록에서 찾지 못했다`);
         }
-        if (open === undefined) {
+        if (order === undefined) {
             return this.safeOrder({
                 id, symbol: market.symbol, status: 'closed', side: trades[0]?.side, filled, cost,
                 average: filled > 0 ? cost / filled : undefined, trades: [], info: { trades: tradeInfo },
             }, market);
         }
-        // 미체결 행의 체결수량은 그 날 목록에 보인 것이다. 이 주문의 체결내역 합계가 정본이다.
-        const amount = open.amount as number;
-        return this.safeOrder({
-            ...open, filled, cost, remaining: Math.max(0, amount - filled), average: filled > 0 ? cost / filled : undefined,
-            status: filled >= amount && amount > 0 ? 'closed' : 'open', trades: [],
-        }, market);
+        // 상태와 잔량은 목록의 헤더 행(`parseOrderGroup`)으로 정해 `fetchOrders` 와 같게 둔다. 체결수량과 금액은 이 주문의 체결내역 합계가 정본이다.
+        return this.safeOrder({ ...order, filled, cost, average: filled > 0 ? cost / filled : undefined, trades: [] }, market);
     }
 
     /** 미국 주문 한 건. 체결내역에 없어도 해외 체결현황에 있으면 미체결이나 취소로 돌려준다. 둘 다 없을 때만 `OrderNotFound` 다. */

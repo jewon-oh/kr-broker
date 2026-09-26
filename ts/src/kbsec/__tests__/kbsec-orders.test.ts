@@ -781,6 +781,18 @@ describe('fetchOpenOrders·fetchOrder', () => {
         expect(order.cost).toBe(3 * 69800 + 2 * 69900);
     });
 
+    it('fetchOrder — 일부 체결 뒤 나머지가 취소된 주문은 미체결 목록에 없어도 closed 가 아니라 canceled 다(fetchOrders 와 같다)', async () => {
+        const header = fill({ ordr_no: 'O6', ordr_q: '3', tl_ccls_q: '1', nccls_q: '0' });
+        routeTr(mockFetch, {
+            [KBSEC_TR.TRADES_KR]: (body: Record<string, unknown>) => (body.ccls_clsf === '2' ? {} : { Record1: [header] }),
+        });
+
+        const order = await newExchange().fetchOrder('O6', '005930/KRW');
+
+        expect(order).toMatchObject({ id: 'O6', status: 'canceled', amount: 3, filled: 1, remaining: 0 });
+        expect((await newExchange().fetchOrders('005930/KRW')).find((o) => o.id === 'O6')?.status).toBe('canceled');
+    });
+
     it('fetchOrder — 어디에도 없으면 OrderNotFound 다', async () => {
         routeTr(mockFetch, { [KBSEC_TR.TRADES_KR]: {} });
 
