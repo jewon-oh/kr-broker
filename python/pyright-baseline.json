@@ -3,7 +3,7 @@
   "async_support/kis.py": 17,
   "async_support/toss.py": 21,
   "base/decimal_to_precision.py": 36,
-  "base/exchange.py": 17,
+  "base/exchange.py": 16,
   "base/token_store.py": 1,
   "broker_time.py": 1,
   "kis.py": 17,

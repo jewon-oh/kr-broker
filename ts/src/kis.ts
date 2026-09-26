@@ -10309,7 +10309,7 @@ export class kis extends Exchange {
             // 국내 주문일시(`dmst_ord_dt`, `thco_ord_tmd`)는 한국 시각, 현지 주문일시(`ord_dt`, `ord_tmd`)는 미국 동부 시각이다.
             timestamp = kstTimestamp(this.safeString(order, 'dmst_ord_dt'), this.safeString(order, 'thco_ord_tmd'))
                 ?? etTimestamp(this.safeString(order, 'ord_dt'), this.safeString(order, 'ord_tmd'));
-            status = this.orderStatusOf(filled, remaining, undefined);
+            status = this.orderStatusOf(filled, remaining, undefined, amount);
         } else {
             amount = this.safeString(order, 'ord_qty');
             filled = this.safeString(order, 'tot_ccld_qty');
@@ -10319,7 +10319,7 @@ export class kis extends Exchange {
             average = this.safeString(order, 'avg_prvs');
             cost = this.safeString(order, 'tot_ccld_amt');
             timestamp = kstTimestamp(this.safeString(order, 'ord_dt') ?? kstYmd(this.milliseconds()), this.safeString(order, 'ord_tmd'));
-            status = this.orderStatusOf(filled, remaining, this.safeString(order, 'cncl_yn'));
+            status = this.orderStatusOf(filled, remaining, this.safeString(order, 'cncl_yn'), amount);
         }
         return this.safeOrder({
             info: order,
@@ -10342,10 +10342,14 @@ export class kis extends Exchange {
         }, market);
     }
 
-    /** 체결·잔여 수량과 취소 여부로 주문 상태를 정한다. 판단할 근거가 없으면 `undefined` 다. */
-    private orderStatusOf(filled: Str, remaining: Str, cancelFlag: Str): Str {
+    /**
+     * 체결·잔여 수량과 취소 여부로 주문 상태를 정한다. 판단할 근거가 없으면 `undefined` 다. 잔량이 0 이어도 체결 수량이 주문 수량보다 적으면
+     * 전량 체결(`closed`)이 아니다. 나머지가 취소, 정정, 거부 가운데 무엇으로 끝났는지 행으로 가를 수 없어 비운다.
+     */
+    private orderStatusOf(filled: Str, remaining: Str, cancelFlag: Str, amount: Str = undefined): Str {
         if (cancelFlag === 'Y') return 'canceled';
         if (remaining !== undefined && Number(remaining) > 0) return 'open';
+        if (amount !== undefined && Number(filled) < Number(amount)) return undefined;
         if (filled !== undefined && Number(filled) > 0) return 'closed';
         return undefined;
     }

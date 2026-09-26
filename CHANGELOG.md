@@ -35,6 +35,8 @@
   - 토스증권의 시장 단위 조회 `fetchInvestorTrading`은 `fetchMarketInvestorTrading`으로 옮기고, 토스증권 `has`에서 `fetchInvestorTrading`을 뺍니다.
   - 한국투자증권 `fetchStockWarnings`는 `fetchVolatilityInterruptions`로, KB증권 `fetchStockWarnings`는 `fetchTradingRestriction`으로 옮깁니다. 두 증권사의 `has`에서 `fetchStockWarnings`를 뺍니다. `fetchStockWarnings`는 토스증권의 유의사항 조회 이름으로 남습니다.
   - `fetchRankings`는 순위 종류(`type`)가 증권사마다 달라 세 증권사의 `has`에서 뺍니다. 메서드는 그대로입니다.
+- 한국투자증권 `fetchOrders`, `fetchOrder`, `fetchClosedOrders`는 체결 수량이 주문 수량보다 적은 주문을 잔량이 0이어도 `closed`로 돌려주지 않습니다. ccxt에서 `closed`는 전량 체결입니다. 예전에는 10주 가운데 3주가 체결되고 나머지가 취소된 주문이 `closed`였습니다. 국내 행의 취소 여부(`cncl_yn`)가 `Y`이면 예전처럼 `canceled`이고, 그 밖에는 `status`를 비웁니다. 나머지가 취소, 정정, 거부 가운데 무엇으로 끝났는지 행만으로는 알 수 없기 때문입니다. 미국 행은 취소 여부를 읽지 않으므로 늘 비웁니다. 이런 주문은 `fetchClosedOrders`에서 빠집니다. 끝난 주문의 체결을 `fetchClosedOrders`로 모으던 코드는 `fetchOrders`의 `filled`나 `fetchMyTrades`를 읽습니다. `fetchOpenOrders`와 `cancelAllOrders`는 미체결 조회의 행이라 이때도 `open`으로 둡니다. Python 판도 같습니다.
+- Python 판 통합 메서드(`fetch_order`, `create_order`, `fetch_balance` 등)의 반환 타입을 `Dict[str, Any]`에서 통합 구조 타입으로 바꿨습니다. 타입은 `kr_broker.base.types`의 `Order`, `Trade`, `Ticker`, `OrderBook`, `Balances`, `Balance`, `MarketInterface`, `TradingFeeInterface`입니다. ccxt처럼 `TypedDict`로 적었고(`Balances`는 `dict`를 상속한 타입입니다), 필드는 TypeScript 판과 같습니다. 반환 값은 예전처럼 `dict`입니다. 타입 검사기로 보면, 결과를 `Dict[str, Any]` 인자에 넘기거나 타입에 없는 키를 쓰는 코드가 오류로 잡힙니다. 이런 코드는 결과를 새 타입이나 `Mapping[str, Any]`로 받습니다. 같은 모듈의 옛 별칭 `Order`, `Trade`, `Ticker`, `OrderBook`, `Balances`는 새 타입으로 바뀌었고, `Market`은 `Optional[MarketInterface]`입니다.
 
 ### 추가
 
@@ -43,7 +45,7 @@
 - 세 증권사가 함께 쓰는 주문 게이트를 공개합니다. `kr-broker/krx-trading-hours`의 `krxOrderBlockReason`과 `krxAuctionBuyBlockReason`, `kr-broker/us-market-hours`의 `usOrderBlockReason`과 `usAuctionBuyBlockReason`입니다. Python 판 이름은 `krx_order_block_reason` 등입니다. `marketSessionBlockReason`은 다섯째 인자로 `{ side, blockAuctionBuys }`를 받습니다.
 - `kr-broker/krx-tick-size`(Python 판 `kr_broker.krx_tick_size`)에 KRX 주식 호가 단위 표(`KRX_STOCK_TICK_SIZES`)와 `getKrxTickSize`, `krxTickViolation`을 둡니다.
 - `kr-broker/broker-time`에 한국 표준시 오프셋 `KST_OFFSET_MS`와 한국 날짜 `kstYmd`(`YYYYMMDD`), 한국 시각 `kstHms`(`HHMMSS`)를 둡니다. 세 증권사가 이 정의를 함께 씁니다. Python 판은 `kr_broker.broker_time`의 `KST_OFFSET_MS`와 `kst_ymd`입니다.
-- 오류에 `brokerCode`(Python 판 `broker_code`)를 더합니다. 증권사가 응답에 실어 보낸 원래 오류 코드입니다. 한국투자증권은 `msg_cd`, 토스증권은 오류 코드, KB증권은 `processCode`이고, 코드 표에 없는 코드도 싣습니다. 라이브러리가 요청 전에 막은 오류에는 없습니다. `detail` 값은 그대로이고, 뜻은 라이브러리가 가른 원인 이름으로 정합니다. KB증권의 원래 코드를 오류 메시지에서 꺼내던 코드는 `brokerCode`를 읽습니다.
+- 오류에 `brokerCode`(Python 판 `broker_code`)를 더합니다. 증권사가 응답에 실어 보낸 원래 오류 코드입니다. 한국투자증권은 `msg_cd`, 토스증권은 오류 코드, KB증권은 `processCode`이고, 코드 표에 없는 코드도 싣습니다. 라이브러리가 요청 전에 막은 오류에는 없습니다. KB증권은 토큰 발급이 업무 코드로 거절된 오류에도 싣습니다. `detail` 값은 그대로이고, 뜻은 라이브러리가 가른 원인 이름으로 정합니다. KB증권의 원래 코드를 오류 메시지에서 꺼내던 코드는 `brokerCode`를 읽습니다.
 
 ### 바뀜
 
@@ -65,6 +67,7 @@
 - 휴장일 캘린더를 채우고 비우는 `applyMarketCalendar`와 `resetMarketCalendar`를 테스트 전용 경로 `kr-broker/testing`으로 옮깁니다. 두 함수는 프로세스 전체의 캘린더를 바꾸므로 테스트에서만 씁니다. `kr-broker/market-calendar`의 두 이름은 `@deprecated`를 붙여 한 판 동안 남기고, 다음 판에서 뺍니다. Python 판은 `kr_broker.testing`에서 `apply_market_calendar`와 `reset_market_calendar`를 가져옵니다. `kr_broker.market_calendar`의 두 이름도 다음 판에서 뺍니다.
 - 이 저장소의 CI가 커밋 이력도 검사합니다. `pnpm hygiene:history`는 위생 검사의 패턴으로 모든 커밋의 메시지와 추가된 줄을 봅니다. 작성자 이메일은 GitHub noreply 주소(`…@users.noreply.github.com`)만 받습니다. 커미터 이메일은 웹에서 병합할 때 GitHub이 적는 서비스 주소도 받습니다. PR에서는 PR 브랜치의 커밋과, 스쿼시 병합 커밋의 제목이 될 PR 제목도 봅니다. 위생 검사의 이메일 규칙은 `example.*` 도메인에 더해 GitHub noreply 주소, `noreply@anthropic.com`(공동 작성자 트레일러), `support@github.com`(Dependabot 서명 트레일러)을 허용합니다.
 - 이 저장소의 CI가 Python 의존성을 해시를 고정한 잠금 파일(`python/requirements/*.txt`)로 설치하고, `pip-audit`도 운영 의존성의 잠금 파일을 감사합니다. 예전에는 PyPI 최신판을 해시 없이 받아 감사했습니다. Dependabot은 Python 의존성을 `uv` 생태계로 올립니다. 사용하는 쪽의 설치와 `pyproject.toml`의 하한은 그대로입니다.
+- KB증권 `KbsecAuth.getAccessToken`(`kr-broker/kbsec/kbsec-auth`)은 토큰 발급이 거절되면 `Error` 대신 `AuthenticationError`를 던집니다. 증권사가 준 업무 코드는 `brokerCode`에 싣습니다. 본문 형태 두 가지가 모두 거절되면 먼저 보낸 형태의 코드를 싣습니다. 나중에 보내는 형태는 원인과 관계없이 `E021`을 받기 때문입니다. `detail`은 예전처럼 비어 있습니다. `kbsec` 클래스의 비공개 호출이 던지는 오류는 예전처럼 `AuthenticationError`입니다. 메시지 앞의 `kbsec 토큰을 받지 못했다:`는 빠집니다. 토큰 무효(`I445`) 뒤 재발급이 실패했을 때도 `Error` 대신 `AuthenticationError`를 던집니다.
 
 ### 고침
 

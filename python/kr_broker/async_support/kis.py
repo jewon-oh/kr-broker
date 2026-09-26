@@ -48,7 +48,7 @@ import json
 import logging
 import math
 import re
-from typing import Any, Awaitable, Callable, Dict, List, NamedTuple, Optional
+from typing import Any, Awaitable, Callable, Dict, List, NamedTuple, Optional, cast
 
 from kr_broker.abstract.kis import ImplicitAPI
 from kr_broker.async_support.base.exchange import Exchange
@@ -67,7 +67,9 @@ from kr_broker.base.errors import (
 )
 from kr_broker.base.precise import Precise
 from kr_broker.base.token_store import BrokerTokenStore, legacy_token_store_key, token_store_key
-from kr_broker.base.types import ApiName, Int, Num, Str, Strings
+from kr_broker.base.types import (
+    ApiName, Balances, Int, Market, MarketInterface, Num, Order, OrderBook, Str, Strings, Ticker, Tickers, Trade, TradingFeeInterface,
+)
 from kr_broker.broker_krx_code import is_krx_domestic_code
 from kr_broker.broker_time import KST_OFFSET_MS, kst_ymd
 from kr_broker.kis_kr_market import resolve_kr_market
@@ -1076,7 +1078,7 @@ class kis(Exchange, ImplicitAPI):
 
     # ============ 종목 ============
 
-    async def fetch_markets(self, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    async def fetch_markets(self, params: Optional[Dict[str, Any]] = None) -> List[MarketInterface]:
         """종목 마스터 데이터(`options['masterData']`)로 종목 목록을 만든다. 국내(코스피·코스닥)와 미국(나스닥·뉴욕·아멕스)이 들어 있다.
         `params['market']` 으로 `'domestic'` 이나 `'overseas'` 만 받을 수 있다."""
         which = self.safe_string(params, 'market', 'all')
@@ -1088,7 +1090,7 @@ class kis(Exchange, ImplicitAPI):
             rows.extend(search_overseas_stocks(master, None, 2 ** 53 - 1))
         return self.parse_markets(rows)
 
-    def parse_market(self, market: Dict[str, Any]) -> Dict[str, Any]:
+    def parse_market(self, market: Dict[str, Any]) -> MarketInterface:
         """마스터 행 하나를 종목으로 옮긴다. 해외 마스터 행은 `currency` 를 갖고 국내 행은 갖지 않는다."""
         market_id = self.safe_string(market, 'code')
         if market_id is None:
@@ -1180,14 +1182,14 @@ class kis(Exchange, ImplicitAPI):
         return KisInstrument(f"{self.common_stock_code(code.replace('/', '.', 1))}/USD", code, True, 'USD', quote_exchange,
                              to_order_market_code(quote_exchange))
 
-    def market(self, symbol: Str) -> Dict[str, Any]:
+    def market(self, symbol: Str) -> MarketInterface:
         """종목. `load_markets` 로 받은 종목에 있으면 그것을, 없으면 심볼 모양으로 만든 종목을 돌려준다. 시세와 주문 메서드와 같은 판별이라
         마스터 데이터 없이도 `amount_to_precision` 같은 도우미가 동작한다. 해외 종목은 마스터 데이터가 없으면 상장 거래소를 모르는 종목이 된다."""
         if symbol is None or (self.markets is not None and (symbol in self.markets or symbol in (self.markets_by_id or {}))):
             return super().market(symbol)
         return self._market_of(self._instrument_of(symbol))
 
-    def _market_of(self, instrument: KisInstrument) -> Dict[str, Any]:
+    def _market_of(self, instrument: KisInstrument) -> MarketInterface:
         """`load_markets()` 로 받은 종목이 있으면 그것을, 없으면 마스터 행(또는 모양)으로 종목을 만든다."""
         known = (self.markets or {}).get(instrument.symbol)
         if known is not None:
@@ -1217,7 +1219,7 @@ class kis(Exchange, ImplicitAPI):
 
     # ============ 시세 ============
 
-    async def fetch_ticker(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def fetch_ticker(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> Ticker:
         """현재가. 호가(`bid`·`ask`)는 채우지 않는다. 현재가가 0 이거나 비어 있으면 `NullResponse` 를 던진다. 장 마감·지연시세·휴장에
         빈 값이 오는데, 0 을 현재가로 넘기면 호출하는 쪽의 손익이 -100% 로 보인다."""
         instrument = self._instrument_of(symbol)
@@ -1243,7 +1245,7 @@ class kis(Exchange, ImplicitAPI):
             raise NullResponse(f'{self.id} {symbol} 현재가가 0 이거나 비어 있다')
         return self.parse_ticker(output, market)
 
-    def parse_ticker(self, ticker: Dict[str, Any], market: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def parse_ticker(self, ticker: Dict[str, Any], market: Market = None) -> Ticker:
         timestamp = self.milliseconds()
         if market is not None and market.get('quote') == 'USD':
             last = self.safe_string(ticker, 'last')
@@ -1286,7 +1288,7 @@ class kis(Exchange, ImplicitAPI):
             'info': ticker,
         }, market)
 
-    async def fetch_tickers(self, symbols: Strings = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def fetch_tickers(self, symbols: Strings = None, params: Optional[Dict[str, Any]] = None) -> Tickers:
         """여러 종목의 현재가를 한 번에 받는다(`intstock-multprice`, 한 번에 30종목까지). 국내만 받는다. 이 API 는 NXT 통합(`UN`)을
         문서에 적어 두지 않아 `fetch_ticker` 와 달리 항상 KRX(`J`)로 묻는다."""
         if symbols is None or len(symbols) == 0:
@@ -1324,7 +1326,7 @@ class kis(Exchange, ImplicitAPI):
             }, market)
         return result
 
-    async def fetch_order_book(self, symbol: str, limit: Int = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def fetch_order_book(self, symbol: str, limit: Int = None, params: Optional[Dict[str, Any]] = None) -> OrderBook:
         """국내 호가 10단계(잔량 포함). 매수는 높은 가격부터, 매도는 낮은 가격부터다. 미국 종목은 받지 않는다. 호가가 없으면 `NullResponse`."""
         instrument = self._instrument_of(symbol)
         if instrument.overseas:
@@ -1395,7 +1397,7 @@ class kis(Exchange, ImplicitAPI):
 
     # ============ 수수료 ============
 
-    async def fetch_trading_fee(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def fetch_trading_fee(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> TradingFeeInterface:
         """수수료율. 국내 위탁수수료 0.015%(계좌 유형과 할인에 따라 다르다), 미국 0.25%다. 요율을 알려 주는 API 가 없어 표를 쓴다.
         국내 매도에는 증권거래세가 더해진다. 세율은 시행일 표(`krx_sell_tax`)를 따르며 `info['sellTaxRate']` 에 있다."""
         instrument = self._instrument_of(symbol)
@@ -1626,7 +1628,7 @@ class kis(Exchange, ImplicitAPI):
         suffix = parts[1] if len(parts) > 1 else None
         return {'CANO': parts[0], 'ACNT_PRDT_CD': suffix if suffix else KIS_DEFAULT_ACCOUNT_SUFFIX}
 
-    async def fetch_balance(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def fetch_balance(self, params: Optional[Dict[str, Any]] = None) -> Balances:
         """잔고. 현금은 통화 키(`KRW`, `USD`), 보유 종목은 `market['base']` 키(국내 `005930`, 미국 `AAPL`, 클래스 주식 `BRK.B`)이고 종목의
         `total` 이 보유 수량이다. 평가금액·평균단가 같은 KIS 고유 값은 각 항목의 `info` 에 있다. 조회가 하나라도 실패하면 던진다(빈 잔고와 구분한다).
         미국 티커 `USD` 처럼 현금 코드와 같은 티커는 `commonStockCodes` 의 통합 코드(`ProShares Ultra Semiconductors`)가 키다. 표에 없는
@@ -1715,7 +1717,7 @@ class kis(Exchange, ImplicitAPI):
         }))
         return {'stocks': rows_of(_field(response, 'output1')), 'currencies': rows_of(_field(response, 'output2'))}
 
-    def parse_balance(self, response: Any) -> Dict[str, Any]:
+    def parse_balance(self, response: Any) -> Balances:
         """`fetch_balance` 가 모은 원본(`{'domestic', 'overseas', 'usd'}`)을 통합 잔고로 옮긴다.
 
         `KRW` 는 `total` 이 예수금총액(`dnca_tot_amt`), `free` 가 주문가능현금(`ord_psbl_cash`), `used` 가 둘의 차이다. 주문가능현금이 예수금보다
@@ -1788,7 +1790,7 @@ class kis(Exchange, ImplicitAPI):
     # ============ 주문 ============
 
     async def create_order(self, symbol: str, type: str, side: str, amount: float, price: Num = None,
-                     params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                     params: Optional[Dict[str, Any]] = None) -> Order:
         """주문. 수량은 정수 주로 내린다(소수점 매수는 받지 않는다). 거래시간 밖은 주문을 보내지 않고 `MarketClosed` 를 던진다.
 
         `params['session']` 은 `'regular'` 이나 `'nxt'` 다. 생략하면 `options['nxtRouting']` 과 NXT 확장세션 시각으로 정한다(국내).
@@ -1830,7 +1832,7 @@ class kis(Exchange, ImplicitAPI):
         return floored
 
     async def _create_domestic_order(self, instrument: KisInstrument, type: str, side: str, quantity: int, price: Num,
-                               params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+                               params: Optional[Dict[str, Any]]) -> Order:
         session = self.safe_string(params, 'session')
         if session is not None and session not in ('regular', 'nxt'):
             raise BadRequest(f"{self.id} createOrder() 의 params.session 은 'regular' 이나 'nxt' 여야 한다: {session}")
@@ -1863,7 +1865,7 @@ class kis(Exchange, ImplicitAPI):
                                     limit_price)
 
     async def create_trigger_order(self, symbol: str, type: str, side: str, amount: float, price: Num = None, trigger_price: Num = None,
-                             params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                             params: Optional[Dict[str, Any]] = None) -> Order:
         """스탑지정가(국내만). 같은 주문 엔드포인트(`order-cash`)에 조건가격(`CNDT_PRIC`)을 실어 보내면 KIS 가 스탑지정가로 처리한다.
         지정가만 받고 정규장 시간에만 낼 수 있다. 해외는 대응하는 API 를 찾지 못해 `NotSupported` 다."""
         amount, price, trigger_price = fn.decimal_to_float(amount), fn.decimal_to_float(price), fn.decimal_to_float(trigger_price)
@@ -1971,7 +1973,7 @@ class kis(Exchange, ImplicitAPI):
         return conversion['price']
 
     async def _create_overseas_order(self, instrument: KisInstrument, type: str, side: str, quantity: int, price: float,
-                               params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+                               params: Optional[Dict[str, Any]]) -> Order:
         exchange = instrument.order_exchange
         if exchange is None:
             raise BadSymbol(f'해외 마스터에 없는 ticker: {instrument.symbol}')
@@ -2003,7 +2005,7 @@ class kis(Exchange, ImplicitAPI):
         order_type = 'limit' if ord_dvsn == KIS_OVERSEAS_ORD_DVSN['LIMIT'] else 'market'
         return self._accepted_order(response, self._market_of(instrument), order_type, side, quantity, price)
 
-    def _accepted_order(self, response: Any, market: Dict[str, Any], type: str, side: str, amount: float, price: Num) -> Dict[str, Any]:
+    def _accepted_order(self, response: Any, market: MarketInterface, type: str, side: str, amount: float, price: Num) -> Order:
         """주문 접수 응답을 주문으로 옮긴다. 접수 응답에는 체결 정보가 없어 요청값을 싣고 `filled` 는 비워 둔다."""
         output = self.safe_dict(response, 'output', {})
         if self.safe_string(output, 'ODNO') is None:
@@ -2019,7 +2021,7 @@ class kis(Exchange, ImplicitAPI):
             'info': response,
         }), market)
 
-    async def cancel_order(self, id: str, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def cancel_order(self, id: str, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> Order:
         """주문 취소. 국내는 남은 수량 전체를 취소한다. 미국은 취소 수량이 필요해 미체결 조회에서 찾고, 모의투자처럼 조회할 수 없으면
         `params['amount']` 로 넘긴다. 이미 체결되거나 취소된 주문은 KIS 가 오류로 거절한다."""
         instrument = None if symbol is None else self._instrument_of(symbol)
@@ -2050,7 +2052,7 @@ class kis(Exchange, ImplicitAPI):
             quantity = open_order.get('amount')
         return self.number_to_string(0 if quantity is None else quantity)
 
-    async def _cancel_overseas_order(self, id: str, instrument: KisInstrument, params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    async def _cancel_overseas_order(self, id: str, instrument: KisInstrument, params: Optional[Dict[str, Any]]) -> Order:
         exchange = instrument.order_exchange
         if exchange is None:
             raise BadSymbol(f'해외 마스터에 없는 ticker: {instrument.symbol}')
@@ -2074,7 +2076,7 @@ class kis(Exchange, ImplicitAPI):
         return self.safe_order({'id': id, 'symbol': instrument.symbol, 'status': 'canceled', 'info': response}, self._market_of(instrument))
 
     async def edit_order(self, id: str, symbol: str, type: str, side: str, amount: Num = None, price: Num = None,
-                   params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                   params: Optional[Dict[str, Any]] = None) -> Order:
         """정정. 취소와 같은 엔드포인트(`order-rvsecncl`)를 `RVSE_CNCL_DVSN_CD` 로 나눈다(`01` 정정, `02` 취소). `price` 가 필요하다.
 
         `amount` 는 ccxt 와 같이 정정 뒤 주문의 총수량(체결분 포함)이다. 주면 미체결 조회로 원주문의 체결 수량과 잔량을 확인하고, 둘의 합과
@@ -2112,7 +2114,7 @@ class kis(Exchange, ImplicitAPI):
             'id': new_id, 'symbol': instrument.symbol, 'type': 'limit', 'price': price, 'amount': amount, 'status': 'open', 'info': response,
         }, self._market_of(instrument))
 
-    async def _find_open_order(self, instrument: KisInstrument, id: str) -> Dict[str, Any]:
+    async def _find_open_order(self, instrument: KisInstrument, id: str) -> Order:
         """정정할 원주문을 미체결 목록에서 찾는다. 조회가 실패하면 던지고, 목록에 없으면 `OrderNotFound` 다."""
         open_orders = await self.fetch_open_orders(instrument.symbol)
         found = next((order for order in open_orders if order.get('id') == id), None)
@@ -2121,7 +2123,7 @@ class kis(Exchange, ImplicitAPI):
         return found
 
     async def _edit_overseas_order(self, id: str, instrument: KisInstrument, price: float, amount: Num, partial: bool,
-                             params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+                             params: Optional[Dict[str, Any]]) -> Order:
         """해외 정정. 정정 수량(`ORD_QTY`)에는 미체결 조회로 찾은 잔량을 싣고, `amount` 를 주면 국내처럼 원주문의 총수량과 대조한다.
         `params['amount']` 를 주면 조회와 대조 없이 그 값을 정정 수량으로 싣는다. 모의투자는 미국 미체결 조회가 없어 `params['amount']` 가 필요하고
         `amount` 는 대조할 수 없어 `NotSupported` 다. 일부정정(`params['partial']`)은 받지 않는다. 공식 예제처럼 정정 요청에 실제 수량과 단가를 싣는다."""
@@ -2165,17 +2167,17 @@ class kis(Exchange, ImplicitAPI):
             'info': response,
         }, self._market_of(instrument))
 
-    async def cancel_all_orders(self, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    async def cancel_all_orders(self, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> List[Order]:
         """미체결 주문을 모두 취소한다. 종목을 주면 그 종목만이다. 취소를 시도한 주문마다 미체결 조회로 받은 주문을 항목으로 돌려준다.
         취소된 항목은 `status: 'canceled'` 이고 취소 응답 원문이 `info['cancelResponse']` 에 있다. 취소하지 못한 항목은 원래 상태(`open`)이고
         `info['cancelError']`(메시지)와 `info['cancelErrorDetail']`(오류의 `detail`)이 있다. 일부가 실패해도 던지지 않으므로 항목의 `status` 를 확인한다.
         미체결 조회가 실패하거나 잘리면 하나도 취소하지 않고 던진다. TypeScript 판은 동시에 보내고 이 판은 같은 순서로 차례로 보낸다.
         국내 취소에는 공식 예제처럼 미체결 행의 주문채번지점번호(`ord_gno_brno`)를 원주문 조직번호로 싣는다."""
         open_orders = await self.fetch_open_orders(symbol, None, None, params)
-        results: List[Dict[str, Any]] = []
+        results: List[Any] = []
         for order in open_orders:
             try:
-                canceled = await self.cancel_order(order['id'], order.get('symbol'), self._cancel_params_of(order))
+                canceled = await self.cancel_order(cast(str, order['id']), order.get('symbol'), self._cancel_params_of(order))
                 results.append(self.extend(order, {'status': 'canceled', 'info': self.extend(order.get('info'), {'cancelResponse': canceled.get('info')})}))
             except Exception as error:
                 logger.warning('[kis] 주문 취소 실패(%s): %s', order.get('id'), error)
@@ -2183,7 +2185,7 @@ class kis(Exchange, ImplicitAPI):
                 results.append(self.extend(order, {'info': info}))
         return results
 
-    def _cancel_params_of(self, order: Dict[str, Any]) -> Dict[str, Any]:
+    def _cancel_params_of(self, order: Order) -> Dict[str, Any]:
         """`cancel_all_orders` 가 미체결 주문 하나를 취소할 때의 `params`. 해외 취소 요청에는 조직번호가 없어 아무것도 싣지 않는다."""
         org_no = self.safe_string(order.get('info'), 'ord_gno_brno')
         symbol = order.get('symbol')
@@ -2193,7 +2195,7 @@ class kis(Exchange, ImplicitAPI):
     # ============ 주문·체결 조회 ============
 
     async def fetch_open_orders(self, symbol: Str = None, since: Int = None, limit: Int = None,
-                          params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+                          params: Optional[Dict[str, Any]] = None) -> List[Order]:
         """미체결 주문. 국내는 정정취소가능 주문 조회(`inquire-psbl-rvsecncl`), 미국은 미체결 내역(`inquire-nccs`)이다. 종목을 주면 그 시장만,
         주지 않으면 국내와 미국을 모두 본다(`params['market']` 이 `'domestic'` 이면 국내만). 모의투자는 미국 미체결 조회가 없어 국내만 본다."""
         instrument = None if symbol is None else self._instrument_of(symbol)
@@ -2201,7 +2203,7 @@ class kis(Exchange, ImplicitAPI):
         want_domestic = which != 'overseas' if instrument is None else not instrument.overseas
         # 모의투자에는 미국 미체결 조회(TR)가 없다.
         want_overseas = which != 'domestic' and not self.isSandboxModeEnabled if instrument is None else instrument.overseas
-        orders: List[Dict[str, Any]] = []
+        orders: List[Order] = []
         if want_domestic:
             pages = await self._fetch_all_pages(self.private_get_uapi_domestic_stock_v1_trading_inquire_psbl_rvsecncl, self.extend(self._account_params(), {
                 'CTX_AREA_FK100': '',
@@ -2227,17 +2229,17 @@ class kis(Exchange, ImplicitAPI):
         filtered = orders if instrument is None else [order for order in orders if order.get('symbol') == instrument.symbol]
         return self.filter_by_since_limit(filtered, since, limit)
 
-    def _mark_open(self, order: Dict[str, Any]) -> Dict[str, Any]:
+    def _mark_open(self, order: Order) -> Order:
         """미체결 조회의 행은 모두 살아 있는 주문이다. 응답에 취소 여부가 없어 상태를 정하지 못했으면 `open` 으로 둔다."""
-        return self.extend(order, {'status': 'open'}) if order.get('status') is None else order
+        return cast(Order, self.extend(order, {'status': 'open'})) if order.get('status') is None else order
 
     async def fetch_orders(self, symbol: Str = None, since: Int = None, limit: Int = None,
-                     params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+                     params: Optional[Dict[str, Any]] = None) -> List[Order]:
         """당일(또는 `since` 일부터)의 주문 전체(체결·미체결·취소). 국내는 일별주문체결조회(`inquire-daily-ccld`), 미국은 주문체결내역(`inquire-ccnl`)이다.
         종목을 주면 그 시장만, 주지 않으면 국내와 미국을 모두 조회한다(`params['market']` 으로 좁힌다)."""
         instrument = None if symbol is None else self._instrument_of(symbol)
         which = self.safe_string(params, 'market', 'all')
-        orders: List[Dict[str, Any]] = []
+        orders: List[Order] = []
         if (which != 'overseas') if instrument is None else not instrument.overseas:
             code = None if instrument is None else instrument.code
             orders.extend(self.parse_orders(await self._fetch_domestic_ccld_rows(code, since, '00', self.safe_string(params, 'orderId'))))
@@ -2246,7 +2248,7 @@ class kis(Exchange, ImplicitAPI):
         filtered = orders if instrument is None else [order for order in orders if order.get('symbol') == instrument.symbol]
         return self.filter_by_since_limit(filtered, since, limit)
 
-    async def fetch_order(self, id: str, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def fetch_order(self, id: str, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> Order:
         """주문 하나. 오늘(또는 `params['since']` 일부터)의 주문 목록에서 찾고 없으면 `OrderNotFound` 다. 국내는 주문번호로 좁혀 조회한다."""
         orders = await self.fetch_orders(symbol, self.safe_integer(params, 'since'), None, self.extend(params, {'orderId': id}))
         order = next((candidate for candidate in orders if candidate.get('id') == id), None)
@@ -2255,7 +2257,7 @@ class kis(Exchange, ImplicitAPI):
         return order
 
     async def fetch_my_trades(self, symbol: Str = None, since: Int = None, limit: Int = None,
-                        params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+                        params: Optional[Dict[str, Any]] = None) -> List[Trade]:
         """내 체결 내역. 종목을 주면 그 시장만, 주지 않으면 국내와 미국을 모두 조회한다(`params['market']` 으로 좁힌다). 체결별 수수료는
         응답에 없어 비어 있다.
 
@@ -2264,7 +2266,7 @@ class kis(Exchange, ImplicitAPI):
         거르지 않는다(주문 시각으로 거르면 `since` 앞에 낸 주문이 그 뒤에 체결된 것이 빠진다). 일자는 국내가 한국 날짜, 미국이 현지(ET) 날짜다."""
         instrument = None if symbol is None else self._instrument_of(symbol)
         which = self.safe_string(params, 'market', 'all')
-        trades: List[Dict[str, Any]] = []
+        trades: List[Trade] = []
         if (which != 'overseas') if instrument is None else not instrument.overseas:
             code = None if instrument is None else instrument.code
             trades.extend(self.parse_trades(await self._fetch_domestic_ccld_rows(code, since, '01')))
@@ -2321,7 +2323,7 @@ class kis(Exchange, ImplicitAPI):
         rows = [row for page in pages for row in rows_of(_field(page, 'output'))]
         return [row for row in rows if to_number(row.get('ft_ccld_qty')) > 0] if ccld == '01' else rows
 
-    def parse_order(self, order: Dict[str, Any], market: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def parse_order(self, order: Dict[str, Any], market: Market = None) -> Order:
         """주문 행(접수 응답, 정정취소가능·일별체결·해외 체결·미체결 조회)을 주문으로 옮긴다. 접수 응답은 대문자 키(`ODNO`)이고 조회 행은
         소문자 키(`odno`)다. 해외 행은 `ft_` 접두 필드를 쓴다."""
         order_id = self.safe_string_2(order, 'ODNO', 'odno')
@@ -2348,7 +2350,7 @@ class kis(Exchange, ImplicitAPI):
             timestamp = kst_timestamp(self.safe_string(order, 'dmst_ord_dt'), self.safe_string(order, 'thco_ord_tmd'))
             if timestamp is None:
                 timestamp = et_timestamp(self.safe_string(order, 'ord_dt'), self.safe_string(order, 'ord_tmd'))
-            status = self._order_status_of(filled, remaining, None)
+            status = self._order_status_of(filled, remaining, None, amount)
         else:
             amount = self.safe_string(order, 'ord_qty')
             filled = self.safe_string(order, 'tot_ccld_qty')
@@ -2359,7 +2361,7 @@ class kis(Exchange, ImplicitAPI):
             cost = self.safe_string(order, 'tot_ccld_amt')
             order_date = self.safe_string(order, 'ord_dt')
             timestamp = kst_timestamp(order_date if order_date is not None else kst_ymd(self.milliseconds()), self.safe_string(order, 'ord_tmd'))
-            status = self._order_status_of(filled, remaining, self.safe_string(order, 'cncl_yn'))
+            status = self._order_status_of(filled, remaining, self.safe_string(order, 'cncl_yn'), amount)
         return self.safe_order({
             'info': order,
             'id': order_id,
@@ -2380,17 +2382,20 @@ class kis(Exchange, ImplicitAPI):
             'trades': [],
         }, market)
 
-    def _order_status_of(self, filled: Str, remaining: Str, cancel_flag: Str) -> Str:
-        """체결·잔여 수량과 취소 여부로 주문 상태를 정한다. 판단할 근거가 없으면 None 이다."""
+    def _order_status_of(self, filled: Str, remaining: Str, cancel_flag: Str, amount: Str = None) -> Str:
+        """체결·잔여 수량과 취소 여부로 주문 상태를 정한다. 판단할 근거가 없으면 None 이다. 잔량이 0 이어도 체결 수량이 주문 수량보다 적으면
+        전량 체결(`closed`)이 아니다. 나머지가 취소, 정정, 거부 가운데 무엇으로 끝났는지 행으로 가를 수 없어 비운다."""
         if cancel_flag == 'Y':
             return 'canceled'
         if remaining is not None and fn.js_number(remaining) > 0:
             return 'open'
+        if amount is not None and fn.js_number(filled) < fn.js_number(amount):
+            return None
         if filled is not None and fn.js_number(filled) > 0:
             return 'closed'
         return None
 
-    def parse_trade(self, trade: Dict[str, Any], market: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def parse_trade(self, trade: Dict[str, Any], market: Market = None) -> Trade:
         """체결 행 하나를 체결로 옮긴다. 체결 id 는 주문일자·주문번호·종목(·해외 거래소)의 조합이라 다시 조회해도 같다."""
         overseas = 'ft_ccld_qty' in trade or (market is not None and market.get('quote') == 'USD')
         code = self.safe_string_2(trade, 'pdno', 'ovrs_pdno')

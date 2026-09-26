@@ -175,6 +175,9 @@ describe('usdKrwRate — options.usdKrwRate', () => {
     });
 });
 
+/** 주석을 뺀 소스. 설명문에 적힌 이름이 검사에 걸리지 않게 한다. */
+const strip = (text: string): string => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
 describe('환경 변수와 전역 설정', () => {
     /** 패키지의 비테스트 소스 파일. */
     function sourceFiles(dir: string, out: string[] = []): string[] {
@@ -189,7 +192,6 @@ describe('환경 변수와 전역 설정', () => {
         return out;
     }
     const files = sourceFiles(path.resolve(__dirname, '..'));
-    const strip = (text: string): string => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
     it('소스가 있다 — 빈 목록으로 아래 검사가 통과하지 않는다', () => {
         expect(files.length).toBeGreaterThan(50);
@@ -205,5 +207,46 @@ describe('환경 변수와 전역 설정', () => {
         const offenders = files.filter((file) => /export\s+(?:async\s+)?function\s+(?:configure|register)[A-Z]\w*/.test(strip(readFileSync(file, 'utf8'))));
 
         expect(offenders.map((file) => path.relative(path.resolve(__dirname, '..'), file))).toEqual([]);
+    });
+});
+
+describe('옵션 키 선언', () => {
+    /** 증권사가 기본값을 선언하지 않고 사용자에게서만 받는 키. README 에 적힌 키(`allowInsecureUrl`, `hostAddr`, `htsId`)와 ccxt 관례의 키다. */
+    const USER_ONLY_KEYS: ReadonlySet<string> = new Set(['allowInsecureUrl', 'hostAddr', 'htsId', 'sandbox', 'testnet', 'defaultSubType']);
+    const BROKER_FILES: ReadonlyArray<readonly [string, () => { options: object }]> = [
+        ['kis.ts', () => kisWith()],
+        ['toss.ts', () => new toss({ apiKey: 'c', secret: 's' })],
+        ['kbsec.ts', () => new kbsec({ apiKey: 'a', secret: 's' })],
+    ];
+
+    /**
+     * 소스가 이름을 적어 읽는 옵션 키. `this.options.x`, `safeX(this.options, 'x')`(`safeX2` 는 앞의 두 키), `isOptionEnabled('x')`,
+     * `handleOptionAndParams(params, path, 'x')`, `masterDataOf(this.options)` 를 본다. 이름을 변수로 받는 읽기는 보지 않는다.
+     */
+    function optionKeysRead(file: string): string[] {
+        const text = strip(readFileSync(path.resolve(__dirname, '..', file), 'utf8'));
+        const keys = [
+            ...text.matchAll(/this\.options\.(\w+)/g),
+            ...text.matchAll(/isOptionEnabled\(\s*'(\w+)'/g),
+            ...text.matchAll(/handleOptionAndParams\([^,()]*,[^,()]*,\s*'(\w+)'/g),
+        ].map((m) => m[1]!);
+        for (const m of text.matchAll(/safe\w*?(2?)\(\s*this\.options\s*,\s*'(\w+)'(?:\s*,\s*'(\w+)')?/g)) {
+            keys.push(m[2]!, ...(m[1] === '2' && m[3] !== undefined ? [m[3]] : []));
+        }
+        if (/masterDataOf\(\s*this\.options\s*\)/.test(text)) keys.push('masterData');
+        return [...new Set(keys)];
+    }
+
+    it('★소스가 읽는 옵션 키는 증권사가 기본값을 선언했거나 사용자만 넘기는 키다 — 읽는 쪽과 선언 쪽의 키 오타를 잡는다', () => {
+        const declared = BROKER_FILES.map(([file, make]) => [file, new Set(Object.keys(make().options))] as const);
+        // 기반 클래스가 읽는 키는 한 증권사만 선언해도 된다(`defaultType` 은 KB, `maxRetriesOnFailure` 는 KIS 만 선언한다).
+        const targets = [['base/Exchange.ts', new Set(declared.flatMap(([, keys]) => [...keys]))] as const, ...declared];
+        const undeclared = targets.flatMap(([file, known]) => {
+            const keys = optionKeysRead(file);
+            expect(keys.length, `${file} 에서 읽는 옵션 키를 찾지 못했다`).toBeGreaterThan(0);
+            return keys.filter((key) => !known.has(key) && !USER_ONLY_KEYS.has(key)).map((key) => `${file}: ${key}`);
+        });
+
+        expect(undeclared).toEqual([]);
     });
 });

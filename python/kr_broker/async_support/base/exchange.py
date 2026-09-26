@@ -11,7 +11,7 @@ HTTP 는 aiohttp 로 보낸다. 세션은 처음 요청할 때 열리고, 다 �
 
 import asyncio
 import logging
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Set, cast
 
 import aiohttp
 
@@ -22,7 +22,9 @@ from kr_broker.base.errors import (
     BaseError, ExchangeError, NetworkError, NotSupported, NullResponse, OperationFailed, OrderOutcomeUnknown, RequestTimeout,
 )
 from kr_broker.base.exchange import Exchange as BaseExchange, assert_secure_url, redact_body_for_log, redact_headers_for_log
-from kr_broker.base.types import ApiName, Int, Num, Str, Strings
+from kr_broker.base.types import (
+    ApiName, Balances, Int, MarketInterface, Num, Order, OrderBook, Str, Strings, Ticker, Tickers, Trade, TradingFeeInterface,
+)
 
 logger = logging.getLogger('kr_broker')
 
@@ -224,7 +226,7 @@ class Exchange(BaseExchange):
             option = await maybe_await(option())
         return option is True
 
-    async def load_markets(self, reload: bool = False, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:  # type: ignore[override]
+    async def load_markets(self, reload: bool = False, params: Optional[Dict[str, Any]] = None) -> Dict[str, MarketInterface]:  # type: ignore[override]
         """종목 목록을 받는다. 진행 중인 조회가 있으면 새로 부르지 않고 그 결과를 함께 기다린다(`reload` 는 새 조회를 띄운다).
         조회가 실패하면 진행 중 표시를 지워 다음 호출이 다시 부르게 한다."""
         task = self._markets_loading
@@ -239,7 +241,7 @@ class Exchange(BaseExchange):
                 self._markets_loading = None
             raise
 
-    async def _load_markets_helper(self, reload: bool, params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    async def _load_markets_helper(self, reload: bool, params: Optional[Dict[str, Any]]) -> Dict[str, MarketInterface]:
         if not reload and self.markets is not None:
             if self.markets_by_id is None:
                 return self.set_markets(self.markets)
@@ -248,7 +250,7 @@ class Exchange(BaseExchange):
         markets = await self.fetch_markets({} if params is None else params)
         return self.set_markets(markets, currencies)
 
-    async def fetch_markets(self, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:  # type: ignore[override]
+    async def fetch_markets(self, params: Optional[Dict[str, Any]] = None) -> List[MarketInterface]:  # type: ignore[override]
         return list((self.markets or {}).values())
 
     async def fetch_currencies(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:  # type: ignore[override]
@@ -262,7 +264,7 @@ class Exchange(BaseExchange):
     async def fetch_status(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:  # type: ignore[override]
         raise NotSupported(f'{self.id} fetch_status() is not supported yet')
 
-    async def fetch_ticker(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:  # type: ignore[override]
+    async def fetch_ticker(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> Ticker:  # type: ignore[override]
         if self.has.get('fetchTickers') not in (None, False):
             await self.load_markets()
             market = self.market(symbol)
@@ -270,88 +272,88 @@ class Exchange(BaseExchange):
             ticker = fn.safe_dict(tickers, market['symbol'])
             if ticker is None:
                 raise NullResponse(f'{self.id} fetch_tickers() could not find a ticker for {market["symbol"]}')
-            return ticker
+            return cast(Ticker, ticker)
         raise NotSupported(f'{self.id} fetch_ticker() is not supported yet')
 
-    async def fetch_tickers(self, symbols: Strings = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:  # type: ignore[override]
+    async def fetch_tickers(self, symbols: Strings = None, params: Optional[Dict[str, Any]] = None) -> Tickers:  # type: ignore[override]
         raise NotSupported(f'{self.id} fetch_tickers() is not supported yet')
 
     async def fetch_order_book(self, symbol: str, limit: Int = None,  # type: ignore[override]
-                               params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                               params: Optional[Dict[str, Any]] = None) -> OrderBook:
         raise NotSupported(f'{self.id} fetch_order_book() is not supported yet')
 
     async def fetch_ohlcv(self, symbol: str, timeframe: str = '1m', since: Int = None, limit: Int = None,  # type: ignore[override]
                           params: Optional[Dict[str, Any]] = None) -> List[List[Num]]:
         raise NotSupported(f'{self.id} fetch_ohlcv() is not supported yet')
 
-    async def fetch_balance(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:  # type: ignore[override]
+    async def fetch_balance(self, params: Optional[Dict[str, Any]] = None) -> Balances:  # type: ignore[override]
         raise NotSupported(f'{self.id} fetch_balance() is not supported yet')
 
     async def create_order(self, symbol: str, type: str, side: str, amount: float, price: Num = None,  # type: ignore[override]
-                           params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                           params: Optional[Dict[str, Any]] = None) -> Order:
         raise NotSupported(f'{self.id} create_order() is not supported yet')
 
     async def create_trigger_order(self, symbol: str, type: str, side: str, amount: float, price: Num = None,  # type: ignore[override]
-                                   trigger_price: Num = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                                   trigger_price: Num = None, params: Optional[Dict[str, Any]] = None) -> Order:
         raise NotSupported(f'{self.id} create_trigger_order() is not supported yet')
 
     async def edit_order(self, id: str, symbol: str, type: str, side: str, amount: Num = None, price: Num = None,  # type: ignore[override]
-                         params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                         params: Optional[Dict[str, Any]] = None) -> Order:
         raise NotSupported(f'{self.id} edit_order() is not supported yet')
 
     async def create_limit_order(self, symbol: str, side: str, amount: float, price: float,  # type: ignore[override]
-                                 params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                                 params: Optional[Dict[str, Any]] = None) -> Order:
         return await self.create_order(symbol, 'limit', side, amount, price, params)
 
     async def create_market_order(self, symbol: str, side: str, amount: float, price: Num = None,  # type: ignore[override]
-                                  params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                                  params: Optional[Dict[str, Any]] = None) -> Order:
         return await self.create_order(symbol, 'market', side, amount, price, params)
 
     async def create_limit_buy_order(self, symbol: str, amount: float, price: float,  # type: ignore[override]
-                                     params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                                     params: Optional[Dict[str, Any]] = None) -> Order:
         return await self.create_order(symbol, 'limit', 'buy', amount, price, params)
 
     async def create_limit_sell_order(self, symbol: str, amount: float, price: float,  # type: ignore[override]
-                                      params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                                      params: Optional[Dict[str, Any]] = None) -> Order:
         return await self.create_order(symbol, 'limit', 'sell', amount, price, params)
 
     async def create_market_buy_order(self, symbol: str, amount: float,  # type: ignore[override]
-                                      params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                                      params: Optional[Dict[str, Any]] = None) -> Order:
         return await self.create_order(symbol, 'market', 'buy', amount, None, params)
 
     async def create_market_sell_order(self, symbol: str, amount: float,  # type: ignore[override]
-                                       params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                                       params: Optional[Dict[str, Any]] = None) -> Order:
         return await self.create_order(symbol, 'market', 'sell', amount, None, params)
 
-    async def cancel_order(self, id: str, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:  # type: ignore[override]
+    async def cancel_order(self, id: str, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> Order:  # type: ignore[override]
         raise NotSupported(f'{self.id} cancel_order() is not supported yet')
 
     async def cancel_all_orders(self, symbol: Str = None,  # type: ignore[override]
-                                params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+                                params: Optional[Dict[str, Any]] = None) -> List[Order]:
         raise NotSupported(f'{self.id} cancel_all_orders() is not supported yet')
 
-    async def fetch_order(self, id: str, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:  # type: ignore[override]
+    async def fetch_order(self, id: str, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> Order:  # type: ignore[override]
         raise NotSupported(f'{self.id} fetch_order() is not supported yet')
 
     async def fetch_orders(self, symbol: Str = None, since: Int = None, limit: Int = None,  # type: ignore[override]
-                           params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+                           params: Optional[Dict[str, Any]] = None) -> List[Order]:
         raise NotSupported(f'{self.id} fetch_orders() is not supported yet')
 
     async def fetch_open_orders(self, symbol: Str = None, since: Int = None, limit: Int = None,  # type: ignore[override]
-                                params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+                                params: Optional[Dict[str, Any]] = None) -> List[Order]:
         if self.has.get('fetchOrders') not in (None, False):
             return fn.filter_by(await self.fetch_orders(symbol, since, limit, params), 'status', 'open')
         raise NotSupported(f'{self.id} fetch_open_orders() is not supported yet')
 
     async def fetch_closed_orders(self, symbol: Str = None, since: Int = None, limit: Int = None,  # type: ignore[override]
-                                  params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+                                  params: Optional[Dict[str, Any]] = None) -> List[Order]:
         if self.has.get('fetchOrders') not in (None, False):
             return fn.filter_by(await self.fetch_orders(symbol, since, limit, params), 'status', 'closed')
         raise NotSupported(f'{self.id} fetch_closed_orders() is not supported yet')
 
     async def fetch_my_trades(self, symbol: Str = None, since: Int = None, limit: Int = None,  # type: ignore[override]
-                              params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+                              params: Optional[Dict[str, Any]] = None) -> List[Trade]:
         raise NotSupported(f'{self.id} fetch_my_trades() is not supported yet')
 
-    async def fetch_trading_fee(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:  # type: ignore[override]
+    async def fetch_trading_fee(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> TradingFeeInterface:  # type: ignore[override]
         raise NotSupported(f'{self.id} fetch_trading_fee() is not supported yet')

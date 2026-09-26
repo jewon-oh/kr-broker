@@ -11,7 +11,7 @@ import json
 import math
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union, get_args, get_origin, get_type_hints, is_typeddict
 
 import aiohttp
 import pytest
@@ -21,6 +21,7 @@ import kr_broker
 import kr_broker.async_support
 from kr_broker.base import functions as fn
 from kr_broker.base.functions import deep_extend
+from kr_broker.base.types import Balance, Balances, Float, Int, Str
 from kr_broker.testing import reset_market_calendar
 
 FIXTURES = Path(__file__).resolve().parents[3] / 'ts' / 'src' / 'test' / 'static' / 'request'
@@ -181,6 +182,38 @@ def comparable(value: Any) -> Any:
     return value
 
 
+# `Balances` 는 키마다 값의 모양이 다르다. `kr_broker.base.types.Balances` 의 `__getitem__` 선언과 같다.
+_BALANCES_KEYS: Dict[str, Any] = {'info': Any, 'timestamp': Int, 'datetime': Str, 'free': Dict[str, Float], 'used': Dict[str, Float],
+                                  'total': Dict[str, Float], 'debt': Dict[str, Float]}
+
+
+def _shape_errors(value: Any, hint: Any, path: str = 'result') -> List[str]:
+    """결과가 메서드에 적은 반환 타입과 어긋나는 곳. `TypedDict` 는 필수 키가 다 있고 적지 않은 키가 없어야 하며, 값의 타입도 안쪽까지 본다."""
+    if hint is Any:
+        return []
+    if get_origin(hint) is Union:
+        branches = [_shape_errors(value, arg, path) for arg in get_args(hint)]
+        return [] if any(not errors for errors in branches) else [f'{path}: {value!r} 는 {hint} 가 아니다']
+    if get_origin(hint) is list:
+        if not isinstance(value, list):
+            return [f'{path}: 목록이 아니다']
+        return [error for item in value for error in _shape_errors(item, get_args(hint)[0], f'{path}[]')]
+    if hint is Balances or get_origin(hint) is dict or is_typeddict(hint):
+        if not isinstance(value, dict):
+            return [f'{path}: 사전이 아니다']
+        if is_typeddict(hint):
+            fields = get_type_hints(hint)
+            missing, extra = getattr(hint, '__required_keys__') - value.keys(), value.keys() - fields.keys()
+            if missing or extra:
+                return [f'{path}: {hint.__name__} 에 빠진 키 {sorted(missing)}, 적지 않은 키 {sorted(extra)}']
+        else:
+            fields = {key: _BALANCES_KEYS.get(key, Balance) if hint is Balances else get_args(hint)[1] for key in value}
+        return [error for key, item in value.items() for error in _shape_errors(item, fields[key], f'{path}.{key}')]
+    if hint is float:
+        return [] if isinstance(value, (int, float)) and not isinstance(value, bool) else [f'{path}: {value!r} 는 float 가 아니다']
+    return [] if isinstance(value, hint) else [f'{path}: {value!r} 는 {hint} 가 아니다']
+
+
 @pytest.fixture(autouse=True)
 def _fresh_market_calendar() -> Any:
     # 휴장일 캘린더는 모듈 전역이라 앞 케이스가 받은 캘린더가 다음 케이스의 세션 판정에 섞이지 않게 비운다.
@@ -247,6 +280,9 @@ def test_request_fixture(fixture: Dict[str, Any], case: Dict[str, Any], flavor: 
         if error is not None:
             raise error
         assert comparable(result) == comparable(case['output'])
+        # 반환 타입(`Order`, `Balances` 등)이 실제 결과와 어긋나지 않는지 본다.
+        owner = getattr(kr_broker if flavor == 'sync' else kr_broker.async_support, fixture['broker'])
+        assert _shape_errors(result, get_type_hints(getattr(owner, case['method'])).get('return', Any)) == []
     for key, state in case.get('tokenStoreAfter', {}).items():
         assert (key in store.values) == (state == 'present'), f'{key} 는 {state} 여야 한다'
 

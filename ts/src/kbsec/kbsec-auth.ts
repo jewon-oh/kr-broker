@@ -19,8 +19,9 @@ import { refreshTokenWithLock } from '../token-refresh-lock';
 import { logger } from '../logger';
 import type { BrokerTokenStore } from '../options';
 import { legacyTokenStoreKey, tokenStoreKey, withLegacyTokenKeys } from '../token-store-key';
-import { BaseError, ExchangeNotAvailable, NetworkError, RateLimitExceeded, RequestTimeout } from '../base/errors';
+import { AuthenticationError, BaseError, ExchangeNotAvailable, NetworkError, RateLimitExceeded, RequestTimeout } from '../base/errors';
 import type { FetchSignal } from '../base/types';
+import { isKbsecBusinessError, type KbsecResponseHeader } from './kbsec-envelope';
 
 
 import {
@@ -357,6 +358,8 @@ export class KbsecAuth {
         // 형태별 오류를 **전부** 모아 던진다. 마지막 시도(`flat`)는 서버가 늘 `E021 앱키로 앱정보 추출 중 오류` 로 답하므로,
         // 그 오류만 던지면 진짜 원인(envelope 응답)이 가려진다.
         const failures: string[] = [];
+        // `brokerCode` 는 첫 형태의 업무 코드만 싣는다. flat 의 E021 을 실으면 위와 같은 이유로 원인을 잘못 가리킨다.
+        let brokerCode: string | undefined;
         for (const shape of shapes) {
             try {
                 const token = await this.requestToken(shape);
@@ -366,6 +369,7 @@ export class KbsecAuth {
                 // 연결 실패, 시간 초과, 5xx, 429 는 본문 형태와 관계없다. 다른 형태로 다시 보내면 KB 가 제한하는 발급 요청만 늘므로
                 // 그 오류를 그대로 던진다. 호출부는 자격증명 오류가 아니라 일시 장애로 읽는다.
                 if (err instanceof NetworkError) throw err;
+                if (failures.length === 0 && err instanceof BaseError) brokerCode = err.brokerCode;
                 failures.push(`${shape}: ${String(err)}`);
                 logger.warn(
                     { shape, err: String(err) },
@@ -374,7 +378,7 @@ export class KbsecAuth {
             }
         }
         // 정답 형태(envelope)가 앞에 오므로 목록 순서 그대로가 곧 진단 우선순위다.
-        throw new Error(`[KBSecAuth] 토큰 발급 실패 — 시도한 본문 형태 전부 실패\n  ${failures.join('\n  ')}`);
+        throw new AuthenticationError(`[KBSecAuth] 토큰 발급 실패 — 시도한 본문 형태 전부 실패\n  ${failures.join('\n  ')}`, { brokerCode });
     }
 
     private async requestToken(shape: 'envelope' | 'flat'): Promise<string> {
@@ -388,8 +392,9 @@ export class KbsecAuth {
             const message = `KB증권 토큰 발급 오류: ${res.status} ${text.slice(0, 300)}`;
             if (res.status === 429) throw new RateLimitExceeded(message);
             // KB 는 자격증명 오류(E021 등)도 HTTP 500 과 봉투의 processCode 로 준다. 업무 코드가 없는 5xx 만 일시 장애다.
-            if (res.status >= 500 && kbsecProcessCodeOf(text) === undefined) throw new ExchangeNotAvailable(message);
-            throw new Error(message);
+            const brokerCode = kbsecProcessCodeOf(text);
+            if (res.status >= 500 && brokerCode === undefined) throw new ExchangeNotAvailable(message);
+            throw new AuthenticationError(message, { brokerCode });
         }
 
         let parsed: KbsecResponseEnvelope<KbsecTokenResponse> & KbsecTokenResponse;
@@ -403,7 +408,9 @@ export class KbsecAuth {
         const payload: KbsecTokenResponse = parsed.dataBody ?? parsed;
         const accessToken = payload.access_token ?? payload.accessToken;
         if (!accessToken) {
-            throw new Error(`KB증권 토큰 응답에 access_token 없음: ${text.slice(0, 200)}`);
+            // KB 는 발급 거절을 HTTP 200 과 빈 토큰, 실패 봉투(`processFlag B`)로도 준다.
+            const brokerCode = isKbsecBusinessError(parsed.dataHeader as KbsecResponseHeader | undefined) ? kbsecProcessCodeOf(text) : undefined;
+            throw new AuthenticationError(`KB증권 토큰 응답에 access_token 없음: ${text.slice(0, 200)}`, { brokerCode });
         }
 
         const ttlMs = typeof payload.expires_in === 'number' && payload.expires_in > 0

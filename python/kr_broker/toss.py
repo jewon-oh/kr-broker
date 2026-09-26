@@ -42,7 +42,7 @@ ccxt 와 같은 모양으로 다룬다. 실시간(`watch_*`)은 이 클래스를
 import json
 import logging
 import math
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, cast
 
 from kr_broker.abstract.toss import ImplicitAPI
 from kr_broker.base.exchange import Exchange
@@ -60,7 +60,9 @@ from kr_broker.base.errors import (
 )
 from kr_broker.base.precise import Precise
 from kr_broker.base.token_store import BrokerTokenStore, legacy_token_store_key, token_store_key
-from kr_broker.base.types import ApiName, Int, Num, Str, Strings
+from kr_broker.base.types import (
+    ApiName, Balances, Int, Market, MarketInterface, Num, Order, OrderBook, Str, Strings, Ticker, Tickers, Trade, TradingFeeInterface,
+)
 from kr_broker.broker_market_group import symbol_base_code
 from kr_broker.broker_time import KST_OFFSET_MS, candle_period_utc_ms, is_daily_or_longer_timeframe
 from kr_broker.edit_order_amount import assert_whole_remaining_edit, edit_order_total
@@ -698,7 +700,7 @@ class toss(Exchange, ImplicitAPI):
 
     # ============ 종목 ============
 
-    def _market_from_symbol(self, symbol: str) -> Dict[str, Any]:
+    def _market_from_symbol(self, symbol: str) -> MarketInterface:
         """심볼(`005930`, `005930/KRW`, `AAPL`)에서 종목을 만든다. 종목을 불러오지 않았을 때 코드의 모양으로 시장을 판별한다.
         클래스 주식의 `BRK/B` 는 통합 표기 `BRK.B` 로 바꾼다. `commonStockCodes` 의 통합 코드는 티커로 돌려 id 로 쓴다."""
         code = self.stock_ticker(symbol_base_code(symbol))
@@ -721,7 +723,7 @@ class toss(Exchange, ImplicitAPI):
             'options': {'country': country},
         })
 
-    def market(self, symbol: Str) -> Dict[str, Any]:
+    def market(self, symbol: Str) -> MarketInterface:
         """통합 심볼(또는 종목 id)로 종목을 찾는다. 불러온 종목이 있으면 그것을, 없으면 심볼의 모양으로 만든다.
         토스에 없는 종목도 여기서는 막지 않는다. 주문을 보내면 토스가 `stock-not-found`(`BadSymbol`)로 알려 준다.
         옛 심볼(`USD/USD`)처럼 모양으로 만든 심볼이 불러온 종목에 있으면 그 종목을 쓴다."""
@@ -736,8 +738,8 @@ class toss(Exchange, ImplicitAPI):
         shaped = self._market_from_symbol(symbol)
         return (self.markets or {}).get(shaped['symbol'], shaped)
 
-    def safe_market(self, market_id: Str = None, market: Optional[Dict[str, Any]] = None, delimiter: Str = None,
-                    market_type: Str = None) -> Dict[str, Any]:
+    def safe_market(self, market_id: Str = None, market: Market = None, delimiter: Str = None,
+                    market_type: Str = None) -> MarketInterface:
         if market_id is not None:
             candidates = (self.markets_by_id or {}).get(market_id)
             if candidates:
@@ -747,7 +749,7 @@ class toss(Exchange, ImplicitAPI):
             return self._market_from_symbol(market_id)
         return market if market is not None else self.safe_market_structure({'symbol': None})
 
-    def fetch_markets(self, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def fetch_markets(self, params: Optional[Dict[str, Any]] = None) -> List[MarketInterface]:
         """토스가 거래할 수 있는 종목 전체를 마켓별로 받는다(`GET /stocks/all`, 마켓당 한 번). `params['markets']` 로 마켓을 좁힌다."""
         params = {} if params is None else params
         markets = self.safe_list(params, 'markets')
@@ -761,7 +763,7 @@ class toss(Exchange, ImplicitAPI):
                 result.append(self.parse_market(self.extend(row, {'market': market})))
         return result
 
-    def parse_market(self, market: Dict[str, Any]) -> Dict[str, Any]:
+    def parse_market(self, market: Dict[str, Any]) -> MarketInterface:
         """`GET /stocks/all` 의 한 행(요청한 `market` 을 더한 것)을 종목으로 옮긴다."""
         market_id = self.safe_string(market, 'symbol')
         if market_id is None:
@@ -798,7 +800,7 @@ class toss(Exchange, ImplicitAPI):
         })
 
     @staticmethod
-    def _country_of(market: Dict[str, Any]) -> str:
+    def _country_of(market: MarketInterface) -> str:
         return 'KR' if market.get('quote') == 'KRW' else 'US'
 
     def price_to_precision(self, symbol: Str, price: Any) -> Str:
@@ -815,7 +817,7 @@ class toss(Exchange, ImplicitAPI):
             return fn.number_to_string(price)
         return decimal_to_precision(price, ROUND, get_krx_tick_size(fn.js_number(price)), TICK_SIZE, NO_PADDING)
 
-    def _assert_krx_tick_aligned(self, market: Dict[str, Any], price: Any, method: str) -> None:
+    def _assert_krx_tick_aligned(self, market: MarketInterface, price: Any, method: str) -> None:
         """국내 지정가가 호가 단위 표에 맞지 않으면 요청 전에 `InvalidOrder` 다. 불러온 종목이 주식(`STOCK`)일 때만 검사하고, 종목 유형을
         모르거나(`load_markets` 전) ETF·ETN 이면 서버에 맡긴다. 서버도 같은 경우를 `price-tick-invalid` 로 거절한다."""
         if self._country_of(market) != 'KR' or self.safe_string(market.get('options'), 'securityType') != 'STOCK':
@@ -824,7 +826,7 @@ class toss(Exchange, ImplicitAPI):
         if violation is not None:
             raise InvalidOrder(f'{self.id} {method}() {violation} ({market["symbol"]})', detail=KRX_TICK_INVALID_DETAIL)
 
-    def _order_price_string(self, market: Dict[str, Any], price: Any) -> Str:
+    def _order_price_string(self, market: MarketInterface, price: Any) -> Str:
         """요청 본문의 지정가. 국내는 호가에 맞추지 않고 그대로 보낸다(맞지 않는 가격은 `_assert_krx_tick_aligned` 가 막거나 서버가 거절한다)."""
         if price is None:
             return None
@@ -915,7 +917,7 @@ class toss(Exchange, ImplicitAPI):
 
     # ============ 시세 ============
 
-    def parse_ticker(self, ticker: Dict[str, Any], market: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def parse_ticker(self, ticker: Dict[str, Any], market: Market = None) -> Ticker:
         market = self.safe_market(self.safe_string(ticker, 'symbol'), market)
         timestamp = self.parse8601(self.safe_string(ticker, 'timestamp'))
         last = self.safe_string(ticker, 'lastPrice')
@@ -929,7 +931,7 @@ class toss(Exchange, ImplicitAPI):
             'info': ticker,
         }, market)
 
-    def fetch_ticker(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def fetch_ticker(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> Ticker:
         market = self.market(symbol)
         rows = self.to_array(self.unwrap(self.private_market_get_prices(self.extend({'symbols': market['id']}, params))))
         row = next((candidate for candidate in rows if self.safe_string(candidate, 'symbol') == market['id']), None)
@@ -939,12 +941,12 @@ class toss(Exchange, ImplicitAPI):
             raise NullResponse(f"{self.id} fetchTicker() 응답에 {market['id']} 가 없다")
         return self.parse_ticker(row, market)
 
-    def fetch_tickers(self, symbols: Strings = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def fetch_tickers(self, symbols: Strings = None, params: Optional[Dict[str, Any]] = None) -> Tickers:
         """여러 종목의 현재가. 토스는 한 번에 200종목까지 받는다. 종목을 주지 않으면 `ArgumentsRequired`(전 종목 시세는 없다)."""
         if not symbols:
             raise ArgumentsRequired(f'{self.id} fetchTickers() requires a list of symbols')
         unified = self.market_symbols(symbols)
-        ids = [self.market(symbol)['id'] for symbol in unified]
+        ids = [cast(str, self.market(symbol)['id']) for symbol in unified]
         rows: List[Any] = []
         batch = 200
         for i in range(0, len(ids), batch):
@@ -952,7 +954,7 @@ class toss(Exchange, ImplicitAPI):
             rows.extend(self.to_array(self.unwrap(response)))
         return self.parse_tickers(rows, unified)
 
-    def fetch_order_book(self, symbol: str, limit: Int = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def fetch_order_book(self, symbol: str, limit: Int = None, params: Optional[Dict[str, Any]] = None) -> OrderBook:
         market = self.market(symbol)
         response = self.unwrap(self.private_market_get_orderbook(self.extend({'symbol': market['id']}, params)))
         timestamp = self.parse8601(self.safe_string(response, 'timestamp'))
@@ -1031,7 +1033,7 @@ class toss(Exchange, ImplicitAPI):
         result.sort(key=lambda row: row[0])
         return result[-target:] if since is None else result[:target]
 
-    def parse_ohlcv(self, ohlcv: Any, market: Optional[Dict[str, Any]] = None) -> List[Any]:
+    def parse_ohlcv(self, ohlcv: Any, market: Market = None) -> List[Any]:
         return [
             self.parse8601(self.safe_string(ohlcv, 'timestamp')),
             self.safe_number(ohlcv, 'openPrice'),
@@ -1043,7 +1045,7 @@ class toss(Exchange, ImplicitAPI):
 
     # ============ 잔고 ============
 
-    def fetch_balance(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def fetch_balance(self, params: Optional[Dict[str, Any]] = None) -> Balances:
         """잔고. 현금은 통화 키(`KRW`·`USD`)이고 값은 현금 매수 가능 금액이며, 보유 종목은 `market['base']` 키이고 `total` 이 보유 수량이다.
 
         `params['symbol']` 을 주면 그 종목의 보유만, `params['currency']`(`KRW`·`USD`)를 주면 그 현금만 받는다. 둘 다 주면 그 종목의 보유와
@@ -1105,7 +1107,7 @@ class toss(Exchange, ImplicitAPI):
             raise BadResponse(f'{self.id} 매수 가능 금액 응답에 cashBuyingPower 가 없거나 숫자가 아니다: {buying_power!r}')
         return cash if cash > 0 else 0
 
-    def parse_balance(self, response: Any) -> Dict[str, Any]:
+    def parse_balance(self, response: Any) -> Balances:
         """`fetch_balance` 가 모은 응답(`{'holdings', 'sellable', 'buyingPower', 'integrated'}`)을 잔고 구조로 옮긴다.
 
         `sellable` 은 종목 id 별 매도 가능 수량이다. 보유 종목의 `free` 는 그 값이고 없으면 비운다. `used` 는 `safe_balance` 가 `total − free` 로 채운다.
@@ -1161,7 +1163,7 @@ class toss(Exchange, ImplicitAPI):
         self._commissions_fetched_at = _now_ms()
         logger.info('[toss] 수수료율을 갱신했다: %s', self._commission_rates)
 
-    def fetch_trading_fee(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def fetch_trading_fee(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> TradingFeeInterface:
         """위탁수수료율. `maker` 와 `taker` 는 같다. 국내 매도에 붙는 증권거래세는 별도다."""
         self.refresh_commissions()
         market = self.market(symbol)
@@ -1236,7 +1238,7 @@ class toss(Exchange, ImplicitAPI):
         return floored
 
     def create_order(self, symbol: str, type: str, side: str, amount: float, price: Num = None,
-                     params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                     params: Optional[Dict[str, Any]] = None) -> Order:
         """주문을 낸다. `params['triggerPrice']` 가 있으면 조건주문이다. 인자의 뜻은 모듈 설명을 본다.
 
         확장세션(프리·애프터, 미국 주간거래)에서 시장가 주문은 매수와 매도 모두 지정가로 바꿔 낸다(옵션 `nxtRouting`·`usExtendedLimit` 이 켜져 있을 때만).
@@ -1348,7 +1350,7 @@ class toss(Exchange, ImplicitAPI):
         return self._build_created_order(draft, status, snapshot=snapshot, raw=last)
 
     def edit_order(self, id: str, symbol: str, type: str, side: str, amount: Num = None, price: Num = None,
-                   params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                   params: Optional[Dict[str, Any]] = None) -> Order:
         """주문을 정정한다. 잔량 전부를 새 가격으로 옮긴다. 국내는 정정 본문의 수량(`quantity`)에 주문 상세(`GET /orders/{orderId}`)로 읽은
         잔량을 싣고, 미국은 가격만 보낸다. `amount` 는 ccxt 와 같이 정정 뒤 주문의 총수량(체결분 포함)이고, 주면 주문 상세로 대조해 총수량과
         다르면 정정 요청 없이 `NotSupported` 다. 명세의 `quantity` 뜻이 정해지지 않아 국내는 체결 없는 주문만 정정하고, 일부 체결된 주문은
@@ -1449,13 +1451,13 @@ class toss(Exchange, ImplicitAPI):
             return 0
 
     def create_trigger_order(self, symbol: str, type: str, side: str, amount: float, price: Num = None, trigger_price: Num = None,
-                             params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                             params: Optional[Dict[str, Any]] = None) -> Order:
         """조건주문을 낸다. `create_order(..., {'triggerPrice': ...})` 와 같다. `trigger_price` 가 없으면 요청 없이 `ArgumentsRequired` 다."""
         if trigger_price is None:
             raise ArgumentsRequired(f'{self.id} createTriggerOrder() requires a triggerPrice argument')
         return self.create_order(symbol, type, side, amount, price, self.extend(params, {'triggerPrice': trigger_price}))
 
-    def create_market_buy_order_with_cost(self, symbol: str, cost: float, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def create_market_buy_order_with_cost(self, symbol: str, cost: float, params: Optional[Dict[str, Any]] = None) -> Order:
         """미국 주식 시장가 매수를 금액으로 낸다(`create_order` 의 `params['cost']`). 국내는 금액 주문 API 가 없어 요청 없이 `NotSupported` 다."""
         if self._country_of(self.market(symbol)) != 'US':
             raise NotSupported(f'{self.id} createMarketBuyOrderWithCost() 는 미국 종목만 지원한다: {symbol}')
@@ -1565,7 +1567,7 @@ class toss(Exchange, ImplicitAPI):
         return snapshot, last['raw']
 
     def _build_created_order(self, draft: Dict[str, Any], status: Str, still_open: Optional[bool] = None,
-                             snapshot: Optional[Dict[str, Any]] = None, raw: Any = None) -> Dict[str, Any]:
+                             snapshot: Optional[Dict[str, Any]] = None, raw: Any = None) -> Order:
         """접수 결과로 주문 구조를 만든다. 체결을 확정하지 못했으면 `filled` 를 비운다(요청값으로 추정해 채우지 않는다)."""
         timestamp = self.parse8601(self.safe_value(raw, 'orderedAt'))
         if timestamp is None:
@@ -1664,7 +1666,7 @@ class toss(Exchange, ImplicitAPI):
         unit = first['orderPrice'] if first['orderPrice'] is not None else first['triggerPrice']
         return amount * unit if _is_finite_number(amount) and _is_finite_number(unit) else math.nan
 
-    def _conditional_order_fields(self, market: Dict[str, Any], amount: float, plan: Dict[str, Any]) -> Dict[str, Any]:
+    def _conditional_order_fields(self, market: MarketInterface, amount: float, plan: Dict[str, Any]) -> Dict[str, Any]:
         """조건주문 등록과 정정이 같이 보내는 필드(수량, 호가유형, 만료일, 감시조건, 고액주문 확인)."""
         order_type = plan['orderType']
         fields: Dict[str, Any] = {
@@ -1680,8 +1682,8 @@ class toss(Exchange, ImplicitAPI):
             fields['confirmHighValueOrder'] = True
         return fields
 
-    def _create_conditional_order(self, market: Dict[str, Any], type: str, side: str, amount: float, price: Num,
-                                  params: Dict[str, Any]) -> Dict[str, Any]:
+    def _create_conditional_order(self, market: MarketInterface, type: str, side: str, amount: float, price: Num,
+                                  params: Dict[str, Any]) -> Order:
         """조건주문을 등록한다(`create_order` 가 `params['triggerPrice']` 를 보고 부른다)."""
         plan = self._plan_conditional_order(type, side, price, params)
         order_type = plan['orderType']
@@ -1713,8 +1715,8 @@ class toss(Exchange, ImplicitAPI):
             'trades': [],
         }, market)
 
-    def _modify_conditional_order(self, id: str, market: Dict[str, Any], type: str, side: str, amount: float, price: Num,
-                                  params: Dict[str, Any]) -> Dict[str, Any]:
+    def _modify_conditional_order(self, id: str, market: MarketInterface, type: str, side: str, amount: float, price: Num,
+                                  params: Dict[str, Any]) -> Order:
         """조건주문을 정정한다(`edit_order` 가 `params['trigger']` 로 부른다). 등록과 같은 필드 전체를 다시 보낸다.
         정정하면 새 조건주문 번호가 나오고 옛 번호는 무효가 된다."""
         plan = self._plan_conditional_order(type, side, price, params)
@@ -1780,7 +1782,7 @@ class toss(Exchange, ImplicitAPI):
             return 'expired'
         return 'open'
 
-    def _parse_conditional_order(self, conditional: Dict[str, Any], market: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def _parse_conditional_order(self, conditional: Dict[str, Any], market: Market = None) -> Order:
         """조건주문 조회 응답을 주문 구조로 옮긴다. 첫 조건(leg)이 대표이고 `triggerPrice` 에 트리거 가격이 실린다.
         방향은 응답에 실려 오면 그 값을, 없으면 종류로 유추한 값을 쓴다. 종류는 `info['type']` 이다."""
         market = self.safe_market(self.safe_string(conditional, 'symbol'), market)
@@ -1827,7 +1829,7 @@ class toss(Exchange, ImplicitAPI):
         }
         return self.safe_string(statuses, status, status)
 
-    def parse_order(self, order: Dict[str, Any], market: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def parse_order(self, order: Dict[str, Any], market: Market = None) -> Order:
         """`GET /orders` 의 주문 하나를 주문 구조로 옮긴다. 체결 결과(`execution`)와 수수료·세금도 싣는다."""
         market = self.safe_market(self.safe_string(order, 'symbol'), market)
         execution = self.safe_dict(order, 'execution', {})
@@ -1858,7 +1860,7 @@ class toss(Exchange, ImplicitAPI):
             'trades': [],
         }, market)
 
-    def fetch_order(self, id: str, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def fetch_order(self, id: str, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> Order:
         """주문 하나. `params['trigger']` 가 `True` 면 조건주문이다."""
         trigger = self.safe_bool_2(params, 'trigger', 'stop', False) is True
         market = self.market(symbol) if symbol is not None else None
@@ -1869,7 +1871,7 @@ class toss(Exchange, ImplicitAPI):
         return self.parse_order(self.unwrap(response), market)
 
     def fetch_open_orders(self, symbol: Str = None, since: Int = None, limit: Int = None,
-                          params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+                          params: Optional[Dict[str, Any]] = None) -> List[Order]:
         """미체결 주문. `symbol` 을 주면 그 종목만 받는다. 조건주문은 별도 장부라서 `params['trigger']` 는 조건주문만,
         `params['includeTrigger']` 는 일반 주문에 조건주문을 합쳐 돌려준다. 조회에 실패하면 던진다("스톱이 없다"로 읽히는 빈 목록으로 바꾸지 않는다)."""
         params = {} if params is None else params
@@ -1877,7 +1879,7 @@ class toss(Exchange, ImplicitAPI):
         include_trigger = self.safe_bool(params, 'includeTrigger', False) is True
         query = self.omit(params, ['trigger', 'stop', 'includeTrigger'])
         market = self.market(symbol) if symbol is not None else None
-        orders: List[Dict[str, Any]] = []
+        orders: List[Order] = []
         if not trigger_only:
             request: Dict[str, Any] = {'status': 'OPEN'}
             if market is not None:
@@ -1892,7 +1894,7 @@ class toss(Exchange, ImplicitAPI):
             orders = orders + [self._parse_conditional_order(row, market) for row in rows]
         return self.filter_by_symbol_since_limit(self.sort_by(orders, 'timestamp'), market['symbol'] if market is not None else None, since, limit)
 
-    def _fetch_open_conditional_rows(self, market: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _fetch_open_conditional_rows(self, market: Market) -> List[Dict[str, Any]]:
         """미체결 조건주문 원본을 커서로 끝까지 이어 받는다(공식 기본이 20건이라 커서 없이는 잘린다). 쪽 수 상한을 넘기면 로그를 남기고 자른다.
         조회가 실패하면 던진다. 앞쪽만 돌려주면 뒤쪽의 스톱이 없는 것으로 읽힌다."""
         request: Dict[str, Any] = {'status': 'OPEN', 'limit': CONDITIONAL_ORDER_PAGE_LIMIT}
@@ -1917,18 +1919,18 @@ class toss(Exchange, ImplicitAPI):
         return collected
 
     def fetch_closed_orders(self, symbol: Str = None, since: Int = None, limit: Int = None,
-                            params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+                            params: Optional[Dict[str, Any]] = None) -> List[Order]:
         """전량 체결된 주문(`status: 'closed'`). 토스의 종료된 주문(`CLOSED`)에 섞인 취소, 거부, 정정 대체 주문은 거른다. 취소된 주문은
         `fetch_canceled_orders` 로 받는다. `params['until']`(ms)은 그 시각까지의 주문만 받는다. 100건씩 최대 10쪽까지 받는다."""
         return self._fetch_ended_orders('closed', symbol, since, limit, params)
 
     def fetch_canceled_orders(self, symbol: Str = None, since: Int = None, limit: Int = None,
-                              params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+                              params: Optional[Dict[str, Any]] = None) -> List[Order]:
         """취소된 주문(정정으로 대체된 원주문 포함). `fetch_closed_orders` 와 같은 조회에서 `status: 'canceled'` 만 거른다."""
         return self._fetch_ended_orders('canceled', symbol, since, limit, params)
 
     def _fetch_ended_orders(self, status: str, symbol: Str, since: Int, limit: Int,
-                            params: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+                            params: Optional[Dict[str, Any]]) -> List[Order]:
         market = self.market(symbol) if symbol is not None else None
         params = {} if params is None else params
         until = self.safe_integer(params, 'until')
@@ -1943,7 +1945,7 @@ class toss(Exchange, ImplicitAPI):
         rows = self._fetch_closed_order_rows(market, since, limit, params, keep)
         return self.parse_orders(rows, market, since, limit)
 
-    def _fetch_closed_order_rows(self, market: Optional[Dict[str, Any]], since: Int, limit: Int,
+    def _fetch_closed_order_rows(self, market: Market, since: Int, limit: Int,
                                  params: Dict[str, Any], keep: Callable[[Dict[str, Any]], bool]) -> List[Dict[str, Any]]:
         """종료된 주문 원본을 커서로 이어 받고 `keep` 에 맞는 행만 남긴다. 개수만 정한 조회는 남긴 행이 `limit` 에 이르면 멈춘다."""
         request: Dict[str, Any] = {'status': 'CLOSED', 'limit': CLOSED_ORDER_PAGE_LIMIT}
@@ -1978,7 +1980,7 @@ class toss(Exchange, ImplicitAPI):
         return collected
 
     def fetch_my_trades(self, symbol: Str = None, since: Int = None, limit: Int = None,
-                        params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+                        params: Optional[Dict[str, Any]] = None) -> List[Trade]:
         """체결 내역. 토스에는 체결 단위 조회가 없어 체결이 있는 주문 하나를 거래 하나로 본다. 종료된 주문과 함께 일부 체결된 채 걸려 있는
         미체결 주문도 넣는다. 거래 id 는 주문번호이고 수량은 누적 체결 수량이라, 체결이 늘면 같은 id 의 거래가 더 큰 수량으로 다시 나온다.
         거래를 쌓는 쪽은 id 로 덮어써야 한다. 가격은 평균 체결가, 수수료는 브로커가 확정한 `execution.commission` 과 `execution.tax` 의 합이다."""
@@ -1997,11 +1999,11 @@ class toss(Exchange, ImplicitAPI):
         until = self.safe_integer(params, 'until')
         trades = self.parse_trades(ended + open_rows, market, since)
         if until is not None:
-            trades = [trade for trade in trades if trade['timestamp'] <= until]
+            trades = [trade for trade in trades if cast(int, trade['timestamp']) <= until]
         return self.filter_by_since_limit(trades, since, limit)
 
     def fetch_trades(self, symbol: str, since: Int = None, limit: Int = None,
-                     params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+                     params: Optional[Dict[str, Any]] = None) -> List[Trade]:
         """당일 최근 체결 내역(`GET /trades`, 최대 50건, 기본 50건). 체결가와 체결수량, 체결시각만 오고 방향(매수·매도)과 체결 id 는 없다.
         자기 주문의 체결(`fetch_my_trades`)과 행 모양이 달라 따로 옮긴다."""
         market = self.market(symbol)
@@ -2012,7 +2014,7 @@ class toss(Exchange, ImplicitAPI):
         trades = [self._parse_public_trade(row, market) for row in fn.to_array(response)]
         return trades if since is None else [trade for trade in trades if (trade['timestamp'] or 0) >= since]
 
-    def _parse_public_trade(self, trade: Dict[str, Any], market: Dict[str, Any]) -> Dict[str, Any]:
+    def _parse_public_trade(self, trade: Dict[str, Any], market: MarketInterface) -> Trade:
         timestamp = self.parse8601(self.safe_string(trade, 'timestamp'))
         return self.safe_trade({
             'info': trade, 'id': None, 'order': None, 'timestamp': timestamp, 'datetime': self.iso8601(timestamp), 'symbol': market['symbol'],
@@ -2020,7 +2022,7 @@ class toss(Exchange, ImplicitAPI):
             'cost': None, 'fee': None,
         }, market)
 
-    def parse_trade(self, trade: Dict[str, Any], market: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def parse_trade(self, trade: Dict[str, Any], market: Market = None) -> Trade:
         """체결된 주문 하나를 거래 하나로 옮긴다. 체결 시각은 최종 체결 시각(없으면 주문 시각)이다."""
         market = self.safe_market(self.safe_string(trade, 'symbol'), market)
         execution = self.safe_dict(trade, 'execution', {})
@@ -2052,7 +2054,7 @@ class toss(Exchange, ImplicitAPI):
             'fee': {'currency': self.safe_string(trade, 'currency', market['quote']), 'cost': fee_cost} if fee_cost is not None else None,
         }, market)
 
-    def cancel_order(self, id: str, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def cancel_order(self, id: str, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> Order:
         """주문을 취소한다. `params['trigger']` 가 `True` 면 조건주문 취소다. 이미 체결·취소된 주문이면 `OrderNotFound` 다.
         응답 원본은 `info` 에 있고, 취소 응답 본문이 비어 있어도 성공이다.
 
@@ -2102,7 +2104,7 @@ class toss(Exchange, ImplicitAPI):
                 break
         return last
 
-    def cancel_all_orders(self, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def cancel_all_orders(self, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> List[Order]:
         """미체결 주문을 모두 취소한다(토스에는 전체 취소가 없어 조회한 주문을 하나씩 취소한다). `params['includeTrigger']` 면 조건주문도 취소한다.
         돌려주는 목록은 대상 주문 전부이고, 항목은 미체결 조회로 받은 주문이다. 취소를 접수한 것은 `cancel_order` 가 돌려준 상태이고(확정하지 못하면
         비어 있다) 그 `info`(취소 응답 원문과 조회한 원주문 `order`)가 `info['cancelResponse']` 에 있다. 확정 조회를 주문마다 하므로 미확정 주문이 많으면
@@ -2115,7 +2117,7 @@ class toss(Exchange, ImplicitAPI):
         for order in orders:
             trigger = self.safe_string(order.get('info'), 'conditionalOrderId') is not None
             try:
-                canceled = self.cancel_order(order['id'], order.get('symbol'), {'trigger': trigger})
+                canceled = self.cancel_order(cast(str, order['id']), order.get('symbol'), {'trigger': trigger})
                 results.append(self.extend(order, {'status': canceled.get('status'), 'info': self.extend(order.get('info'), {'cancelResponse': canceled.get('info')})}))
             except OrderNotFound as error:
                 detail = getattr(error, 'detail', None)

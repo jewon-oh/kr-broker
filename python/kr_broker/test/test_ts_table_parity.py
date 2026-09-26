@@ -7,9 +7,10 @@
 import calendar
 import re
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Set, Tuple, get_type_hints
 
 from kr_broker import broker_krx_code, broker_market_group, krx_sell_tax, krx_tick_size
+from kr_broker.base import types as base_types
 from kr_broker.async_support.kis import KIS_EXCEPTIONS_EXACT
 
 TS = Path(__file__).resolve().parents[3] / 'ts' / 'src'
@@ -86,3 +87,32 @@ def test_market_group_tables_match() -> None:
     # 종목 통합 코드는 공백이 든 이름이라 `_pairs` 대신 따옴표 안을 통째로 읽는다.
     stock_codes = dict(re.findall(r"(\w+):\s*'([^']+)'\s*,", _literal(text, 'COMMON_STOCK_CODES', '{', '};')))
     assert stock_codes and stock_codes == dict(broker_market_group.COMMON_STOCK_CODES)
+
+
+def _interface_body(text: str, name: str) -> str:
+    """`export interface <name> ... {` 의 중괄호 안쪽."""
+    start = text.index('{', text.index(f'export interface {name} ')) + 1
+    depth = 1
+    for end in range(start, len(text)):
+        depth += {'{': 1, '}': -1}.get(text[end], 0)
+        if depth == 0:
+            return text[start:end]
+    raise AssertionError(f'{name} 의 끝을 찾지 못했다')
+
+
+def _fields(body: str) -> Set[str]:
+    """맨 바깥 필드 이름. 안쪽 `{ ... }` 블록의 필드는 빼고 읽는다."""
+    while re.search(r'\{[^{}]*\}', body):
+        body = re.sub(r'\{[^{}]*\}', '', body)
+    fields = set(re.findall(r'^\s*(\w+)\??:', body, re.M))
+    assert fields, '필드가 없다'
+    return fields
+
+
+def test_unified_structures_have_the_ts_fields() -> None:
+    text = _source('base/types.ts')
+    for name in ('MinMax', 'Precision', 'MarketInterface', 'Ticker', 'OrderBook', 'Fee', 'Trade', 'Order', 'Balance', 'TradingFeeInterface'):
+        assert _fields(_interface_body(text, name)) == set(get_type_hints(getattr(base_types, name))), name
+    # TypeScript 판은 종목의 `limits` 를 이름 없이 적었다. Python 판은 ccxt 처럼 `MarketLimits` 로 적는다.
+    limits = re.search(r'limits: (\{.*?\});', _interface_body(text, 'MarketInterface'), re.S)
+    assert limits is not None and _fields(limits.group(1)[1:-1]) == set(get_type_hints(base_types.MarketLimits))
