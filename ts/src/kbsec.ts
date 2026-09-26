@@ -2665,7 +2665,7 @@ export class kbsec extends Exchange {
     /**
      * 봉. **국내만 지원한다.** 명세(`IVS11560`)의 필드 이름으로 읽으며, 실계좌로 검증한 적은 없다.
      * 해외 차트(`GSC10060`)는 15분 지연 시세다. 지연 봉을 공통 메서드에 섞지 않으려고 해외는 `fetchOverseasCandles`로만 준다.
-     * 시장구분(`mkt_clsf`)은 코스피(`0`)로 보낸다. 코스닥 종목에서 빈 응답이 오면 `params.mkt_clsf` 에 `'1'` 을 넘긴다.
+     * 시장구분(`mkt_clsf`)은 `options.masterData` 로 코스닥 종목임을 알면 `'1'`, 그 밖에는 코스피(`'0'`)로 보낸다. `params.mkt_clsf` 가 있으면 그 값을 쓴다.
      *
      * `since` 가 있으면 `since` 부터 `limit`(기본 100) 개이고, 없으면 가장 최근 `limit` 개다. `params.until`(ms)은 그 시각까지의 봉만 남긴다.
      * 명세의 시작일(`strt_dy`)은 뜻을 확인하지 못해 비워 보낸다. 대신 지금부터 `since`(또는 `until`)까지 덮을 만큼 최근 봉을 받아 거른다.
@@ -2690,7 +2690,7 @@ export class kbsec extends Exchange {
         count = Math.min(count, KBSEC_CHART_MAX);
         const body = await this.callTr(KBSEC_TR.CHART_KR, {
             info_ccd: '1', // 원주가
-            mkt_clsf: '0', // KOSPI. KOSDAQ 종목도 KB 가 종목코드로 해석하는지는 실측이 필요하다.
+            mkt_clsf: getKRXStockByCode(masterDataOf(this.options), market.id as string)?.market === 'KOSDAQ' ? '1' : '0', // 명세: 0 KOSPI, 1 KOSDAQ
             chrt_clsf,
             minute_tck_indx: minute,
             is_cd: market.id,

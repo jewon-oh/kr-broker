@@ -172,7 +172,7 @@
         },
         "kbsec": {
           "status": "부분",
-          "constraint": "국내만 지원합니다. 코스닥은 `params.mkt_clsf`를 지정합니다. 해외 차트는 실계좌에서 15분 지연 시세라 `fetchOverseasCandles`로 따로 줍니다",
+          "constraint": "국내만 지원합니다. 코스닥 종목은 `options.masterData`로 시장을 알면 코스닥으로 조회하고, 모르면 `params.mkt_clsf`에 `'1'`을 줍니다. 해외 차트는 실계좌에서 15분 지연 시세라 `fetchOverseasCandles`로 따로 줍니다",
           "apis": [
             "IVS11560"
           ]

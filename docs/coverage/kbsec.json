@@ -167,7 +167,7 @@
       "suggested": null,
       "proposal": null,
       "verified": "spec-only",
-      "note": "실계좌 미검증(테스트 제목). 시장구분 mkt_clsf는 코스피 고정, 수정주가(info_ccd 2)는 미노출. fetchTrades가 체결 날짜를 정할 때도 일봉을 부르고, options.masterData가 코스닥 종목이라고 알려 주면 코스닥(1)으로 보냅니다",
+      "note": "실계좌 미검증(테스트 제목). 시장구분 mkt_clsf는 options.masterData가 코스닥 종목이라고 알려 주면 코스닥(1), 그 밖에는 코스피(0)이고 params.mkt_clsf로 덮을 수 있습니다. 수정주가(info_ccd 2)는 미노출. fetchTrades가 체결 날짜를 정할 때도 이 일봉을 부릅니다",
       "spec": "https://github.com/kbsecurities/kb-openapi/blob/159480c/frontend/src/app/openapi-test/samples.generated.json#Tkb_IVS11560_B2C"
     },
     {

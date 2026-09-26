@@ -13,6 +13,7 @@ import { KBSEC_TR } from '../kbsec-types';
 import { kbsecCandleTimestamp } from '../kbsec-chart';
 import { __resetKbsecTokenBreaker } from '../../testing';
 import { CREDS, calledTrs, routeTr, trBody } from './support/kbsec-fetch';
+import { KIS_MASTER_FIXTURE } from '../../__tests__/support/kis-master-fixture';
 
 const newExchange = () => new kbsec({ ...CREDS, rateLimit: 0 });
 
@@ -213,6 +214,20 @@ describe('fetchOHLCV — 국내(명세 기준, 실계좌 미검증)', () => {
             .filter(call => String(call[0]).endsWith(`/api/v1/${KBSEC_TR.CHART_KR.toLowerCase()}`))
             .map(call => JSON.parse((call[1] as { body: string }).body).dataBody);
         expect(bodies.map(b => b.mkt_clsf)).toEqual(['0', '1']);
+    });
+
+    it('마스터 데이터로 코스닥 종목임을 알면 params 없이도 코스닥(1)으로 받고, params.mkt_clsf 가 있으면 그 값을 쓴다', async () => {
+        routeTr(mockFetch, { [KBSEC_TR.CHART_KR]: {} });
+        const withMaster = new kbsec({ ...CREDS, rateLimit: 0, options: { masterData: KIS_MASTER_FIXTURE } });
+
+        await withMaster.fetchOHLCV('247540/KRW', '1d');
+        await withMaster.fetchOHLCV('005930/KRW', '1d');
+        await withMaster.fetchOHLCV('247540/KRW', '1d', undefined, undefined, { mkt_clsf: '0' });
+
+        const bodies = mockFetch.mock.calls
+            .filter(call => String(call[0]).endsWith(`/api/v1/${KBSEC_TR.CHART_KR.toLowerCase()}`))
+            .map(call => JSON.parse((call[1] as { body: string }).body).dataBody);
+        expect(bodies.map(b => b.mkt_clsf)).toEqual(['1', '0', '0']);
     });
 
     it('일봉 — 시각이 없어도 거래일의 00:00 UTC 로 읽는다', async () => {
