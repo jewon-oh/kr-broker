@@ -88,7 +88,7 @@ import {
     type ApiName,
     type Market,
 } from './base';
-import { implicitMethodName, kstTimestampOf, strictKstTimestampOf } from './base/Exchange';
+import { implicitMethodName, kstTimestampOf, kstTradeTimestamps, strictKstTimestampOf } from './base/Exchange';
 import { KIS_API_TREE, type KisImplicitApi, type KisPrivateGetPath } from './abstract/kis';
 import { logger } from './logger';
 import { buildExtendedSessionLimit } from './extended-session-limit';
@@ -160,8 +160,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const HOLIDAY_LOOKBACK_MS = 30 * DAY_MS;
 /** 휴장일 캘린더를 신선하게 보는 시간. KIS 는 하루 한 번 호출을 권하므로 하루에 두 번까지만 부른다. */
 const CALENDAR_TTL_MS = 12 * 60 * 60 * 1000;
-/** 최근 체결의 시각이 지금보다 늦어도 받아들이는 폭. 증권사 서버와 이 컴퓨터의 시계 차이다. */
-const TRADE_CLOCK_SKEW_MS = 60_000;
 
 /** 매도매수구분코드: 체결·미체결 조회 응답에서 `01` 이 매도, `02` 가 매수다. */
 const SIDE_CODE_SELL = '01';
@@ -5039,17 +5037,7 @@ export class kis extends Exchange {
         const rows = multiRowsOf(this.safeValue(response, 'output'));
         if (rows.length === 0) return [];
         const date = await this.lastTradedDate(instrument.symbol, division);
-        const stamps: Int[] = [];
-        let previous: Int;
-        let known = date !== undefined;
-        for (const row of rows) {
-            const hms = this.safeString(row, 'stck_cntg_hour', '');
-            const stamp = known && hms !== '' ? strictKstTimestampOf(date, hms) : undefined;
-            if (stamp === undefined || (previous !== undefined && stamp > previous)) known = false;
-            stamps.push(known ? stamp : undefined);
-            previous = stamp;
-        }
-        if (stamps[0] !== undefined && stamps[0] > this.milliseconds() + TRADE_CLOCK_SKEW_MS) stamps.fill(undefined);
+        const stamps = kstTradeTimestamps(rows.map((row) => this.safeString(row, 'stck_cntg_hour', '')), date, this.milliseconds());
         const market = this.marketOf(instrument);
         const trades = rows.map((row, index) => this.safeTrade({
             info: row,
