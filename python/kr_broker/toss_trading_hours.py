@@ -127,12 +127,18 @@ def kr_session_order_restriction(session: str, form: Dict[str, Any]) -> Optional
 
 
 def is_toss_trading_open(now_ms: Optional[int] = None) -> bool:
-    """국내 정규장이 열려 있는가(정적 시간표)."""
+    """국내 정규장이 열려 있는가(정적 시간표).
+
+    라이브러리 안에서 쓰지 않는다. `is_trading_hours('toss', now_ms)` 를 쓴다. 다음 판에서 지운다.
+    """
     return is_trading_hours('toss', now_ms)
 
 
 def time_until_toss_open(now_ms: Optional[int] = None) -> int:
-    """다음 국내 개장까지 남은 밀리초. 열려 있으면 0."""
+    """다음 국내 개장까지 남은 밀리초. 열려 있으면 0.
+
+    라이브러리 안에서 쓰지 않는다. `get_time_until_market_open('toss', now_ms)` 를 쓴다. 다음 판에서 지운다.
+    """
     return get_time_until_market_open('toss', now_ms)
 
 

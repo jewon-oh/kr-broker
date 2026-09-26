@@ -51,7 +51,10 @@ def _number_at(fields: List[str], index: int) -> float:
 
 
 def parse_kis_realtime_frame(raw: str) -> List[KisRealtimeRecord]:
-    """실시간 프레임 하나를 레코드 목록으로 바꾼다. 제어·빈·지원하지 않는 프레임은 빈 목록이다."""
+    """실시간 프레임 하나를 레코드 목록으로 바꾼다. 제어·빈·지원하지 않는 프레임은 빈 목록이다.
+
+    라이브러리 안에서 쓰지 않는다. 연결은 복호한 본문을 `parse_kis_realtime_payload` 로 읽는다. 다음 판에서 지운다.
+    """
     if not raw or raw[0] == '{':
         return []
     parts = raw.split('|')

@@ -1,36 +1,36 @@
 /**
- * @fileoverview 타임프레임 변환과 봉 시각 규칙 — 이 패키지가 쓰는 최소 유틸.
+ * @fileoverview 타임프레임 변환과 봉 시각 규칙, 한국 시각 도우미 — 이 패키지가 쓰는 최소 유틸. 세 증권사가 함께 쓴다.
  */
 
+import { parseTimeframe } from './base/functions/time';
 import type { StockMarketGroup } from './broker-market-group';
 import { etYmd } from './us-market-hours';
 
 const MS_PER_MINUTE = 60_000;
 const MS_PER_HOUR = 60 * MS_PER_MINUTE;
 const MS_PER_DAY = 24 * MS_PER_HOUR;
-const MS_PER_WEEK = 7 * MS_PER_DAY;
-
-const TIMEFRAME_UNIT_MS: Record<string, number> = {
-    'm': MS_PER_MINUTE,
-    'h': MS_PER_HOUR,
-    'd': MS_PER_DAY,
-    'w': MS_PER_WEEK,
-};
 
 /**
  * 타임프레임 문자열(`5m`, `1h`, `1d`, `1w`)을 밀리초로 바꾼다. 읽지 못하면 `NaN` 이다. 월봉 `1M` 과 대문자 주봉 `1W` 도 `NaN` 이다.
+ * 단위 환산은 `parseTimeframe` 이 한다. 이 함수는 받는 모양만 분·시·일·주의 정수로 좁힌다.
  */
 export function timeframeToMs(timeframe: string): number {
-    const match = timeframe.match(/^(\d+)([mhdw])$/);
-    const amount = match?.[1];
-    const unit = match?.[2];
-    if (amount === undefined || unit === undefined) return Number.NaN;
-
-    const value = parseInt(amount);
-    return value * (TIMEFRAME_UNIT_MS[unit] || MS_PER_MINUTE);
+    if (timeframe.match(/^\d+[mhdw]$/) === null) return Number.NaN;
+    return parseTimeframe(timeframe) * 1000;
 }
 
-const KST_OFFSET_MS = 9 * MS_PER_HOUR;
+/** 한국 표준시(UTC+9). */
+export const KST_OFFSET_MS = 9 * MS_PER_HOUR;
+
+/** epoch ms 의 한국 날짜 `YYYYMMDD`. */
+export function kstYmd(ms: number): string {
+    return new Date(ms + KST_OFFSET_MS).toISOString().slice(0, 10).replace(/-/g, '');
+}
+
+/** epoch ms 의 한국 시각 `HHMMSS`. */
+export function kstHms(ms: number): string {
+    return new Date(ms + KST_OFFSET_MS).toISOString().slice(11, 19).replace(/:/g, '');
+}
 
 /** 일·주·월·연봉인가(`1d`, `1w`, `1W`, `1M`, `1y` 등). 분봉과 시봉은 아니다. */
 export function isDailyOrLongerTimeframe(timeframe: string): boolean {

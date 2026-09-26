@@ -1,7 +1,7 @@
 /**
  * @fileoverview 국내 정산 행(`SSQM2121`) ↔ 거래 매칭·안분 — **순수 함수**.
  *
- * 입력 계약은 {@link KbsecSettlementTrade} 의 필드뿐이다.
+ * 입력 계약은 {@link KbsecSettlementTrade} 의 필드뿐이다. 라이브러리 안에서는 이 모듈을 쓰지 않아 공개 이름을 모두 다음 판에서 지운다.
  *
  * ## 왜 체결단가를 조인 키로 안 쓰나
  *
@@ -43,7 +43,11 @@
 import type { KbsecSettlementRow } from './kbsec-settlement-row';
 import { kbsecSettlementCostKrw } from './kbsec-settlement-row';
 
-/** 매칭 대상 거래 — 호출하는 쪽의 거래 기록에서 필요한 것만 추린 모양. */
+/**
+ * 매칭 대상 거래 — 호출하는 쪽의 거래 기록에서 필요한 것만 추린 모양.
+ *
+ * @deprecated 라이브러리 안에서 쓰지 않는다. 다음 판에서 지운다.
+ */
 export interface KbsecSettlementTrade {
     id: string;
     /** 도메인 종목코드(6자리). */
@@ -59,6 +63,7 @@ export interface KbsecSettlementTrade {
     quantity: number | null;
 }
 
+/** @deprecated 라이브러리 안에서 쓰지 않는다. 다음 판에서 지운다. */
 export type KbsecSettlementMatch =
     | {
         kind: 'matched';
@@ -81,6 +86,8 @@ export type KbsecSettlementMatch =
  *
  * 0.1% 다. 원화 단가를 `priceUsd × usdToKrwRate` 로 되짚어 생기는 부동소수 꼬리는 덮고,
  * **한 주 어긋남**(가장 작은 실질 불일치)은 잡는다.
+ *
+ * @deprecated 라이브러리 안에서 쓰지 않는다. 다음 판에서 지운다.
  */
 export const SETTLEMENT_NOTIONAL_REL_TOLERANCE = 0.001;
 
@@ -115,6 +122,8 @@ function notionalKrwOf(trade: KbsecSettlementTrade): number | null {
  * @param trades 그날(KST) 국내 KB증권 거래
  * @param rows 같은 날 `fetchDomesticSettlements` 결과의 `rows`(매도·매수를 따로 받아 합친 것)
  * @returns 거래 하나당 결과 하나. 입력 순서를 유지한다.
+ *
+ * @deprecated 라이브러리 안에서 쓰지 않는다. 다음 판에서 지운다.
  */
 export function matchKbsecSettlements(
     trades: readonly KbsecSettlementTrade[],

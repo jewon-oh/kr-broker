@@ -69,6 +69,7 @@ from kr_broker.base.precise import Precise
 from kr_broker.base.token_store import BrokerTokenStore, legacy_token_store_key, token_store_key
 from kr_broker.base.types import ApiName, Int, Num, Str, Strings
 from kr_broker.broker_krx_code import is_krx_domestic_code
+from kr_broker.broker_time import KST_OFFSET_MS, kst_ymd
 from kr_broker.kis_kr_market import resolve_kr_market
 from kr_broker.kis_master_data import master_data_of
 from kr_broker.kis_rate_limit import reserve_kis_slot, reset_kis_rate_limiter  # noqa: F401 - 예전 경로(kr_broker.kis)로도 부른다
@@ -109,7 +110,6 @@ STOCK_INFO_PRODUCT_TYPE = '300'
 # VI 발동 현황 조회의 고정 화면 분류 코드. 공식 예제가 이 값 하나만 쓴다.
 VI_STATUS_SCREEN_CODE = '20139'
 
-KST_OFFSET_MS = 9 * 60 * 60 * 1000
 DAY_MS = 24 * 60 * 60 * 1000
 # 지난 영업일을 알기 위해 되돌아 조회하는 기간.
 HOLIDAY_LOOKBACK_MS = 30 * DAY_MS
@@ -186,11 +186,6 @@ class KisInstrument(NamedTuple):
 
 
 _SUFFIXED_SYMBOL = re.compile(r'(.+)/(KRW|USD)')
-
-
-def kst_ymd(ms: int) -> str:
-    """UTC 밀리초의 한국 날짜 `YYYYMMDD`."""
-    return fn.iso8601(ms + KST_OFFSET_MS)[:10].replace('-', '')
 
 
 def kst_timestamp(ymd: Str, hms: Str) -> Int:

@@ -170,6 +170,8 @@ export function usOrderBlockReason(gate: UsOrderGate): string | null {
  *
  * @param now 현재 시각. 미지정 시 `new Date`
  * @returns ms (음수 없음). 정규장 중이면 0
+ *
+ * @deprecated 라이브러리 안에서 쓰지 않는다. 다음 판에서 지운다.
  */
 export function getTimeUntilUsMarketOpen(now: Date = new Date()): number {
     // 정규장(및 opening/closing 동시호가) 중이면 0.

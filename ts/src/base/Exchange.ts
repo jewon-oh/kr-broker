@@ -29,6 +29,7 @@
  * `maxRetriesOnFailure` 번까지 다시 보낸다.
  */
 
+import { KST_OFFSET_MS } from '../broker-time';
 import { logger } from '../logger';
 import { resolveFlag, resolveTokenStore, type BrokerTokenStore } from '../options';
 import { resolveConfirmBudget, type ConfirmBudget } from '../execution-confirm';
@@ -241,8 +242,6 @@ const DEFAULT_CURRENCY_DECIMALS = 8;
 const RATIO_TO_PERCENT = '100';
 /** 이보다 큰 `limit` 은 쓰일 일이 없다. 이런 값은 옛 위치 인자 `until`(ms)이 `limit` 자리로 들어온 것이다. */
 const LIMIT_LOOKS_LIKE_MS = 1_000_000_000;
-/** 한국 표준시(UTC+9). */
-const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 /**
  * 엔드포인트의 암묵 메서드 이름. `api` 이름들(둘째부터 첫 글자를 대문자로) 뒤에 HTTP 메서드와, 영숫자가 아닌 문자로 자른 경로 조각을

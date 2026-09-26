@@ -5,6 +5,8 @@
  * 반복 호출해 채운다. 그 창 계산을 부수효과 없이 여기 둔다.
  */
 
+import { kstYmd } from '../broker-time';
+
 /** KIS 한 응답의 최대 행수(실측). 창 크기는 이걸 넘지 않게 잡는다. */
 export const KIS_DAILY_PAGE_ROWS = 100;
 
@@ -29,15 +31,14 @@ export interface DateWindow {
 }
 
 const MS_PER_DAY = 86_400_000;
-const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
-/** `Date` → `YYYYMMDD` (KIS 인자 형식). 실행 환경의 시간대가 아니라 한국 날짜다. */
+/**
+ * `Date` → `YYYYMMDD` (KIS 인자 형식). 실행 환경의 시간대가 아니라 한국 날짜다(`kstYmd`).
+ * 시각이 아니면 던지지 않고 `NaNNaNNaN` 이다(Python 판 `to_kis_date` 와 같다).
+ */
 export function toKisDate(d: Date): string {
-    const kst = new Date(d.getTime() + KST_OFFSET_MS);
-    const y = kst.getUTCFullYear();
-    const m = String(kst.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(kst.getUTCDate()).padStart(2, '0');
-    return `${y}${m}${day}`;
+    const ms = d.getTime();
+    return Number.isNaN(ms) ? 'NaNNaNNaN' : kstYmd(ms);
 }
 
 /**

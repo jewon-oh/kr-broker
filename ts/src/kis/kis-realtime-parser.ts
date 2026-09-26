@@ -44,7 +44,11 @@ export function toStreamSymbol(rawSymbol: string): string {
  */
 export const OVERSEAS_STREAM_QUOTE = 'USD';
 
-/** KIS 실시간 프레임 1개를 record 배열로 파싱 (제어/빈/미지원 프레임 → []). */
+/**
+ * KIS 실시간 프레임 1개를 record 배열로 파싱 (제어/빈/미지원 프레임 → []).
+ *
+ * @deprecated 라이브러리 안에서 쓰지 않는다. 연결은 복호한 본문을 `parseKisRealtimePayload` 로 읽는다. 다음 판에서 지운다.
+ */
 export function parseKisRealtimeFrame(raw: string): KisRealtimeRecord[] {
     if (!raw || raw[0] === '{') return [];
     const parts = raw.split('|');

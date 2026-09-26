@@ -1,5 +1,6 @@
 /**
  * @fileoverview 해외 정산 행(`SPQM2205`) ↔ 거래 매칭·안분 — **순수 함수**. 입력 계약은 {@link KbsecOverseasSettlementTrade} 의 필드뿐이다.
+ * 라이브러리 안에서는 이 모듈을 쓰지 않아 공개 이름을 모두 다음 판에서 지운다.
  *
  * 국내 짝은 `kbsec-settlement-match.ts` 다. 안분 규칙은 같지만 **기준 축이 다르다** —
  * 여기는 전부 USD 고, 그룹 키에 **미국 현지 주문일자**가 들어간다. 통화 축을 섞지 않도록 금액 필드 이름에 단위를 붙인다.
@@ -39,7 +40,11 @@
 import type { KbsecOverseasSettlementRow } from './kbsec-overseas-settlement-row';
 import { kbsecOverseasSettlementCostUsd } from './kbsec-overseas-settlement-row';
 
-/** 매칭 대상 거래. 매칭은 이 필드만 읽는다. */
+/**
+ * 매칭 대상 거래. 매칭은 이 필드만 읽는다.
+ *
+ * @deprecated 라이브러리 안에서 쓰지 않는다. 다음 판에서 지운다.
+ */
 export interface KbsecOverseasSettlementTrade {
     id: string;
     /** 단축종목코드(티커). 거래 심볼에서 기준 코드만 뗀 값. */
@@ -55,6 +60,7 @@ export interface KbsecOverseasSettlementTrade {
     quantity: number | null;
 }
 
+/** @deprecated 라이브러리 안에서 쓰지 않는다. 다음 판에서 지운다. */
 export type KbsecOverseasSettlementMatch =
     | {
         kind: 'matched';
@@ -72,7 +78,11 @@ export type KbsecOverseasSettlementMatch =
     | { kind: 'unallocatable'; tradeId: string; groupTrades: number }
     | { kind: 'notional-mismatch'; tradeId: string; ourUsd: number; theirUsd: number };
 
-/** 입력 거래에 못 붙은 정산 묶음 — 축이 어긋났는지 확인하는 용도다. */
+/**
+ * 입력 거래에 못 붙은 정산 묶음 — 축이 어긋났는지 확인하는 용도다.
+ *
+ * @deprecated 라이브러리 안에서 쓰지 않는다. 다음 판에서 지운다.
+ */
 export interface KbsecOverseasUnmatchedGroup {
     /** `주문일자|종목|방향`. */
     key: string;
@@ -82,6 +92,7 @@ export interface KbsecOverseasUnmatchedGroup {
     costUsd: number;
 }
 
+/** @deprecated 라이브러리 안에서 쓰지 않는다. 다음 판에서 지운다. */
 export interface KbsecOverseasSettlementMatchResult {
     /** 거래 하나당 결과 하나. **입력 순서를 유지한다.** */
     matches: KbsecOverseasSettlementMatch[];
@@ -96,6 +107,8 @@ export interface KbsecOverseasSettlementMatchResult {
  * 소수 절사분뿐이다. 그래도 국내 정산 매칭과 같은 값으로 둔다: 이 크기면 잡음을 덮고도
  * **한 주 어긋남**(가장 작은 실질 불일치)은 잡는다
  * (`kbsec-settlement-match.ts` 의 `SETTLEMENT_NOTIONAL_REL_TOLERANCE`).
+ *
+ * @deprecated 라이브러리 안에서 쓰지 않는다. 다음 판에서 지운다.
  */
 export const OVERSEAS_SETTLEMENT_NOTIONAL_REL_TOLERANCE = 0.001;
 
@@ -125,6 +138,8 @@ function notionalUsdOf(trade: KbsecOverseasSettlementTrade): number | null {
  *
  * @param trades 조회 구간(미국 일자)의 해외 KB증권 거래
  * @param rows 같은 구간 `SPQM2205` 행 (`trd_clsf=99` 로 양방향 다 받은 것)
+ *
+ * @deprecated 라이브러리 안에서 쓰지 않는다. 다음 판에서 지운다.
  */
 export function matchKbsecOverseasSettlements(
     trades: readonly KbsecOverseasSettlementTrade[],

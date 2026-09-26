@@ -85,12 +85,18 @@ export async function resolveWsCtor(): Promise<WsCtor | null> {
  *
  * 전역이 없어도 `ws` 로 붙을 수 있어 **거의 항상 true** 다. false 는 `ws` 조차 못 불러오는 환경뿐이다.
  * `connect` 의 판정과 같은 조건을 유지한다.
+ *
+ * @deprecated 라이브러리 안에서 쓰지 않는다. 다음 판에서 지운다.
  */
 export async function isKisWsSupported(): Promise<boolean> {
     return (await resolveWsCtor()) !== null;
 }
 
-/** 전역 WebSocket 을 쓰는가 — 폴백(`ws`)과 구별해 로그에 사실대로 남기기 위함. */
+/**
+ * 전역 WebSocket 을 쓰는가 — 폴백(`ws`)과 구별해 로그에 사실대로 남기기 위함.
+ *
+ * @deprecated 라이브러리 안에서 쓰지 않는다. 다음 판에서 지운다.
+ */
 export function isUsingGlobalWebSocket(): boolean {
     return globalWsCtor() !== undefined;
 }

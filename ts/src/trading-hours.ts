@@ -7,11 +7,10 @@
  *
  * 인자는 시장 이름이 아니라 **거래소 ID**(`'kis'`, `'toss'`)다. `'stock'` 같은 시장 이름을 넘기면 "표에 없음 = 제한 없음" 으로 **조용히 0** 이 나온다.
  */
+import { isKrxDomesticCode } from './broker-krx-code';
 import { isStockBrokerExchange, marketGroupOf } from './broker-market-group';
-import { isKrxDomesticCode } from './kis/kis-types';
-// 이 마스터는 KIS 가 배포하는 파일에서 왔지만 내용은 **미국 상장 거래소 정보**다(어디서 얻었는지와 무엇을 다루는지는 별개다).
-import { getOverseasMarketForCode } from './kis/kis-overseas-master';
-import { EMPTY_KIS_MASTER_DATA, type KisMasterData } from './kis/kis-master-data';
+import { getOverseasMarketForCode } from './overseas-stock-master';
+import { EMPTY_KIS_MASTER_DATA, type KisMasterData } from './stock-master-data';
 import { checkKRXTradingHoursAt, getTimeUntilKrxOpen, krxAuctionBuyBlockReason } from './krx-trading-hours';
 import { usOrderBlockReason } from './us-market-hours';
 

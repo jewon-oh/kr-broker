@@ -10,13 +10,13 @@ import re
 from typing import Any, Dict, Optional, Sequence
 
 from kr_broker.base import functions as fn
+from kr_broker.broker_time import KST_OFFSET_MS
 from kr_broker.market_calendar import is_market_closed_day
 
 MARKET_OPEN_HOUR = 9
 MARKET_OPEN_MINUTE = 0
 MARKET_CLOSE_HOUR = 15
 MARKET_CLOSE_MINUTE = 30
-KST_OFFSET_MS = 9 * 60 * 60 * 1000
 DAY_MS = 24 * 60 * 60 * 1000
 
 # 시초가 결정 동시호가 시작(08:30 KST)과 종가 결정 동시호가 시작(15:20 KST).
@@ -62,7 +62,10 @@ def _is_krx_holiday(kst_wall: datetime.datetime) -> bool:
 
 
 def check_krx_trading_hours() -> Dict[str, Any]:
-    """지금이 KRX 정규장인가. `{'tradable': bool, 'reason': str}`(열려 있으면 `reason` 이 없다)."""
+    """지금이 KRX 정규장인가. `{'tradable': bool, 'reason': str}`(열려 있으면 `reason` 이 없다).
+
+    라이브러리 안에서 쓰지 않는다. `check_krx_trading_hours_at` 을 쓴다. 다음 판에서 지운다.
+    """
     return check_krx_trading_hours_at(fn.milliseconds())
 
 

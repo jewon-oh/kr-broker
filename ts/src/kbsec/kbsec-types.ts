@@ -20,6 +20,7 @@
 import { ExchangeError } from '../base/errors';
 import { isKrxDomesticCode } from '../broker-krx-code';
 import { symbolBaseCode, type StockMarketGroup } from '../broker-market-group';
+import { KST_OFFSET_MS, kstYmd } from '../broker-time';
 import { isKrxBusinessDayKst } from '../krx-trading-hours';
 
 // ============ 접속 상수 ============
@@ -441,6 +442,8 @@ export const KBSEC_CONT_NEXT = '1';
  *
  * UTC 날짜를 그대로 쓰면 15:00 UTC(=자정 KST) 이후로 하루가 어긋난다. KRX 정규장
  * 시간대(00:00~06:30 UTC)만 보면 우연히 맞지만, 호출하는 쪽은 장 밖에서도 조회한다.
+ *
+ * @deprecated 라이브러리 안에서 쓰지 않는다. `kbsecDateKst(new Date())` 와 같다. 다음 판에서 지운다.
  */
 export function kbsecTodayKst(): string {
     return kbsecDateKst(new Date());
@@ -452,8 +455,7 @@ export function kbsecTodayKst(): string {
  * UTC 날짜로 보내면 하루 전 체결내역을 뒤지게 된다.
  */
 export function kbsecDateKst(at: Date): string {
-    const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
-    return new Date(at.getTime() + KST_OFFSET_MS).toISOString().slice(0, 10).replace(/-/g, '');
+    return kstYmd(at.getTime());
 }
 
 /** 미국 동부(ET) 날짜 포매터 — DST 는 IANA `America/New_York` 룰이 처리한다. */
@@ -473,7 +475,6 @@ export function kbsecDateUsEastern(at: Date): string {
     return US_EASTERN_DATE_FORMATTER.format(at).replace(/-/g, '');
 }
 
-/** KST 오프셋을 더한 Date — `getUTC*` 가 곧 한국 시각/요일이 된다. */
 /**
  * 조회 기준일(`ordr_dt`) — **KB 의 `현재일자` 는 영업일**이라 주말·휴장일엔 직전 영업일에 머문다.
  *
@@ -487,7 +488,7 @@ export function kbsecDateUsEastern(at: Date): string {
  * @param now 기준 시각. 증권사 인스턴스는 자기 시계(`milliseconds()`)를 넘긴다.
  */
 export function kbsecBusinessDateKst(stepsBack = 0, now: Date = new Date()): string {
-    const d = new Date(now.getTime() + 9 * 60 * 60 * 1000);   // 한국 날짜를 UTC 필드로 읽는다
+    const d = new Date(now.getTime() + KST_OFFSET_MS);   // 한국 날짜를 UTC 필드로 읽는다
     let remaining = stepsBack;
     // 휴장일 표가 잘못되어 모든 날이 휴장으로 보여도 멈추게 상한을 둔다. 1년이면 어떤 연휴도 넘는다.
     for (let days = 0; days < 366 + stepsBack * 7; days++) {
@@ -517,7 +518,11 @@ export function kbsecBusinessDateUsEastern(stepsBack = 0, now: Date = new Date()
     return d.toISOString().slice(0, 10).replace(/-/g, '');
 }
 
-/** `주문일자가 현재일자보다 큽니다` — 조회일자가 KB 영업일보다 앞설 때. */
+/**
+ * `주문일자가 현재일자보다 큽니다` — 조회일자가 KB 영업일보다 앞설 때.
+ *
+ * @deprecated 라이브러리 안에서 쓰지 않는다. 이 거절은 오류의 `detail`(`KBSEC_ERROR_DETAIL.FUTURE_QUERY_DATE`)로 가린다. 다음 판에서 지운다.
+ */
 export const KBSEC_CODE_FUTURE_QUERY_DATE = '2854';
 
 // ── 해외 잔고평가(SPQM2226) 입력 코드
@@ -569,12 +574,20 @@ export const KBSEC_ORDER_TYPE_US = {
     STOP_LIMIT: 'C',
 } as const;
 
-/** 해외 알고리즘 주문 유형 판별 — start_tm/end_tm 이 필요한 유형인가. */
+/**
+ * 해외 알고리즘 주문 유형 판별 — start_tm/end_tm 이 필요한 유형인가.
+ *
+ * @deprecated 라이브러리 안에서 쓰지 않는다. 다음 판에서 지운다.
+ */
 export function kbsecIsAlgoOrderType(t: string): boolean {
     return ['3', '4', '7', '8'].includes(t);
 }
 
-/** 해외 거래소코드 (`krx_cd`) — 시세 TR 용. */
+/**
+ * 해외 거래소코드 (`krx_cd`) — 시세 TR 용.
+ *
+ * @deprecated 라이브러리 안에서 쓰지 않는다. 미국 거래소 코드는 `KBSEC_US_EXCHANGES` 에 있다. 다음 판에서 지운다.
+ */
 export const KBSEC_OVERSEAS_EXCHANGE = {
     NASDAQ: 'NAS',
     NYSE: 'NYS',

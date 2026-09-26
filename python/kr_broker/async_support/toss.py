@@ -60,7 +60,7 @@ from kr_broker.base.precise import Precise
 from kr_broker.base.token_store import BrokerTokenStore, legacy_token_store_key, token_store_key
 from kr_broker.base.types import ApiName, Int, Num, Str, Strings
 from kr_broker.broker_market_group import symbol_base_code
-from kr_broker.broker_time import candle_period_utc_ms, is_daily_or_longer_timeframe
+from kr_broker.broker_time import KST_OFFSET_MS, candle_period_utc_ms, is_daily_or_longer_timeframe
 from kr_broker.edit_order_amount import assert_whole_remaining_edit, edit_order_total
 from kr_broker.krx_tick_size import KRX_TICK_INVALID_DETAIL, get_krx_tick_size, krx_tick_violation
 from kr_broker.krx_trading_hours import krx_auction_buy_block_reason
@@ -127,7 +127,6 @@ PEAK_COST_FACTOR = 2
 # 429 를 받은 그룹을 쉬게 하는 시간(Retry-After 가 없을 때)과 상한.
 DEFAULT_BACKOFF_MS = 1_000
 MAX_BACKOFF_MS = 30_000
-KST_OFFSET_MS = 9 * 60 * 60 * 1000
 DAY_MS = 24 * 60 * 60 * 1000
 ORDER_TIME_IN_FORCE = ('DAY', 'CLS', 'OPG')
 

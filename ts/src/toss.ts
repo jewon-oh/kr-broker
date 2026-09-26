@@ -113,7 +113,7 @@ import { TOSS_API_TREE, type TossImplicitApi } from './abstract/toss';
 import { confirmExecution, type ExecutionSnapshot } from './execution-confirm';
 import { buildExtendedSessionLimit } from './extended-session-limit';
 import { symbolBaseCode, type StockMarketGroup } from './broker-market-group';
-import { candlePeriodUtcMs, isDailyOrLongerTimeframe } from './broker-time';
+import { KST_OFFSET_MS, candlePeriodUtcMs, isDailyOrLongerTimeframe } from './broker-time';
 import { logger } from './logger';
 import type { UsdKrwRateOption } from './options';
 import { applyMarketCalendar } from './market-calendar';
@@ -299,7 +299,6 @@ const PEAK_COST_FACTOR = 2;
 const DEFAULT_BACKOFF_MS = 1_000;
 const MAX_BACKOFF_MS = 30_000;
 
-const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const ORDER_TIME_IN_FORCE = ['DAY', 'CLS', 'OPG'] as const;
@@ -327,7 +326,7 @@ function unseenRows<T>(rows: T[], idOf: (row: T) => string | undefined, seen: Se
 
 /** 지금이 개장 직후 09:00~09:10(한국 시각)인가. */
 function isOrderInfoPeakWindow(now: Date): boolean {
-    const kstMinutes = (now.getUTCHours() * 60 + now.getUTCMinutes() + 9 * 60) % (24 * 60);
+    const kstMinutes = (now.getUTCHours() * 60 + now.getUTCMinutes() + KST_OFFSET_MS / 60_000) % (24 * 60);
     return kstMinutes >= PEAK_WINDOW_START_MIN && kstMinutes < PEAK_WINDOW_END_MIN;
 }
 

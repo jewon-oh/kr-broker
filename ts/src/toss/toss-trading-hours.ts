@@ -168,12 +168,20 @@ export function krSessionOrderRestriction(
     return null;
 }
 
-/** 국내 정규장이 열려 있는가(정적 시간표). */
+/**
+ * 국내 정규장이 열려 있는가(정적 시간표).
+ *
+ * @deprecated 라이브러리 안에서 쓰지 않는다. `kr-broker/trading-hours` 의 `isTradingHours('toss', now)` 를 쓴다. 다음 판에서 지운다.
+ */
 export function isTossTradingOpen(now: Date = new Date()): boolean {
     return isTradingHours('toss', now);
 }
 
-/** 다음 국내 개장까지 남은 시간(ms). 열려 있으면 0. */
+/**
+ * 다음 국내 개장까지 남은 시간(ms). 열려 있으면 0.
+ *
+ * @deprecated 라이브러리 안에서 쓰지 않는다. `kr-broker/trading-hours` 의 `getTimeUntilMarketOpen('toss', now)` 를 쓴다. 다음 판에서 지운다.
+ */
 export function timeUntilTossOpen(now: Date = new Date()): number {
     return getTimeUntilMarketOpen('toss', now);
 }

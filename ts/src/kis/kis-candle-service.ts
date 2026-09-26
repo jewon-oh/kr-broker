@@ -18,7 +18,7 @@ import type { Exchange } from '../base';
 import type { KisImplicitApi } from '../abstract/kis';
 import { planWindows, mergeCandles, sliceCandleWindow, toKisDate } from './kis-candle-pagination';
 import type { KisDailyCandle, KisOverseasDailyCandle } from './kis-types';
-import type { OverseasMarket } from './kis-overseas-master';
+import type { OverseasMarket } from '../overseas-stock-master';
 
 // ============ 캔들 관련 상수 ============
 

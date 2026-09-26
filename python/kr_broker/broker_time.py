@@ -5,6 +5,7 @@ import math
 import re
 import time
 
+from kr_broker.base import functions as fn
 from kr_broker.us_market_hours import et_ymd
 
 MS_PER_MINUTE = 60_000
@@ -12,18 +13,25 @@ MS_PER_HOUR = 60 * MS_PER_MINUTE
 MS_PER_DAY = 24 * MS_PER_HOUR
 MS_PER_WEEK = 7 * MS_PER_DAY
 
-_TIMEFRAME_UNIT_MS = {'m': MS_PER_MINUTE, 'h': MS_PER_HOUR, 'd': MS_PER_DAY, 'w': MS_PER_WEEK}
 _TIMEFRAME_RE = re.compile(r'([0-9]+)([mhdw])')
 
 
 def timeframe_to_ms(timeframe: str) -> float:
-    """타임프레임(`5m`, `1h`, `1d`, `1w`)을 밀리초로 바꾼다. 읽지 못하면 NaN 이다. 월봉 `1M` 과 대문자 주봉 `1W` 도 NaN 이다."""
-    match = _TIMEFRAME_RE.fullmatch(timeframe) if isinstance(timeframe, str) else None
-    if match is None:
+    """타임프레임(`5m`, `1h`, `1d`, `1w`)을 밀리초로 바꾼다. 읽지 못하면 NaN 이다. 월봉 `1M` 과 대문자 주봉 `1W` 도 NaN 이다.
+    단위 환산은 `parse_timeframe` 이 한다. 이 함수는 받는 모양만 분·시·일·주의 정수로 좁힌다."""
+    if not isinstance(timeframe, str) or _TIMEFRAME_RE.fullmatch(timeframe) is None:
         return math.nan
-    return int(match.group(1)) * _TIMEFRAME_UNIT_MS.get(match.group(2), MS_PER_MINUTE)
+    return int(fn.parse_timeframe(timeframe) * 1000)
 
-_KST_OFFSET_MS = 9 * MS_PER_HOUR
+# 한국 표준시(UTC+9).
+KST_OFFSET_MS = 9 * MS_PER_HOUR
+
+
+def kst_ymd(ms: int) -> str:
+    """UTC 밀리초의 한국 날짜 `YYYYMMDD`. TypeScript 판 `kstYmd` 와 같다."""
+    return fn.iso8601(ms + KST_OFFSET_MS)[:10].replace('-', '')
+
+
 _DAILY_OR_LONGER_RE = re.compile(r'[0-9]+[dwWMy]')
 
 
@@ -36,7 +44,7 @@ def candle_period_utc_ms(timestamp: float, timeframe: str, market: str) -> int:
     """일·주·월·연봉의 시각 규칙: 그 봉이 덮는 기간 첫날(그 시장의 현지 날짜)의 00:00 UTC 다. 주봉은 월요일, 월봉은 1일, 연봉은 1월 1일이다.
     TypeScript 판 `candlePeriodUtcMs` 와 같다."""
     if market == 'KR':
-        day = (int(timestamp) + _KST_OFFSET_MS) // MS_PER_DAY * MS_PER_DAY
+        day = (int(timestamp) + KST_OFFSET_MS) // MS_PER_DAY * MS_PER_DAY
     else:
         ymd = et_ymd(int(timestamp))
         day = calendar.timegm((int(ymd[0:4]), int(ymd[4:6]), int(ymd[6:8]), 0, 0, 0, 0, 0, 0)) * 1000
