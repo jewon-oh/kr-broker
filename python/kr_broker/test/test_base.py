@@ -1,14 +1,19 @@
 """기반 계층(`kr_broker.base`) 단위 테스트. 기대값은 TypeScript 판이 도는 JavaScript 런타임(node)으로 계산한 값이다."""
 
+import ast
 import hashlib
+import inspect
 import math
 import re
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Type
 
 import pytest
 
 import kr_broker
+import kr_broker.async_support
+import kr_broker.pro
 from kr_broker.base import functions as fn
 from kr_broker.base.errors import BadRequest, BaseError, MarketClosed, OrderOutcomeUnknown, RequestTimeout
 from kr_broker.base.exchange import Exchange, strict_kst_timestamp_of
@@ -166,6 +171,38 @@ def test_camelcase_aliases_follow_ccxt() -> None:
     assert broker.loadMarkets.__func__ is kr_broker.toss.load_markets
     assert broker.safeString({'a': 1}, 'a') == '1'
     assert callable(broker.private_market_get_exchange_rate) and callable(broker.privateMarketGetExchangeRate)
+
+
+def _type_checking_aliases(klass: type) -> Dict[str, str]:
+    """클래스 본문의 `if TYPE_CHECKING:` 블록에 적은 `camelCase = snake_case` 선언."""
+    tree = ast.parse(Path(inspect.getfile(klass)).read_text(encoding='utf-8'))
+    node = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == klass.__name__)
+    return {stmt.targets[0].id: stmt.value.id for block in node.body if isinstance(block, ast.If) and ast.unparse(block.test) == 'TYPE_CHECKING'
+            for stmt in block.body if isinstance(stmt, ast.Assign) and isinstance(stmt.targets[0], ast.Name) and isinstance(stmt.value, ast.Name)}
+
+
+@pytest.mark.parametrize('cls', [kr_broker.kis, kr_broker.toss, kr_broker.async_support.kis, kr_broker.async_support.toss,
+                                 kr_broker.pro.kis, kr_broker.pro.toss])
+def test_camelcase_aliases_are_declared_for_type_checkers(cls: Type[Exchange]) -> None:
+    """생성자가 붙이는 메서드 별칭을, 그 메서드를 정의한 클래스마다 `if TYPE_CHECKING:` 블록에 적었는지 본다.
+    재정의한 클래스도 다시 적어야 그 클래스의 시그니처로 보인다. 암묵 메서드는 `abstract/*.py` 가 선언한다.
+    값 속성(`last_http_response` 등)의 별칭은 생성할 때의 값을 복사한 것이라 적지 않는다."""
+    broker = cls({})
+    runtime = {name for name in dir(broker) if name in Exchange._camelcase_cache and callable(getattr(broker, name))}
+    unmatched = set(runtime)
+    for klass in cls.__mro__:
+        if klass is object:
+            continue
+        own = runtime.intersection(vars(klass))
+        unmatched -= own
+        if klass.__module__.startswith('kr_broker.abstract.'):
+            continue
+        expected = {Exchange._camelcase_cache[name]: name for name in own}
+        declared = _type_checking_aliases(klass)
+        lines = sorted(f'{camel} = {name}' for camel, name in expected.items() if declared.get(camel) != name)
+        extra = sorted(f'{camel} = {name}' for camel, name in declared.items() if expected.get(camel) != name)
+        assert not lines and not extra, f'{klass.__module__}.{klass.__name__} 의 `if TYPE_CHECKING:` 블록에 더할 줄 {lines}, 뺄 줄 {extra}'
+    assert not unmatched, f'정의한 클래스를 찾지 못한 별칭: {sorted(unmatched)}'
 
 
 def test_describe_merges_user_config() -> None:

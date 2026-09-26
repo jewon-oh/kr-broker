@@ -17,7 +17,7 @@ TypeScript 판 `ts/src/toss.ts` 의 `createPriceStream` 과 실시간(ccxt pro) 
 체결 프레임은 가격과 수량만 주므로 `watch_ticker` 의 시세도 현재가뿐이다. `close()` 는 실시간 연결과 HTTP 세션을 함께 닫는다.
 """
 
-from typing import Any, Dict, List, Optional, cast
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, cast
 
 import kr_broker.async_support
 from kr_broker.async_support.base.ws.client import session_connector
@@ -142,3 +142,11 @@ class toss(kr_broker.async_support.toss):
         self._watch_subs.clear()
         self._watch_hub.reject(ExchangeClosedByUser(f'{self.id} 실시간 연결을 닫았다'))
         await super().close()
+
+    # 생성자가 붙이는 camelCase 별칭을 타입 검사기에 알린다. 빠지거나 남는 줄은 test_base.py 가 잡는다.
+    if TYPE_CHECKING:
+        createPriceStream = create_price_stream
+        watchTicker = watch_ticker
+        watchTrades = watch_trades
+        watchOrderBook = watch_order_book
+        watchOrders = watch_orders

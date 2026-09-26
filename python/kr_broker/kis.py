@@ -49,7 +49,7 @@ import json
 import logging
 import math
 import re
-from typing import Any, Callable, Dict, List, NamedTuple, Optional, cast
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, NamedTuple, Optional, cast
 
 from kr_broker.abstract.kis import ImplicitAPI
 from kr_broker.base.exchange import Exchange
@@ -2420,3 +2420,39 @@ class kis(Exchange, ImplicitAPI):
             'cost': self.safe_string(trade, 'ft_ccld_amt3') if overseas else self.safe_string(trade, 'tot_ccld_amt'),
             'fee': None,
         }, market)
+
+    # 생성자가 붙이는 camelCase 별칭을 타입 검사기에 알린다. 빠지거나 남는 줄은 test_base.py 가 잡는다.
+    if TYPE_CHECKING:
+        setSandboxMode = set_sandbox_mode
+        authManager = auth_manager
+        invalidateToken = invalidate_token
+        getApprovalKey = get_approval_key
+        handleErrors = handle_errors
+        fetchMarkets = fetch_markets
+        parseMarket = parse_market
+        priceToPrecision = price_to_precision
+        fetchTicker = fetch_ticker
+        parseTicker = parse_ticker
+        fetchTickers = fetch_tickers
+        fetchOrderBook = fetch_order_book
+        fetchOHLCV = fetch_ohlcv
+        fetchTradingFee = fetch_trading_fee
+        fetchVolatilityInterruptions = fetch_volatility_interruptions
+        fetchStockWarnings = fetch_stock_warnings
+        fetchInvestorTrading = fetch_investor_trading
+        fetchRankings = fetch_rankings
+        fetchMarketCalendar = fetch_market_calendar
+        refreshMarketCalendar = refresh_market_calendar
+        fetchBalance = fetch_balance
+        parseBalance = parse_balance
+        createOrder = create_order
+        createTriggerOrder = create_trigger_order
+        cancelOrder = cancel_order
+        editOrder = edit_order
+        cancelAllOrders = cancel_all_orders
+        fetchOpenOrders = fetch_open_orders
+        fetchOrders = fetch_orders
+        fetchOrder = fetch_order
+        fetchMyTrades = fetch_my_trades
+        parseOrder = parse_order
+        parseTrade = parse_trade

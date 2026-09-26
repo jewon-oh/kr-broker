@@ -42,7 +42,7 @@ ccxt 와 같은 모양으로 다룬다. 실시간(`watch_*`)은 이 클래스를
 import json
 import logging
 import math
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, cast
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple, cast
 
 from kr_broker.abstract.toss import ImplicitAPI
 from kr_broker.base.exchange import Exchange
@@ -2131,3 +2131,50 @@ class toss(Exchange, ImplicitAPI):
                 results.append(self.extend(order, {'info': info}))
         logger.info('[toss] 미체결 주문을 취소했다(%d건 중 %d건)', len(orders), sum(1 for order in results if order.get('status') == 'canceled'))
         return results
+
+    # 생성자가 붙이는 camelCase 별칭을 타입 검사기에 알린다. 빠지거나 남는 줄은 test_base.py 가 잡는다.
+    if TYPE_CHECKING:
+        needsAccount = needs_account
+        tokenAuth = token_auth
+        loadAccountSeq = load_account_seq
+        calculateRateLimiterCost = calculate_rate_limiter_cost
+        handleErrors = handle_errors
+        safeMarket = safe_market
+        fetchMarkets = fetch_markets
+        parseMarket = parse_market
+        priceToPrecision = price_to_precision
+        fetchStockWarnings = fetch_stock_warnings
+        fetchMarketInvestorTrading = fetch_market_investor_trading
+        fetchInvestorTrading = fetch_investor_trading
+        fetchRankings = fetch_rankings
+        fetchMarketSessions = fetch_market_sessions
+        fetchMarketCalendar = fetch_market_calendar
+        currentKrSession = current_kr_session
+        currentUsSession = current_us_session
+        parseTicker = parse_ticker
+        fetchTicker = fetch_ticker
+        fetchTickers = fetch_tickers
+        fetchOrderBook = fetch_order_book
+        fetchOHLCV = fetch_ohlcv
+        parseOHLCV = parse_ohlcv
+        fetchBalance = fetch_balance
+        parseBalance = parse_balance
+        fetchCommissions = fetch_commissions
+        refreshCommissions = refresh_commissions
+        fetchTradingFee = fetch_trading_fee
+        normalizeQuantity = normalize_quantity
+        createOrder = create_order
+        editOrder = edit_order
+        createTriggerOrder = create_trigger_order
+        createMarketBuyOrderWithCost = create_market_buy_order_with_cost
+        parseOrderStatus = parse_order_status
+        parseOrder = parse_order
+        fetchOrder = fetch_order
+        fetchOpenOrders = fetch_open_orders
+        fetchClosedOrders = fetch_closed_orders
+        fetchCanceledOrders = fetch_canceled_orders
+        fetchMyTrades = fetch_my_trades
+        fetchTrades = fetch_trades
+        parseTrade = parse_trade
+        cancelOrder = cancel_order
+        cancelAllOrders = cancel_all_orders
