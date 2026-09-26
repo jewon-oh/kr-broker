@@ -60,7 +60,7 @@ from kr_broker.async_support.kis_yahoo_candles import fetch_yahoo_candles
 from kr_broker.async_support.market_calendar import refresh_market_calendar as refresh_shared_market_calendar
 from kr_broker.base import functions as fn
 from kr_broker.base.decimal_to_precision import NO_PADDING, ROUND, TICK_SIZE, decimal_to_precision
-from kr_broker.base.exchange import kst_timestamp_of, strict_kst_timestamp_of
+from kr_broker.base.exchange import kst_timestamp_of, kst_trade_timestamps
 from kr_broker.base.errors import (
     ArgumentsRequired, AuthenticationError, BadRequest, BadResponse, BadSymbol, ExchangeError, InvalidOrder, MarketClosed, NotSupported,
     NullResponse, OrderNotFound, RateLimitExceeded, RequestTimeout,
@@ -117,8 +117,6 @@ DAY_MS = 24 * 60 * 60 * 1000
 HOLIDAY_LOOKBACK_MS = 30 * DAY_MS
 # 휴장일 캘린더를 신선하게 보는 시간. KIS 는 하루 한 번 호출을 권하므로 하루에 두 번까지만 부른다.
 CALENDAR_TTL_MS = 12 * 60 * 60 * 1000
-# 최근 체결의 시각이 지금보다 늦어도 받아들이는 폭. 증권사 서버와 이 컴퓨터의 시계 차이다.
-TRADE_CLOCK_SKEW_MS = 60_000
 
 # 매도매수구분코드: 체결·미체결 조회 응답에서 `01` 이 매도, `02` 가 매수다.
 SIDE_CODE_SELL = '01'
@@ -1371,18 +1369,7 @@ class kis(Exchange, ImplicitAPI):
         if len(rows) == 0:
             return []
         date = await self._last_traded_date(instrument, division)
-        stamps: List[Int] = []
-        previous: Int = None
-        known = date is not None
-        for row in rows:
-            hms = self.safe_string(row, 'stck_cntg_hour', '')
-            stamp = strict_kst_timestamp_of(date, hms) if known and hms != '' else None
-            if stamp is None or (previous is not None and stamp > previous):
-                known = False
-            stamps.append(stamp if known else None)
-            previous = stamp
-        if stamps[0] is not None and stamps[0] > self.milliseconds() + TRADE_CLOCK_SKEW_MS:
-            stamps = [None] * len(rows)
+        stamps = kst_trade_timestamps([cast(str, self.safe_string(row, 'stck_cntg_hour', '')) for row in rows], date, self.milliseconds())
         market = self._market_of(instrument)
         trades = [self.safe_trade({
             'info': row, 'id': None, 'order': None, 'timestamp': stamp, 'datetime': self.iso8601(stamp), 'symbol': market['symbol'],

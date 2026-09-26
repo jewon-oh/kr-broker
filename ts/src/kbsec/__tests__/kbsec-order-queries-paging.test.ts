@@ -11,7 +11,7 @@ const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 global.fetch = mockFetch as unknown as typeof fetch;
 
 import { kbsec } from '../../kbsec';
-import { InvalidOrder, OrderNotFound } from '../../base/errors';
+import { BadRequest, InvalidOrder, OrderNotFound } from '../../base/errors';
 import { KBSEC_TR } from '../kbsec-types';
 import { __resetKbsecTokenBreaker } from '../../testing';
 import { KIS_MASTER_FIXTURE } from '../../__tests__/support/kis-master-fixture';
@@ -101,6 +101,36 @@ describe('해외 체결 조회(SPQM2103)의 날짜 축', () => {
 
         expect(seen[KBSEC_TR.ORDERS_US]!.map((b) => b.ordr_dt)).toEqual(['20260922', '20260921']);
         expect(seen[KBSEC_TR.TRADES_KR]!.map((b) => b.ordr_dt)).toEqual(['20260923']);
+    });
+
+    it('되감기 상한을 오늘 이미 되감은 칸 수보다 작게 줄이면 undefined 가 아니라 BadRequest 를 요청 없이 던진다', async () => {
+        vi.setSystemTime(new Date('2026-09-21T01:00:00Z'));   // 월 10:00 KST
+        const seen = serve({ [KBSEC_TR.TRADES_KR]: (b) => b.ordr_dt === '20260921' ? futureDate() : ok({ nxt_key: '', Record1: [] }) });
+        const exchange = newExchange();
+        await exchange.fetchOpenOrders();   // 월요일이 2854 라 금요일로 한 칸 되감고, 그 칸 수를 그날 캐시한다
+        exchange.options.businessDateMaxBackoff = 0;
+
+        await expect(exchange.fetchOpenOrders()).rejects.toBeInstanceOf(BadRequest);
+        expect(seen[KBSEC_TR.TRADES_KR]!.map((b) => b.ordr_dt)).toEqual(['20260921', '20260918']);
+    });
+});
+
+describe('체결 id', () => {
+    const filled = (ordr_no: string, price: string) => ({
+        ordr_no, stnd_is_no: 'A005930', trd_dl_ccd_nm: '현금매수', ordr_q: '1', tl_ccls_q: '1', nccls_q: '0', ccls_uprc: price, ordr_uprc: price, ordr_ccd: '00',
+    });
+
+    it('★같은 체결의 id 는 조회 범위에 따라 바뀌지 않는다 — since 로 여러 날을 조회해도 그날만 조회한 것과 같다', async () => {
+        serve({
+            [KBSEC_TR.TRADES_KR]: (b) => ok({ nxt_key: '', Record1: [b.ordr_dt === '20260922' ? filled('0000000001', '70000') : filled('0000000002', '70100')] }),
+        });
+        const exchange = newExchange();
+
+        const range = await exchange.fetchMyTrades('005930/KRW', Date.parse('2026-09-22T00:00:00+09:00'));   // 22일(화)과 23일(수)
+        const single = await exchange.fetchMyTrades('005930/KRW', undefined, undefined, { date: '20260923' });
+
+        expect(range.map((t) => t.id)).toEqual(['0000000001#20260922#0', '0000000002#20260923#0']);
+        expect(single.map((t) => t.id)).toEqual(['0000000002#20260923#0']);
     });
 });
 

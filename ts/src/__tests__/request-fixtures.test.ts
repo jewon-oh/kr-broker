@@ -12,13 +12,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { deepExtend } from '../base/functions/generic';
 import type { Dict } from '../base/types';
+import { kbsec } from '../kbsec';
 import { kis } from '../kis';
-import { resetMarketCalendar } from '../testing';
+import { __resetKbsecTokenBreaker, resetMarketCalendar } from '../testing';
 import type { BrokerTokenStore } from '../options';
 import { toss } from '../toss';
 
 const FIXTURES = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../test/static/request');
-const BROKERS: Record<string, new (config: Dict) => Dict> = { kis, toss } as unknown as Record<string, new (config: Dict) => Dict>;
+const BROKERS: Record<string, new (config: Dict) => Dict> = { kbsec, kis, toss } as unknown as Record<string, new (config: Dict) => Dict>;
 
 interface FixtureRequest { method: string; url: string; headers: Record<string, string>; body: string | null }
 interface FixtureExchange {
@@ -121,8 +122,9 @@ const files = readdirSync(FIXTURES).filter((name) => name.endsWith('.json')).sor
 afterEach(() => {
     vi.unstubAllGlobals();
     vi.useRealTimers();
-    // 휴장일 캘린더는 모듈 전역이라 앞 케이스가 받은 캘린더가 다음 케이스의 세션 판정에 섞이지 않게 비운다.
+    // 휴장일 캘린더와 KB증권 토큰 차단기는 모듈 전역이라 앞 케이스의 상태가 다음 케이스에 섞이지 않게 비운다.
     resetMarketCalendar();
+    __resetKbsecTokenBreaker();
 });
 
 describe.each(files)('test/static/request/%s', (file) => {
@@ -139,8 +141,11 @@ describe.each(files)('test/static/request/%s', (file) => {
             vi.setSystemTime(c.now);
         }
         const broker = new Broker(config);
-        // 인자의 `null` 은 "주지 않음"(`undefined`)이다. Python 판의 `None` 기본값과 맞춘다.
-        const args = c.args.map((arg) => (arg === null ? undefined : arg));
+        // 인자의 `null` 은 "주지 않음"(`undefined`)이다. 인자가 사전이면 그 값의 `null` 도 같다. Python 판의 `None` 과 맞춘다.
+        const absent = (value: unknown): unknown => (value === null ? undefined : value);
+        const args = c.args.map((arg) => (arg !== null && typeof arg === 'object' && !Array.isArray(arg)
+            ? Object.fromEntries(Object.entries(arg).map(([key, value]) => [key, absent(value)]))
+            : absent(arg)));
 
         let result: unknown;
         let error: unknown;

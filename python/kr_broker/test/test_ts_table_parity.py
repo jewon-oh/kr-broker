@@ -12,6 +12,8 @@ from typing import Dict, List, Set, Tuple, get_type_hints
 from kr_broker import broker_krx_code, broker_market_group, krx_sell_tax, krx_tick_size
 from kr_broker.base import types as base_types
 from kr_broker.async_support.kis import KIS_EXCEPTIONS_EXACT
+from kr_broker.kbsec_error_codes import KBSEC_ERROR_DETAIL, KBSEC_PROCESS_CODES
+from kr_broker.kbsec_tr_inputs import KBSEC_TR_INPUTS
 
 TS = Path(__file__).resolve().parents[3] / 'ts' / 'src'
 
@@ -76,6 +78,22 @@ def test_krx_tick_size_table_matches() -> None:
 def test_kis_exact_error_codes_match() -> None:
     ts = _pairs(_literal(_source('kis/kis-error-codes.ts'), 'KIS_EXCEPTIONS_EXACT', '{', '};'))
     assert ts == {code: error.__name__ for code, error in KIS_EXCEPTIONS_EXACT.items()}
+
+
+def test_kbsec_process_codes_match() -> None:
+    text = _source('kbsec/kbsec-error-codes.ts')
+    assert _pairs(_literal(text, 'KBSEC_ERROR_DETAIL', '{', '} as const;')) == KBSEC_ERROR_DETAIL
+    entries = re.findall(r'(\w+):\s*\{\s*error:\s*(\w+)(?:,\s*detail:\s*KBSEC_ERROR_DETAIL\.(\w+))?\s*\}',
+                         _literal(text, 'KBSEC_PROCESS_CODES', '{', '};'))
+    ts = {code: (error, detail or None) for code, error, detail in entries}
+    assert ts and ts == {code: (mapping['error'].__name__, mapping.get('detail')) for code, mapping in KBSEC_PROCESS_CODES.items()}
+
+
+def test_kbsec_tr_input_layouts_match() -> None:
+    # 필드 순서까지 같아야 한다. KB 콘솔 요청과 같은 순서로 보내고, 요청 픽스처는 본문을 문자열로 비교한다.
+    body = _literal(_source('kbsec/kbsec-tr-inputs.ts'), 'KBSEC_TR_INPUTS', '{', '} as const;')
+    ts = {code: tuple(re.findall(r"'(\w+)'", fields)) for code, fields in re.findall(r'(\w+):\s*\[(.*?)\]', body, re.S)}
+    assert ts and ts == KBSEC_TR_INPUTS
 
 
 def test_market_group_tables_match() -> None:

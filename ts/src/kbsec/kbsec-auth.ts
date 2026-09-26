@@ -78,8 +78,8 @@ function kbsecProcessCodeOf(text: string): string | undefined {
 const AUTH_TIMEOUT_MS = 10_000;
 
 /**
- * JSON 을 POST 하고 본문까지 읽는다. 상한에 걸리면 **요청 자체를 끊고**(`AbortSignal`) `RequestTimeout` 을 던진다.
- * 연결 실패는 `NetworkError` 로 던진다. 전송 계층의 `TypeError` 를 그대로 올리면 호출부가 자격증명 오류(`AuthenticationError`)로 감싼다.
+ * JSON 을 POST 하고 본문까지 읽는다. 상한에 걸리면 **요청 자체를 끊고**(`AbortSignal`) `RequestTimeout` 을 던진다. 전송 계층이 스스로
+ * 시간 초과로 끝내도 `RequestTimeout` 이다. 연결 실패는 `NetworkError` 로 던진다. 전송 계층의 `TypeError` 를 그대로 올리면 호출부가 자격증명 오류(`AuthenticationError`)로 감싼다.
  *
  * 응답 헤더만 오고 본문이 안 오는 경우도 무한정 기다리게 되므로 본문 읽기까지 상한이 덮는다. `Promise.race` 는 전송 계층이 신호를 안 듣는
  * 경우의 백스톱이다. 버려진 promise 의 늦은 실패는 삼켜 `unhandledRejection` 으로 프로세스가 종료되지 않게 한다.
@@ -119,6 +119,11 @@ async function postJson(op: string, url: string, body: unknown): Promise<{ res: 
         // 취소가 먼저 걸려 전송 계층이 AbortError 로 실패한 경우도 같은 오류로 통일한다.
         if (timedOut && !(err instanceof RequestTimeout)) throw timeout();
         if (err instanceof BaseError) throw err;
+        // 전송 계층이 스스로 시간 초과로 끝낸 경우(`TimeoutError`, `AbortError`)도 `RequestTimeout` 이다. 기반 `sendHttpRequest` 와 같다.
+        const name = (err as { name?: unknown } | null)?.name;
+        if (name === 'TimeoutError' || name === 'AbortError') {
+            throw new RequestTimeout(`kbsec ${op} 요청이 시간 초과로 끝났다: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
+        }
         throw new NetworkError(`kbsec ${op} 요청 실패: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
     } finally {
         if (timer) clearTimeout(timer);

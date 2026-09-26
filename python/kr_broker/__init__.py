@@ -11,11 +11,12 @@ from kr_broker.base.errors import __all__ as _error_names
 from kr_broker.base.exchange import Exchange
 from kr_broker.base.precise import Precise
 from kr_broker.base.token_store import BrokerTokenStore
+from kr_broker.kbsec import kbsec
 from kr_broker.kis import kis
 from kr_broker.toss import toss
 
 __version__ = '0.5.0'
 
-exchanges = ['kis', 'toss']
+exchanges = ['kbsec', 'kis', 'toss']
 
-__all__ = ['Exchange', 'Precise', 'BrokerTokenStore', 'exchanges', 'kis', 'toss', '__version__'] + list(_error_names)
+__all__ = ['Exchange', 'Precise', 'BrokerTokenStore', 'exchanges', 'kbsec', 'kis', 'toss', '__version__'] + list(_error_names)

@@ -17,19 +17,20 @@ Python 3.10 이상이 필요하고, 의존성은 `requests`(동기 판), `aiohtt
 
 ## 지금 되는 것
 
-- 한국투자증권(`kr_broker.kis`)과 토스증권(`kr_broker.toss`)의 인증, 서명, 오류 처리, 호출 간격 조절입니다.
-- 두 증권사의 모든 엔드포인트를 암묵 메서드로 부를 수 있습니다. 한국투자증권 272개, 토스증권 36개입니다.
-- 두 증권사 모두 아래 표의 통합 메서드를 부를 수 있습니다. 실시간(`watch_ticker`, `watch_trades`, `watch_order_book`, `watch_orders`)은 `kr_broker.pro`에 있습니다.
+- 한국투자증권(`kr_broker.kis`), 토스증권(`kr_broker.toss`), KB증권(`kr_broker.kbsec`)의 인증, 서명, 오류 처리, 호출 간격 조절입니다.
+- 세 증권사의 모든 엔드포인트를 암묵 메서드로 부를 수 있습니다. 한국투자증권 272개, 토스증권 36개, KB증권 83개입니다.
+- 아래 표의 통합 메서드를 부를 수 있습니다. 실시간(`watch_ticker`, `watch_trades`, `watch_order_book`, `watch_orders`)은 `kr_broker.pro`에 있습니다.
+- KB증권은 TypeScript 판에서 옮기는 중입니다. 지금은 아래 표의 메서드만 옮겼고, 나머지 통합 메서드는 `has`가 `False`라서 부르면 `NotSupported`입니다. KB증권은 웹소켓을 제공하지 않아서 `kr_broker.pro`에 없습니다.
 
-| 분류 | 한국투자증권 통합 메서드 | 토스증권 통합 메서드 |
-|---|---|---|
-| 종목과 시세 | `fetch_markets`, `fetch_ticker`, `fetch_tickers`, `fetch_order_book`, `fetch_ohlcv` | `fetch_markets`, `fetch_ticker`, `fetch_tickers`, `fetch_order_book`, `fetch_ohlcv` |
-| 잔고와 수수료 | `fetch_balance`, `fetch_trading_fee` | `fetch_balance`, `fetch_trading_fee` |
-| 주문 | `create_order`, `create_limit_order`, `create_market_order`, `create_trigger_order`, `edit_order`, `cancel_order`, `cancel_all_orders` | `create_order`, `create_limit_order`, `create_market_order`, `create_market_buy_order_with_cost`, `create_trigger_order`, `edit_order`, `cancel_order`, `cancel_all_orders` |
-| 주문 조회 | `fetch_order`, `fetch_orders`, `fetch_open_orders`, `fetch_closed_orders`, `fetch_my_trades` | `fetch_order`, `fetch_open_orders`, `fetch_closed_orders`, `fetch_my_trades` |
-| 고유 조회 | `fetch_market_calendar`, `fetch_stock_warnings`, `fetch_investor_trading`, `fetch_rankings` | `fetch_market_calendar`, `fetch_stock_warnings`, `fetch_investor_trading`, `fetch_rankings` |
+| 분류 | 한국투자증권 통합 메서드 | 토스증권 통합 메서드 | KB증권 통합 메서드 |
+|---|---|---|---|
+| 종목과 시세 | `fetch_markets`, `fetch_ticker`, `fetch_tickers`, `fetch_order_book`, `fetch_ohlcv`, `fetch_trades` | `fetch_markets`, `fetch_ticker`, `fetch_tickers`, `fetch_order_book`, `fetch_ohlcv`, `fetch_trades` | `fetch_ticker`, `fetch_order_book`, `fetch_ohlcv`, `fetch_trades` |
+| 잔고와 수수료 | `fetch_balance`, `fetch_trading_fee` | `fetch_balance`, `fetch_trading_fee` | `fetch_trading_fee` |
+| 주문 | `create_order`, `create_limit_order`, `create_market_order`, `create_trigger_order`, `edit_order`, `cancel_order`, `cancel_all_orders` | `create_order`, `create_limit_order`, `create_market_order`, `create_market_buy_order_with_cost`, `create_trigger_order`, `edit_order`, `cancel_order`, `cancel_all_orders` | 아직 없음 |
+| 주문 조회 | `fetch_order`, `fetch_orders`, `fetch_open_orders`, `fetch_closed_orders`, `fetch_canceled_orders`, `fetch_my_trades` | `fetch_order`, `fetch_open_orders`, `fetch_closed_orders`, `fetch_canceled_orders`, `fetch_my_trades` | `fetch_order`, `fetch_orders`, `fetch_open_orders`, `fetch_closed_orders`, `fetch_my_trades` |
+| 고유 조회 | `fetch_market_calendar`, `fetch_volatility_interruptions`, `fetch_investor_trading`, `fetch_rankings` | `fetch_market_calendar`, `fetch_stock_warnings`, `fetch_market_investor_trading`, `fetch_rankings` | `fetch_market_calendar`, `fetch_investor_trading`, `fetch_overseas_order_status` |
 
-고유 조회는 이름이 같아도 증권사마다 인자와 결과가 다릅니다. 예를 들어 `fetch_investor_trading`은 한국투자증권에서 종목 단위이고 토스증권에서 시장 단위입니다.
+고유 조회는 이름이 같아도 증권사마다 인자와 결과가 다를 수 있습니다. 예를 들어 `fetch_rankings`는 순위 종류(`type`)의 값과 뒤따르는 인자가 한국투자증권과 토스증권에서 다릅니다. 토스증권의 시장 단위 투자자 매매동향은 `fetch_market_investor_trading`입니다. 옛 이름 `fetch_investor_trading`은 한 판 동안 경고 로그를 남기고 동작합니다.
 
 ## 쓰는 법
 
@@ -51,7 +52,7 @@ price = kis.privateGetUapiDomesticStockV1QuotationsInquirePrice({
 kis.set_sandbox_mode(True)             # 한국투자증권 모의투자
 ```
 
-암묵 메서드 이름은 `api 이름 + HTTP 메서드 + 경로`입니다. 전체 목록은 `kr_broker/abstract/kis.py`와 `kr_broker/abstract/toss.py`에 있습니다.
+암묵 메서드 이름은 `api 이름 + HTTP 메서드 + 경로`입니다. 전체 목록은 `kr_broker/abstract/kis.py`, `kr_broker/abstract/toss.py`, `kr_broker/abstract/kbsec.py`에 있습니다.
 
 주문 메서드의 숫자 인자(`amount`, `price`, `trigger_price`)와 `params`의 숫자 값에는 ccxt처럼 `Decimal`도 넘길 수 있습니다. 라이브러리가 입구에서 `float`로 바꾸므로, `float`로 나타낼 수 없는 자릿수는 요청에 실리지 않습니다. 결과의 숫자는 `float`입니다.
 
@@ -91,6 +92,40 @@ stop = toss.create_trigger_order('005930/KRW', 'market', 'sell', 1, None, 65000,
 
 `create_order`는 장 운영 캘린더로 지금 열린 세션을 확인합니다. 세션 밖이면 요청을 보내지 않고 `MarketClosed`를 던집니다.
 주문이 접수되면 주문 상세를 짧게 조회해 체결 수량과 평균가, 수수료를 확정합니다.
+
+### KB증권 통합 메서드
+
+KB증권 통합 메서드도 TypeScript 판과 같은 요청을 만들고 같은 결과를 돌려줍니다. 옮긴 범위와 인자의 뜻은 `kr_broker/kbsec.py` 모듈 설명에 있습니다.
+
+```python
+kb = kr_broker.kbsec({
+    'apiKey': APP_KEY, 'secret': APP_SECRET,               # 계좌번호는 받지 않는다. 계좌는 앱키에 묶인다
+    'options': {'hostAddr': {'ipAddr': HOST_IP, 'macAddr': HOST_MAC}},
+})
+ticker = kb.fetch_ticker('005930/KRW')
+book = kb.fetch_order_book('AAPL/USD')
+candles = kb.fetch_ohlcv('005930/KRW', '1d', limit=30)                      # 국내만 받는다
+orders = kb.fetch_open_orders('005930/KRW')                                 # 국내만 받는다
+trades = kb.fetch_my_trades('005930/KRW', since)                            # 종목이 필요하다. since 부터 영업일마다 조회한다
+holdings = kb.private_post_ssqm1801({'inq_clsf': '1', 'mkt_tm_ccd': '1'})   # 빠진 입력 필드는 빈 문자열로 채워 보낸다
+```
+
+모든 TR은 `POST /api/v1/{trcode}`이고, 본문은 `{dataHeader, dataBody}` 봉투입니다. KB증권은 TR마다 입력 필드를 모두 받아야 하므로, 빠진 필드는 빈 문자열로 채워 보냅니다.
+업무 오류는 HTTP 200으로도 500으로도 옵니다. 라이브러리는 상태 코드보다 봉투의 `processFlag`를 먼저 보고, `processCode`를 오류의 `broker_code`에 싣습니다.
+
+`fetch_ohlcv`는 국내 종목만 받습니다. 해외 차트는 15분 지연 시세라서 `NotSupported`를 던집니다. 국내 `fetch_trades`는 체결 행에 날짜가 없어 일봉을 한 번 더 조회하고,
+거래량이 있는 가장 최근 거래일을 날짜로 붙입니다. 두 조회는 `options['masterData']`로 코스닥 종목임을 알 때만 코스닥 시장구분으로 보냅니다.
+KB증권에는 수수료 조회 TR이 없어서 `fetch_trading_fee`는 공시 요율로 추정한 값입니다(`info['estimated']`가 `True`).
+
+`dataHeader`에는 호스트의 IP 주소와 MAC 주소를 싣고, KB증권은 빈 값을 받지 않습니다. `options['hostAddr']`로 두 값을 주지 않으면 이 호스트에서 찾아 씁니다.
+TypeScript 판은 네트워크 인터페이스 목록에서 첫 외부 IPv4 주소를 고르고, Python 판은 기본 경로의 주소를 고릅니다. 인터페이스가 여럿인 호스트에서는 두 판이 다른 주소를 보낼 수 있으므로, 운영에서는 `options['hostAddr']`를 줍니다.
+
+토큰이 무효라는 응답(HTTP 401, `I445`)을 받으면 토큰을 다시 발급하고 요청을 한 번만 다시 보냅니다. 주문 TR도 같습니다. KB증권이 다시 발급한 토큰의 `jti`가 실패한 토큰과 같으면, 그 토큰을 폐기한 뒤 한 번 더 발급합니다.
+다시 보낸 요청도 토큰 실패로 끝나는 일이 앱키마다 5번 이어지면, 10분 동안 요청을 보내지 않고 `ExchangeNotAvailable`을 던집니다. KB증권은 잘못된 조회를 과도하게 반복하는 것을 계정 제한 사유로 듭니다.
+
+주문 목록(`fetch_orders`, `fetch_open_orders`, `fetch_closed_orders`)은 국내 종목만 받고 `since`를 쓰지 않습니다. 목록의 행에 주문 시각이 없기 때문입니다.
+`fetch_my_trades`와 `fetch_order`는 미국 종목도 받습니다. 분할체결은 주문번호를 지운 연속 행으로 오는데, 라이브러리가 이 행을 앞 주문에 붙입니다.
+조회일은 KB증권 영업일로 맞춥니다. 휴장일이라 거절되면(`2854`) 영업일을 하나씩 더 되돌려 다시 조회합니다. `fetch_my_trades`의 `since`는 31일 전까지만 받습니다.
 
 ### 오류
 

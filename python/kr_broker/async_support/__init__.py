@@ -17,6 +17,7 @@
 
 from kr_broker import __version__
 from kr_broker.async_support.base.exchange import Exchange
+from kr_broker.async_support.kbsec import kbsec
 from kr_broker.async_support.kis import kis
 from kr_broker.async_support.toss import toss
 from kr_broker.base.errors import *  # noqa: F401,F403 - ccxt 처럼 오류 클래스를 최상위에서도 부른다
@@ -24,6 +25,6 @@ from kr_broker.base.errors import __all__ as _error_names
 from kr_broker.base.precise import Precise
 from kr_broker.base.token_store import BrokerTokenStore
 
-exchanges = ['kis', 'toss']
+exchanges = ['kbsec', 'kis', 'toss']
 
-__all__ = ['Exchange', 'Precise', 'BrokerTokenStore', 'exchanges', 'kis', 'toss', '__version__'] + list(_error_names)
+__all__ = ['Exchange', 'Precise', 'BrokerTokenStore', 'exchanges', 'kbsec', 'kis', 'toss', '__version__'] + list(_error_names)
