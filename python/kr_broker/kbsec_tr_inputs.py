@@ -231,6 +231,7 @@ def fill_tr_inputs(tr_code: str, values: Mapping[str, Any]) -> Dict[str, Any]:
 
     - 호출하는 쪽이 준 값은 그대로 두고, 빠진 필드(`None` 포함)만 빈 문자열로 채운다. 필드 순서는 스펙 순서다.
     - 스펙에 없는 키는 경고를 남기고 뒤에 붙여 그대로 보낸다. 오타를 조용히 삼키지 않되, 스펙이 낡았을 수도 있어 막지는 않는다.
+      값이 `None` 인 키는 빼고 보낸다. TypeScript 판에서 값이 `undefined` 인 키가 JSON 에서 빠지는 것과 같다.
     - 표에 없는 TR 은 입력을 그대로 돌려준다.
     """
     spec = KBSEC_TR_INPUTS.get(tr_code.upper())
@@ -244,5 +245,6 @@ def fill_tr_inputs(tr_code: str, values: Mapping[str, Any]) -> Dict[str, Any]:
         value = values.get(field)
         out[field] = '' if value is None else value
     for key in unknown:
-        out[key] = values[key]
+        if values[key] is not None:
+            out[key] = values[key]
     return out

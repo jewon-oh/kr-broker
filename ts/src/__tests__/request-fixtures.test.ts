@@ -141,8 +141,11 @@ describe.each(files)('test/static/request/%s', (file) => {
             vi.setSystemTime(c.now);
         }
         const broker = new Broker(config);
-        // 인자의 `null` 은 "주지 않음"(`undefined`)이다. Python 판의 `None` 기본값과 맞춘다.
-        const args = c.args.map((arg) => (arg === null ? undefined : arg));
+        // 인자의 `null` 은 "주지 않음"(`undefined`)이다. 인자가 사전이면 그 값의 `null` 도 같다. Python 판의 `None` 과 맞춘다.
+        const absent = (value: unknown): unknown => (value === null ? undefined : value);
+        const args = c.args.map((arg) => (arg !== null && typeof arg === 'object' && !Array.isArray(arg)
+            ? Object.fromEntries(Object.entries(arg).map(([key, value]) => [key, absent(value)]))
+            : absent(arg)));
 
         let result: unknown;
         let error: unknown;

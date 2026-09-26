@@ -69,6 +69,56 @@
             }
         },
         {
+            "description": "암묵 메서드는 스펙에 없는 키의 값이 비어 있으면(null) 본문에서 뺀다. 스펙에 있는 키의 빈 값은 빈 문자열로 채운다",
+            "method": "privatePostSsqm1801",
+            "args": [
+                {
+                    "inq_clsf": "1",
+                    "is_no": null,
+                    "mkt_tm_ccd": "1",
+                    "memo_key": null,
+                    "nxt_key": ""
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm1801",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"is_no\":\"\",\"mkt_tm_ccd\":\"1\",\"spclz_ordr_ccd\":\"\",\"act_cd\":\"\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "o_msg": "정상"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "dataHeader": {
+                    "processFlag": "A",
+                    "processCode": "0011",
+                    "processMessage": "정상적으로 조회되었습니다."
+                },
+                "dataBody": {
+                    "o_msg": "정상"
+                }
+            }
+        },
+        {
             "description": "저장소에 토큰이 없으면 봉투 형태로 발급해 저장소에 넣고 TR 을 보낸다",
             "tokenStore": {},
             "method": "privatePostSsqm1801",

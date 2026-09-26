@@ -44,7 +44,8 @@ TypeScript 판이 실계좌로 확인한 기준 구현이므로, 새 케이스�
   `undefined`의 구분이 없기 때문이다. 그래서 `output`에는 값이 있는 키만 적는다.
 - 오류(`error`)는 클래스 이름을 비교하고, `detail`과 `brokerCode`는 적은 것만 비교한다. Python 판은 `brokerCode`를 `broker_code`로 읽는다.
   `brokerCode`의 `null`은 그 필드가 없어야 한다는 뜻이다(증권사 응답 없이 막은 오류).
-- `args`의 `null`은 TypeScript 판에서 `undefined`로 넘긴다. Python 판에서 인자의 기본값이 `None`인 것과 맞춘다.
+- `args`의 `null`은 TypeScript 판에서 `undefined`로 넘긴다. 인자가 객체(`params` 등)면 그 값의 `null`도 `undefined`로 넘긴다. Python 판에서
+  인자의 기본값과 "값 없음"이 `None`인 것과 맞춘다.
 - 요청 본문은 문자열 그대로 비교한다. 두 판 모두 JavaScript의 `JSON.stringify`와 같은 모양(공백 없음, 한글 그대로, 정수 값의 실수는 소수점 없이)으로 보낸다.
 - `http` 목록보다 요청이 많거나 적으면 실패한다.
 - 증권사 API 가 아닌 요청도 같은 `http` 목록이 응답한다. 한국투자증권 `fetchOHLCV` 의 야후 파이낸스 캔들 요청이 그렇다. 이 요청은 서명과 공통 헤더 없이
