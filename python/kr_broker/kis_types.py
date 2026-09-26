@@ -47,7 +47,7 @@ KIS_WS_FIELD = {
     'DOMESTIC_BIDP_RSQN_BASE': 33,
 }
 
-# 아래 속도 제한 코드 셋은 라이브러리 안에서 쓰지 않는다. 이 오류는 `RateLimitExceeded` 로 가리고, 코드는 오류의 `detail` 에 있다.
+# 아래 속도 제한 코드 셋은 라이브러리 안에서 쓰지 않는다. 이 오류는 `RateLimitExceeded` 로 가리고, 증권사가 준 코드는 오류의 `broker_code` 에 있다.
 # 다음 판에서 지운다.
 # 초당 거래건수 초과. 조회는 다시 보내고 주문은 다시 보내지 않는다(이중 주문 위험).
 KIS_RATE_LIMIT_ERROR_CODE = 'EGW00201'

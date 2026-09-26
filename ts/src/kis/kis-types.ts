@@ -26,20 +26,20 @@ export const KIS_API_DOMAINS = {
 /**
  * 초당 거래건수 초과 오류 코드. 조회는 다시 보내고 주문은 다시 보내지 않는다(이중 주문 위험).
  *
- * @deprecated 라이브러리 안에서 쓰지 않는다. 이 오류는 `RateLimitExceeded` 로 가리고, 코드는 오류의 `detail` 에 있다. 다음 판에서 지운다.
+ * @deprecated 라이브러리 안에서 쓰지 않는다. 이 오류는 `RateLimitExceeded` 로 가리고, 증권사가 준 코드는 오류의 `brokerCode` 에 있다. 다음 판에서 지운다.
  */
 export const KIS_RATE_LIMIT_ERROR_CODE = 'EGW00201';
 /**
  * 원장(ledger) 초당 거래건수 초과. `EGW00201` 과 같은 계열이고 HTTP 500 으로 온다.
  * 잔고·캔들 조회가 이 코드로 곧장 실패하면 호출하는 쪽이 잔액 부족으로 오해해 주문을 건너뛸 수 있으므로 조회 재시도 대상에 넣는다.
  *
- * @deprecated 라이브러리 안에서 쓰지 않는다. 이 오류는 `RateLimitExceeded` 로 가리고, 코드는 오류의 `detail` 에 있다. 다음 판에서 지운다.
+ * @deprecated 라이브러리 안에서 쓰지 않는다. 이 오류는 `RateLimitExceeded` 로 가리고, 증권사가 준 코드는 오류의 `brokerCode` 에 있다. 다음 판에서 지운다.
  */
 export const KIS_LEDGER_RATE_LIMIT_ERROR_CODE = 'EGW00215';
 /**
  * 초당 거래건수 초과 오류 코드 전체.
  *
- * @deprecated 라이브러리 안에서 쓰지 않는다. 이 오류는 `RateLimitExceeded` 로 가리고, 코드는 오류의 `detail` 에 있다. 다음 판에서 지운다.
+ * @deprecated 라이브러리 안에서 쓰지 않는다. 이 오류는 `RateLimitExceeded` 로 가리고, 증권사가 준 코드는 오류의 `brokerCode` 에 있다. 다음 판에서 지운다.
  */
 export const KIS_RATE_LIMIT_ERROR_CODES = [KIS_RATE_LIMIT_ERROR_CODE, KIS_LEDGER_RATE_LIMIT_ERROR_CODE] as const;
 
