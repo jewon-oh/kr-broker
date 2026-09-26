@@ -455,6 +455,33 @@
             }
         },
         {
+            "description": "fetchTicker 는 표의 통합 코드 심볼(ProShares Ultra Semiconductors/USD)을 티커 USD 로 조회해 그 심볼로 돌려준다",
+            "method": "fetchTicker",
+            "args": ["ProShares Ultra Semiconductors/USD"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/prices?symbols=USD",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": { "result": [{ "symbol": "USD", "lastPrice": "45", "currency": "USD", "timestamp": "2026-03-25T14:30:00Z" }] }
+                    }
+                }
+            ],
+            "output": {
+                "symbol": "ProShares Ultra Semiconductors/USD",
+                "timestamp": 1774449000000,
+                "datetime": "2026-03-25T14:30:00.000Z",
+                "close": 45,
+                "last": 45,
+                "info": { "symbol": "USD", "lastPrice": "45", "currency": "USD", "timestamp": "2026-03-25T14:30:00Z" }
+            }
+        },
+        {
             "description": "fetchTicker 응답에 종목이 없으면 NullResponse 다",
             "method": "fetchTicker",
             "args": ["005930"],
@@ -1263,7 +1290,7 @@
             }
         },
         {
-            "description": "fetchBalance 는 보유 종목 키가 현금 키와 겹치면(미국 티커 USD 와 달러 현금) 한쪽을 덮어쓰지 않고 NotSupported 를 던진다",
+            "description": "fetchBalance 는 미국 티커 USD 보유를 표의 통합 코드(ProShares Ultra Semiconductors) 키에 싣고 달러 현금은 USD 키에 둔다",
             "method": "fetchBalance",
             "args": [],
             "http": [
@@ -1324,6 +1351,89 @@
                         "status": 200,
                         "body": { "result": { "currency": "USD", "cashBuyingPower": "2609.73" } }
                     }
+                }
+            ],
+            "output": {
+                "info": {
+                    "holdings": {
+                        "items": [
+                            {
+                                "symbol": "USD",
+                                "name": "프로셰어즈 울트라 반도체",
+                                "marketCountry": "US",
+                                "currency": "USD",
+                                "quantity": "2",
+                                "averagePurchasePrice": "40"
+                            }
+                        ]
+                    },
+                    "buyingPower": { "KRW": { "currency": "KRW", "cashBuyingPower": "300000" }, "USD": { "currency": "USD", "cashBuyingPower": "2609.73" } }
+                },
+                "KRW": { "free": 300000, "info": { "currency": "KRW", "cashBuyingPower": "300000" } },
+                "USD": { "free": 2609.73, "info": { "currency": "USD", "cashBuyingPower": "2609.73" } },
+                "ProShares Ultra Semiconductors": {
+                    "total": 2,
+                    "info": {
+                        "symbol": "USD",
+                        "name": "프로셰어즈 울트라 반도체",
+                        "marketCountry": "US",
+                        "currency": "USD",
+                        "quantity": "2",
+                        "averagePurchasePrice": "40"
+                    }
+                },
+                "free": { "KRW": 300000, "USD": 2609.73 },
+                "used": {},
+                "total": { "ProShares Ultra Semiconductors": 2 }
+            }
+        },
+        {
+            "description": "fetchBalance 는 표에 없는 티커가 현금 키와 겹치면(미국 티커 KRW 와 원화 현금) 한쪽을 덮어쓰지 않고 NotSupported 를 던진다",
+            "method": "fetchBalance",
+            "args": [],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/holdings",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "items": [
+                                    {
+                                        "symbol": "KRW",
+                                        "name": "테스트",
+                                        "marketCountry": "US",
+                                        "currency": "USD",
+                                        "quantity": "1",
+                                        "averagePurchasePrice": "10"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/buying-power?currency=KRW",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": { "status": 200, "body": { "result": { "currency": "KRW", "cashBuyingPower": "300000" } } }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/buying-power?currency=USD",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001" },
+                        "body": null
+                    },
+                    "response": { "status": 200, "body": { "result": { "currency": "USD", "cashBuyingPower": "2609.73" } } }
                 }
             ],
             "error": { "class": "NotSupported" }
@@ -2331,6 +2441,140 @@
                 "timeInForce": "IOC",
                 "side": "sell",
                 "amount": 0.5,
+                "status": "open",
+                "trades": [],
+                "fees": []
+            }
+        },
+        {
+            "description": "createOrder 는 옛 심볼(USD/USD)로 불러도 토스에 티커 USD 를 보내고 결과 심볼은 표의 통합 코드다",
+            "now": 1774449000000,
+            "method": "createOrder",
+            "args": ["USD/USD", "limit", "buy", 2, 40.5, { "confirmExecution": false }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/market-calendar/US",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "previousBusinessDay": {
+                                    "date": "2026-03-24",
+                                    "dayMarket": { "startTime": "2026-03-24T09:00:00+09:00", "endTime": "2026-03-24T16:50:00+09:00" },
+                                    "preMarket": { "startTime": "2026-03-24T17:00:00+09:00", "endTime": "2026-03-24T22:30:00+09:00" },
+                                    "regularMarket": { "startTime": "2026-03-24T22:30:00+09:00", "endTime": "2026-03-25T05:00:00+09:00" },
+                                    "afterMarket": { "startTime": "2026-03-25T05:00:00+09:00", "endTime": "2026-03-25T07:00:00+09:00" }
+                                },
+                                "today": {
+                                    "date": "2026-03-25",
+                                    "dayMarket": { "startTime": "2026-03-25T09:00:00+09:00", "endTime": "2026-03-25T16:50:00+09:00" },
+                                    "preMarket": { "startTime": "2026-03-25T17:00:00+09:00", "endTime": "2026-03-25T22:30:00+09:00" },
+                                    "regularMarket": { "startTime": "2026-03-25T22:30:00+09:00", "endTime": "2026-03-26T05:00:00+09:00" },
+                                    "afterMarket": { "startTime": "2026-03-26T05:00:00+09:00", "endTime": "2026-03-26T07:00:00+09:00" }
+                                },
+                                "nextBusinessDay": {
+                                    "date": "2026-03-26",
+                                    "dayMarket": { "startTime": "2026-03-26T09:00:00+09:00", "endTime": "2026-03-26T16:50:00+09:00" },
+                                    "preMarket": { "startTime": "2026-03-26T17:00:00+09:00", "endTime": "2026-03-26T22:30:00+09:00" },
+                                    "regularMarket": { "startTime": "2026-03-26T22:30:00+09:00", "endTime": "2026-03-27T05:00:00+09:00" },
+                                    "afterMarket": { "startTime": "2026-03-27T05:00:00+09:00", "endTime": "2026-03-27T07:00:00+09:00" }
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001", "Content-Type": "application/json" },
+                        "body": "{\"symbol\":\"USD\",\"side\":\"BUY\",\"orderType\":\"LIMIT\",\"quantity\":\"2\",\"price\":\"40.5\"}"
+                    },
+                    "response": { "status": 200, "body": { "result": { "orderId": "ORD-0301" } } }
+                }
+            ],
+            "output": {
+                "info": { "orderId": "ORD-0301" },
+                "id": "ORD-0301",
+                "timestamp": 1774449000000,
+                "datetime": "2026-03-25T14:30:00.000Z",
+                "symbol": "ProShares Ultra Semiconductors/USD",
+                "type": "limit",
+                "side": "buy",
+                "price": 40.5,
+                "amount": 2,
+                "status": "open",
+                "trades": [],
+                "fees": []
+            }
+        },
+        {
+            "description": "createOrder 는 표의 통합 코드 심볼(ProShares Ultra Semiconductors/USD)로 불러도 토스에 티커 USD 를 보낸다",
+            "now": 1774449000000,
+            "method": "createOrder",
+            "args": ["ProShares Ultra Semiconductors/USD", "limit", "buy", 2, 40.5, { "confirmExecution": false }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/market-calendar/US",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "previousBusinessDay": {
+                                    "date": "2026-03-24",
+                                    "dayMarket": { "startTime": "2026-03-24T09:00:00+09:00", "endTime": "2026-03-24T16:50:00+09:00" },
+                                    "preMarket": { "startTime": "2026-03-24T17:00:00+09:00", "endTime": "2026-03-24T22:30:00+09:00" },
+                                    "regularMarket": { "startTime": "2026-03-24T22:30:00+09:00", "endTime": "2026-03-25T05:00:00+09:00" },
+                                    "afterMarket": { "startTime": "2026-03-25T05:00:00+09:00", "endTime": "2026-03-25T07:00:00+09:00" }
+                                },
+                                "today": {
+                                    "date": "2026-03-25",
+                                    "dayMarket": { "startTime": "2026-03-25T09:00:00+09:00", "endTime": "2026-03-25T16:50:00+09:00" },
+                                    "preMarket": { "startTime": "2026-03-25T17:00:00+09:00", "endTime": "2026-03-25T22:30:00+09:00" },
+                                    "regularMarket": { "startTime": "2026-03-25T22:30:00+09:00", "endTime": "2026-03-26T05:00:00+09:00" },
+                                    "afterMarket": { "startTime": "2026-03-26T05:00:00+09:00", "endTime": "2026-03-26T07:00:00+09:00" }
+                                },
+                                "nextBusinessDay": {
+                                    "date": "2026-03-26",
+                                    "dayMarket": { "startTime": "2026-03-26T09:00:00+09:00", "endTime": "2026-03-26T16:50:00+09:00" },
+                                    "preMarket": { "startTime": "2026-03-26T17:00:00+09:00", "endTime": "2026-03-26T22:30:00+09:00" },
+                                    "regularMarket": { "startTime": "2026-03-26T22:30:00+09:00", "endTime": "2026-03-27T05:00:00+09:00" },
+                                    "afterMarket": { "startTime": "2026-03-27T05:00:00+09:00", "endTime": "2026-03-27T07:00:00+09:00" }
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.tossinvest.com/api/v1/orders",
+                        "headers": { "Authorization": "Bearer tok-stored", "X-Tossinvest-Account": "ACC-001", "Content-Type": "application/json" },
+                        "body": "{\"symbol\":\"USD\",\"side\":\"BUY\",\"orderType\":\"LIMIT\",\"quantity\":\"2\",\"price\":\"40.5\"}"
+                    },
+                    "response": { "status": 200, "body": { "result": { "orderId": "ORD-0301" } } }
+                }
+            ],
+            "output": {
+                "info": { "orderId": "ORD-0301" },
+                "id": "ORD-0301",
+                "timestamp": 1774449000000,
+                "datetime": "2026-03-25T14:30:00.000Z",
+                "symbol": "ProShares Ultra Semiconductors/USD",
+                "type": "limit",
+                "side": "buy",
+                "price": 40.5,
+                "amount": 2,
                 "status": "open",
                 "trades": [],
                 "fees": []

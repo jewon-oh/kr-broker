@@ -14,7 +14,8 @@ ccxt 와 같은 모양으로 다룬다. 실시간(`watch_*`)은 이 클래스를
     `GET /accounts` 의 첫 계좌로 채운다. 토스에는 모의투자 환경이 없다.
 
 심볼
-    국내는 `005930/KRW`, 미국은 `AAPL/USD` 다. `load_markets()` 없이도 코드의 모양으로 시장을 판별한다. `load_markets()` 를 부르면
+    국내는 `005930/KRW`, 미국은 `AAPL/USD` 다. `load_markets()` 없이도 코드의 모양으로 시장을 판별한다. 현금 코드와 같은 티커(`USD`)는
+    `commonStockCodes` 의 통합 코드로 심볼을 만든다(`ProShares Ultra Semiconductors/USD`). 입력은 `USD/USD` 도 받는다. `load_markets()` 를 부르면
     토스가 거래할 수 있는 종목 전체(`GET /stocks/all`)가 `markets` 에 들어가고, 종목 유형(`ETF` 등)이 `market['options']` 에 실린다.
 
 주문
@@ -699,14 +700,15 @@ class toss(Exchange, ImplicitAPI):
 
     def _market_from_symbol(self, symbol: str) -> Dict[str, Any]:
         """심볼(`005930`, `005930/KRW`, `AAPL`)에서 종목을 만든다. 종목을 불러오지 않았을 때 코드의 모양으로 시장을 판별한다.
-        클래스 주식의 `BRK/B` 는 통합 표기 `BRK.B` 로 바꾼다."""
-        code = symbol_base_code(symbol)
+        클래스 주식의 `BRK/B` 는 통합 표기 `BRK.B` 로 바꾼다. `commonStockCodes` 의 통합 코드는 티커로 돌려 id 로 쓴다."""
+        code = self.stock_ticker(symbol_base_code(symbol))
         country = toss_market_country(code)
         quote = 'KRW' if country == 'KR' else 'USD'
+        base = self.common_stock_code(code)
         return self.safe_market_structure({
             'id': code,
-            'symbol': f'{code}/{quote}',
-            'base': code,
+            'symbol': f'{base}/{quote}',
+            'base': base,
             'quote': quote,
             'baseId': code,
             'quoteId': quote,
@@ -721,14 +723,18 @@ class toss(Exchange, ImplicitAPI):
 
     def market(self, symbol: Str) -> Dict[str, Any]:
         """통합 심볼(또는 종목 id)로 종목을 찾는다. 불러온 종목이 있으면 그것을, 없으면 심볼의 모양으로 만든다.
-        토스에 없는 종목도 여기서는 막지 않는다. 주문을 보내면 토스가 `stock-not-found`(`BadSymbol`)로 알려 준다."""
+        토스에 없는 종목도 여기서는 막지 않는다. 주문을 보내면 토스가 `stock-not-found`(`BadSymbol`)로 알려 준다.
+        옛 심볼(`USD/USD`)처럼 모양으로 만든 심볼이 불러온 종목에 있으면 그 종목을 쓴다."""
         if symbol is None:
             raise ArgumentsRequired(f'{self.id} market() requires a symbol argument')
         loaded = (self.markets or {}).get(symbol)
         if loaded is None:
             candidates = (self.markets_by_id or {}).get(symbol)
             loaded = candidates[0] if candidates else None
-        return loaded if loaded is not None else self._market_from_symbol(symbol)
+        if loaded is not None:
+            return loaded
+        shaped = self._market_from_symbol(symbol)
+        return (self.markets or {}).get(shaped['symbol'], shaped)
 
     def safe_market(self, market_id: Str = None, market: Optional[Dict[str, Any]] = None, delimiter: Str = None,
                     market_type: Str = None) -> Dict[str, Any]:
@@ -765,10 +771,11 @@ class toss(Exchange, ImplicitAPI):
         quote = 'KRW' if country == 'KR' else 'USD'
         # 시장별 기본 위탁수수료율이다. 실제 요율은 `fetch_trading_fee`(`GET /commissions`)가 정한다.
         brokerage = TOSS_BROKERAGE_FEE if country == 'KR' else TOSS_US_BROKERAGE_FEE
+        base = self.common_stock_code(market_id)
         return self.safe_market_structure({
             'id': market_id,
-            'symbol': f'{market_id}/{quote}',
-            'base': market_id,
+            'symbol': f'{base}/{quote}',
+            'base': base,
             'quote': quote,
             'baseId': market_id,
             'quoteId': quote,
@@ -1041,8 +1048,9 @@ class toss(Exchange, ImplicitAPI):
 
         `params['symbol']` 을 주면 그 종목의 보유만, `params['currency']`(`KRW`·`USD`)를 주면 그 현금만 받는다. 둘 다 주면 그 종목의 보유와
         그 통화의 현금을 함께 받는다. 달러 현금을 받을 때 `options['krwIntegratedMargin']` 이 켜져 있으면 원화 예수금을 참고 환율로 환산해 더한다
-        (전체 잔고에는 이중 계상이라 더하지 않는다). 보유 종목 키가 같은 잔고의 현금 키와 겹치면(미국 티커 `USD` 와 달러 현금) 한쪽을
-        덮어쓰지 않고 `NotSupported` 를 던진다. `symbol` 과 `currency` 로 나눠 받는다.
+        (전체 잔고에는 이중 계상이라 더하지 않는다). 미국 티커 `USD` 처럼 현금 코드와 같은 티커는 `commonStockCodes` 의 통합 코드
+        (`ProShares Ultra Semiconductors`)가 키다. 표에 없는 티커가 현금 키와 겹치면 한쪽을 덮어쓰지 않고 `NotSupported` 를 던진다.
+        `symbol` 과 `currency` 로 나눠 받거나 `commonStockCodes` 에 그 티커를 더한다.
 
         `free` 는 지금 주문에 쓸 수 있는 양이다(ccxt 정의). 현금은 매수 가능 금액만 있고 예수금을 주는 API 가 없어 `total` 과 `used` 가 비어 있다.
         보유 종목의 `free` 는 `symbol` 로 한 종목만 받을 때 매도 가능 수량(`GET /sellable-quantity`)으로 채우고, 전체 잔고에서는 비어 있다.
@@ -1112,7 +1120,10 @@ class toss(Exchange, ImplicitAPI):
             quantity = self.safe_number(item, 'quantity')
             if quantity is None or not quantity > 0:
                 continue
-            held[item.get('symbol')] = {'free': sellable.get(item.get('symbol')), 'used': None, 'total': quantity, 'info': item}
+            # 키는 `parse_market` 의 `base` 다(`USD` → `ProShares Ultra Semiconductors`).
+            symbol = item.get('symbol')
+            key = self.common_stock_code(symbol) if isinstance(symbol, str) else symbol
+            held[key] = {'free': sellable.get(symbol), 'used': None, 'total': quantity, 'info': item}
         for code, power in (buying_power or {}).items():
             cash = self._parse_cash(power)
             info = dict(power) if isinstance(power, dict) else {}
@@ -1126,7 +1137,7 @@ class toss(Exchange, ImplicitAPI):
             # 겹친 키에 대입하면 보유나 현금 한쪽이 알림 없이 사라진다.
             if result.get(code) is not None:
                 raise NotSupported(f'{self.id} fetchBalance() 보유 종목 {code} 가 현금 {code} 와 키가 같아 한 잔고에 담을 수 없다. '
-                                   'params.symbol 로 그 종목의 보유를, params.currency 로 현금을 따로 받는다')
+                                   'params.symbol 로 그 종목의 보유를, params.currency 로 현금을 따로 받거나 commonStockCodes 에 그 티커의 통합 코드를 더한다')
             result[code] = holding
         return self.safe_balance(result)
 

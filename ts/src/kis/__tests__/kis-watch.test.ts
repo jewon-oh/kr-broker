@@ -85,6 +85,27 @@ describe('watchTicker, watchTrades', () => {
     });
 });
 
+describe('현금 코드와 같은 티커', () => {
+    it('옛 심볼(USD/USD)로 구독해도 티커 USD 로 구독하고, 시세 심볼은 표의 통합 코드다', async () => {
+        const amex = [{ code: 'USD', name: 'PROSHARES ULTRA SEMICONDUCTORS', market: 'AMS' as const, currency: 'USD' }];
+        const ex = newKis({ masterData: { ...KIS_MASTER_FIXTURE, amex } });
+        const stream = { subscribe: vi.fn(), stop: vi.fn() };
+        let onRecord: OnRecord = () => undefined;
+        vi.spyOn(ex, 'createRealtimeStream').mockImplementation(((record: OnRecord) => {
+            onRecord = record;
+            return stream;
+        }) as never);
+
+        const pending = ex.watchTicker('USD/USD');
+        await flush();
+        const fields = { rsym: 'DAMSUSD', symb: 'USD', kymd: '20260924', khms: '223000', last: '45' };
+        onRecord({ trId: 'HDFSCNT0', values: Object.values(fields), fields });
+
+        expect(stream.subscribe).toHaveBeenCalledWith('HDFSCNT0', 'DAMSUSD');
+        expect(await pending).toMatchObject({ symbol: 'ProShares Ultra Semiconductors/USD', last: 45 });
+    });
+});
+
 describe('watchOrderBook', () => {
     it('국내 호가 TR(H0STASP0)의 10단계를 매수는 높은 가격순, 매도는 낮은 가격순으로 정리하고 limit 로 자른다', async () => {
         const { ex, stream, emit } = withFakeStream();

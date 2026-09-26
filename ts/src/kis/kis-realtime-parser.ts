@@ -9,6 +9,7 @@
  * 순수 함수라 단위 테스트로 레이아웃을 고정한다(kis-realtime-parser.test).
  */
 
+import { COMMON_STOCK_CODES, commonStockCode } from '../broker-market-group';
 import { KIS_WS_TR, KIS_WS_FIELD, isOverseasSymbol } from './kis-types';
 
 export interface KisTradeRecord {
@@ -31,11 +32,11 @@ export type KisRealtimeRecord = KisTradeRecord | KisOrderbookRecord;
 
 /**
  * 실시간 raw 종목코드 → 체결가·호가 콜백의 심볼.
- * 국내(6자리) → `<code>/KRW`, 해외(ticker) → `<TICKER>/USD`.
+ * 국내(6자리) → `<code>/KRW`, 해외(ticker) → `<TICKER>/USD`. 현금 코드와 같은 티커는 표(`codes`)의 통합 코드를 쓴다(`USD` → `ProShares Ultra Semiconductors/USD`).
  */
-export function toStreamSymbol(rawSymbol: string): string {
+export function toStreamSymbol(rawSymbol: string, codes: Readonly<Record<string, string>> = COMMON_STOCK_CODES): string {
     const code = rawSymbol.toUpperCase();
-    return isOverseasSymbol(code) ? `${code}/${OVERSEAS_STREAM_QUOTE}` : `${code}/KRW`;
+    return isOverseasSymbol(code) ? `${commonStockCode(code, codes)}/${OVERSEAS_STREAM_QUOTE}` : `${code}/KRW`;
 }
 
 /**

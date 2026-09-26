@@ -587,7 +587,10 @@ export function kbsecMarketOf(symbol: string): StockMarketGroup {
     return isKrxDomesticCode(kbsecBaseSymbol(symbol)) ? 'KR' : 'US';
 }
 
-/** 도메인 심볼 → API 종목코드 (base 만). 클래스 주식의 `BRK/B` 는 통합 표기 `BRK.B` 로 바꾼다. */
+/**
+ * 도메인 심볼 → API 종목코드 (base 만). 클래스 주식의 `BRK/B` 는 통합 표기 `BRK.B` 로 바꾸고, `COMMON_STOCK_CODES` 의 통합 코드는 티커로 돌린다
+ * (`ProShares Ultra Semiconductors/USD` → `USD`).
+ */
 export function kbsecBaseSymbol(symbol: string): string {
     return symbolBaseCode(symbol.trim()).trim();
 }

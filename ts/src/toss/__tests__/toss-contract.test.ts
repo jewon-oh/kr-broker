@@ -90,6 +90,7 @@ const harness: BrokerContractHarness = {
         { symbol: 'BRK.B', quantity: '1' },
     ]),
     fetchBalanceWithCollidingKey: () => fetchBalanceWith([{ symbol: 'USD', quantity: '2' }]),
+    fetchBalanceWithUnlistedCollidingKey: () => fetchBalanceWith([{ symbol: 'KRW', quantity: '1' }]),
     market: (symbol) => makeToss().market(symbol),
 };
 

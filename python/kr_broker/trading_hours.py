@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional
 
 from kr_broker.base import functions as fn
 from kr_broker.broker_krx_code import is_krx_domestic_code
-from kr_broker.broker_market_group import is_stock_broker_exchange, market_group_of
+from kr_broker.broker_market_group import is_stock_broker_exchange, market_group_of, stock_ticker
 from kr_broker.kis_master_data import EMPTY_KIS_MASTER_DATA
 from kr_broker.kis_overseas_master import get_overseas_market_for_code
 from kr_broker.krx_trading_hours import check_krx_trading_hours_at, get_time_until_krx_open, krx_auction_buy_block_reason
@@ -48,12 +48,12 @@ def market_session_block_reason(exchange_id: str, symbol: str, now_ms: Optional[
     판정 축은 통화나 심볼 모양이 아니라 상장 거래소다. "국내가 아니면 미국"으로 보면 도쿄 종목에 미국 시간이 걸려 장중에 막고 마감 뒤에 연다.
     그래서 해외 종목은 마스터 데이터(`options['masterData']`)로 거래소를 찾고, 그 거래소의 시장 그룹을 모르면 막는다. 이 패키지가 모르는
     거래소 ID 면 제한하지 않는다. 시간표는 세 증권사 공용 게이트(`krx_order_block_reason`·`us_order_block_reason`)와 같고,
-    동시호가 신규 매수 차단은 `block_auction_buys` 를 켰을 때만 건다.
+    동시호가 신규 매수 차단은 `block_auction_buys` 를 켰을 때만 건다. `COMMON_STOCK_CODES` 의 통합 코드는 티커로 돌려 찾는다.
     """
     if not is_stock_broker_exchange(exchange_id):
         return None
     now = fn.milliseconds() if now_ms is None else now_ms
-    base = symbol.split('/')[0].strip().upper()
+    base = stock_ticker(symbol.split('/')[0].strip()).upper()
 
     def krx() -> Optional[str]:
         reason = trading_hours_block_reason(exchange_id, now)

@@ -772,6 +772,93 @@
             }
         },
         {
+            "description": "fetchTicker 는 옛 심볼(USD/USD)을 티커 USD 로 조회하고 표의 통합 코드 심볼로 돌려준다",
+            "config": {
+                "options": {
+                    "masterData": {
+                        "amex": [{ "code": "USD", "name": "PROSHARES ULTRA SEMICONDUCTORS", "nameKr": "프로셰어즈 울트라 반도체", "market": "AMS", "currency": "USD" }]
+                    }
+                }
+            },
+            "now": 1774450800000,
+            "method": "fetchTicker",
+            "args": ["USD/USD"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-price/v1/quotations/price?AUTH=&EXCD=AMS&SYMB=USD",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "HHDFS00000300",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "output": {
+                                "rsym": "DAMSUSD",
+                                "zdiv": "4",
+                                "base": "44.0000",
+                                "pvol": "900000",
+                                "last": "45.0000",
+                                "sign": "2",
+                                "diff": "1.0000",
+                                "rate": "+2.27",
+                                "tvol": "800000",
+                                "tamt": "36000000",
+                                "ordy": "매도불가",
+                                "open": "44.2000",
+                                "high": "45.3000",
+                                "low": "44.1000"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "symbol": "ProShares Ultra Semiconductors/USD",
+                "timestamp": 1774450800000,
+                "datetime": "2026-03-25T15:00:00.000Z",
+                "high": 45.3,
+                "low": 44.1,
+                "open": 44.2,
+                "close": 45,
+                "last": 45,
+                "previousClose": 44,
+                "change": 1,
+                "percentage": 2.27,
+                "baseVolume": 800000,
+                "quoteVolume": 36000000,
+                "info": {
+                    "rsym": "DAMSUSD",
+                    "zdiv": "4",
+                    "base": "44.0000",
+                    "pvol": "900000",
+                    "last": "45.0000",
+                    "sign": "2",
+                    "diff": "1.0000",
+                    "rate": "+2.27",
+                    "tvol": "800000",
+                    "tamt": "36000000",
+                    "ordy": "매도불가",
+                    "open": "44.2000",
+                    "high": "45.3000",
+                    "low": "44.1000"
+                },
+                "average": 44.6,
+                "vwap": 45
+            }
+        },
+        {
             "description": "fetchTicker 해외 마스터에 없는 종목은 요청 전에 BadSymbol 이다",
             "method": "fetchTicker",
             "args": ["MSFT/USD"],
@@ -1506,6 +1593,55 @@
                     2800000
                 ]
             ]
+        },
+        {
+            "description": "fetchOHLCV 는 표의 통합 코드 심볼(ProShares Ultra Semiconductors/USD)을 야후에 티커 USD 로 묻는다",
+            "config": {
+                "options": {
+                    "masterData": {
+                        "amex": [{ "code": "USD", "name": "PROSHARES ULTRA SEMICONDUCTORS", "nameKr": "프로셰어즈 울트라 반도체", "market": "AMS", "currency": "USD" }]
+                    }
+                }
+            },
+            "now": 1774440000000,
+            "method": "fetchOHLCV",
+            "args": ["ProShares Ultra Semiconductors/USD", "1d", null, 2],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://query1.finance.yahoo.com/v8/finance/chart/USD?interval=1d&range=5y",
+                        "headers": { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "chart": {
+                                "result": [
+                                    {
+                                        "meta": { "symbol": "USD", "currency": "USD", "exchangeTimezoneName": "America/New_York", "regularMarketPrice": 45 },
+                                        "timestamp": [1774272600, 1774359000],
+                                        "indicators": {
+                                            "quote": [
+                                                {
+                                                    "open": [44.1, 44.2],
+                                                    "high": [44.8, 45.3],
+                                                    "low": [43.9, 44.1],
+                                                    "close": [44, 45],
+                                                    "volume": [850000, 800000]
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ],
+                                "error": null
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [[1774224000000, 44.1, 44.8, 43.9, 44, 850000], [1774310400000, 44.2, 45.3, 44.1, 45, 800000]]
         },
         {
             "description": "fetchOHLCV 미국 일봉은 야후가 없는 심볼로 답하면 KIS 해외 기간별 시세로 다시 받는다",
@@ -4529,7 +4665,7 @@
             }
         },
         {
-            "description": "fetchBalance 는 보유 종목 키가 현금 키와 겹치면(미국 티커 USD 와 달러 현금) 한쪽을 덮어쓰지 않고 NotSupported 를 던진다",
+            "description": "fetchBalance 는 미국 티커 USD 보유를 표의 통합 코드(ProShares Ultra Semiconductors) 키에 싣고 달러 현금은 USD 키에 둔다",
             "method": "fetchBalance",
             "args": [{ "scope": ["us", "usd"] }],
             "http": [
@@ -4605,10 +4741,92 @@
                     }
                 }
             ],
-            "error": { "class": "NotSupported" }
+            "output": {
+                "info": {
+                    "overseas": {
+                        "holdings": [
+                            {
+                                "cano": "12345678",
+                                "acnt_prdt_cd": "01",
+                                "ovrs_pdno": "USD",
+                                "ovrs_item_name": "PROSHARES ULTRA SEMICONDUCTORS",
+                                "ovrs_cblc_qty": "2",
+                                "ord_psbl_qty": "2",
+                                "pchs_avg_pric": "40.0000",
+                                "ovrs_excg_cd": "AMEX",
+                                "tr_crcy_cd": "USD"
+                            }
+                        ]
+                    },
+                    "usd": {
+                        "stocks": [
+                            {
+                                "pdno": "USD",
+                                "prdt_name": "PROSHARES ULTRA SEMICONDUCTORS",
+                                "cblc_qty13": "2",
+                                "buy_crcy_cd": "USD",
+                                "frcr_evlu_amt2": "90.00"
+                            }
+                        ],
+                        "currencies": [{ "crcy_cd": "USD", "crcy_cd_name": "미국 달러", "frcr_dncl_amt_2": "1000.50", "frcr_buy_mgn_amt": "0" }]
+                    }
+                },
+                "USD": {
+                    "free": 1000.5,
+                    "used": 0,
+                    "total": 1000.5,
+                    "info": {
+                        "deposit": 1000.5,
+                        "buyMargin": 0,
+                        "stockValue": 90,
+                        "currencies": [{ "crcy_cd": "USD", "crcy_cd_name": "미국 달러", "frcr_dncl_amt_2": "1000.50", "frcr_buy_mgn_amt": "0" }],
+                        "stocks": [
+                            {
+                                "pdno": "USD",
+                                "prdt_name": "PROSHARES ULTRA SEMICONDUCTORS",
+                                "cblc_qty13": "2",
+                                "buy_crcy_cd": "USD",
+                                "frcr_evlu_amt2": "90.00"
+                            }
+                        ]
+                    }
+                },
+                "ProShares Ultra Semiconductors": {
+                    "free": 2,
+                    "used": 0,
+                    "total": 2,
+                    "info": {
+                        "cano": "12345678",
+                        "acnt_prdt_cd": "01",
+                        "ovrs_pdno": "USD",
+                        "ovrs_item_name": "PROSHARES ULTRA SEMICONDUCTORS",
+                        "ovrs_cblc_qty": "2",
+                        "ord_psbl_qty": "2",
+                        "pchs_avg_pric": "40.0000",
+                        "ovrs_excg_cd": "AMEX",
+                        "tr_crcy_cd": "USD",
+                        "rows": [
+                            {
+                                "cano": "12345678",
+                                "acnt_prdt_cd": "01",
+                                "ovrs_pdno": "USD",
+                                "ovrs_item_name": "PROSHARES ULTRA SEMICONDUCTORS",
+                                "ovrs_cblc_qty": "2",
+                                "ord_psbl_qty": "2",
+                                "pchs_avg_pric": "40.0000",
+                                "ovrs_excg_cd": "AMEX",
+                                "tr_crcy_cd": "USD"
+                            }
+                        ]
+                    }
+                },
+                "free": { "USD": 1000.5, "ProShares Ultra Semiconductors": 2 },
+                "used": { "USD": 0, "ProShares Ultra Semiconductors": 0 },
+                "total": { "USD": 1000.5, "ProShares Ultra Semiconductors": 2 }
+            }
         },
         {
-            "description": "fetchBalance 는 scope 로 보유만 받으면 미국 티커 USD 보유를 USD 키에 싣는다",
+            "description": "fetchBalance 는 scope 로 보유만 받아도 미국 티커 USD 보유를 표의 통합 코드 키에 싣는다",
             "method": "fetchBalance",
             "args": [{ "scope": "us" }],
             "http": [
@@ -4669,7 +4887,7 @@
                         ]
                     }
                 },
-                "USD": {
+                "ProShares Ultra Semiconductors": {
                     "free": 2,
                     "used": 0,
                     "total": 2,
@@ -4698,10 +4916,82 @@
                         ]
                     }
                 },
-                "free": { "USD": 2 },
-                "used": { "USD": 0 },
-                "total": { "USD": 2 }
+                "free": { "ProShares Ultra Semiconductors": 2 },
+                "used": { "ProShares Ultra Semiconductors": 0 },
+                "total": { "ProShares Ultra Semiconductors": 2 }
             }
+        },
+        {
+            "description": "fetchBalance 는 표에 없는 티커가 현금 키와 겹치면(미국 티커 KRW 와 원화 현금) 한쪽을 덮어쓰지 않고 NotSupported 를 던진다",
+            "method": "fetchBalance",
+            "args": [{ "scope": ["kr", "us"], "orderable": false }],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/trading/inquire-balance?CANO=12345678&ACNT_PRDT_CD=01&AFHR_FLPR_YN=N&OFL_YN=&INQR_DVSN=02&UNPR_DVSN=01&FUND_STTL_ICLD_YN=N&FNCG_AMT_AUTO_RDPT_YN=N&PRCS_DVSN=01&CTX_AREA_FK100=&CTX_AREA_NK100=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTC8434R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_fk100": "",
+                            "ctx_area_nk100": "",
+                            "output1": [],
+                            "output2": [{ "dnca_tot_amt": "500000" }]
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/trading/inquire-balance?CANO=12345678&ACNT_PRDT_CD=01&OVRS_EXCG_CD=NASD&TR_CRCY_CD=USD&CTX_AREA_FK200=&CTX_AREA_NK200=",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTS3012R",
+                            "custtype": "P"
+                        },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "MCA00000",
+                            "msg1": "정상처리 되었습니다.",
+                            "ctx_area_fk200": "",
+                            "ctx_area_nk200": "",
+                            "output1": [
+                                {
+                                    "cano": "12345678",
+                                    "acnt_prdt_cd": "01",
+                                    "ovrs_pdno": "KRW",
+                                    "ovrs_item_name": "TEST KRW TICKER",
+                                    "ovrs_cblc_qty": "1",
+                                    "ord_psbl_qty": "1",
+                                    "ovrs_excg_cd": "NASD",
+                                    "tr_crcy_cd": "USD"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "error": { "class": "NotSupported" }
         },
         {
             "description": "fetchBalance 는 조회가 하나라도 실패하면 던진다(원장 초당 거래건수 초과는 RateLimitExceeded)",
@@ -6908,6 +7198,122 @@
                 "type": "limit",
                 "side": "buy",
                 "price": 170.5,
+                "amount": 2,
+                "status": "open",
+                "trades": [],
+                "fees": []
+            }
+        },
+        {
+            "description": "createOrder 는 옛 심볼(USD/USD)로 불러도 KIS 에 티커 USD 를 보내고 결과 심볼은 표의 통합 코드다",
+            "config": {
+                "options": {
+                    "masterData": {
+                        "amex": [{ "code": "USD", "name": "PROSHARES ULTRA SEMICONDUCTORS", "nameKr": "프로셰어즈 울트라 반도체", "market": "AMS", "currency": "USD" }]
+                    }
+                }
+            },
+            "now": 1774450800000,
+            "method": "createOrder",
+            "args": ["USD/USD", "limit", "buy", 2, 40.5],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/trading/order",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTT1002U",
+                            "custtype": "P"
+                        },
+                        "body": "{\"CANO\":\"12345678\",\"ACNT_PRDT_CD\":\"01\",\"OVRS_EXCG_CD\":\"AMEX\",\"PDNO\":\"USD\",\"ORD_QTY\":\"2\",\"OVRS_ORD_UNPR\":\"40.5\",\"CTAC_TLNO\":\"\",\"MGCO_APTM_ODNO\":\"\",\"SLL_TYPE\":\"\",\"ORD_SVR_DVSN_CD\":\"0\",\"ORD_DVSN\":\"00\"}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "APBK0013",
+                            "msg1": "주문 전송 완료 되었습니다.",
+                            "output": { "KRX_FWDG_ORD_ORGNO": "01790", "ODNO": "ORD-0201", "ORD_TMD": "000001" }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "info": {
+                    "rt_cd": "0",
+                    "msg_cd": "APBK0013",
+                    "msg1": "주문 전송 완료 되었습니다.",
+                    "output": { "KRX_FWDG_ORD_ORGNO": "01790", "ODNO": "ORD-0201", "ORD_TMD": "000001" }
+                },
+                "id": "ORD-0201",
+                "timestamp": 1774450801000,
+                "datetime": "2026-03-25T15:00:01.000Z",
+                "symbol": "ProShares Ultra Semiconductors/USD",
+                "type": "limit",
+                "side": "buy",
+                "price": 40.5,
+                "amount": 2,
+                "status": "open",
+                "trades": [],
+                "fees": []
+            }
+        },
+        {
+            "description": "createOrder 는 표의 통합 코드 심볼(ProShares Ultra Semiconductors/USD)로 불러도 KIS 에 티커 USD 를 보낸다",
+            "config": {
+                "options": {
+                    "masterData": {
+                        "amex": [{ "code": "USD", "name": "PROSHARES ULTRA SEMICONDUCTORS", "nameKr": "프로셰어즈 울트라 반도체", "market": "AMS", "currency": "USD" }]
+                    }
+                }
+            },
+            "now": 1774450800000,
+            "method": "createOrder",
+            "args": ["ProShares Ultra Semiconductors/USD", "limit", "buy", 2, 40.5],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/trading/order",
+                        "headers": {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "authorization": "Bearer tok-stored",
+                            "appkey": "kis-app-key-abcdefgh",
+                            "appsecret": "kis-app-secret",
+                            "tr_id": "TTTT1002U",
+                            "custtype": "P"
+                        },
+                        "body": "{\"CANO\":\"12345678\",\"ACNT_PRDT_CD\":\"01\",\"OVRS_EXCG_CD\":\"AMEX\",\"PDNO\":\"USD\",\"ORD_QTY\":\"2\",\"OVRS_ORD_UNPR\":\"40.5\",\"CTAC_TLNO\":\"\",\"MGCO_APTM_ODNO\":\"\",\"SLL_TYPE\":\"\",\"ORD_SVR_DVSN_CD\":\"0\",\"ORD_DVSN\":\"00\"}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "rt_cd": "0",
+                            "msg_cd": "APBK0013",
+                            "msg1": "주문 전송 완료 되었습니다.",
+                            "output": { "KRX_FWDG_ORD_ORGNO": "01790", "ODNO": "ORD-0201", "ORD_TMD": "000001" }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "info": {
+                    "rt_cd": "0",
+                    "msg_cd": "APBK0013",
+                    "msg1": "주문 전송 완료 되었습니다.",
+                    "output": { "KRX_FWDG_ORD_ORGNO": "01790", "ODNO": "ORD-0201", "ORD_TMD": "000001" }
+                },
+                "id": "ORD-0201",
+                "timestamp": 1774450801000,
+                "datetime": "2026-03-25T15:00:01.000Z",
+                "symbol": "ProShares Ultra Semiconductors/USD",
+                "type": "limit",
+                "side": "buy",
+                "price": 40.5,
                 "amount": 2,
                 "status": "open",
                 "trades": [],

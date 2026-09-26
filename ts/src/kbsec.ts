@@ -20,7 +20,8 @@
  * ## 심볼
  *
  * `005930/KRW`(국내), `AAPL/USD`(미국). KB 는 TR 마다 종목코드를 직접 받아서 종목 목록을 내려받지 않는다. `market(symbol)` 이 심볼 모양으로
- * 종목을 그때그때 만든다(`market.info.country` 가 `KR` 또는 `US`).
+ * 종목을 그때그때 만든다(`market.info.country` 가 `KR` 또는 `US`). 현금 코드와 같은 티커(`USD`)는 `commonStockCodes` 의 통합 코드로 심볼을 만든다
+ * (`ProShares Ultra Semiconductors/USD`). 입력은 `USD/USD` 도 받는다.
  *
  * ## 옵션
  *
@@ -1961,22 +1962,24 @@ export class kbsec extends Exchange {
 
     /**
      * KB 는 종목 목록 TR 을 쓰지 않는다. 심볼 모양으로 종목을 만든다. `005930/KRW`·`005930` 은 국내, 그 밖은 미국이다.
-     * 이미 `markets` 를 넣어 두었으면 그것을 먼저 찾는다.
+     * 이미 `markets` 를 넣어 두었으면 그것을 먼저 찾는다. 현금 코드와 같은 티커(`USD`)는 `commonStockCodes` 의 통합 코드로 심볼을 만들고
+     * (`ProShares Ultra Semiconductors/USD`), 그 통합 코드와 옛 심볼(`USD/USD`)도 받는다.
      */
     override market(symbol: Str): MarketInterface {
         if (symbol === undefined) throw new ArgumentsRequired(`${this.id} market() requires a symbol argument`);
         const known = this.markets?.[symbol];
         if (known !== undefined) return known;
-        const base = kbsecBaseSymbol(symbol).toUpperCase();
-        if (base === '') throw new BadSymbol(`${this.id} does not have market symbol ${symbol}`);
-        const country = kbsecMarketOf(base);
+        const id = this.stockTicker(kbsecBaseSymbol(symbol)).toUpperCase();
+        if (id === '') throw new BadSymbol(`${this.id} does not have market symbol ${symbol}`);
+        const country = kbsecMarketOf(id);
         const quote = country === 'KR' ? 'KRW' : 'USD';
+        const base = this.commonStockCode(id);
         return this.safeMarketStructure({
-            id: base,
+            id,
             symbol: `${base}/${quote}`,
             base,
             quote,
-            baseId: base,
+            baseId: id,
             quoteId: quote,
             type: 'spot',
             spot: true,
@@ -2843,8 +2846,9 @@ export class kbsec extends Exchange {
 
     /**
      * 통화와 보유 종목의 잔고. 현금은 통화 키(`KRW`, `USD`), 보유 종목은 `market.base` 키(종목 코드)이며 `total` 이 **수량**이다. 평균 단가·평가금액·종목명은
-     * 각 항목의 `info` 에 있다(`averagePrice`, `marketValue`, `name`, `quoteCurrency`). 보유 종목 키가 현금 키와 겹치면(미국 티커 `USD` 와 달러 현금)
-     * 한쪽을 덮어쓰지 않고 `NotSupported` 를 던진다. KB증권은 보유와 현금을 나눠 받는 인자가 없어 그런 계좌는 잔고를 조회할 수 없다.
+     * 각 항목의 `info` 에 있다(`averagePrice`, `marketValue`, `name`, `quoteCurrency`). 미국 티커 `USD` 처럼 현금 코드와 같은 티커는 `commonStockCodes` 의
+     * 통합 코드(`ProShares Ultra Semiconductors`)가 키다. 표에 없는 티커가 현금 키와 겹치면 한쪽을 덮어쓰지 않고 `NotSupported` 를 던진다. KB증권은
+     * 보유와 현금을 나눠 받는 인자가 없어서, 그런 계좌는 `commonStockCodes` 에 그 티커를 더해야 잔고를 조회할 수 있다.
      *
      * 예수금을 읽지 못하면 던진다. 보유를 일부만 읽었으면 던지지 않고 `info.readStatus` 가 `PARTIAL`, 못 읽은 시장(`KR`, `US`)이
      * `info.unreadMarkets` 다. **이때 그 시장에서 목록에 없는 종목은 미보유가 아니라 미확인이다.**
@@ -2936,7 +2940,7 @@ export class kbsec extends Exchange {
         }
         const held: Dict = {};
         for (const holding of response.holdings as HoldingRow[]) {
-            held[holding.code] = {
+            held[this.commonStockCode(holding.code)] = {
                 free: holding.orderableQuantity,
                 used: undefined,
                 total: holding.quantity,
@@ -2952,7 +2956,7 @@ export class kbsec extends Exchange {
             // 겹친 키에 대입하면 현금이 알림 없이 보유 수량으로 바뀐다.
             if (result[code] !== undefined) {
                 throw new NotSupported(`${this.id} fetchBalance() 보유 종목 ${code} 가 현금 ${code} 와 키가 같아 한 잔고에 담을 수 없다. `
-                    + 'KB증권은 보유 종목과 현금을 나눠 받는 인자가 없다');
+                    + 'KB증권은 보유 종목과 현금을 나눠 받는 인자가 없다. commonStockCodes 에 그 티커의 통합 코드를 더한다');
             }
             result[code] = holding;
         }
@@ -3389,7 +3393,7 @@ export class kbsec extends Exchange {
         const body = await this.callTr(KBSEC_TR.ONEMARKET_BUYABLE, {
             crncy_cd: '',
             iso_cd: '',
-            stnd_is_cd: kbsecBaseSymbol(symbol),
+            stnd_is_cd: this.stockTicker(kbsecBaseSymbol(symbol)),
             frgn_ordr_prc_p4: price !== undefined ? kbsecNum(price, 4) : '',
             ordr_prc: price !== undefined ? kbsecNum(price, 4) : '',
         });
@@ -4437,7 +4441,7 @@ export class kbsec extends Exchange {
         // 세션 게이트. 거래시간 밖 주문은 KB 로 보내지 않고 `MarketClosed` 로 막는다.
         // KRX 판정은 시장이 아는 사실이라 이 클래스가 자기 시간표를 갖지 않고 공용 술어에 맡긴다.
         if (isKr) await this.refreshMarketCalendar();
-        const closed = marketSessionBlockReason('kbsec', symbol, new Date(this.milliseconds()), masterDataOf(this.options), {
+        const closed = marketSessionBlockReason('kbsec', base, new Date(this.milliseconds()), masterDataOf(this.options), {
             side, blockAuctionBuys: await this.isOptionEnabled('blockAuctionBuys'),
         });
         if (closed !== null) {
@@ -4523,7 +4527,7 @@ export class kbsec extends Exchange {
         this.checkOrderArguments(market, 'limit', side, amount, price, params);
 
         if (isKr) await this.refreshMarketCalendar();
-        const closed = marketSessionBlockReason('kbsec', symbol, new Date(this.milliseconds()), masterDataOf(this.options), {
+        const closed = marketSessionBlockReason('kbsec', base, new Date(this.milliseconds()), masterDataOf(this.options), {
             side, blockAuctionBuys: await this.isOptionEnabled('blockAuctionBuys'),
         });
         if (closed !== null) {
@@ -4636,7 +4640,7 @@ export class kbsec extends Exchange {
         if (!this.isUs(market)) throw new NotSupported(`${this.id} createMarketBuyOrderWithCost() 는 미국 종목만 지원한다: ${symbol}`);
         if (!(cost > 0)) throw new ArgumentsRequired(`${this.id} createMarketBuyOrderWithCost() requires a cost argument above 0`);
 
-        const closed = marketSessionBlockReason('kbsec', symbol, new Date(this.milliseconds()), masterDataOf(this.options), {
+        const closed = marketSessionBlockReason('kbsec', market.id as string, new Date(this.milliseconds()), masterDataOf(this.options), {
             side: 'buy', blockAuctionBuys: await this.isOptionEnabled('blockAuctionBuys'),
         });
         if (closed !== null) {
@@ -4735,7 +4739,7 @@ export class kbsec extends Exchange {
                 throw new NotSupported(`${this.id} editOrder() 는 해외 주문의 amount 를 받지 않는다. 원주문의 체결 수량을 믿을 만한 조회로 확인할 수 없다. `
                     + 'amount 를 빼면 잔량 전부의 가격만 정정하고, 수량을 바꾸려면 취소한 뒤 다시 주문한다');
             }
-            await this.assertEditSessionOpen(symbol, false);
+            await this.assertEditSessionOpen(symbol, base, false);
             const response = await this.callTr(KBSEC_TR.AMEND_CANCEL_US, {
                 is_cd: base,
                 orgn_ordr_no: id,
@@ -4746,7 +4750,7 @@ export class kbsec extends Exchange {
             return this.editedOrder(response, market, price, undefined);
         }
         this.assertKrxTickAligned(market, price, 'editOrder');
-        await this.assertEditSessionOpen(symbol, true);
+        await this.assertEditSessionOpen(symbol, base, true);
         let sor: string;
         if (!isPartial && amount !== undefined) {
             // 수량을 대조하므로 원주문 조회 실패를 발주 정책으로 덮지 않고 던진다.
@@ -4767,9 +4771,9 @@ export class kbsec extends Exchange {
     }
 
     /** 정정 게이트. `createOrder` 와 같은 판정이고, 방향을 넘기지 않아 동시호가 매수 차단은 걸지 않는다. 국내는 휴장일 캘린더를 먼저 받는다. */
-    private async assertEditSessionOpen(symbol: string, isKr: boolean): Promise<void> {
+    private async assertEditSessionOpen(symbol: string, ticker: string, isKr: boolean): Promise<void> {
         if (isKr) await this.refreshMarketCalendar();
-        const closed = marketSessionBlockReason('kbsec', symbol, new Date(this.milliseconds()), masterDataOf(this.options));
+        const closed = marketSessionBlockReason('kbsec', ticker, new Date(this.milliseconds()), masterDataOf(this.options));
         if (closed !== null) {
             logger.info({ symbol, reason: closed }, '[kbsec] 거래시간 외 정정 차단');
             throw new MarketClosed(closed);

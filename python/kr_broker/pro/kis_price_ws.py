@@ -9,7 +9,7 @@ Python 판은 aiohttp 가 필수 의존성이라 그 판정이 없다.
 """
 
 import logging
-from typing import Any, Awaitable, Callable, List, Optional, Sequence, Tuple
+from typing import Any, Awaitable, Callable, List, Mapping, Optional, Sequence, Tuple
 
 from kr_broker.async_support.base.runtime import sleep_seconds
 from kr_broker.async_support.base.ws.client import WsConnect
@@ -27,18 +27,20 @@ OnSubscribeError = Callable[[str, str, str], None]
 
 class KisPriceWs(KisRealtimeStream):
     """`start(subs)` 로 구독을 시작하고 체결은 `on_trade(스트림 심볼, 현재가, 등락률)`, 호가는 `on_orderbook(스트림 심볼, 매수, 매도)` 로 넘긴다.
-    구독 응답이 실패(`rt_cd` 가 `0` 이 아님)면 로그를 남기고 `on_subscribe_error(tr_id, tr_key, 메시지)` 로 알린다. 실행 중인 이벤트 루프 안에서 쓴다."""
+    구독 응답이 실패(`rt_cd` 가 `0` 이 아님)면 로그를 남기고 `on_subscribe_error(tr_id, tr_key, 메시지)` 로 알린다. 실행 중인 이벤트 루프 안에서 쓴다.
+    스트림 심볼은 `common_stock_codes`(없으면 `COMMON_STOCK_CODES`)의 통합 코드를 쓴다. `kis.create_price_stream()` 은 인스턴스의 표를 넘긴다."""
 
     label = '[KisPriceWs]'
 
     def __init__(self, get_approval_key: Callable[[], Awaitable[str]], is_virtual: bool, connect: WsConnect,
                  on_trade: Optional[OnTrade] = None, on_orderbook: Optional[OnOrderbook] = None,
                  sleep: Callable[[float], Awaitable[Any]] = sleep_seconds, url: Optional[str] = None,
-                 on_subscribe_error: Optional[OnSubscribeError] = None) -> None:
+                 on_subscribe_error: Optional[OnSubscribeError] = None, common_stock_codes: Optional[Mapping[str, str]] = None) -> None:
         # 프레임은 `_on_frame` 이 가격으로 읽는다.
         super().__init__(get_approval_key, is_virtual, connect, lambda record: None, on_subscribe_error, sleep, url)
         self._on_trade = on_trade
         self._on_orderbook = on_orderbook
+        self._common_stock_codes = common_stock_codes
 
     def start(self, subs: Sequence[Tuple[str, str]] = ()) -> None:  # type: ignore[override]
         wanted = [KisWsSub(*sub) for sub in subs]
@@ -54,7 +56,7 @@ class KisPriceWs(KisRealtimeStream):
 
     def _on_frame(self, tr_id: str, count_text: str, payload: str) -> None:
         for record in parse_kis_realtime_payload(tr_id, count_text, payload):
-            stream_symbol = to_stream_symbol(record.symbol)
+            stream_symbol = to_stream_symbol(record.symbol, self._common_stock_codes)
             # 한 건의 콜백이 던져도 나머지 건은 계속 넘긴다.
             try:
                 if isinstance(record, KisTradeRecord):

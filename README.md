@@ -163,11 +163,11 @@ main().catch(console.error);
 
 ### 시장과 심볼
 
-`loadMarkets()`가 종목 목록을 불러와 인스턴스에 저장합니다. KB증권은 종목 목록 API를 아직 쓰지 않습니다. 그래서 심볼 형식으로 종목을 판별합니다. `loadMarkets()`는 요청 없이 끝납니다. 심볼은 `BASE/QUOTE` 형식이고 국내는 종목코드 6자리에 `/KRW`, 미국은 티커에 `/USD`를 붙입니다. 알 수 없는 심볼은 `BadSymbol`입니다.
+`loadMarkets()`가 종목 목록을 불러와 인스턴스에 저장합니다. KB증권은 종목 목록 API를 아직 쓰지 않습니다. 그래서 심볼 형식으로 종목을 판별합니다. `loadMarkets()`는 요청 없이 끝납니다. 심볼은 `BASE/QUOTE` 형식이고 국내는 종목코드 6자리에 `/KRW`, 미국은 티커에 `/USD`를 붙입니다. 현금 코드와 같은 미국 티커 `USD`는 `ProShares Ultra Semiconductors/USD`로 씁니다([ccxt와 다른 점](docs/ccxt-differences.md)). 알 수 없는 심볼은 `BadSymbol`입니다.
 
 ### 잔고
 
-`fetchBalance()`는 ccxt의 `Balances`를 반환합니다. 현금은 통화(`KRW`, `USD`)를 키로 하고, 보유 종목은 `market.base`(종목코드, 클래스 주식은 `BRK.B`)를 키로 합니다. 보유 종목 키가 현금 키와 겹치면 한쪽을 덮어쓰지 않고 `NotSupported`를 던집니다. 보유 종목의 `total`은 수량입니다. `free`는 지금 주문에 쓸 수 있는 양, `total`은 정산이 끝난 뒤 남을 양이고, 모르는 값은 0으로 채우지 않고 비웁니다. 증권사별 차이는 [ccxt와 다른 점](docs/ccxt-differences.md)에 있습니다. 평균단가와 평가금액 같은 증권사 고유 값은 각 항목의 `info`에 있습니다. 조회에 실패하면 빈 잔고가 아니라 오류를 던집니다.
+`fetchBalance()`는 ccxt의 `Balances`를 반환합니다. 현금은 통화(`KRW`, `USD`)를 키로 하고, 보유 종목은 `market.base`(종목코드, 클래스 주식은 `BRK.B`)를 키로 합니다. 미국 티커 `USD` 보유의 키는 `ProShares Ultra Semiconductors`라서 달러 현금과 겹치지 않습니다. 표에 없는 티커가 현금 키와 겹치면 한쪽을 덮어쓰지 않고 `NotSupported`를 던집니다. 보유 종목의 `total`은 수량입니다. `free`는 지금 주문에 쓸 수 있는 양, `total`은 정산이 끝난 뒤 남을 양이고, 모르는 값은 0으로 채우지 않고 비웁니다. 증권사별 차이는 [ccxt와 다른 점](docs/ccxt-differences.md)에 있습니다. 평균단가와 평가금액 같은 증권사 고유 값은 각 항목의 `info`에 있습니다. 조회에 실패하면 빈 잔고가 아니라 오류를 던집니다.
 
 KB증권은 보유를 일부만 읽었으면 던지지 않고 `info.readStatus`가 `PARTIAL`이며, 읽지 못한 시장(`KR`, `US`)이 `info.unreadMarkets`에 있습니다. 이때 그 시장에서 목록에 없는 종목은 미보유가 아니라 미확인입니다. 다 읽었으면 `readStatus`가 `COMPLETE`입니다.
 

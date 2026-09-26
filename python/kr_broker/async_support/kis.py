@@ -18,6 +18,7 @@
 
 심볼
     국내는 `005930/KRW`, 미국은 `AAPL/USD` 다. 슬래시가 든 티커(`BRK/B`)는 `BRK.B/USD` 로 쓰고 `market['id']` 에 KIS 표기를 둔다.
+    현금 코드와 같은 티커(`USD`)는 `commonStockCodes` 의 통합 코드로 심볼을 만든다(`ProShares Ultra Semiconductors/USD`). 입력은 `USD/USD` 도 받는다.
     접미사를 뺀 `005930`, `AAPL` 도 받는다. 국내 종목은 종목코드 모양(6자리)만으로 가르고, 해외 종목의 거래소는 종목 마스터
     (`options['masterData']`, `kis_master_data` 참고)에서 찾는다. `load_markets()` 는 마스터 데이터로 종목 목록을 만들 뿐이고 주문과 시세 호출에는 필요 없다.
 
@@ -1094,7 +1095,7 @@ class kis(Exchange, ImplicitAPI):
             raise ExchangeError(f'{self.id} parseMarket() missing code')
         overseas = self.safe_string(market, 'currency') is not None or not is_krx_domestic_code(market_id)
         quote = 'USD' if overseas else 'KRW'
-        base = market_id.replace('/', '.', 1)
+        base = self.common_stock_code(market_id.replace('/', '.', 1))
         exchange_code = self.safe_string(market, 'market')
         fee = KIS_OVERSEAS_DEFAULT_FEE_RATE if overseas else KIS_BROKERAGE_FEE
         return self.safe_market_structure({
@@ -1163,9 +1164,10 @@ class kis(Exchange, ImplicitAPI):
             raise InvalidOrder(f'{self.id} {method}() {violation} ({instrument.symbol})', detail=KRX_TICK_INVALID_DETAIL)
 
     def _instrument_of(self, symbol: str) -> KisInstrument:
-        """심볼(또는 종목코드)을 종목 식별 결과로 바꾼다. 국내는 마스터 없이도 되고, 해외는 마스터에서 거래소를 찾는다."""
+        """심볼(또는 종목코드)을 종목 식별 결과로 바꾼다. 국내는 마스터 없이도 되고, 해외는 마스터에서 거래소를 찾는다.
+        `commonStockCodes` 의 통합 코드(`ProShares Ultra Semiconductors/USD`)는 티커(`USD`)로 돌려 찾고, 심볼은 통합 코드로 만든다."""
         suffixed = _SUFFIXED_SYMBOL.fullmatch(symbol)
-        base = (suffixed.group(1) if suffixed else symbol).strip()
+        base = self.stock_ticker((suffixed.group(1) if suffixed else symbol).strip())
         if is_krx_domestic_code(base):
             return KisInstrument(f'{base}/KRW', base, False, 'KRW', None, None)
         # 통합 심볼의 점(`BRK.B`)을 KIS 표기의 슬래시(`BRK/B`)로 돌린다. 마스터가 그 표기를 가질 때만 바꾼다.
@@ -1175,7 +1177,8 @@ class kis(Exchange, ImplicitAPI):
         use_slashed = get_overseas_stock_by_code(master, upper) is None and get_overseas_stock_by_code(master, slashed) is not None
         code = slashed if use_slashed else upper
         quote_exchange = get_overseas_market_for_code(master, code)
-        return KisInstrument(f"{code.replace('/', '.', 1)}/USD", code, True, 'USD', quote_exchange, to_order_market_code(quote_exchange))
+        return KisInstrument(f"{self.common_stock_code(code.replace('/', '.', 1))}/USD", code, True, 'USD', quote_exchange,
+                             to_order_market_code(quote_exchange))
 
     def market(self, symbol: Str) -> Dict[str, Any]:
         """종목. `load_markets` 로 받은 종목에 있으면 그것을, 없으면 심볼 모양으로 만든 종목을 돌려준다. 시세와 주문 메서드와 같은 판별이라
@@ -1370,7 +1373,8 @@ class kis(Exchange, ImplicitAPI):
         yahoo: List[List[Any]] = []
         yahoo_error: Optional[BaseException] = None
         try:
-            yahoo = await fetch_yahoo_candles(instrument.symbol, timeframe, limit, since, until, kr_market, exchange=self)
+            # 통합 심볼이 아니라 티커로 묻는다. `commonStockCodes` 로 바꾼 통합 코드는 야후 티커가 아니다.
+            yahoo = await fetch_yahoo_candles(instrument.code, timeframe, limit, since, until, kr_market, exchange=self)
         except Exception as e:
             if fallback_exchange is None:
                 raise
@@ -1500,7 +1504,7 @@ class kis(Exchange, ImplicitAPI):
         def symbol_of(row: Dict[str, Any]) -> str:
             # 해외 슬래시 티커(`BRK/B`)는 다른 메서드처럼 점 심볼(`BRK.B/USD`)로 옮긴다.
             code = self.safe_string(row, spec['symbolKey'], '')
-            return f"{code.replace('/', '.', 1) if overseas else code}/{currency}"
+            return f"{self.common_stock_code(code.replace('/', '.', 1)) if overseas else code}/{currency}"
 
         return [{
             'rank': self.safe_number(row, f.get('rank', 'data_rank')),
@@ -1625,8 +1629,8 @@ class kis(Exchange, ImplicitAPI):
     async def fetch_balance(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """잔고. 현금은 통화 키(`KRW`, `USD`), 보유 종목은 `market['base']` 키(국내 `005930`, 미국 `AAPL`, 클래스 주식 `BRK.B`)이고 종목의
         `total` 이 보유 수량이다. 평가금액·평균단가 같은 KIS 고유 값은 각 항목의 `info` 에 있다. 조회가 하나라도 실패하면 던진다(빈 잔고와 구분한다).
-        보유 종목 키가 같은 잔고의 현금 키와 겹치면(미국 티커 `USD` 와 달러 현금) 한쪽을 덮어쓰지 않고 `NotSupported` 를 던진다.
-        `params['scope']` 로 나눠 받는다.
+        미국 티커 `USD` 처럼 현금 코드와 같은 티커는 `commonStockCodes` 의 통합 코드(`ProShares Ultra Semiconductors`)가 키다. 표에 없는
+        티커가 현금 키와 겹치면 한쪽을 덮어쓰지 않고 `NotSupported` 를 던진다. `params['scope']` 로 나눠 받거나 `commonStockCodes` 에 그 티커를 더한다.
 
         `params['scope']` 로 읽을 범위를 좁힌다. 기본은 전부(`'all'`)이고 목록으로 골라도 된다.
         `'kr'` 는 국내 잔고(`KRW` 와 국내 보유 종목), `'us'` 는 미국 보유 종목(실전은 `NASD` 한 번이 미국 전체이고 모의는 거래소마다 부른다),
@@ -1718,7 +1722,8 @@ class kis(Exchange, ImplicitAPI):
         크면(매도 대금이 결제되기 전) 예수금은 정산 뒤 현금이 아니라서 `total` 과 `used` 를 비운다. 예수금은 `info['summary']` 에 있다.
         `USD` 는 `total` 이 예수금, `free` 가 예수금에서 미결제 매수증거금을 뺀 값이고, 종목 평가금액 합계는 `info['stockValue']` 에 있다.
         달러 행이 없으면 싣지 않는다.
-        종목은 `total` 이 보유수량, `free` 가 주문가능수량(없으면 보유수량)이다. 키는 `market['base']` 라 해외 슬래시 티커(`BRK/B`)는 `BRK.B` 다.
+        종목은 `total` 이 보유수량, `free` 가 주문가능수량(없으면 보유수량)이다. 키는 `market['base']` 라 해외 슬래시 티커(`BRK/B`)는 `BRK.B`,
+        미국 티커 `USD` 는 `ProShares Ultra Semiconductors` 다.
         같은 종목이 매매구분이나 대출일자별로 여러 행이면 수량을 더하고, `info` 는 첫 행에 원문 행 전부(`rows`)를 더한 것이다.
         """
         result: Dict[str, Any] = {'info': response, 'timestamp': None, 'datetime': None}
@@ -1761,14 +1766,14 @@ class kis(Exchange, ImplicitAPI):
             # 겹친 키에 대입하면 보유나 현금 한쪽이 알림 없이 사라진다.
             if result.get(code) is not None:
                 raise NotSupported(f"{self.id} fetchBalance() 보유 종목 {code} 가 현금 {code} 와 키가 같아 한 잔고에 담을 수 없다. "
-                                   "params.scope 로 미국 보유 종목('us')과 현금('kr', 'usd')을 따로 받는다")
+                                   "params.scope 로 미국 보유 종목('us')과 현금('kr', 'usd')을 따로 받거나 commonStockCodes 에 그 티커의 통합 코드를 더한다")
             result[code] = holding
         return self.safe_balance(result)
 
     def _add_holding(self, result: Dict[str, Any], item: Dict[str, Any], code_key: str, quantity_key: str) -> None:
-        # 키는 `parse_market` 의 `base` 와 같은 표기다(`BRK/B` → `BRK.B`).
+        # 키는 `parse_market` 의 `base` 와 같은 표기다(`BRK/B` → `BRK.B`, `USD` → `ProShares Ultra Semiconductors`).
         code = self.safe_string(item, code_key)
-        code = None if code is None else code.replace('/', '.', 1)
+        code = None if code is None else self.common_stock_code(code.replace('/', '.', 1))
         quantity = self.safe_string(item, quantity_key)
         if code is None or quantity is None or not fn.js_number(quantity) > 0:
             return

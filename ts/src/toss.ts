@@ -15,6 +15,7 @@
  * ## 심볼
  *
  * 국내는 `005930/KRW`, 미국은 `AAPL/USD` 다. 종목을 아직 불러오지 않았어도(`loadMarkets` 없이) 코드의 모양으로 시장을 판별해 바로 조회하고 주문할 수 있다.
+ * 현금 코드와 같은 티커(`USD`)는 `commonStockCodes` 의 통합 코드로 심볼을 만든다(`ProShares Ultra Semiconductors/USD`). 입력은 `USD/USD` 도 받는다.
  * `loadMarkets()` 를 부르면 토스가 거래할 수 있는 종목 전체(`GET /stocks/all`)가 `markets` 에 들어가고, 종목 유형(`ETF` 등)이 `market.options` 에 실린다.
  *
  * ## 주문
@@ -833,16 +834,17 @@ export class toss extends Exchange {
 
     /**
      * 심볼(`005930`, `005930/KRW`, `AAPL`)에서 종목을 만든다. 종목을 불러오지 않았을 때 코드의 모양으로 시장을 판별한다.
-     * 클래스 주식의 `BRK/B` 는 통합 표기 `BRK.B` 로 바꾼다.
+     * 클래스 주식의 `BRK/B` 는 통합 표기 `BRK.B` 로 바꾼다. `commonStockCodes` 의 통합 코드는 티커로 돌려 id 로 쓴다.
      */
     private marketFromSymbol(symbol: string): MarketInterface {
-        const code = symbolBaseCode(symbol);
+        const code = this.stockTicker(symbolBaseCode(symbol));
         const country = tossMarketCountry(code);
         const quote = country === 'KR' ? 'KRW' : 'USD';
+        const base = this.commonStockCode(code);
         return this.safeMarketStructure({
             id: code,
-            symbol: `${code}/${quote}`,
-            base: code,
+            symbol: `${base}/${quote}`,
+            base,
             quote,
             baseId: code,
             quoteId: quote,
@@ -859,11 +861,14 @@ export class toss extends Exchange {
     /**
      * 통합 심볼(또는 종목 id)로 종목을 찾는다. `loadMarkets` 로 불러온 종목이 있으면 그것을 쓰고, 없으면 심볼의 모양으로 만든다.
      * 토스에 없는 종목이라도 여기서는 막지 않는다. 주문을 보내면 토스가 `stock-not-found`(`BadSymbol`)로 알려 준다.
+     * 옛 심볼(`USD/USD`)처럼 모양으로 만든 심볼이 불러온 종목에 있으면 그 종목을 쓴다.
      */
     override market(symbol: Str): MarketInterface {
         if (symbol === undefined) throw new ArgumentsRequired(`${this.id} market() requires a symbol argument`);
         const loaded = this.markets?.[symbol] ?? this.markets_by_id?.[symbol]?.[0];
-        return loaded ?? this.marketFromSymbol(symbol);
+        if (loaded !== undefined) return loaded;
+        const shaped = this.marketFromSymbol(symbol);
+        return this.markets?.[shaped.symbol] ?? shaped;
     }
 
     override safeMarket(marketId: Str = undefined, market: Market = undefined, _delimiter: Str = undefined, _marketType: Str = undefined): MarketInterface {
@@ -896,10 +901,11 @@ export class toss extends Exchange {
         const country: StockMarketGroup = listedMarket !== undefined && KR_LISTED_MARKETS.has(listedMarket) ? 'KR' : 'US';
         const quote = country === 'KR' ? 'KRW' : 'USD';
         const brokerage = country === 'KR' ? TOSS_BROKERAGE_FEE : TOSS_US_BROKERAGE_FEE;
+        const base = this.commonStockCode(id);
         return this.safeMarketStructure({
             id,
-            symbol: `${id}/${quote}`,
-            base: id,
+            symbol: `${base}/${quote}`,
+            base,
             quote,
             baseId: id,
             quoteId: quote,
@@ -1331,8 +1337,9 @@ export class toss extends Exchange {
 
     /**
      * 잔고. 현금은 통화 키(`KRW`·`USD`)이고 값은 현금 매수 가능 금액이며, 보유 종목은 `market.base` 키(`005930`, `AAPL`)이고 `total` 이 보유 수량이다.
-     * 종목의 평균단가·평가금액·종목명은 `balances[code].info` 에 있다. 조회에 실패하면 던진다. 보유 종목 키가 같은 잔고의 현금 키와 겹치면
-     * (미국 티커 `USD` 와 달러 현금) 한쪽을 덮어쓰지 않고 `NotSupported` 를 던진다. 아래 `symbol` 과 `currency` 로 나눠 받는다.
+     * 종목의 평균단가·평가금액·종목명은 `balances[code].info` 에 있다. 조회에 실패하면 던진다. 미국 티커 `USD` 처럼 현금 코드와 같은 티커는
+     * `commonStockCodes` 의 통합 코드(`ProShares Ultra Semiconductors`)가 키다. 표에 없는 티커가 현금 키와 겹치면 한쪽을 덮어쓰지 않고
+     * `NotSupported` 를 던진다. 아래 `symbol` 과 `currency` 로 나눠 받거나 `commonStockCodes` 에 그 티커를 더한다.
      *
      * `free` 는 지금 주문에 쓸 수 있는 양이다(ccxt 정의). 현금은 매수 가능 금액만 있고 예수금을 주는 API 가 없어 `total` 과 `used` 가 비어 있다.
      * 보유 종목의 `free` 는 `symbol` 로 한 종목만 받을 때 매도 가능 수량으로 채우고, 전체 잔고에서는 비어 있다(종목마다 요청을 더하지 않는다).
@@ -1410,7 +1417,8 @@ export class toss extends Exchange {
         for (const item of holdings?.items ?? []) {
             const quantity = this.safeNumber(item, 'quantity');
             if (quantity === undefined || !(quantity > 0)) continue;
-            held[item.symbol] = { free: sellable?.[item.symbol], used: undefined, total: quantity, info: item };
+            // 키는 `parseMarket` 의 `base` 다(`USD` → `ProShares Ultra Semiconductors`).
+            held[this.commonStockCode(String(item.symbol))] = { free: sellable?.[item.symbol], used: undefined, total: quantity, info: item };
         }
         for (const [code, power] of Object.entries(buyingPower ?? {})) {
             let cash = this.parseCash(power);
@@ -1427,7 +1435,7 @@ export class toss extends Exchange {
             // 겹친 키에 대입하면 보유나 현금 한쪽이 알림 없이 사라진다.
             if (result[code] !== undefined) {
                 throw new NotSupported(`${this.id} fetchBalance() 보유 종목 ${code} 가 현금 ${code} 와 키가 같아 한 잔고에 담을 수 없다. `
-                    + 'params.symbol 로 그 종목의 보유를, params.currency 로 현금을 따로 받는다');
+                    + 'params.symbol 로 그 종목의 보유를, params.currency 로 현금을 따로 받거나 commonStockCodes 에 그 티커의 통합 코드를 더한다');
             }
             result[code] = holding;
         }
@@ -2601,10 +2609,10 @@ export class toss extends Exchange {
         }
     }
 
-    /** 토스 원본 코드 → 통합 심볼. 종목 목록에 없으면 시장의 통화를 붙인다. */
+    /** 토스 원본 코드 → 통합 심볼. 종목 목록에 없으면 `commonStockCodes` 를 거친 코드에 시장의 통화를 붙인다. */
     private watchSymbolOf(market: 'us' | 'kr', code: string): string {
         const known = this.markets_by_id?.[code]?.[0]?.symbol;
-        return known ?? `${code}/${market === 'us' ? 'USD' : 'KRW'}`;
+        return known ?? `${this.commonStockCode(code)}/${market === 'us' ? 'USD' : 'KRW'}`;
     }
 
     private watchMarketSub(channel: 'trade' | 'orderbook', symbol: string): string {

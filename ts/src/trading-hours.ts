@@ -8,7 +8,7 @@
  * 인자는 시장 이름이 아니라 **거래소 ID**(`'kis'`, `'toss'`)다. `'stock'` 같은 시장 이름을 넘기면 "표에 없음 = 제한 없음" 으로 **조용히 0** 이 나온다.
  */
 import { isKrxDomesticCode } from './broker-krx-code';
-import { isStockBrokerExchange, marketGroupOf } from './broker-market-group';
+import { isStockBrokerExchange, marketGroupOf, stockTicker } from './broker-market-group';
 import { getOverseasMarketForCode } from './overseas-stock-master';
 import { EMPTY_KIS_MASTER_DATA, type KisMasterData } from './stock-master-data';
 import { checkKRXTradingHoursAt, getTimeUntilKrxOpen, krxAuctionBuyBlockReason } from './krx-trading-hours';
@@ -64,7 +64,7 @@ export interface MarketSessionOrderPolicy {
  * 시간표는 세 증권사 공용 게이트(`krxOrderBlockReason`·`usOrderBlockReason`)와 같다.
  *
  * @param exchangeId 거래소 ID — 이 패키지가 모르는 거래소면 항상 `null`(제한 없음)
- * @param symbol 주문 심볼 (`005930/KRW`, `AAPL/USD`, `AAPL` 모두 허용)
+ * @param symbol 주문 심볼 (`005930/KRW`, `AAPL/USD`, `AAPL` 모두 허용). `COMMON_STOCK_CODES` 의 통합 코드는 티커로 돌려 찾는다
  * @param now 기준 시각
  * @param masterData 해외 종목의 상장 거래소를 찾는 마스터 데이터(`options.masterData`). 없으면 빈 데이터라 모든 해외 티커가 "거래소 미상"이다.
  * @param policy 동시호가 신규 매수 차단. 생략하면 막지 않는다.
@@ -80,7 +80,7 @@ export function marketSessionBlockReason(
     const { side, blockAuctionBuys = false } = policy;
 
     const [code = ''] = symbol.split('/');
-    const base = code.trim().toUpperCase();
+    const base = stockTicker(code.trim()).toUpperCase();
     const krx = (): string | null => tradingHoursBlockReason(exchangeId, now) ?? (blockAuctionBuys ? krxAuctionBuyBlockReason(now, side) : null);
     if (isKrxDomesticCode(base)) return krx();
 

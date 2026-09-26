@@ -17,7 +17,8 @@
  * 7. 정상 주문은 접수 결과(`Order`)를 돌려준다. 모의 주문이 없어서 그대로 부르면 주문 요청이 정확히 한 번 나간다.
  * 8. 일괄 취소(`cancelAllOrders`)가 일부만 실패하면 던지지 않고 주문마다 결과를 돌려준다. 취소하지 못한 주문은 `canceled` 가 아니라
  *    원래 상태(`open`)이고 실패 사유(`info.cancelError`)를 싣는다. 항목은 미체결 조회로 받은 주문이라 수량과 방향을 잃지 않는다.
- * 9. 잔고의 현금은 통화 키(`KRW`, `USD`)이고 보유 종목은 `market.base` 키다. 보유 종목 키가 현금 키와 겹치면 한쪽을 덮어쓰지 않고
+ * 9. 잔고의 현금은 통화 키(`KRW`, `USD`)이고 보유 종목은 `market.base` 키다. 현금 코드와 같은 티커(미국 `USD`)는 종목 통합 코드 표
+ *    (`commonStockCodes`)의 코드로 싣고, 같은 코드의 현금은 통화 키에 그대로 둔다. 표에 없는 티커가 현금 키와 겹치면 한쪽을 덮어쓰지 않고
  *    `NotSupported` 를 던진다. 호출하는 쪽은 `balance[market.base]` 로 보유를 찾는다.
  * 10. 잔고의 `free` 는 지금 주문에 쓸 수 있는 양, `total` 은 정산 뒤 계좌에 남을 양이다(ccxt 정의). 모르는 값은 0 으로 채우지 않고 비운다.
  *     현금의 `free` 와 `total` 이 모두 있으면 `free` 가 `total` 을 넘지 않는다.
@@ -27,6 +28,7 @@ import {
     BaseError, ExchangeError, MarketClosed, NetworkError, NotSupported, OrderOutcomeUnknown,
     type Balances, type Dict, type ErrorClass, type MarketInterface, type Order,
 } from '../../base';
+import { COMMON_STOCK_CODES } from '../../broker-market-group';
 
 /** 증권사가 실측한 업무 오류 하나. 이 상황을 만들면 이 오류 클래스(와 세부 원인)로 던져져야 한다. */
 export interface ClassifiedFailure {
@@ -71,8 +73,10 @@ export interface BrokerContractHarness {
     cancelAllWithOneRejected(): Promise<Order[]>;
     /** 보유 종목과 현금(`KRW`, `USD`)이 함께 있는 잔고를 조회한다. 원문 표기와 `market.base` 가 다른 종목(슬래시 티커)이 있으면 싣는다. */
     fetchBalanceWithHoldings(): Promise<Balances>;
-    /** 보유 종목 키가 현금 키와 겹치는 잔고(미국 티커 `USD` 보유와 달러 현금)를 조회한다. */
+    /** 현금 코드와 같은 티커의 보유(미국 티커 `USD` 2주)와 달러 현금이 함께 있는 잔고를 조회한다. */
     fetchBalanceWithCollidingKey(): Promise<Balances>;
+    /** 표에 없는 티커가 현금 키와 겹치는 잔고(미국 티커 `KRW` 보유와 원화 현금)를 조회한다. */
+    fetchBalanceWithUnlistedCollidingKey(): Promise<Balances>;
     /** 심볼이나 종목 코드로 종목을 찾는다(`market()`). */
     market(symbol: string): MarketInterface;
 }
@@ -230,8 +234,20 @@ export function defineBrokerContractSuite(h: BrokerContractHarness): void {
                 for (const key of holdings) expect(h.market(key).base, key).toBe(key);
             });
 
-            it('보유 종목 키가 현금 키와 겹치면 한쪽을 덮어쓰지 않고 NotSupported 를 던진다', async () => {
-                expect(await caught(h.fetchBalanceWithCollidingKey())).toBeInstanceOf(NotSupported);
+            it('현금 코드와 같은 티커는 표의 코드로 싣고, 같은 코드의 현금은 통화 키에 남긴다', async () => {
+                const balance = await h.fetchBalanceWithCollidingKey();
+
+                const code = h.market('USD').base;
+                expect(code).toBe(COMMON_STOCK_CODES.USD);
+                expect(h.market(code).id).toBe('USD');
+                expect(balance[code]?.total).toBe(2);
+                // 보유가 현금을 덮었으면 `USD` 의 `total` 이 보유 수량(2)이다.
+                expect(balance.USD).toBeDefined();
+                expect(balance.USD?.total).not.toBe(2);
+            });
+
+            it('표에 없는 티커가 현금 키와 겹치면 한쪽을 덮어쓰지 않고 NotSupported 를 던진다', async () => {
+                expect(await caught(h.fetchBalanceWithUnlistedCollidingKey())).toBeInstanceOf(NotSupported);
             });
         });
 

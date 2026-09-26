@@ -122,6 +122,7 @@ const harness: BrokerContractHarness = {
     },
     fetchBalanceWithHoldings: () => fetchBalanceWith([{ is_cd: 'JNJ', is_nm: '존슨앤드존슨', frgn_hld_q_p6: '2', now_prc_p4: '366.0000' }]),
     fetchBalanceWithCollidingKey: () => fetchBalanceWith([{ is_cd: 'USD', is_nm: '프로셰어즈 울트라 반도체', frgn_hld_q_p6: '2', now_prc_p4: '45.0000' }]),
+    fetchBalanceWithUnlistedCollidingKey: () => fetchBalanceWith([{ is_cd: 'KRW', is_nm: '표에 없는 겹침', frgn_hld_q_p6: '1', now_prc_p4: '10.0000' }]),
     market: (symbol) => newExchange().market(symbol),
 };
 

@@ -66,7 +66,7 @@ class kis(kr_broker.async_support.kis):
                             on_subscribe_error: Optional[OnSubscribeError] = None) -> KisPriceWs:
         """실시간 시세 스트림을 만든다. 이 인스턴스의 접속키와 모의 여부를 쓴다. 구독은 반환값의 `start(subs)` 로 시작한다."""
         return KisPriceWs(self.get_approval_key, self.isSandboxModeEnabled, session_connector(self), on_trade, on_orderbook, url=self._realtime_url(),
-                          on_subscribe_error=on_subscribe_error)
+                          on_subscribe_error=on_subscribe_error, common_stock_codes=self.commonStockCodes)
 
     def create_realtime_stream(self, on_record: Callable[[KisRealtimeRecord], None],
                                on_subscribe_error: Optional[Callable[[str, str, str], None]] = None) -> KisRealtimeStream:
@@ -190,7 +190,7 @@ class kis(kr_broker.async_support.kis):
             }))
             return
         if tr_id == 'HDFSCNT0':
-            symbol = self._watch_symbol(f.get('rsym'), f"{_tpl(f.get('symb'))}/USD")
+            symbol = self._watch_symbol(f.get('rsym'), f"{self.common_stock_code(_tpl(f.get('symb')))}/USD")
             # 해외 체결에는 현지 일시(`xymd`, `xhms`)와 한국 일시(`kymd`, `khms`)가 함께 온다.
             stamp = self.kst_stamp(f.get('kymd'), f.get('khms'))
             self._watch_hub.resolve(f'ticker:{symbol}', self.safe_ticker({
@@ -201,7 +201,7 @@ class kis(kr_broker.async_support.kis):
             self._watch_hub.push(f'trades:{symbol}', self.safe_trade({'symbol': symbol, **stamp, 'price': num('last'), 'amount': num('evol'), 'info': f}))
             return
         if tr_id == 'HDFSASP0':
-            symbol = self._watch_symbol(f.get('rsym'), f"{_tpl(f.get('symb'))}/USD")
+            symbol = self._watch_symbol(f.get('rsym'), f"{self.common_stock_code(_tpl(f.get('symb')))}/USD")
             stamp = self.kst_stamp(f.get('kymd'), f.get('khms'))
             bid = num('pbid1')
             ask = num('pask1')

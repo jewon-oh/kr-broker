@@ -11,6 +11,7 @@
  * ## 심볼
  *
  * 국내 `005930/KRW`, 미국 `AAPL/USD` 를 쓴다. 슬래시가 든 티커(`BRK/B`)는 `BRK.B/USD` 로 통합하고 `market.id` 에 KIS 표기를 둔다.
+ * 현금 코드와 같은 티커(`USD`)는 `commonStockCodes` 의 통합 코드로 심볼을 만든다(`ProShares Ultra Semiconductors/USD`). 입력은 `USD/USD` 도 받는다.
  * 접미사를 뺀 `005930`, `AAPL` 도 받는다. 국내 종목은 마스터 데이터 없이 종목코드 모양(6자리)만으로 가르고, 해외 종목의 거래소는
  * 종목 마스터(`options.masterData`)에서 찾는다. `loadMarkets()` 는 마스터 데이터로 종목 목록을 만들 뿐이고 주문·시세 호출에는 필요 없다.
  *
@@ -3912,6 +3913,7 @@ export class kis extends Exchange {
             getApprovalKey: () => this.getApprovalKey(),
             isVirtual: this.isSandboxModeEnabled,
             url: this.realtimeUrl(),
+            commonStockCodes: this.commonStockCodes,
             ...handlers,
         });
     }
@@ -4061,7 +4063,7 @@ export class kis extends Exchange {
                 return;
             }
             case 'HDFSCNT0': {
-                const symbol = watched(f.rsym) ?? `${f.symb}/USD`;
+                const symbol = watched(f.rsym) ?? `${this.commonStockCode(String(f.symb))}/USD`;
                 // 해외 체결에는 현지 일시(`xymd`, `xhms`)와 한국 일시(`kymd`, `khms`)가 함께 온다.
                 const stamp = this.kstStamp(f.kymd, f.khms);
                 this.watchHub.resolve(`ticker:${symbol}`, this.safeTicker({
@@ -4073,7 +4075,7 @@ export class kis extends Exchange {
                 return;
             }
             case 'HDFSASP0': {
-                const symbol = watched(f.rsym) ?? `${f.symb}/USD`;
+                const symbol = watched(f.rsym) ?? `${this.commonStockCode(String(f.symb))}/USD`;
                 const stamp = this.kstStamp(f.kymd, f.khms);
                 const bid = num('pbid1');
                 const ask = num('pask1');
@@ -4235,7 +4237,7 @@ export class kis extends Exchange {
         if (id === undefined) throw new ExchangeError(`${this.id} parseMarket() missing code`);
         const overseas = this.safeString(market, 'currency') !== undefined || !isKrxDomesticCode(id);
         const quote = overseas ? 'USD' : 'KRW';
-        const base = id.replace('/', '.');
+        const base = this.commonStockCode(id.replace('/', '.'));
         const exchangeCode = this.safeString(market, 'market');
         return this.safeMarketStructure({
             id,
@@ -4304,9 +4306,12 @@ export class kis extends Exchange {
         if (violation !== null) throw new InvalidOrder(`${this.id} ${method}() ${violation} (${instrument.symbol})`, { detail: KRX_TICK_INVALID_DETAIL });
     }
 
-    /** 심볼(또는 종목코드)을 종목 식별 결과로 바꾼다. 국내는 마스터 없이도 되고, 해외는 마스터에서 거래소를 찾는다. */
+    /**
+     * 심볼(또는 종목코드)을 종목 식별 결과로 바꾼다. 국내는 마스터 없이도 되고, 해외는 마스터에서 거래소를 찾는다.
+     * `commonStockCodes` 의 통합 코드(`ProShares Ultra Semiconductors/USD`)는 티커(`USD`)로 돌려 찾고, 심볼은 통합 코드로 만든다.
+     */
     private instrumentOf(symbol: string): KisInstrument {
-        const base = (/^(.+)\/(KRW|USD)$/.exec(symbol)?.[1] ?? symbol).trim();
+        const base = this.stockTicker((/^(.+)\/(KRW|USD)$/.exec(symbol)?.[1] ?? symbol).trim());
         if (isKrxDomesticCode(base)) {
             return { symbol: `${base}/KRW`, code: base, overseas: false, quote: 'KRW', quoteExchange: undefined, orderExchange: undefined };
         }
@@ -4317,7 +4322,7 @@ export class kis extends Exchange {
         const code = getOverseasStockByCode(master, upper) === undefined && getOverseasStockByCode(master, slashed) !== undefined ? slashed : upper;
         const quoteExchange = getOverseasMarketForCode(master, code);
         return {
-            symbol: `${code.replace('/', '.')}/USD`,
+            symbol: `${this.commonStockCode(code.replace('/', '.'))}/USD`,
             code,
             overseas: true,
             quote: 'USD',
@@ -4555,7 +4560,8 @@ export class kis extends Exchange {
         let yahoo: OHLCV[] = [];
         let yahooError: unknown;
         try {
-            yahoo = await fetchYahooCandles(instrument.symbol, timeframe, limit ?? 100, since, until, krMarket, this) as OHLCV[];
+            // 통합 심볼이 아니라 티커로 묻는다. `commonStockCodes` 로 바꾼 통합 코드는 야후 티커가 아니다.
+            yahoo = await fetchYahooCandles(instrument.code, timeframe, limit ?? 100, since, until, krMarket, this) as OHLCV[];
         } catch (e) {
             if (fallbackExchange === undefined) throw e;
             yahooError = e;
@@ -4578,7 +4584,8 @@ export class kis extends Exchange {
     /**
      * 잔고. 현금은 통화 키(`KRW`, `USD`), 보유 종목은 `market.base` 키(국내 `005930`, 미국 `AAPL`, 클래스 주식 `BRK.B`)이며 종목의 `total` 이
      * 보유 수량이다. 평가금액·평균단가 같은 KIS 고유 값은 각 항목의 `info` 에 원본 그대로 있다. 조회가 하나라도 실패하면 던진다(빈 잔고와 구분한다).
-     * 보유 종목 키가 같은 잔고의 현금 키와 겹치면(미국 티커 `USD` 와 달러 현금) 한쪽을 덮어쓰지 않고 `NotSupported` 를 던진다. `params.scope` 로 나눠 받는다.
+     * 미국 티커 `USD` 처럼 현금 코드와 같은 티커는 `commonStockCodes` 의 통합 코드(`ProShares Ultra Semiconductors`)가 키다. 표에 없는 티커가
+     * 현금 키와 겹치면 한쪽을 덮어쓰지 않고 `NotSupported` 를 던진다. `params.scope` 로 나눠 받거나 `commonStockCodes` 에 그 티커를 더한다.
      *
      * `params.scope` 로 읽을 범위를 좁힌다. 기본은 전부(`'all'`)이고 배열로 골라도 된다.
      * - `'kr'`: 국내 잔고(`inquire-balance`). `KRW` 와 국내 보유 종목
@@ -4678,7 +4685,8 @@ export class kis extends Exchange {
      * - `KRW`: `total`=예수금총액(`dnca_tot_amt`), `free`=주문가능현금(`ord_psbl_cash`), `used`=둘의 차이. 주문가능현금이 예수금보다 크면
      *   (매도 대금이 결제되기 전) 예수금은 정산 뒤 현금이 아니라서 `total` 과 `used` 를 비운다. 예수금은 `info.summary` 에 있다.
      * - `USD`: `total`=예수금, `free`=예수금에서 미결제 매수증거금을 뺀 값. 종목 평가금액 합계는 `info.stockValue` 에 있다. 달러 행이 없으면 싣지 않는다.
-     * - 종목: `total`=보유수량, `free`=주문가능수량(없으면 보유수량). 키는 `market.base` 라 해외 슬래시 티커(`BRK/B`)는 `BRK.B` 다.
+     * - 종목: `total`=보유수량, `free`=주문가능수량(없으면 보유수량). 키는 `market.base` 라 해외 슬래시 티커(`BRK/B`)는 `BRK.B`, 미국 티커 `USD` 는
+     *   `ProShares Ultra Semiconductors` 다.
      *   같은 종목이 매매구분이나 대출일자별로 여러 행이면 수량을 더한다. `info` 는 첫 행이고, `info.rows` 에 원문 행 전부가 있다.
      */
     override parseBalance(response: Dict): Balances {
@@ -4721,7 +4729,7 @@ export class kis extends Exchange {
             // 겹친 키에 대입하면 보유나 현금 한쪽이 알림 없이 사라진다.
             if (result[code] !== undefined) {
                 throw new NotSupported(`${this.id} fetchBalance() 보유 종목 ${code} 가 현금 ${code} 와 키가 같아 한 잔고에 담을 수 없다. `
-                    + `params.scope 로 미국 보유 종목('us')과 현금('kr', 'usd')을 따로 받는다`);
+                    + `params.scope 로 미국 보유 종목('us')과 현금('kr', 'usd')을 따로 받거나 commonStockCodes 에 그 티커의 통합 코드를 더한다`);
             }
             result[code] = holding;
         }
@@ -4730,8 +4738,9 @@ export class kis extends Exchange {
 
     /** 보유 행 하나를 더한다. 같은 종목의 행(매매구분, 대출일자별)은 수량을 합치고 원문 행은 `info.rows` 에 모은다. */
     private addHolding(result: Dict, item: Dict, codeKey: string, quantityKey: string): void {
-        // 키는 `parseMarket` 의 `base` 와 같은 표기다(`BRK/B` → `BRK.B`).
-        const code = this.safeString(item, codeKey)?.replace('/', '.');
+        // 키는 `parseMarket` 의 `base` 와 같은 표기다(`BRK/B` → `BRK.B`, `USD` → `ProShares Ultra Semiconductors`).
+        const ticker = this.safeString(item, codeKey);
+        const code = ticker === undefined ? undefined : this.commonStockCode(ticker.replace('/', '.'));
         const quantity = this.safeString(item, quantityKey);
         if (code === undefined || quantity === undefined || !(Number(quantity) > 0)) return;
         const free = this.safeString(item, 'ord_psbl_qty', quantity) as string;
@@ -9721,7 +9730,7 @@ export class kis extends Exchange {
             rank: this.safeNumber(row, f.rank ?? 'data_rank'),
             // 해외 슬래시 티커(`BRK/B`)는 다른 메서드처럼 점 심볼(`BRK.B/USD`)로 옮긴다.
             symbol: spec.overseas
-                ? `${this.safeString(row, spec.symbolKey, '').replace('/', '.')}/${KIS_OVERSEAS_RANKING_EXCHANGES[prepared.EXCD as string]}`
+                ? `${this.commonStockCode(this.safeString(row, spec.symbolKey, '').replace('/', '.'))}/${KIS_OVERSEAS_RANKING_EXCHANGES[prepared.EXCD as string]}`
                 : `${this.safeString(row, spec.symbolKey, '')}/KRW`,
             name: this.safeString(row, f.name ?? 'hts_kor_isnm') || undefined,
             last: this.safeNumber(row, f.price ?? 'stck_prpr'),
