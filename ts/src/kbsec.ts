@@ -2887,7 +2887,8 @@ export class kbsec extends Exchange {
      *   읽지 못한 보유 행이 있으면 못 읽은 것이다. 이름이 어긋난 종목 그리드를 "보유 없음"으로 읽지 않으려는 것이다.
      *
      * `USD` 항목은 해외 잔고평가(`SPQM2226`)의 통화별 예수금 그리드에서 온다(예수금·주문가능금액). 그 그리드를 못 읽었으면 `USD` 항목이 없다.
-     * **없다는 것은 0 이 아니라 모른다는 뜻이다.** `options.krwIntegratedMargin` 이 켜져 있고 원화환산 외화예수금이 있으면 그것을 환율로 환산한 USD 가 우선한다.
+     * **없다는 것은 0 이 아니라 모른다는 뜻이다.** 미국 시장은 읽었는데 달러 행을 가리지 못해 `USD` 항목이 없으면 `info.unreadCurrencies` 에 `USD` 가 있다.
+     * `readStatus` 는 보유의 완전성만 알리므로 이때도 `COMPLETE` 일 수 있다. `options.krwIntegratedMargin` 이 켜져 있고 원화환산 외화예수금이 있으면 그것을 환율로 환산한 USD 가 우선한다.
      *
      * `free` 는 지금 주문에 쓸 수 있는 양, `total` 은 정산 뒤 계좌에 남을 양, `used` 는 `total − free` 다(ccxt 정의). 모르는 값은 비운다.
      * - 국내 보유: `free` 는 주문가능수량(`ordr_psbl_q`)이다. 해외 보유는 매도 가능 수량을 읽지 않아 `free` 가 비어 있다.
@@ -2950,6 +2951,7 @@ export class kbsec extends Exchange {
             info: {
                 readStatus: (unreadMarkets.length === 0 ? 'COMPLETE' : 'PARTIAL') as KbsecReadStatus,
                 unreadMarkets,
+                unreadCurrencies: [] as string[],
                 deposit: response.deposit,
             },
             timestamp: undefined,
@@ -2966,6 +2968,9 @@ export class kbsec extends Exchange {
             const free = numberToString(pickNum(usdCash, 'ordr_psbl_amt_p2'));
             result['USD'] = { free, used: undefined, total: Precise.stringGt(free, deposit) ? undefined : deposit, info: usdCash };
         }
+        // 미국 시장을 읽었는데 달러 예수금 행을 가리지 못하면 USD 항목이 없다. 0 이 아니라 모르는 것이라 따로 밝힌다.
+        // 미국 시장을 못 읽었으면 `unreadMarkets` 가 이미 알린다.
+        if (overseas.read && result['USD'] === undefined) (result['info'] as { unreadCurrencies: string[] }).unreadCurrencies.push('USD');
         const held: Dict = {};
         for (const holding of response.holdings as HoldingRow[]) {
             held[this.commonStockCode(holding.code)] = {

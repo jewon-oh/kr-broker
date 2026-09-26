@@ -70,6 +70,7 @@
   - KB증권은 웹소켓을 제공하지 않아서 ccxt처럼 `kr_broker.pro`에 넣지 않았습니다. 그래서 `kr_broker.pro.exchanges`는 이제 `kr_broker.exchanges`의 일부입니다.
   - 테스트 훅 `reset_kbsec_token_breaker`와 `reset_fill_side_warn`을 `kr_broker.testing`에서 가져옵니다.
 - 테스트 전용 경로 `kr-broker/testing`에서 `tokenStoreKey(prefix, credentialId)`를 내보냅니다. 증권사 인증이 토큰 저장소에 쓰는 키를 테스트가 규칙을 흉내 내지 않고 만들 수 있습니다. 접두사와 자격증명은 증권사마다 다르고, `testing` 모듈 설명에 적었습니다. Python 판은 `kr_broker.testing`에서 `token_store_key`를 가져옵니다.
+- KB증권 `fetchBalance`는 미국 시장을 읽었는데 달러 예수금 행을 가리지 못하면 `info.unreadCurrencies`에 `USD`를 싣습니다. 이때 `USD` 항목은 없고 `readStatus`는 `COMPLETE`일 수 있습니다. 예전에는 달러 현금이 빠진 것을 결과로 알 수 없었습니다. 운영에서는 해외 잔고평가(`SPQM2226`) 예수금 그리드의 통화구분명이 모두 빈 값으로 와서 이 경우가 됩니다. 달러 행을 가리는 규칙은 실계좌로 확인한 뒤 고칩니다(#29). 미국 시장을 못 읽었으면 예전처럼 `unreadMarkets`가 알리고 `unreadCurrencies`는 비어 있습니다.
 
 ### 바뀜
 
