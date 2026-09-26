@@ -101,7 +101,7 @@ describe('토큰 발급도 상한을 받는다', () => {
         // 첫 요청부터 응답 없이 멈춘다. 토큰 발급 자체가 돌아오지 않는 경우다.
         mockFetch.mockImplementation(hangForever);
 
-        // 토큰 상한(10초)이 조회 상한(20초)보다 짧다. 본문 형태를 둘 시도하므로 20초 안에 두 번 끊기고 호출이 실패로 끝난다.
+        // 토큰 상한(10초)이 조회 상한(20초)보다 짧다. 시간 초과는 본문 형태와 관계없는 일시 장애라 다른 형태로 다시 보내지 않고, 첫 상한에서 호출이 실패로 끝난다.
         const result = await advanceTo(READ_TIMEOUT_MS, newExchange().privatePostSsqm1801({}));
 
         expect(result.ok).toBe(false);
