@@ -152,7 +152,7 @@
                     "response": { "status": 200, "body": { "rt_cd": "1", "msg_cd": "APBK0919 ", "msg1": "장운영일자가 주문일과 상이합니다" } }
                 }
             ],
-            "error": { "class": "ExchangeError", "detail": "APBK0919" }
+            "error": { "class": "ExchangeError", "detail": "APBK0919", "brokerCode": "APBK0919" }
         },
         {
             "description": "초당 거래건수 초과(HTTP 500, EGW00201)는 RateLimitExceeded 이고 조회는 설정한 횟수만큼 다시 보낸다",
@@ -217,7 +217,7 @@
                     "response": { "status": 500, "body": { "rt_cd": "1", "msg_cd": "EGW00123", "msg1": "기간이 만료된 token 입니다." } }
                 }
             ],
-            "error": { "class": "AuthenticationError", "detail": "EGW00123" },
+            "error": { "class": "AuthenticationError", "detail": "EGW00123", "brokerCode": "EGW00123" },
             "tokenStoreAfter": { "kis:token:kis-app-key-": "absent" }
         },
         {
@@ -834,7 +834,7 @@
                     "response": { "status": 200, "body": { "rt_cd": "1", "msg_cd": "OPSQ0002", "msg1": "없는 서비스 코드 입니다" } }
                 }
             ],
-            "error": { "class": "ExchangeError", "detail": "OPSQ0002" }
+            "error": { "class": "ExchangeError", "detail": "OPSQ0002", "brokerCode": "OPSQ0002" }
         },
         {
             "description": "fetchTickers 는 종목마다 시장구분과 종목코드를 번호 붙여 한 번에 묻고, 묻지 않은 행은 버린다",
@@ -4775,7 +4775,7 @@
                     "response": { "status": 500, "body": { "rt_cd": "1", "msg_cd": "EGW00215", "msg1": "초당 거래건수를 초과하였습니다." } }
                 }
             ],
-            "error": { "class": "RateLimitExceeded", "detail": "EGW00215" }
+            "error": { "class": "RateLimitExceeded", "detail": "EGW00215", "brokerCode": "EGW00215" }
         },
         {
             "description": "createOrder 국내 지정가 매수는 휴장일 캘린더를 받은 뒤 정규장 TR 로 내고, 소수 수량은 내린다",
@@ -6565,7 +6565,7 @@
             "method": "createOrder",
             "args": ["005930/KRW", "limit", "buy", 1, 70030],
             "http": [],
-            "error": { "class": "InvalidOrder", "detail": "price-tick-invalid" }
+            "error": { "class": "InvalidOrder", "detail": "price-tick-invalid", "brokerCode": null }
         },
         {
             "description": "createOrder session 이 nxt 여도 NXT 가 닫힌 새벽에는 주문을 보내지 않고 MarketClosed 다",
@@ -6777,7 +6777,7 @@
                     "response": { "status": 200, "body": { "rt_cd": "1", "msg_cd": "APBK0952", "msg1": "주문가능금액을 초과 했습니다" } }
                 }
             ],
-            "error": { "class": "ExchangeError", "detail": "APBK0952" }
+            "error": { "class": "ExchangeError", "detail": "APBK0952", "brokerCode": "APBK0952" }
         },
         {
             "description": "createOrder 국내 주문 요청이 시간 초과로 끝나면 캘린더 뒤 주문을 한 번만 보내고 OrderOutcomeUnknown 이다",
@@ -8719,7 +8719,7 @@
                     "response": { "status": 200, "body": { "rt_cd": "1", "msg_cd": "APBK1683", "msg1": "정정/취소할 수량이 없습니다." } }
                 }
             ],
-            "error": { "class": "ExchangeError", "detail": "APBK1683" }
+            "error": { "class": "ExchangeError", "detail": "APBK1683", "brokerCode": "APBK1683" }
         },
         {
             "description": "cancelAllOrders 는 종목의 미체결을 모두 차례로 취소하고 행의 주문채번지점번호(ord_gno_brno)를 원주문 조직번호로 싣는다",

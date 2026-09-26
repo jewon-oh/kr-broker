@@ -41,6 +41,7 @@
 - 세 증권사가 함께 쓰는 주문 게이트를 공개합니다. `kr-broker/krx-trading-hours`의 `krxOrderBlockReason`과 `krxAuctionBuyBlockReason`, `kr-broker/us-market-hours`의 `usOrderBlockReason`과 `usAuctionBuyBlockReason`입니다. Python 판 이름은 `krx_order_block_reason` 등입니다. `marketSessionBlockReason`은 다섯째 인자로 `{ side, blockAuctionBuys }`를 받습니다.
 - `kr-broker/krx-tick-size`(Python 판 `kr_broker.krx_tick_size`)에 KRX 주식 호가 단위 표(`KRX_STOCK_TICK_SIZES`)와 `getKrxTickSize`, `krxTickViolation`을 둡니다.
 - `kr-broker/broker-time`에 한국 표준시 오프셋 `KST_OFFSET_MS`와 한국 날짜 `kstYmd`(`YYYYMMDD`), 한국 시각 `kstHms`(`HHMMSS`)를 둡니다. 세 증권사가 이 정의를 함께 씁니다. Python 판은 `kr_broker.broker_time`의 `KST_OFFSET_MS`와 `kst_ymd`입니다.
+- 오류에 `brokerCode`(Python 판 `broker_code`)를 더합니다. 증권사가 응답에 실어 보낸 원래 오류 코드입니다. 한국투자증권은 `msg_cd`, 토스증권은 오류 코드, KB증권은 `processCode`이고, 코드 표에 없는 코드도 싣습니다. 라이브러리가 요청 전에 막은 오류에는 없습니다. `detail` 값은 그대로이고, 뜻은 라이브러리가 가른 원인 이름으로 정합니다. KB증권의 원래 코드를 오류 메시지에서 꺼내던 코드는 `brokerCode`를 읽습니다.
 
 ### 바뀜
 

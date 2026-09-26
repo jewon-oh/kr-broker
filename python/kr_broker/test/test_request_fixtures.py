@@ -241,6 +241,8 @@ def test_request_fixture(fixture: Dict[str, Any], case: Dict[str, Any], flavor: 
         assert type(error).__name__ == expected_error['class']
         if 'detail' in expected_error:
             assert getattr(error, 'detail', None) == expected_error['detail']
+        if 'brokerCode' in expected_error:
+            assert getattr(error, 'broker_code', None) == expected_error['brokerCode']
     else:
         if error is not None:
             raise error

@@ -47,11 +47,17 @@ __all__ = [
 
 
 class BaseError(Exception):
-    """모든 오류의 부모. `detail` 은 증권사가 알려 준 세부 원인 코드, `retryable` 은 같은 요청을 다시 보내도 되는지다."""
+    """모든 오류의 부모. `retryable` 은 같은 요청을 다시 보내도 되는지다.
 
-    def __init__(self, message: str = '', *, detail: Optional[str] = None, retryable: Optional[bool] = None) -> None:
+    `detail` 은 라이브러리가 가른 원인 이름이다. 값 체계는 증권사마다 다르다. 한국투자증권과 토스증권은 대개 증권사 오류 코드와 같고,
+    요청 전에 막은 오류는 라이브러리가 정한 이름(`price-tick-invalid` 등)이다. `broker_code` 는 증권사가 응답에 실어 보낸 원래 오류 코드다
+    (한국투자증권 `msg_cd`, 토스증권 오류 코드). 코드 표에 없는 코드도 싣고, 증권사 응답 없이 라이브러리가 막은 오류에는 없다."""
+
+    def __init__(self, message: str = '', *, detail: Optional[str] = None, retryable: Optional[bool] = None,
+                 broker_code: Optional[str] = None) -> None:
         super().__init__(message)
         self.detail = detail
+        self.broker_code = broker_code
         self.retryable = retryable
 
 
@@ -108,8 +114,9 @@ class ManualInteractionNeeded(OperationRejected):
 class MarketClosed(OperationRejected):
     """장 시간 밖이거나 휴장일이다. 곧바로 다시 보내도 같은 결과이므로 재시도 대상이 아니다."""
 
-    def __init__(self, message: str = '', *, detail: Optional[str] = None, retryable: Optional[bool] = False) -> None:
-        super().__init__(message, detail=detail, retryable=retryable)
+    def __init__(self, message: str = '', *, detail: Optional[str] = None, retryable: Optional[bool] = False,
+                 broker_code: Optional[str] = None) -> None:
+        super().__init__(message, detail=detail, retryable=retryable, broker_code=broker_code)
 
 
 class InsufficientFunds(ExchangeError):
@@ -166,8 +173,9 @@ class OrderOutcomeUnknown(RequestTimeout):
     """주문 요청이 시간 초과나 연결 끊김으로 끝나 접수 여부를 모른다. 다시 보내면 중복 주문이 될 수 있어 재시도하지 않는다.
     호출한 쪽은 주문 조회로 접수 여부를 확인해야 한다."""
 
-    def __init__(self, message: str = '', *, detail: Optional[str] = None, retryable: Optional[bool] = False) -> None:
-        super().__init__(message, detail=detail, retryable=retryable)
+    def __init__(self, message: str = '', *, detail: Optional[str] = None, retryable: Optional[bool] = False,
+                 broker_code: Optional[str] = None) -> None:
+        super().__init__(message, detail=detail, retryable=retryable, broker_code=broker_code)
 
 
 class BadResponse(OperationFailed):
@@ -184,16 +192,18 @@ class TossTokenRejected(AuthenticationError):
     """토스가 액세스 토큰을 거절했다(401). `failed_token` 은 거절된 요청이 실제로 쓴 토큰이다. 다시 인증할 때
     다른 프로세스가 방금 넣은 새 토큰을 지우지 않는 데 쓴다."""
 
-    def __init__(self, message: str = '', *, detail: Optional[str] = None, failed_token: Optional[str] = None) -> None:
-        super().__init__(message, detail=detail)
+    def __init__(self, message: str = '', *, detail: Optional[str] = None, failed_token: Optional[str] = None,
+                 broker_code: Optional[str] = None) -> None:
+        super().__init__(message, detail=detail, broker_code=broker_code)
         self.failed_token = failed_token
 
 
 class TossRateLimited(RateLimitExceeded):
     """토스 호출 빈도 제한(429). `retry_after_ms` 는 `Retry-After` 헤더가 알려 준 대기 시간이다."""
 
-    def __init__(self, message: str = '', *, detail: Optional[str] = None, retry_after_ms: Optional[float] = None) -> None:
-        super().__init__(message, detail=detail)
+    def __init__(self, message: str = '', *, detail: Optional[str] = None, retry_after_ms: Optional[float] = None,
+                 broker_code: Optional[str] = None) -> None:
+        super().__init__(message, detail=detail, broker_code=broker_code)
         self.retry_after_ms = retry_after_ms
 
 

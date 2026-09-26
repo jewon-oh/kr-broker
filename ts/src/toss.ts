@@ -50,7 +50,7 @@
  *
  * ## 오류
  *
- * 토스의 오류 코드는 ccxt 오류 계층으로 옮겨 던지고, 원래 코드는 `error.detail` 에 둔다. 장 시간 밖은 `MarketClosed`, 주문 요청이 시간 초과로 끝나 접수 여부를
+ * 토스의 오류 코드는 ccxt 오류 계층으로 옮겨 던지고, 원래 코드는 `error.detail` 과 `error.brokerCode` 에 둔다. 장 시간 밖은 `MarketClosed`, 주문 요청이 시간 초과로 끝나 접수 여부를
  * 모르면 `OrderOutcomeUnknown`(다시 보내면 중복 주문이 되므로 재시도하지 않는다), 이미 체결·취소된 주문의 취소는 `OrderNotFound` 다.
  */
 
@@ -771,7 +771,7 @@ export class toss extends Exchange {
     /**
      * 응답의 오류를 오류 클래스로 던진다. 토스는 실패를 HTTP 상태와 본문의 오류 코드(`error.code` 또는 `error`) 두 층으로 준다.
      * 401·403·429 는 상태가 먼저이고, 그 밖에는 코드 표(`exceptions.exact`)를 본 다음 상태 표(`httpExceptions`)를 본다.
-     * 코드는 `error.detail` 에 담는다.
+     * 코드는 `error.detail` 과 `error.brokerCode` 에 담는다.
      */
     override handleErrors(
         statusCode: number,
@@ -791,7 +791,7 @@ export class toss extends Exchange {
         const description = typeof errorValue === 'string'
             ? this.safeString(response, 'error_description')
             : this.safeString(errorValue, 'message');
-        const options = { detail: code };
+        const options = { detail: code, brokerCode: code };
         const isTokenRequest = url.endsWith('/oauth2/token');
         const feedback = isTokenRequest
             ? `토스 토큰 발급 실패: ${statusCode} ${responseBody}`
@@ -813,7 +813,7 @@ export class toss extends Exchange {
 
         // 호가 단위를 어긴 주문은 `invalid-request` 에 올바른 호가 단위가 `data.tickSize` 로 실려 온다.
         if (code === 'invalid-request' && this.safeValue(this.safeDict(errorValue, 'data'), 'tickSize') !== undefined) {
-            throw new InvalidOrder(feedback, { detail: 'price-tick-invalid' });
+            throw new InvalidOrder(feedback, { detail: 'price-tick-invalid', brokerCode: code });
         }
         const exact = this.exceptions?.exact as Dictionary<ErrorClass> | undefined;
         this.throwExactlyMatchedException(exact, code, feedback, options);

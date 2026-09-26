@@ -4203,8 +4203,8 @@ export class kis extends Exchange {
         else if (statusCode >= 400) feedback = `KIS API 오류: ${statusCode} [${msgCd}] ${msg}`;
         else feedback = `KIS API 비즈니스 오류 [${msgCd}]: ${msg}`;
         const exceptions = this.exceptions as { exact?: Dictionary<any>; broad?: Dictionary<any> };
-        // 증권사 오류 코드는 어떤 오류 클래스로 던지든 `detail` 에 남긴다. 표에 없는 코드도 호출하는 쪽이 코드를 그대로 볼 수 있어야 한다.
-        const options = { detail: msgCd?.trim() };
+        // 증권사 오류 코드는 어떤 오류 클래스로 던지든 `detail` 과 `brokerCode` 에 남긴다. 표에 없는 코드도 호출하는 쪽이 코드를 그대로 볼 수 있어야 한다.
+        const options = { detail: msgCd?.trim(), brokerCode: msgCd?.trim() };
         this.throwExactlyMatchedException(exceptions.exact, msgCd?.trim(), feedback, options);
         this.throwBroadlyMatchedException(exceptions.broad, msg, feedback, options);
         throw new ExchangeError(feedback, options);

@@ -153,6 +153,7 @@ describe('createOrder — 국내', () => {
 
         expect(error).toBeInstanceOf(InvalidOrder);
         expect(error.detail).toBe(KBSEC_ERROR_DETAIL.QUANTITY_INVALID);
+        expect(error.brokerCode).toBeUndefined();
         expect(calledTrs(mockFetch)).not.toContain(TR_BUY.toLowerCase());
     });
 

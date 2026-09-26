@@ -1935,12 +1935,13 @@ export class kbsec extends Exchange {
             const processCode = String(header?.processCode ?? '').trim();
             const processMessage = String(header?.processMessage ?? '').trim();
             const feedback = `KB증권 업무 오류 (${trCode}): ${processMessage} [processCode=${processCode}]`;
-            const detail = kbsecErrorDetail(processCode);
-            this.throwExactlyMatchedException((this.exceptions as Dict).exact, processCode, feedback, { detail });
-            throw new ExchangeError(feedback);
+            const brokerCode = processCode || undefined;
+            this.throwExactlyMatchedException((this.exceptions as Dict).exact, processCode, feedback, { detail: kbsecErrorDetail(processCode), brokerCode });
+            throw new ExchangeError(feedback, { brokerCode });
         }
         if (isKbsecTokenFailure(statusCode, header)) {
-            throw new AuthenticationError(`${this.id} ${method} ${url} ${statusCode} 토큰이 무효다`, { detail: KBSEC_ERROR_DETAIL.TOKEN_INVALID });
+            const brokerCode = String(header?.processCode ?? '').trim() || undefined;
+            throw new AuthenticationError(`${this.id} ${method} ${url} ${statusCode} 토큰이 무효다`, { detail: KBSEC_ERROR_DETAIL.TOKEN_INVALID, brokerCode });
         }
         if (statusCode >= 200 && statusCode < 300 && response === undefined) {
             throw new BadResponse(`KB증권 응답이 JSON 이 아님 (${trCode}): ${responseBody.slice(0, 200)}`);

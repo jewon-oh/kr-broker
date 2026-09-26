@@ -652,7 +652,7 @@ class toss(Exchange, ImplicitAPI):
     def handle_errors(self, code: int, reason: str, url: str, method: str, headers: Dict[str, str], body: str, response: Any,
                       request_headers: Optional[Dict[str, str]], request_body: Str) -> Optional[bool]:
         """토스는 실패를 HTTP 상태와 본문의 오류 코드(`error.code` 또는 `error`) 두 층으로 준다. 401·403·429 는 상태가 먼저이고,
-        그 밖에는 코드 표(`exceptions['exact']`)를 본 다음 상태 표(`httpExceptions`)를 본다. 코드는 오류의 `detail` 에 담는다."""
+        그 밖에는 코드 표(`exceptions['exact']`)를 본 다음 상태 표(`httpExceptions`)를 본다. 코드는 오류의 `detail` 과 `broker_code` 에 담는다."""
         error_value = self.safe_value(response, 'error')
         if code < 400 and error_value is None:
             return None
@@ -669,24 +669,25 @@ class toss(Exchange, ImplicitAPI):
             feedback = f'토스 API 비즈니스 오류 [{error_code}]: {description or ""}'
         if code == 401:
             if is_token_request:
-                raise AuthenticationError(feedback, detail=error_code)
+                raise AuthenticationError(feedback, detail=error_code, broker_code=error_code)
             authorization = self.safe_string(request_headers, 'Authorization')
             failed_token = authorization[len('Bearer '):] if authorization is not None and authorization.startswith('Bearer ') else None
-            raise TossTokenRejected(feedback, detail=error_code, failed_token=failed_token)
+            raise TossTokenRejected(feedback, detail=error_code, failed_token=failed_token, broker_code=error_code)
         if code == 403:
-            raise PermissionDenied(feedback, detail=error_code)
+            raise PermissionDenied(feedback, detail=error_code, broker_code=error_code)
         if code == 429:
             retry_after = self.safe_number(headers, 'Retry-After')
-            raise TossRateLimited(feedback, detail=error_code, retry_after_ms=None if retry_after is None else retry_after * 1000)
+            raise TossRateLimited(feedback, detail=error_code, retry_after_ms=None if retry_after is None else retry_after * 1000,
+                                  broker_code=error_code)
         # 호가 단위를 어긴 주문은 invalid-request 에 올바른 호가 단위가 data.tickSize 로 실려 온다.
         if error_code == 'invalid-request' and self.safe_value(self.safe_dict(error_value, 'data'), 'tickSize') is not None:
-            raise InvalidOrder(feedback, detail='price-tick-invalid')
-        self.throw_exactly_matched_exception(self.exceptions.get('exact'), error_code, feedback, detail=error_code)
+            raise InvalidOrder(feedback, detail='price-tick-invalid', broker_code=error_code)
+        self.throw_exactly_matched_exception(self.exceptions.get('exact'), error_code, feedback, detail=error_code, broker_code=error_code)
         # 코드 표에 없는 응답은 상태로만 분류한다. 주문 요청의 5xx 는 접수 미상이 된다(`is_outcome_unknown`).
         by_status = self.httpExceptions.get(str(code)) or (ExchangeNotAvailable if code >= 500 else None)
         if by_status is not None:
-            raise self.http_status_error(code, by_status, feedback, detail=error_code)
-        raise ExchangeError(feedback, detail=error_code)
+            raise self.http_status_error(code, by_status, feedback, detail=error_code, broker_code=error_code)
+        raise ExchangeError(feedback, detail=error_code, broker_code=error_code)
 
     def unwrap(self, response: Any) -> Any:
         """응답의 `result` 봉투를 벗긴다. 봉투가 없으면 원본을, 본문이 비어 있으면 `None` 을 돌려준다."""

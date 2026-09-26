@@ -252,7 +252,7 @@
                     "response": { "status": 422, "body": { "error": { "code": "insufficient-buying-power", "message": "주문가능금액 부족" } } }
                 }
             ],
-            "error": { "class": "InsufficientFunds", "detail": "insufficient-buying-power" }
+            "error": { "class": "InsufficientFunds", "detail": "insufficient-buying-power", "brokerCode": "insufficient-buying-power" }
         },
         {
             "description": "이미 끝난 주문을 취소하면 OrderNotFound 다",
@@ -269,7 +269,7 @@
                     "response": { "status": 409, "body": { "error": { "code": "already-filled", "message": "이미 체결" } } }
                 }
             ],
-            "error": { "class": "OrderNotFound", "detail": "already-filled" }
+            "error": { "class": "OrderNotFound", "detail": "already-filled", "brokerCode": "already-filled" }
         },
         {
             "description": "429 는 TossRateLimited 이고 다시 보내지 않는다",
@@ -286,7 +286,7 @@
                     "response": { "status": 429, "headers": { "Retry-After": "2" }, "body": { "error": { "code": "rate-limit-exceeded", "message": "잠시 후" } } }
                 }
             ],
-            "error": { "class": "TossRateLimited", "detail": "rate-limit-exceeded" }
+            "error": { "class": "TossRateLimited", "detail": "rate-limit-exceeded", "brokerCode": "rate-limit-exceeded" }
         },
         {
             "description": "500 internal-error 는 ExchangeNotAvailable 이다",
@@ -303,7 +303,7 @@
                     "response": { "status": 500, "body": { "error": { "code": "internal-error", "message": "내부 오류" } } }
                 }
             ],
-            "error": { "class": "ExchangeNotAvailable", "detail": "internal-error" }
+            "error": { "class": "ExchangeNotAvailable", "detail": "internal-error", "brokerCode": "internal-error" }
         },
         {
             "description": "호가 단위를 어기면 invalid-request 에 tickSize 가 실려 오고 InvalidOrder 로 바꾼다",
@@ -320,7 +320,7 @@
                     "response": { "status": 400, "body": { "error": { "code": "invalid-request", "message": "호가 단위", "data": { "tickSize": "100" } } } }
                 }
             ],
-            "error": { "class": "InvalidOrder", "detail": "price-tick-invalid" }
+            "error": { "class": "InvalidOrder", "detail": "price-tick-invalid", "brokerCode": "invalid-request" }
         },
         {
             "description": "주문 요청이 시간 초과로 끝나면 접수 여부를 모르므로 OrderOutcomeUnknown 이다",
@@ -1386,7 +1386,7 @@
                     "response": { "status": 401, "body": { "error": { "code": "token-revoked", "message": "만료" } } }
                 }
             ],
-            "error": { "class": "TossTokenRejected", "detail": "token-revoked" }
+            "error": { "class": "TossTokenRejected", "detail": "token-revoked", "brokerCode": "token-revoked" }
         },
         {
             "description": "fetchBalance 는 달러 매수 가능 금액 조회가 실패하면 던진다 — 보유와 원화만 담아 성공으로 돌려주지 않는다",
@@ -1430,7 +1430,7 @@
                     "response": { "status": 503, "body": { "error": { "code": "service-unavailable", "message": "잠시 뒤 다시" } } }
                 }
             ],
-            "error": { "class": "ExchangeNotAvailable" }
+            "error": { "class": "ExchangeNotAvailable", "brokerCode": "service-unavailable" }
         },
         {
             "description": "fetchBalance 는 보유 응답에 items 목록이 없으면 보유 없음이 아니라 BadResponse 로 던진다",
@@ -2121,7 +2121,7 @@
             "method": "createOrder",
             "args": ["005930/KRW", "limit", "buy", 1, 70030],
             "http": [],
-            "error": { "class": "InvalidOrder", "detail": "price-tick-invalid" }
+            "error": { "class": "InvalidOrder", "detail": "price-tick-invalid", "brokerCode": null }
         },
         {
             "description": "createOrder 는 종목 유형을 모르면 국내 지정가를 호가에 맞추지 않고 그대로 보내고, 서버의 호가 단위 거절을 InvalidOrder 로 옮긴다",
@@ -2181,7 +2181,7 @@
                     }
                 }
             ],
-            "error": { "class": "InvalidOrder", "detail": "price-tick-invalid" }
+            "error": { "class": "InvalidOrder", "detail": "price-tick-invalid", "brokerCode": "invalid-request" }
         },
         {
             "description": "createOrder 에 라이브러리가 채우는 본문 필드(quantity)를 params 로 주면 요청 없이 BadRequest 다",

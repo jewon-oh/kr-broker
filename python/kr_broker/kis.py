@@ -1030,11 +1030,11 @@ class kis(Exchange, ImplicitAPI):
             feedback = f'KIS API 오류: {code} [{msg_cd}] {msg}'
         else:
             feedback = f'KIS API 비즈니스 오류 [{msg_cd}]: {msg}'
-        # 증권사 오류 코드는 어떤 오류 클래스로 던지든 detail 에 남긴다.
+        # 증권사 오류 코드는 어떤 오류 클래스로 던지든 detail 과 broker_code 에 남긴다.
         detail = None if msg_cd is None else msg_cd.strip()
-        self.throw_exactly_matched_exception(self.exceptions.get('exact'), detail, feedback, detail=detail)
-        self.throw_broadly_matched_exception(self.exceptions.get('broad'), msg, feedback, detail=detail)
-        raise ExchangeError(feedback, detail=detail)
+        self.throw_exactly_matched_exception(self.exceptions.get('exact'), detail, feedback, detail=detail, broker_code=detail)
+        self.throw_broadly_matched_exception(self.exceptions.get('broad'), msg, feedback, detail=detail, broker_code=detail)
+        raise ExchangeError(feedback, detail=detail, broker_code=detail)
 
     def _record_tr_cont(self, headers: Optional[Dict[str, str]], response: Any) -> None:
         """다음 쪽이 있다는 응답 헤더 `tr_cont` 를 응답 객체의 id 에 적는다. 없으면 같은 id 의 옛 기록(해제된 객체의 id 재사용)을 지운다."""
