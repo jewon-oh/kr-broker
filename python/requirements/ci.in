@@ -1,0 +1,7 @@
+# CI 가 설치하는 의존성. 운영 의존성은 runtime.txt 와 같은 판으로 묶는다.
+-c runtime.txt
+-r runtime.in
+# pyproject.toml 의 dev extra
+pytest>=8
+# pyproject.toml 의 [build-system] requires. CI 는 --no-build-isolation 으로 이 판을 써서 패키지를 빌드한다.
+hatchling>=1.24

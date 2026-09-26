@@ -51,6 +51,7 @@ pnpm typecheck   # 소스, 테스트, examples/ 까지 타입 검사
 pnpm test
 pnpm build
 pnpm hygiene:check   # 비밀이나 사설 식별자로 보이는 값 검사
+pnpm hygiene:history # 같은 검사를 커밋 이력(메시지, 추가된 줄, 커밋 이메일)에
 pnpm verify          # CI 가 돌리는 검사를 한 번에(Python 단계 포함)
 ```
 
@@ -60,7 +61,7 @@ pnpm verify          # CI 가 돌리는 검사를 한 번에(Python 단계 포�
 - 테스트는 `fetch`를 가짜 함수로 대체합니다. 증권사 서버를 호출하지 않습니다.
 - `ts/src/abstract/`는 `node scripts/gen-ts-abstract.mjs`가 `ts/src/spec/*.json`에서 만드는 파일입니다. 증권사 클래스의 `describe().api`와 암묵 메서드의 타입이 여기서 옵니다. 엔드포인트를 더하거나 고칠 때는 표를 고친 뒤 다시 만듭니다.
 - `docs/coverage/`의 자료를 고쳤다면 `pnpm docs:gen`으로 `docs/brokers/`와 README의 기능 표를 다시 만듭니다. README는 `<!-- coverage:start -->`와 `<!-- coverage:end -->` 사이만 바뀝니다. `pnpm docs:check`는 둘이 자료와 다르면 실패합니다.
-- CI는 `pnpm typecheck`, `node scripts/gen-ts-abstract.mjs --check`, `pnpm hygiene:check`, `pnpm test`, `pnpm docs:check`, `pnpm build`, `node scripts/check-dist-imports.mjs`, `pnpm audit --prod`와 Python 단계(아래)를 실행합니다. 테스트는 Linux의 Node.js 22와 24, Windows의 Node.js 22에서 실행합니다.
+- CI는 `pnpm typecheck`, `node scripts/gen-ts-abstract.mjs --check`, `pnpm hygiene:check`, `pnpm hygiene:history`, `pnpm test`, `pnpm docs:check`, `pnpm build`, `node scripts/check-dist-imports.mjs`, `pnpm audit --prod`와 Python 단계(아래)를 실행합니다. 테스트는 Linux의 Node.js 22와 24, Windows의 Node.js 22에서 실행합니다.
 - `pnpm verify`는 네트워크가 필요한 의존성 감사(`pnpm audit --prod`, `pip-audit`)를 빼고 CI와 같은 순서로 검사를 돌립니다. 하나라도 실패하면 거기서 멈춥니다. Python 단계는 `KR_BROKER_PYTHON`, `python/.venv`의 Python, PATH의 `python3`와 `python` 순서로 `pytest`를 불러올 수 있는 Python을 찾아 씁니다. Python 환경이 없으면 `pnpm verify --no-python`으로 Python 단계를 건너뜁니다.
 
 PR을 올리기 전에 `pnpm verify`가 통과해야 합니다.
@@ -83,7 +84,17 @@ node ../scripts/check-python-types.mjs --python .venv/bin/python   # pyright 타
 - 비동기 판 소스는 asyncio 를 직접 쓰지 않고 `async_support/base/runtime.py`의 `sleep_seconds`, `new_lock`, `new_semaphore`, `maybe_await`를 씁니다. 생성 스크립트가 이 이름들을 동기 짝(`base/runtime.py`)으로 바꿉니다.
 - 두 판이 함께 써야 하는 전역 상태(휴장일 캘린더, 한국투자증권 앱키 슬롯)는 생성하지 않는 모듈(`market_calendar.py`, `kis_rate_limit.py`)에 둡니다. 베이스(`base/`)와 캘린더 갱신 함수는 동기 짝과 비동기 짝(`async_support/base/`, `async_support/market_calendar.py`)을 손으로 씁니다. 한쪽을 고치면 다른 쪽도 고칩니다. `test_async_support.py`가 두 짝의 인자가 같은지 봅니다.
 - 타입 검사는 pyright(`basic`)로 센 파일별 오류 수가 `python/pyright-baseline.json`과 다르면 실패합니다. 오류가 늘었으면 새 오류를 고치고, 줄었으면 `--update`를 붙여 스크립트를 다시 돌린 뒤 바뀐 기준선 파일을 코드와 함께 커밋합니다.
-- CI는 `node scripts/gen-python-abstract.mjs --check`, `node scripts/gen-python-sync.mjs --check`, `pytest`를 Python 3.10과 3.13에서 실행합니다. 타입 검사와 운영 의존성의 취약점 감사(`pip-audit`)는 3.13에서만 돌립니다. 감사는 `pyproject.toml`의 `dependencies`를 PyPI 최신판으로 풀어 봅니다. 로컬에서는 `pip install pip-audit` 뒤 저장소 루트에서 `pip-audit ./python`을 실행합니다.
+- CI는 `node scripts/gen-python-abstract.mjs --check`, `node scripts/gen-python-sync.mjs --check`, `node scripts/python-lock.mjs --check`, `pytest`, 운영 의존성의 취약점 감사(`pip-audit`)를 Python 3.10과 3.13에서 실행합니다. 타입 검사는 3.13에서만 돌립니다.
+- CI는 의존성을 해시를 고정한 잠금 파일(`python/requirements/ci.txt`)로 설치하고, 패키지 자신은 `--no-deps --no-build-isolation`으로 설치합니다. 잠금 파일은 CI 전용입니다. 사용하는 쪽의 설치는 `pyproject.toml`의 하한을 따릅니다.
+- `pip-audit`는 운영 의존성의 잠금 파일(`python/requirements/runtime.txt`)을 감사합니다. 로컬에서는 새 venv에서 `pip install --require-hashes -r python/requirements/pip-audit.txt` 뒤 `pip-audit --disable-pip -r python/requirements/runtime.txt`를 실행합니다.
+
+### Python 잠금 파일
+
+`python/requirements/`의 `.in`은 직접 요구하는 의존성이고, `.txt`는 `uv pip compile --universal --generate-hashes`로 푼 판과 해시입니다. `.txt` 하나가 환경 마커로 Python 3.10과 3.13을 함께 덮습니다.
+
+- `pyproject.toml`의 `dependencies`, `dev` extra, `build-system.requires`를 바꾸면 같은 PR에서 `.in`을 맞추고 `pnpm python:lock`으로 `.txt`를 다시 만듭니다. [uv](https://docs.astral.sh/uv/)가 필요합니다. 이미 있는 판은 그대로 두고, 모든 판을 올리려면 `pnpm python:lock --upgrade`를 씁니다.
+- `node scripts/python-lock.mjs --check`는 네트워크 없이 `.in`이 `pyproject.toml`과 같은지, `.txt`의 판이 `.in`의 범위를 만족하는지 봅니다. `pnpm verify`와 CI가 이 검사를 돌립니다.
+- Dependabot(`uv` 생태계)이 `.in`과 `.txt`를 함께 올립니다. `.txt` 머리말의 명령으로 다시 만들므로 머리말을 손으로 고치지 않습니다.
 
 ## 커밋과 PR
 
@@ -97,6 +108,7 @@ type(scope): 설명
 - `scope`는 `kis`, `toss`, `kbsec`, `base`, `docs`처럼 바뀐 곳을 적습니다. 생략해도 됩니다.
 - 설명은 한국어나 영어로 씁니다. 한 줄에 무엇이 바뀌었는지 적습니다.
 - 파괴적 변경은 `type!:`로 표시하고 본문에 `BREAKING CHANGE:`를 적습니다.
+- 커밋의 작성자 이메일은 GitHub noreply 주소(`<ID>+<사용자 이름>@users.noreply.github.com`)를 씁니다. 공개 저장소의 커밋 이메일은 누구나 볼 수 있습니다. 저장소에서 `git config user.email`로 이 주소를 정해 둡니다. `pnpm hygiene:history`는 작성자 이메일이 이 주소가 아니면 실패합니다. 커미터 이메일은 웹에서 병합할 때 GitHub이 적는 서비스 주소도 받습니다.
 
 PR 하나에는 목적 하나만 담습니다. 사용자에게 보이는 변경은 `CHANGELOG.md`의 `[Unreleased]`에 적습니다. 버전을 어떻게 올리는지는 [버전 정책](docs/versioning.md)에 있습니다.
 
@@ -145,7 +157,8 @@ PR 본문은 [PR 템플릿](.github/pull_request_template.md)의 항목을 채�
 - 실제 응답을 바탕으로 만든 픽스처는 필드 구조를 그대로 두고 값을 바꿉니다.
 - 수량, 가격, 체결 시각처럼 계좌 활동을 드러내는 값도 바꿉니다.
 - 커밋한 비밀은 이력에 남습니다. 커밋 전에 `git diff`로 픽스처를 확인합니다.
-- `pnpm hygiene:check`는 토큰과 키 모양(JWT, 개인 키, KIS 앱키, 긴 base64 시크릿, `approval_key`와 `client_secret`에 붙은 값 등), 사설 주소(사설 IP, 링크로컬, IPv6 사설 주소, `.lan` 호스트), `example.*`가 아닌 이메일, 홈 디렉터리 경로, 계좌번호 모양을 찾습니다. 전체 목록은 `scripts/check-hygiene.mjs`의 머리 주석에 있습니다. 주문번호는 패턴으로 가릴 수 없고 계좌번호도 8자리-2자리 모양만 찾으므로 직접 확인합니다.
+- `pnpm hygiene:check`는 토큰과 키 모양(JWT, 개인 키, KIS 앱키, 긴 base64 시크릿, `approval_key`와 `client_secret`에 붙은 값 등), 사설 주소(사설 IP, 링크로컬, IPv6 사설 주소, `.lan` 호스트), 이메일(`example.*` 도메인, GitHub noreply 주소, `noreply@anthropic.com`, Dependabot 서명 트레일러의 `support@github.com`은 허용), 홈 디렉터리 경로, 계좌번호 모양을 찾습니다. 전체 목록은 `scripts/check-hygiene.mjs`의 머리 주석에 있습니다. 주문번호는 패턴으로 가릴 수 없고 계좌번호도 8자리-2자리 모양만 찾으므로 직접 확인합니다.
+- `pnpm hygiene:history`는 같은 패턴으로 `HEAD`에 닿는 모든 커밋의 메시지와 추가된 줄을 봅니다. 나중 커밋에서 지운 값도 이력에는 남기 때문입니다. PR에서는 PR 브랜치의 커밋도 봅니다. 걸린 커밋이 PR 브랜치에 있으면 그 커밋을 고쳐 다시 푸시합니다.
 - 실수로 올렸다면 PR을 닫고 [보안 정책](SECURITY.md)의 절차대로 앱키를 폐기합니다.
 
 ## 증권사 API 변경 대응

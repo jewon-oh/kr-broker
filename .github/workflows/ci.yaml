@@ -23,6 +23,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # 커밋 이력 검사가 모든 커밋을 본다. 얕은 클론이면 그 검사가 실패한다.
+          fetch-depth: 0
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -34,6 +36,17 @@ jobs:
         run: node scripts/gen-ts-abstract.mjs --check
       - name: 비밀이나 사설 식별자로 보이는 값이 없는지
         run: pnpm hygiene:check
+      # PR 에서는 GitHub 이 만든 시험용 병합 커밋 대신 PR 브랜치의 끝을 본다. 그 조상인 PR 커밋과 main 이력이 대상이다.
+      - name: 커밋 이력(메시지, 추가된 줄, 커밋 이메일)에 비밀이나 사설 식별자로 보이는 값이 없는지
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: pnpm hygiene:history "$HEAD_SHA"
+      # 스쿼시 병합 커밋의 제목은 PR 제목이다. 본문(커밋 메시지들)은 위 단계가 본다. 제목은 셸에 끼워 넣지 않고 환경 변수로 넘긴다.
+      - name: PR 제목에 비밀이나 사설 식별자로 보이는 값이 없는지
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: node scripts/check-hygiene.mjs --pr-title
 
   test:
     name: test (${{ matrix.os }}, node ${{ matrix.node }})
@@ -85,7 +98,15 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: node scripts/gen-python-abstract.mjs --check
       - run: node scripts/gen-python-sync.mjs --check
-      - run: python -m pip install -e './python[dev]'
+      - name: 잠금 파일(python/requirements)이 pyproject.toml 과 맞는지
+        run: node scripts/python-lock.mjs --check
+      # 의존성은 해시를 고정한 잠금 파일로 설치한다. 패키지 자신은 잠금 파일의 hatchling 으로 빌드하고(--no-build-isolation),
+      # pip check 로 pyproject.toml 의 요구사항을 잠금 파일의 판이 만족하는지 본다.
+      - name: 의존성 설치(해시 고정)
+        run: |
+          python -m pip install --require-hashes -r python/requirements/ci.txt
+          python -m pip install --no-deps --no-build-isolation ./python
+          python -m pip check
       - run: python -m pytest
         working-directory: python
       - name: 예제 문법 검사
@@ -94,13 +115,14 @@ jobs:
       - name: 타입 검사(pyright 오류 수가 기준선과 같은지)
         if: matrix.python == '3.13'
         run: node scripts/check-python-types.mjs --python python
-      # 운영 의존성(pyproject.toml 의 dependencies)을 PyPI 최신판으로 풀어 알려진 취약점을 본다. 선택 의존성(dev)은 보지 않는다.
-      # 매트릭스마다 돌리지 않고 3.13 에서 푼 판만 본다.
+      # 운영 의존성의 잠금 파일(runtime.txt)에서 알려진 취약점을 본다. 선택 의존성(dev)과 빌드 도구는 보지 않는다.
+      # pip-audit 는 환경 마커를 지금 Python 으로 풀어 해당하는 판만 보므로 매트릭스의 두 판에서 모두 돌린다.
+      # 감사 도구도 해시 잠금 파일로 따로 만든 venv 에 설치한다. 테스트 환경의 판과 섞이지 않게 하려는 것이다.
       - name: Python 운영 의존성의 알려진 취약점(pip-audit)
-        if: matrix.python == '3.13'
         run: |
-          python -m pip install pip-audit==2.10.1
-          python -m pip_audit --progress-spinner off ./python
+          python -m venv "$RUNNER_TEMP/pip-audit"
+          "$RUNNER_TEMP/pip-audit/bin/python" -m pip install --require-hashes -r python/requirements/pip-audit.txt
+          "$RUNNER_TEMP/pip-audit/bin/python" -m pip_audit --progress-spinner off --disable-pip -r python/requirements/runtime.txt
 
   # 운영 의존성만 검사한다. 개발 의존성의 취약점은 배포물에 실리지 않는다.
   audit:
