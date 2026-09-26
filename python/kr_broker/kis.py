@@ -2349,7 +2349,7 @@ class kis(Exchange, ImplicitAPI):
             timestamp = kst_timestamp(self.safe_string(order, 'dmst_ord_dt'), self.safe_string(order, 'thco_ord_tmd'))
             if timestamp is None:
                 timestamp = et_timestamp(self.safe_string(order, 'ord_dt'), self.safe_string(order, 'ord_tmd'))
-            status = self._order_status_of(filled, remaining, None)
+            status = self._order_status_of(filled, remaining, None, amount)
         else:
             amount = self.safe_string(order, 'ord_qty')
             filled = self.safe_string(order, 'tot_ccld_qty')
@@ -2360,7 +2360,7 @@ class kis(Exchange, ImplicitAPI):
             cost = self.safe_string(order, 'tot_ccld_amt')
             order_date = self.safe_string(order, 'ord_dt')
             timestamp = kst_timestamp(order_date if order_date is not None else kst_ymd(self.milliseconds()), self.safe_string(order, 'ord_tmd'))
-            status = self._order_status_of(filled, remaining, self.safe_string(order, 'cncl_yn'))
+            status = self._order_status_of(filled, remaining, self.safe_string(order, 'cncl_yn'), amount)
         return self.safe_order({
             'info': order,
             'id': order_id,
@@ -2381,12 +2381,15 @@ class kis(Exchange, ImplicitAPI):
             'trades': [],
         }, market)
 
-    def _order_status_of(self, filled: Str, remaining: Str, cancel_flag: Str) -> Str:
-        """체결·잔여 수량과 취소 여부로 주문 상태를 정한다. 판단할 근거가 없으면 None 이다."""
+    def _order_status_of(self, filled: Str, remaining: Str, cancel_flag: Str, amount: Str = None) -> Str:
+        """체결·잔여 수량과 취소 여부로 주문 상태를 정한다. 판단할 근거가 없으면 None 이다. 잔량이 0 이어도 체결 수량이 주문 수량보다 적으면
+        전량 체결(`closed`)이 아니다. 나머지가 취소, 정정, 거부 가운데 무엇으로 끝났는지 행으로 가를 수 없어 비운다."""
         if cancel_flag == 'Y':
             return 'canceled'
         if remaining is not None and fn.js_number(remaining) > 0:
             return 'open'
+        if amount is not None and fn.js_number(filled) < fn.js_number(amount):
+            return None
         if filled is not None and fn.js_number(filled) > 0:
             return 'closed'
         return None

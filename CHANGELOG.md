@@ -35,6 +35,7 @@
   - 토스증권의 시장 단위 조회 `fetchInvestorTrading`은 `fetchMarketInvestorTrading`으로 옮기고, 토스증권 `has`에서 `fetchInvestorTrading`을 뺍니다.
   - 한국투자증권 `fetchStockWarnings`는 `fetchVolatilityInterruptions`로, KB증권 `fetchStockWarnings`는 `fetchTradingRestriction`으로 옮깁니다. 두 증권사의 `has`에서 `fetchStockWarnings`를 뺍니다. `fetchStockWarnings`는 토스증권의 유의사항 조회 이름으로 남습니다.
   - `fetchRankings`는 순위 종류(`type`)가 증권사마다 달라 세 증권사의 `has`에서 뺍니다. 메서드는 그대로입니다.
+- 한국투자증권 `fetchOrders`, `fetchOrder`, `fetchClosedOrders`는 체결 수량이 주문 수량보다 적은 주문을 잔량이 0이어도 `closed`로 돌려주지 않습니다. ccxt에서 `closed`는 전량 체결입니다. 예전에는 10주 가운데 3주가 체결되고 나머지가 취소된 주문이 `closed`였습니다. 국내 행의 취소 여부(`cncl_yn`)가 `Y`이면 예전처럼 `canceled`이고, 그 밖에는 `status`를 비웁니다. 나머지가 취소, 정정, 거부 가운데 무엇으로 끝났는지 행만으로는 알 수 없기 때문입니다. 미국 행은 취소 여부를 읽지 않으므로 늘 비웁니다. 이런 주문은 `fetchClosedOrders`에서 빠집니다. 끝난 주문의 체결을 `fetchClosedOrders`로 모으던 코드는 `fetchOrders`의 `filled`나 `fetchMyTrades`를 읽습니다. `fetchOpenOrders`와 `cancelAllOrders`는 미체결 조회의 행이라 이때도 `open`으로 둡니다. Python 판도 같습니다.
 
 ### 추가
 
