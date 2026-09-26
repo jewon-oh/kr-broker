@@ -29,6 +29,8 @@ npm에는 아직 게시하지 않았습니다. 버전별 변경은 [CHANGELOG](.
 
 `kr-broker/logger`로는 라이브러리의 유일한 전역 설정인 로거를 바꿉니다. `kr-broker/token-refresh-lock`의 `refreshTokenWithLock`은 `options.tokenStore`를 직접 구현할 때, 그 저장소가 여러 프로세스 사이의 잠금 규칙에 맞는지 확인하는 데 씁니다.
 
+증권사 클래스 밖에서 쓰도록 남긴 공개 도우미가 셋 있습니다. `kr-broker/kis/kis-types`의 `getKisEffectiveFeeRate`와 `kr-broker/kbsec/kbsec-fee`의 `kbsecEstimatedFee`는 매도 거래세까지 더한 실효 수수료율을 구합니다. `fetchTradingFee`는 거래세를 싣는 자리가 증권사마다 달라서, 두 증권사의 실효율을 같은 방식으로 얻으려면 이 도우미를 씁니다. `kr-broker/broker-time`의 `timeframeToMs`는 읽지 못한 타임프레임에 `NaN`을 돌려줍니다. 진입점의 `parseTimeframe`은 모르는 단위에 `NotSupported`를 던집니다.
+
 `kr-broker/testing`은 테스트 전용 경로입니다. 모듈 전역 상태를 비우거나 읽는 훅(`__resetKbsecTokenBreaker`, `kbsecTokenBreakerState`, `__resetFillSideWarn`)을 모았습니다. 이 경로는 호환을 약속하지 않으므로 운영 코드에서 가져오지 않습니다.
 
 ## 0.x의 규칙

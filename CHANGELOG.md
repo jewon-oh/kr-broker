@@ -47,9 +47,7 @@
 - 라이브러리 안에서 쓰지 않는 공개 이름에 `@deprecated`를 붙였습니다. 다음 판에서 지웁니다. Python 판의 같은 이름(`check_krx_trading_hours`, `get_time_until_us_market_open`, `is_toss_trading_open`, `time_until_toss_open`, `parse_kis_realtime_frame`, `kis_types`의 `KIS_RATE_LIMIT_ERROR_CODE`, `KIS_LEDGER_RATE_LIMIT_ERROR_CODE`, `KIS_RATE_LIMIT_ERROR_CODES`)도 함께 지웁니다.
   - `kr-broker/kbsec/kbsec-settlement-match`와 `kr-broker/kbsec/kbsec-overseas-settlement-match`의 모든 이름. 정산 대조는 호출하는 쪽의 거래 기록을 KB증권의 정산 행과 맞추는 일이므로, 대조 코드를 호출하는 쪽으로 옮깁니다. 정산 행은 `fetchDomesticSettlements`와 `fetchOverseasSettlements`가 계속 돌려줍니다.
   - `kr-broker/kbsec/kbsec-types`의 `kbsecTodayKst`
-  - `kr-broker/kbsec/kbsec-fee`의 `kbsecEstimatedFee`. 비율은 `kbsecEstimatedFeeRate`로 구합니다.
   - `kr-broker/kis/kis-types`의 속도 제한 코드 `KIS_RATE_LIMIT_ERROR_CODE`, `KIS_LEDGER_RATE_LIMIT_ERROR_CODE`, `KIS_RATE_LIMIT_ERROR_CODES`. 오류 메시지에서 이 코드를 찾던 코드는 `RateLimitExceeded`로 가릅니다. 증권사가 준 코드는 오류의 `detail`에 있습니다.
-  - `kr-broker/kis/kis-types`의 `getKisEffectiveFeeRate`. 수수료율은 `KIS_BROKERAGE_FEE`이고, 매도라면 `krxSellTaxRate()`를 더합니다.
   - `kr-broker/kis/kis-realtime-parser`의 `parseKisRealtimeFrame`, `kr-broker/kis/kis-price-ws`의 `isKisWsSupported`와 `isUsingGlobalWebSocket`
   - `kr-broker/krx-trading-hours`의 `checkKRXTradingHours`. `checkKRXTradingHoursAt(now)`를 씁니다.
   - `kr-broker/toss/toss-trading-hours`의 `isTossTradingOpen`과 `timeUntilTossOpen`. `kr-broker/trading-hours`의 `isTradingHours('toss', now)`와 `getTimeUntilMarketOpen('toss', now)`를 씁니다.

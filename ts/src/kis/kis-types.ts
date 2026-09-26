@@ -69,11 +69,7 @@ export const KIS_BROKERAGE_FEE = 0.00015;
 /** KRX 매도 거래세 — 매도 시에만 적용. 세율은 `../krx-sell-tax` 한 곳에 두고 체결 시각으로 고른다. 코넥스는 다루지 않는다. */
 export { krxSellTaxRate };
 
-/**
- * KIS 의 effective 수수료율 — 매수는 위탁수수료, 매도는 위탁수수료에 `at` 시점의 거래세를 더한다.
- *
- * @deprecated 라이브러리 안에서 쓰지 않는다. `KIS_BROKERAGE_FEE` 를 쓰고, 매도라면 `krxSellTaxRate(at)` 를 더한다. 다음 판에서 지운다.
- */
+/** KIS 의 effective 수수료율 — 매수는 위탁수수료, 매도는 위탁수수료에 `at` 시점의 거래세를 더한다. */
 export function getKisEffectiveFeeRate(side: 'buy' | 'sell', at: Date = new Date()): number {
     return side === 'sell'
         ? KIS_BROKERAGE_FEE + krxSellTaxRate(at)

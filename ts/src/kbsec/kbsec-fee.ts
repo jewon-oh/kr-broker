@@ -53,8 +53,6 @@ export function kbsecEstimatedFeeRate(
  *
  * `at` 은 체결 시각이다(생략하면 현재). 국내 매도세가 시행일마다 달라 과거 거래를 다시
  * 계산할 때는 그 거래의 시각을 넘겨야 한다 — `krSellTaxRate` 주석 참조.
- *
- * @deprecated 라이브러리 안에서 쓰지 않는다. 비율은 `kbsecEstimatedFeeRate` 로 구한다. 다음 판에서 지운다.
  */
 export function kbsecEstimatedFee(
     notional: number,
