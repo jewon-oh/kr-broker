@@ -2,6 +2,7 @@
  * @fileoverview KB 토큰 차단기와 토큰 캐시의 범위.
  *
  * - 차단기는 앱키마다 따로 센다. 한 계정의 실패가 같은 프로세스의 다른 계정을 막지 않는다.
+ * - 토큰 발급 거절은 차단기를 풀지 않는다. 토큰을 싣고 보낸 TR 의 업무 거절만 푼다.
  * - `invalidate(failedToken)` 은 캐시 토큰이 실패한 토큰일 때만 비운다.
  * - 만료 직전의 짧은 `expires_in` 도 수명의 절반 동안은 캐시해 TR 마다 발급하지 않는다.
  */
@@ -11,7 +12,7 @@ const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 global.fetch = mockFetch as unknown as typeof fetch;
 
 import { kbsec } from '../../kbsec';
-import { BadRequest, ExchangeNotAvailable } from '../../base/errors';
+import { AuthenticationError, BadRequest, ExchangeNotAvailable, PermissionDenied } from '../../base/errors';
 import { __resetKbsecTokenBreaker, kbsecTokenBreakerState } from '../../testing';
 
 const envelope = (header: Record<string, unknown>, body: unknown, status = 200) => {
@@ -46,6 +47,26 @@ describe('KB 토큰 차단기는 앱키마다 따로 센다', () => {
         await expect(a.fetchWithdrawableAmount()).rejects.toBeInstanceOf(ExchangeNotAvailable);
         await expect(make('kb-app-key-BBBBBB').fetchWithdrawableAmount()).resolves.toMatchObject({ nextDay: 1 });
         expect(kbsecTokenBreakerState('kb-app-key-BBBBBB').streak).toBe(0);
+    });
+
+    it('★토큰 발급 거절은 차단기를 풀지 않는다. TR 을 보내지 않았으니 토큰이 통했다는 뜻이 아니다', async () => {
+        const e021 = () => envelope({ processFlag: 'B', processCode: 'E021', processMessage: '앱키로 앱정보 추출 중 오류' }, {}, 500);
+        const i446 = () => envelope({ processFlag: 'B', processCode: 'I446', processMessage: 'API 사용 권한이 없습니다.' }, {}, 500);
+        let issue = () => token('T');
+        let reply = i445;
+        mockFetch.mockImplementation(async (url: string) => (String(url).includes('/oauth2/token') ? issue() : reply()));
+        await make().fetchWithdrawableAmount().catch(() => undefined);   // 회전 뒤에도 I445 라 한 번 센다
+        expect(kbsecTokenBreakerState('kb-app-key-123456').streak).toBe(1);
+
+        issue = e021;
+        await expect(make().fetchWithdrawableAmount()).rejects.toBeInstanceOf(AuthenticationError);
+        expect(kbsecTokenBreakerState('kb-app-key-123456').streak).toBe(1);
+
+        // 토큰을 싣고 보낸 TR 이 업무 오류로 거절되면 예전처럼 푼다.
+        issue = () => token('T');
+        reply = i446;
+        await expect(make().fetchWithdrawableAmount()).rejects.toBeInstanceOf(PermissionDenied);
+        expect(kbsecTokenBreakerState('kb-app-key-123456').streak).toBe(0);
     });
 });
 

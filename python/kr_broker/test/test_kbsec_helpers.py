@@ -180,6 +180,17 @@ def test_a_business_rejection_closes_the_breaker_but_a_bare_5xx_does_not() -> No
     assert kbsec_token_breaker_state('app-a')['streak'] == 0
 
 
+def test_a_token_issue_rejection_does_not_close_the_breaker() -> None:
+    """발급이 거절되면 TR 을 보내지 않았으므로 토큰이 통했다는 뜻이 아니다. 차단기를 풀지 않는다."""
+    record_token_failure('app-a', 'SSQM1801', 'TOKEN_INVALID')
+    e021 = {'status': 500, 'body': {'dataHeader': {'processFlag': 'B', 'processCode': 'E021'}, 'dataBody': {}}}
+    broker = _broker([e021, e021])
+    with pytest.raises(kr_broker.AuthenticationError):
+        broker.private_post_ssqm1801({})
+    assert broker.session.seen == ['token', 'token']
+    assert kbsec_token_breaker_state('app-a')['streak'] == 1
+
+
 # ============ 해외 체결 조회 래치 ============
 
 def test_overseas_fills_latch_after_a_business_rejection_but_not_after_a_transient_failure() -> None:

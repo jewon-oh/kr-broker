@@ -505,7 +505,8 @@ class kbsec(Exchange, ImplicitAPI):
             token_failed = isinstance(error, AuthenticationError) and error.detail == KBSEC_ERROR_DETAIL['TOKEN_INVALID']
             if not token_failed:
                 # 응답을 읽고 던진 오류(업무 거절)는 토큰이 통했다는 뜻이므로 차단기를 푼다. 전송 실패는 아무것도 알려 주지 않는다.
-                if isinstance(error, ExchangeError):
+                # 토큰을 싣지 못한 요청(발급 거절)은 TR 을 보내지 않았으므로 풀지 않는다.
+                if isinstance(error, ExchangeError) and 'Authorization' in request_headers:
                     record_kbsec_call_ok(self.apiKey)
                 raise
             if not allow_retry:

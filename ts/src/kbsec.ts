@@ -1909,7 +1909,8 @@ export class kbsec extends Exchange {
             const tokenFailed = error instanceof AuthenticationError && error.detail === KBSEC_ERROR_DETAIL.TOKEN_INVALID;
             if (!tokenFailed) {
                 // 응답을 읽고 던진 오류(업무 거절)는 토큰이 통했다는 뜻이므로 차단기를 푼다. 전송 실패는 아무것도 알려 주지 않는다.
-                if (error instanceof ExchangeError) recordKbsecCallOk((this.apiKey as string));
+                // 토큰을 싣지 못한 요청(발급 거절)은 TR 을 보내지 않았으므로 풀지 않는다.
+                if (error instanceof ExchangeError && requestHeaders['Authorization'] !== undefined) recordKbsecCallOk((this.apiKey as string));
                 throw error;
             }
             const failedToken = String(requestHeaders['Authorization'] ?? '').replace(/^bearer /i, '');
