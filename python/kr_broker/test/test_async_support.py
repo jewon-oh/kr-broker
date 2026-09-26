@@ -238,7 +238,7 @@ def test_sync_base_methods_that_reach_io_are_overridden_as_coroutines() -> None:
     assert missing == []
 
 
-@pytest.mark.parametrize('broker', ['kis', 'toss'])
+@pytest.mark.parametrize('broker', ['kis', 'toss', 'kbsec'])
 def test_broker_overrides_match_base_coroutine_kind(broker: str) -> None:
     """부모의 코루틴을 동기 메서드로 덮거나, 부모의 동기 메서드(`handle_errors` 등)를 코루틴으로 덮지 않았다."""
     cls = getattr(kr_broker.async_support, broker)
@@ -258,10 +258,12 @@ def test_async_and_pro_packages_export_same_names_as_sync() -> None:
     import kr_broker.async_support
     import kr_broker.pro
     for package in (kr_broker.async_support, kr_broker.pro):
-        assert package.exchanges == kr_broker.exchanges
-        assert set(package.__all__) == set(kr_broker.__all__)
+        # ccxt 처럼 실시간 판에는 웹소켓이 있는 증권사만 둔다(KB증권은 없다). 비동기 판은 아래에서 동기 판과 같은지 본다.
+        assert set(package.exchanges) <= set(kr_broker.exchanges)
+        assert set(package.__all__) <= set(kr_broker.__all__)
         assert package.__version__ == kr_broker.__version__
         assert package.ExchangeError is kr_broker.ExchangeError
+    assert kr_broker.async_support.exchanges == kr_broker.exchanges and set(kr_broker.async_support.__all__) == set(kr_broker.__all__)
     assert issubclass(kr_broker.pro.kis, kr_broker.async_support.kis) and issubclass(kr_broker.pro.toss, kr_broker.async_support.toss)
     assert kr_broker.pro.kis({}).has['watchTicker'] is True and kr_broker.async_support.kis({}).has['watchTicker'] is False
 

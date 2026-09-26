@@ -22,7 +22,7 @@ import kr_broker.async_support
 from kr_broker.base import functions as fn
 from kr_broker.base.functions import deep_extend
 from kr_broker.base.types import Balance, Balances, Float, Int, Str
-from kr_broker.testing import reset_market_calendar
+from kr_broker.testing import reset_kbsec_token_breaker, reset_market_calendar
 
 FIXTURES = Path(__file__).resolve().parents[3] / 'ts' / 'src' / 'test' / 'static' / 'request'
 
@@ -215,11 +215,13 @@ def _shape_errors(value: Any, hint: Any, path: str = 'result') -> List[str]:
 
 
 @pytest.fixture(autouse=True)
-def _fresh_market_calendar() -> Any:
-    # 휴장일 캘린더는 모듈 전역이라 앞 케이스가 받은 캘린더가 다음 케이스의 세션 판정에 섞이지 않게 비운다.
+def _fresh_module_state() -> Any:
+    # 휴장일 캘린더와 KB증권 토큰 차단기는 모듈 전역이라 앞 케이스의 상태가 다음 케이스에 섞이지 않게 비운다.
     reset_market_calendar()
+    reset_kbsec_token_breaker()
     yield
     reset_market_calendar()
+    reset_kbsec_token_breaker()
 
 
 def _load_cases() -> List[Any]:

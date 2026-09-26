@@ -31,7 +31,7 @@ npm에는 아직 게시하지 않았습니다. 버전별 변경은 [CHANGELOG](.
 
 증권사 클래스 밖에서 쓰도록 남긴 공개 도우미가 셋 있습니다. `kr-broker/kis/kis-types`의 `getKisEffectiveFeeRate`와 `kr-broker/kbsec/kbsec-fee`의 `kbsecEstimatedFee`는 매도 거래세까지 더한 실효 수수료율을 구합니다. `fetchTradingFee`는 거래세를 싣는 자리가 증권사마다 달라서, 두 증권사의 실효율을 같은 방식으로 얻으려면 이 도우미를 씁니다. `kr-broker/broker-time`의 `timeframeToMs`는 읽지 못한 타임프레임에 `NaN`을 돌려줍니다. 진입점의 `parseTimeframe`은 모르는 단위에 `NotSupported`를 던집니다.
 
-`kr-broker/testing`은 테스트 전용 경로입니다. 모듈 전역 상태를 비우거나 읽거나 채우는 훅을 모았습니다. KB증권 토큰 차단기와 체결 경고의 훅(`__resetKbsecTokenBreaker`, `kbsecTokenBreakerState`, `__resetFillSideWarn`)과 휴장일 캘린더를 채우고 비우는 훅(`applyMarketCalendar`, `resetMarketCalendar`)이 있습니다. Python 판은 `kr_broker.testing`에서 캘린더 훅(`apply_market_calendar`, `reset_market_calendar`)을 가져옵니다. 이 경로는 호환을 약속하지 않으므로 운영 코드에서 가져오지 않습니다.
+`kr-broker/testing`은 테스트 전용 경로입니다. 모듈 전역 상태를 비우거나 읽거나 채우는 훅을 모았습니다. KB증권 토큰 차단기와 체결 경고의 훅(`__resetKbsecTokenBreaker`, `kbsecTokenBreakerState`, `__resetFillSideWarn`)과 휴장일 캘린더를 채우고 비우는 훅(`applyMarketCalendar`, `resetMarketCalendar`)이 있습니다. Python 판은 `kr_broker.testing`에서 캘린더 훅(`apply_market_calendar`, `reset_market_calendar`)과 KB증권 토큰 차단기 훅(`reset_kbsec_token_breaker`)을 가져옵니다. 이 경로는 호환을 약속하지 않으므로 운영 코드에서 가져오지 않습니다.
 
 ## 0.x의 규칙
 

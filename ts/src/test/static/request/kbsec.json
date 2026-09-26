@@ -1,0 +1,2141 @@
+{
+    "schema_version": 1,
+    "broker": "kbsec",
+    "config": {
+        "apiKey": "TEST-APPKEY-KBSEC-0001",
+        "secret": "TEST-APPSECRET-KBSEC-0001",
+        "enableRateLimit": false,
+        "options": {
+            "hostAddr": {
+                "ipAddr": "203.0.113.10",
+                "macAddr": "00-00-5E-00-53-01"
+            }
+        }
+    },
+    "tokenStore": {
+        "kbsec:token:2f6506bc8b1a20daff3b7300414b5fff": {
+            "accessToken": "kb-token-stored",
+            "expiresAt": 4102444800000
+        }
+    },
+    "cases": [
+        {
+            "description": "암묵 메서드는 TR 입력 레이아웃의 빠진 키를 빈 문자열로 채워 스펙 순서로 보내고, 스펙에 없는 키는 뒤에 붙인다",
+            "method": "privatePostSsqm1801",
+            "args": [
+                {
+                    "nxt_key": "",
+                    "inq_clsf": "1",
+                    "mkt_tm_ccd": "1",
+                    "memo_key": "x"
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm1801",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"is_no\":\"\",\"mkt_tm_ccd\":\"1\",\"spclz_ordr_ccd\":\"\",\"act_cd\":\"\",\"nxt_key\":\"\",\"memo_key\":\"x\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "o_msg": "정상"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "dataHeader": {
+                    "processFlag": "A",
+                    "processCode": "0011",
+                    "processMessage": "정상적으로 조회되었습니다."
+                },
+                "dataBody": {
+                    "o_msg": "정상"
+                }
+            }
+        },
+        {
+            "description": "저장소에 토큰이 없으면 봉투 형태로 발급해 저장소(새 키와 옛 키)에 넣고 TR 을 보낸다",
+            "tokenStore": {},
+            "method": "privatePostSsqm1801",
+            "args": [
+                {
+                    "inq_clsf": "1",
+                    "mkt_tm_ccd": "1",
+                    "nxt_key": ""
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/oauth2/token",
+                        "headers": {
+                            "Content-Type": "application/json"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"\",\"macAddr\":\"\"},\"dataBody\":{\"appKey\":\"TEST-APPKEY-KBSEC-0001\",\"appSecret\":\"TEST-APPSECRET-KBSEC-0001\",\"grantType\":\"client_credentials\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0000"
+                            },
+                            "dataBody": {
+                                "access_token": "kb-token-new",
+                                "token_type": "Bearer",
+                                "expires_in": 86400
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm1801",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-new"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"is_no\":\"\",\"mkt_tm_ccd\":\"1\",\"spclz_ordr_ccd\":\"\",\"act_cd\":\"\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "o_msg": "정상"
+                            }
+                        }
+                    }
+                }
+            ],
+            "tokenStoreAfter": {
+                "kbsec:token:2f6506bc8b1a20daff3b7300414b5fff": "present",
+                "kbsec:token:TEST-APPKEY-": "present"
+            },
+            "output": {
+                "dataHeader": {
+                    "processFlag": "A",
+                    "processCode": "0011",
+                    "processMessage": "정상적으로 조회되었습니다."
+                },
+                "dataBody": {
+                    "o_msg": "정상"
+                }
+            }
+        },
+        {
+            "description": "봉투 형태 발급이 업무 코드로 거절되면 평면 형태로 한 번 더 보내고, 평면 응답의 토큰도 받는다",
+            "tokenStore": {},
+            "method": "privatePostSsqm1801",
+            "args": [
+                {
+                    "inq_clsf": "1",
+                    "mkt_tm_ccd": "1",
+                    "nxt_key": ""
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/oauth2/token",
+                        "headers": {
+                            "Content-Type": "application/json"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"\",\"macAddr\":\"\"},\"dataBody\":{\"appKey\":\"TEST-APPKEY-KBSEC-0001\",\"appSecret\":\"TEST-APPSECRET-KBSEC-0001\",\"grantType\":\"client_credentials\"}}"
+                    },
+                    "response": {
+                        "status": 500,
+                        "body": {
+                            "dataHeader": {
+                                "resultCode": "200",
+                                "resultMessage": "성공",
+                                "processFlag": "B",
+                                "processCode": "E021",
+                                "processMessage": "앱키로 앱정보 추출 중 오류가 발생했습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/oauth2/token",
+                        "headers": {
+                            "Content-Type": "application/json"
+                        },
+                        "body": "{\"grant_type\":\"client_credentials\",\"appKey\":\"TEST-APPKEY-KBSEC-0001\",\"appSecret\":\"TEST-APPSECRET-KBSEC-0001\"}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "access_token": "kb-token-flat",
+                            "expires_in": 86400
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm1801",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-flat"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"is_no\":\"\",\"mkt_tm_ccd\":\"1\",\"spclz_ordr_ccd\":\"\",\"act_cd\":\"\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "o_msg": "정상"
+                            }
+                        }
+                    }
+                }
+            ],
+            "tokenStoreAfter": {
+                "kbsec:token:2f6506bc8b1a20daff3b7300414b5fff": "present"
+            },
+            "output": {
+                "dataHeader": {
+                    "processFlag": "A",
+                    "processCode": "0011",
+                    "processMessage": "정상적으로 조회되었습니다."
+                },
+                "dataBody": {
+                    "o_msg": "정상"
+                }
+            }
+        },
+        {
+            "description": "봉투 형태 발급 응답이 JSON 이 아니면 평면 형태로 한 번 더 보낸다",
+            "tokenStore": {},
+            "method": "privatePostSsqm1801",
+            "args": [
+                {
+                    "inq_clsf": "1",
+                    "mkt_tm_ccd": "1",
+                    "nxt_key": ""
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/oauth2/token",
+                        "headers": {
+                            "Content-Type": "application/json"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"\",\"macAddr\":\"\"},\"dataBody\":{\"appKey\":\"TEST-APPKEY-KBSEC-0001\",\"appSecret\":\"TEST-APPSECRET-KBSEC-0001\",\"grantType\":\"client_credentials\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": "<html>gateway</html>"
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/oauth2/token",
+                        "headers": {
+                            "Content-Type": "application/json"
+                        },
+                        "body": "{\"grant_type\":\"client_credentials\",\"appKey\":\"TEST-APPKEY-KBSEC-0001\",\"appSecret\":\"TEST-APPSECRET-KBSEC-0001\"}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0000"
+                            },
+                            "dataBody": {
+                                "access_token": "kb-token-flat",
+                                "token_type": "Bearer",
+                                "expires_in": 86400
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm1801",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-flat"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"is_no\":\"\",\"mkt_tm_ccd\":\"1\",\"spclz_ordr_ccd\":\"\",\"act_cd\":\"\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "o_msg": "정상"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "dataHeader": {
+                    "processFlag": "A",
+                    "processCode": "0011",
+                    "processMessage": "정상적으로 조회되었습니다."
+                },
+                "dataBody": {
+                    "o_msg": "정상"
+                }
+            }
+        },
+        {
+            "description": "두 형태가 모두 거절되면 AuthenticationError 이고 brokerCode 는 먼저 보낸 봉투 형태의 코드다",
+            "tokenStore": {},
+            "method": "privatePostSsqm1801",
+            "args": [
+                {
+                    "inq_clsf": "1",
+                    "mkt_tm_ccd": "1",
+                    "nxt_key": ""
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/oauth2/token",
+                        "headers": {
+                            "Content-Type": "application/json"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"\",\"macAddr\":\"\"},\"dataBody\":{\"appKey\":\"TEST-APPKEY-KBSEC-0001\",\"appSecret\":\"TEST-APPSECRET-KBSEC-0001\",\"grantType\":\"client_credentials\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "resultCode": "200",
+                                "resultMessage": "성공",
+                                "processFlag": "B",
+                                "processCode": "E021",
+                                "processMessage": "앱키로 앱정보 추출 중 오류가 발생했습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/oauth2/token",
+                        "headers": {
+                            "Content-Type": "application/json"
+                        },
+                        "body": "{\"grant_type\":\"client_credentials\",\"appKey\":\"TEST-APPKEY-KBSEC-0001\",\"appSecret\":\"TEST-APPSECRET-KBSEC-0001\"}"
+                    },
+                    "response": {
+                        "status": 500,
+                        "body": {
+                            "dataHeader": {
+                                "resultCode": "200",
+                                "resultMessage": "성공",
+                                "processFlag": "B",
+                                "processCode": "T022",
+                                "processMessage": "유효하지 않은 클라이언트 정보입니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                }
+            ],
+            "error": {
+                "class": "AuthenticationError",
+                "brokerCode": "E021"
+            },
+            "tokenStoreAfter": {
+                "kbsec:token:2f6506bc8b1a20daff3b7300414b5fff": "absent"
+            }
+        },
+        {
+            "description": "발급 요청의 연결이 끊기면 다른 형태로 다시 보내지 않고 NetworkError 다",
+            "tokenStore": {},
+            "method": "privatePostSsqm1801",
+            "args": [
+                {
+                    "inq_clsf": "1",
+                    "mkt_tm_ccd": "1",
+                    "nxt_key": ""
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/oauth2/token",
+                        "headers": {
+                            "Content-Type": "application/json"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"\",\"macAddr\":\"\"},\"dataBody\":{\"appKey\":\"TEST-APPKEY-KBSEC-0001\",\"appSecret\":\"TEST-APPSECRET-KBSEC-0001\",\"grantType\":\"client_credentials\"}}"
+                    },
+                    "network": "reset"
+                }
+            ],
+            "error": {
+                "class": "NetworkError",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "발급 응답이 업무 코드 없는 5xx 면 다른 형태로 다시 보내지 않고 ExchangeNotAvailable 이다",
+            "tokenStore": {},
+            "method": "privatePostSsqm1801",
+            "args": [
+                {
+                    "inq_clsf": "1",
+                    "mkt_tm_ccd": "1",
+                    "nxt_key": ""
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/oauth2/token",
+                        "headers": {
+                            "Content-Type": "application/json"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"\",\"macAddr\":\"\"},\"dataBody\":{\"appKey\":\"TEST-APPKEY-KBSEC-0001\",\"appSecret\":\"TEST-APPSECRET-KBSEC-0001\",\"grantType\":\"client_credentials\"}}"
+                    },
+                    "response": {
+                        "status": 502,
+                        "body": "Bad Gateway"
+                    }
+                }
+            ],
+            "error": {
+                "class": "ExchangeNotAvailable",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "발급 응답이 429 면 다른 형태로 다시 보내지 않고 RateLimitExceeded 다",
+            "tokenStore": {},
+            "method": "privatePostSsqm1801",
+            "args": [
+                {
+                    "inq_clsf": "1",
+                    "mkt_tm_ccd": "1",
+                    "nxt_key": ""
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/oauth2/token",
+                        "headers": {
+                            "Content-Type": "application/json"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"\",\"macAddr\":\"\"},\"dataBody\":{\"appKey\":\"TEST-APPKEY-KBSEC-0001\",\"appSecret\":\"TEST-APPSECRET-KBSEC-0001\",\"grantType\":\"client_credentials\"}}"
+                    },
+                    "response": {
+                        "status": 429,
+                        "body": ""
+                    }
+                }
+            ],
+            "error": {
+                "class": "RateLimitExceeded"
+            }
+        },
+        {
+            "description": "수명이 짧은 토큰(expires_in 3초)은 저장소에 넣지 않는다",
+            "tokenStore": {},
+            "method": "privatePostSsqm1801",
+            "args": [
+                {
+                    "inq_clsf": "1",
+                    "mkt_tm_ccd": "1",
+                    "nxt_key": ""
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/oauth2/token",
+                        "headers": {
+                            "Content-Type": "application/json"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"\",\"macAddr\":\"\"},\"dataBody\":{\"appKey\":\"TEST-APPKEY-KBSEC-0001\",\"appSecret\":\"TEST-APPSECRET-KBSEC-0001\",\"grantType\":\"client_credentials\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0000"
+                            },
+                            "dataBody": {
+                                "access_token": "kb-token-short",
+                                "token_type": "Bearer",
+                                "expires_in": 3
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm1801",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-short"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"is_no\":\"\",\"mkt_tm_ccd\":\"1\",\"spclz_ordr_ccd\":\"\",\"act_cd\":\"\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "o_msg": "정상"
+                            }
+                        }
+                    }
+                }
+            ],
+            "tokenStoreAfter": {
+                "kbsec:token:2f6506bc8b1a20daff3b7300414b5fff": "absent",
+                "kbsec:token:TEST-APPKEY-": "absent"
+            },
+            "output": {
+                "dataHeader": {
+                    "processFlag": "A",
+                    "processCode": "0011",
+                    "processMessage": "정상적으로 조회되었습니다."
+                },
+                "dataBody": {
+                    "o_msg": "정상"
+                }
+            }
+        },
+        {
+            "description": "업무 오류가 HTTP 200 으로 와도 봉투(processFlag B)가 정본이다. 표에 없는 코드는 ExchangeError 와 원래 코드다",
+            "method": "fetchTicker",
+            "args": [
+                "005930/KRW"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10140",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"shrt_cd\":\"005930\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "resultCode": "200",
+                                "resultMessage": "성공",
+                                "processFlag": "B",
+                                "processCode": "9999",
+                                "processMessage": "처리 중 오류가 발생했습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                }
+            ],
+            "error": {
+                "class": "ExchangeError",
+                "brokerCode": "9999"
+            }
+        },
+        {
+            "description": "업무 오류가 HTTP 500 으로 와도 봉투가 정본이다. I446 은 재발급 없이 PermissionDenied 다",
+            "method": "fetchTicker",
+            "args": [
+                "005930/KRW"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10140",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"shrt_cd\":\"005930\"}}"
+                    },
+                    "response": {
+                        "status": 500,
+                        "body": {
+                            "dataHeader": {
+                                "resultCode": "200",
+                                "resultMessage": "성공",
+                                "processFlag": "B",
+                                "processCode": "I446",
+                                "processMessage": "API 사용 권한이 없습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                }
+            ],
+            "error": {
+                "class": "PermissionDenied",
+                "brokerCode": "I446"
+            }
+        },
+        {
+            "description": "H049 는 AccountNotEnabled 다",
+            "method": "fetchTicker",
+            "args": [
+                "AAPL/USD"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/gss10030",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"krx_cd\":\"NAS\",\"is_cd\":\"AAPL\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "resultCode": "200",
+                                "resultMessage": "성공",
+                                "processFlag": "B",
+                                "processCode": "H049",
+                                "processMessage": "글로벌원마켓 미신청계좌입니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                }
+            ],
+            "error": {
+                "class": "AccountNotEnabled",
+                "brokerCode": "H049"
+            }
+        },
+        {
+            "description": "표의 detail 을 오류에 싣는다(2854 → FUTURE_QUERY_DATE)",
+            "method": "fetchTicker",
+            "args": [
+                "005930/KRW"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10140",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"shrt_cd\":\"005930\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "resultCode": "200",
+                                "resultMessage": "성공",
+                                "processFlag": "B",
+                                "processCode": "2854",
+                                "processMessage": "주문일자가 현재일자보다 큽니다"
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                }
+            ],
+            "error": {
+                "class": "ExchangeError",
+                "detail": "FUTURE_QUERY_DATE",
+                "brokerCode": "2854"
+            }
+        },
+        {
+            "description": "빈 결과 코드 1861 은 processFlag B 여도 업무 오류가 아니다. 현재가가 없어 NullResponse 다",
+            "method": "fetchTicker",
+            "args": [
+                "005930/KRW"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10140",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"shrt_cd\":\"005930\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "resultCode": "200",
+                                "resultMessage": "성공",
+                                "processFlag": "B",
+                                "processCode": "1861",
+                                "processMessage": "조회할 자료가 없습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                }
+            ],
+            "error": {
+                "class": "NullResponse"
+            }
+        },
+        {
+            "description": "HTTP 200 인데 JSON 이 아니면 BadResponse 다",
+            "method": "fetchTicker",
+            "args": [
+                "005930/KRW"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10140",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"shrt_cd\":\"005930\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": "<html>maintenance</html>"
+                    }
+                }
+            ],
+            "error": {
+                "class": "BadResponse"
+            }
+        },
+        {
+            "description": "봉투 없는 5xx 는 ExchangeNotAvailable 이고 조회를 다시 보내지 않는다",
+            "method": "fetchTicker",
+            "args": [
+                "005930/KRW"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10140",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"shrt_cd\":\"005930\"}}"
+                    },
+                    "response": {
+                        "status": 503,
+                        "body": "Service Unavailable"
+                    }
+                }
+            ],
+            "error": {
+                "class": "ExchangeNotAvailable",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "조회의 연결이 끊기면 NetworkError 이고 다시 보내지 않는다",
+            "method": "fetchTicker",
+            "args": [
+                "005930/KRW"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10140",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"shrt_cd\":\"005930\"}}"
+                    },
+                    "network": "reset"
+                }
+            ],
+            "error": {
+                "class": "NetworkError"
+            }
+        },
+        {
+            "description": "조회의 시간 초과는 RequestTimeout 이고 다시 보내지 않는다",
+            "method": "fetchTicker",
+            "args": [
+                "005930/KRW"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10140",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"shrt_cd\":\"005930\"}}"
+                    },
+                    "network": "timeout"
+                }
+            ],
+            "error": {
+                "class": "RequestTimeout"
+            }
+        },
+        {
+            "description": "fetchTicker 국내는 IVU10140 에 거래소구분 1(KRX)과 단축코드를 보내고 앞의 0 을 뗀 값을 읽는다",
+            "method": "fetchTicker",
+            "args": [
+                "005930/KRW"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10140",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"shrt_cd\":\"005930\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "now_prc": "000070500",
+                                "bdy_cls_prc": "000070000",
+                                "b_sq1_askprc": "000070400",
+                                "s_sq1_askprc": "000070500",
+                                "hgh_prc": "000071000",
+                                "lw_prc": "000069800",
+                                "opn_prc": "000070100",
+                                "up_dwn_r_p2": "0.71",
+                                "acml_vlm": "0012345678"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "symbol": "005930/KRW",
+                "last": 70500,
+                "bid": 70400,
+                "ask": 70500,
+                "high": 71000,
+                "low": 69800,
+                "open": 70100,
+                "percentage": 0.71,
+                "baseVolume": 12345678,
+                "info": {
+                    "now_prc": "000070500",
+                    "bdy_cls_prc": "000070000",
+                    "b_sq1_askprc": "000070400",
+                    "s_sq1_askprc": "000070500",
+                    "hgh_prc": "000071000",
+                    "lw_prc": "000069800",
+                    "opn_prc": "000070100",
+                    "up_dwn_r_p2": "0.71",
+                    "acml_vlm": "0012345678"
+                },
+                "close": 70500,
+                "change": 400,
+                "average": 70300
+            }
+        },
+        {
+            "description": "fetchTicker 국내 장 밖의 0 현재가는 건너뛰고 전일 종가를 쓴다. 보합 등락률 0 은 그대로 둔다",
+            "method": "fetchTicker",
+            "args": [
+                "005930"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10140",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"shrt_cd\":\"005930\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "now_prc": "000000000",
+                                "bdy_cls_prc": "000070000",
+                                "hgh_prc": "000000000",
+                                "lw_prc": "000000000",
+                                "opn_prc": "000000000",
+                                "up_dwn_r_p2": "0.00",
+                                "acml_vlm": "0000000000",
+                                "bdy_vlm": "0010000000"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "symbol": "005930/KRW",
+                "last": 70000,
+                "percentage": 0,
+                "baseVolume": 0,
+                "info": {
+                    "now_prc": "000000000",
+                    "bdy_cls_prc": "000070000",
+                    "hgh_prc": "000000000",
+                    "lw_prc": "000000000",
+                    "opn_prc": "000000000",
+                    "up_dwn_r_p2": "0.00",
+                    "acml_vlm": "0000000000",
+                    "bdy_vlm": "0010000000"
+                },
+                "close": 70000
+            }
+        },
+        {
+            "description": "fetchTicker 미국은 거래소코드를 NAS 부터 차례로 묻고 현재가가 나온 거래소(NYS)를 쓴다",
+            "method": "fetchTicker",
+            "args": [
+                "KO/USD"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/gss10030",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"krx_cd\":\"NAS\",\"is_cd\":\"KO\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "now_prc_p4": "0.0000"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/gss10030",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"krx_cd\":\"NYS\",\"is_cd\":\"KO\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "now_prc_p4": "71.2300",
+                                "b_askprc_p4": "71.2200",
+                                "s_askprc_p4": "71.2400",
+                                "hgh_prc_p4": "71.5000",
+                                "lw_prc_p4": "70.8000",
+                                "opn_prc_p4": "70.9000",
+                                "up_dwn_r_p2": "-0.35",
+                                "vlm": "12345678"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "symbol": "KO/USD",
+                "last": 71.23,
+                "bid": 71.22,
+                "ask": 71.24,
+                "high": 71.5,
+                "low": 70.8,
+                "open": 70.9,
+                "percentage": -0.35,
+                "baseVolume": 12345678,
+                "info": {
+                    "now_prc_p4": "71.2300",
+                    "b_askprc_p4": "71.2200",
+                    "s_askprc_p4": "71.2400",
+                    "hgh_prc_p4": "71.5000",
+                    "lw_prc_p4": "70.8000",
+                    "opn_prc_p4": "70.9000",
+                    "up_dwn_r_p2": "-0.35",
+                    "vlm": "12345678"
+                },
+                "close": 71.23,
+                "change": 0.33,
+                "average": 71.065
+            }
+        },
+        {
+            "description": "fetchTicker 미국은 세 거래소 모두 현재가가 없으면 NullResponse 다",
+            "method": "fetchTicker",
+            "args": [
+                "ZZZZ/USD"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/gss10030",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"krx_cd\":\"NAS\",\"is_cd\":\"ZZZZ\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "now_prc_p4": "0.0000"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/gss10030",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"krx_cd\":\"NYS\",\"is_cd\":\"ZZZZ\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "resultCode": "200",
+                                "resultMessage": "성공",
+                                "processFlag": "B",
+                                "processCode": "1861",
+                                "processMessage": "조회할 자료가 없습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/gss10030",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"krx_cd\":\"AMX\",\"is_cd\":\"ZZZZ\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                }
+            ],
+            "error": {
+                "class": "NullResponse"
+            }
+        },
+        {
+            "description": "fetchTicker 는 표의 통합 코드 심볼을 티커 USD 로 묻고 심볼은 통합 코드로 돌려준다",
+            "method": "fetchTicker",
+            "args": [
+                "USD/USD"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/gss10030",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"krx_cd\":\"NAS\",\"is_cd\":\"USD\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "now_prc_p4": "52.1000",
+                                "up_dwn_r_p2": "1.20"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "symbol": "ProShares Ultra Semiconductors/USD",
+                "last": 52.1,
+                "open": 51.48221343873518,
+                "percentage": 1.2,
+                "baseVolume": 0,
+                "info": {
+                    "now_prc_p4": "52.1000",
+                    "up_dwn_r_p2": "1.20"
+                },
+                "close": 52.1,
+                "change": 0.6177865612648221,
+                "average": 51.79110671936759
+            }
+        },
+        {
+            "description": "fetchOrderBook 국내는 가격이 있는 단계만 담고 매수는 내림차순, 매도는 오름차순이며 limit 으로 자른다",
+            "method": "fetchOrderBook",
+            "args": [
+                "005930/KRW",
+                2
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10070",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"is_cd\":\"005930\",\"ovtm_mkt_clsf\":\"1\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "b1_aprc": "000070400",
+                                "b2_aprc": "000070300",
+                                "b3_aprc": "000070200",
+                                "b4_aprc": "000000000",
+                                "b_pstn_b1_aprc_q": "0000001200",
+                                "b_pstn_b2_aprc_q": "0000003400",
+                                "b_pstn_b3_aprc_q": "0000000100",
+                                "s1_aprc": "000070500",
+                                "s2_aprc": "000070600",
+                                "s3_aprc": "000070700",
+                                "s_pstn_s1_aprc_q": "0000000500",
+                                "s_pstn_s2_aprc_q": "0000000600",
+                                "s_pstn_s3_aprc_q": "0000000700"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "symbol": "005930/KRW",
+                "bids": [
+                    [
+                        70400,
+                        1200
+                    ],
+                    [
+                        70300,
+                        3400
+                    ]
+                ],
+                "asks": [
+                    [
+                        70500,
+                        500
+                    ],
+                    [
+                        70600,
+                        600
+                    ]
+                ]
+            }
+        },
+        {
+            "description": "fetchOrderBook 미국은 거래소코드를 모르면 NAS 로 묻고 _p4 가격 필드를 읽는다",
+            "method": "fetchOrderBook",
+            "args": [
+                "AAPL/USD"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/gss10040",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"krx_cd\":\"NAS\",\"is_cd\":\"AAPL\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "b_askprc1_p4": "229.9900",
+                                "b_askprc_q1": "300",
+                                "s_askprc1_p4": "230.0100",
+                                "s_askprc_q1": "200",
+                                "s_askprc2_p4": "230.0200",
+                                "s_askprc_q2": "150"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "symbol": "AAPL/USD",
+                "bids": [
+                    [
+                        229.99,
+                        300
+                    ]
+                ],
+                "asks": [
+                    [
+                        230.01,
+                        200
+                    ],
+                    [
+                        230.02,
+                        150
+                    ]
+                ]
+            }
+        },
+        {
+            "description": "fetchOrderBook 은 빈 결과(2149)로 호가가 하나도 없으면 NullResponse 다",
+            "method": "fetchOrderBook",
+            "args": [
+                "005930/KRW"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10070",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"is_cd\":\"005930\",\"ovtm_mkt_clsf\":\"1\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "resultCode": "200",
+                                "resultMessage": "성공",
+                                "processFlag": "B",
+                                "processCode": "2149",
+                                "processMessage": "해당자료가 없습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                }
+            ],
+            "error": {
+                "class": "NullResponse"
+            }
+        },
+        {
+            "description": "I445 면 그 토큰을 저장소에서 지우고 재발급해 한 번 다시 보낸다. jti 가 없는 토큰이면 폐기하지 않는다",
+            "method": "privatePostSsqm1801",
+            "args": [
+                {
+                    "inq_clsf": "1",
+                    "mkt_tm_ccd": "1",
+                    "nxt_key": ""
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm1801",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"is_no\":\"\",\"mkt_tm_ccd\":\"1\",\"spclz_ordr_ccd\":\"\",\"act_cd\":\"\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 500,
+                        "body": {
+                            "dataHeader": {
+                                "resultCode": "200",
+                                "resultMessage": "성공",
+                                "processFlag": "B",
+                                "processCode": "I445",
+                                "processMessage": "토큰 검증에 실패했습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/oauth2/token",
+                        "headers": {
+                            "Content-Type": "application/json"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"\",\"macAddr\":\"\"},\"dataBody\":{\"appKey\":\"TEST-APPKEY-KBSEC-0001\",\"appSecret\":\"TEST-APPSECRET-KBSEC-0001\",\"grantType\":\"client_credentials\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0000"
+                            },
+                            "dataBody": {
+                                "access_token": "kb-token-rotated",
+                                "token_type": "Bearer",
+                                "expires_in": 86400
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm1801",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-rotated"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"is_no\":\"\",\"mkt_tm_ccd\":\"1\",\"spclz_ordr_ccd\":\"\",\"act_cd\":\"\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "o_msg": "정상"
+                            }
+                        }
+                    }
+                }
+            ],
+            "tokenStoreAfter": {
+                "kbsec:token:2f6506bc8b1a20daff3b7300414b5fff": "present"
+            },
+            "output": {
+                "dataHeader": {
+                    "processFlag": "A",
+                    "processCode": "0011",
+                    "processMessage": "정상적으로 조회되었습니다."
+                },
+                "dataBody": {
+                    "o_msg": "정상"
+                }
+            }
+        },
+        {
+            "description": "봉투 없는 401 도 토큰 실패로 보고 재발급 뒤 한 번 다시 보낸다. 옛 토큰은 저장소에서 지운다",
+            "method": "privatePostSsqm1801",
+            "args": [
+                {
+                    "inq_clsf": "1",
+                    "mkt_tm_ccd": "1",
+                    "nxt_key": ""
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm1801",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"is_no\":\"\",\"mkt_tm_ccd\":\"1\",\"spclz_ordr_ccd\":\"\",\"act_cd\":\"\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 401,
+                        "body": ""
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/oauth2/token",
+                        "headers": {
+                            "Content-Type": "application/json"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"\",\"macAddr\":\"\"},\"dataBody\":{\"appKey\":\"TEST-APPKEY-KBSEC-0001\",\"appSecret\":\"TEST-APPSECRET-KBSEC-0001\",\"grantType\":\"client_credentials\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0000"
+                            },
+                            "dataBody": {
+                                "access_token": "kb-token-short",
+                                "token_type": "Bearer",
+                                "expires_in": 2
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm1801",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-short"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"is_no\":\"\",\"mkt_tm_ccd\":\"1\",\"spclz_ordr_ccd\":\"\",\"act_cd\":\"\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "o_msg": "정상"
+                            }
+                        }
+                    }
+                }
+            ],
+            "tokenStoreAfter": {
+                "kbsec:token:2f6506bc8b1a20daff3b7300414b5fff": "absent",
+                "kbsec:token:TEST-APPKEY-": "absent"
+            },
+            "output": {
+                "dataHeader": {
+                    "processFlag": "A",
+                    "processCode": "0011",
+                    "processMessage": "정상적으로 조회되었습니다."
+                },
+                "dataBody": {
+                    "o_msg": "정상"
+                }
+            }
+        },
+        {
+            "description": "재발급이 같은 jti 를 돌려주면 그 토큰을 폐기(token 형태)하고 한 번 더 발급한 뒤 다시 보낸다",
+            "tokenStore": {
+                "kbsec:token:2f6506bc8b1a20daff3b7300414b5fff": {
+                    "accessToken": "hdr.eyJqdGkiOiJqdGktMDEifQ.s1",
+                    "expiresAt": 4102444800000
+                }
+            },
+            "method": "privatePostSsqm1801",
+            "args": [
+                {
+                    "inq_clsf": "1",
+                    "mkt_tm_ccd": "1",
+                    "nxt_key": ""
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm1801",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer hdr.eyJqdGkiOiJqdGktMDEifQ.s1"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"is_no\":\"\",\"mkt_tm_ccd\":\"1\",\"spclz_ordr_ccd\":\"\",\"act_cd\":\"\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 500,
+                        "body": {
+                            "dataHeader": {
+                                "resultCode": "200",
+                                "resultMessage": "성공",
+                                "processFlag": "B",
+                                "processCode": "I445",
+                                "processMessage": "토큰 검증에 실패했습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/oauth2/token",
+                        "headers": {
+                            "Content-Type": "application/json"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"\",\"macAddr\":\"\"},\"dataBody\":{\"appKey\":\"TEST-APPKEY-KBSEC-0001\",\"appSecret\":\"TEST-APPSECRET-KBSEC-0001\",\"grantType\":\"client_credentials\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0000"
+                            },
+                            "dataBody": {
+                                "access_token": "hdr.eyJqdGkiOiJqdGktMDEifQ.s2",
+                                "token_type": "Bearer",
+                                "expires_in": 86400
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/oauth2/revoke",
+                        "headers": {
+                            "Content-Type": "application/json"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"\",\"macAddr\":\"\"},\"dataBody\":{\"appKey\":\"TEST-APPKEY-KBSEC-0001\",\"appSecret\":\"TEST-APPSECRET-KBSEC-0001\",\"token\":\"hdr.eyJqdGkiOiJqdGktMDEifQ.s1\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0000"
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/oauth2/token",
+                        "headers": {
+                            "Content-Type": "application/json"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"\",\"macAddr\":\"\"},\"dataBody\":{\"appKey\":\"TEST-APPKEY-KBSEC-0001\",\"appSecret\":\"TEST-APPSECRET-KBSEC-0001\",\"grantType\":\"client_credentials\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0000"
+                            },
+                            "dataBody": {
+                                "access_token": "hdr.eyJqdGkiOiJqdGktMDIifQ.s3",
+                                "token_type": "Bearer",
+                                "expires_in": 86400
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm1801",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer hdr.eyJqdGkiOiJqdGktMDIifQ.s3"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"is_no\":\"\",\"mkt_tm_ccd\":\"1\",\"spclz_ordr_ccd\":\"\",\"act_cd\":\"\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "o_msg": "정상"
+                            }
+                        }
+                    }
+                }
+            ],
+            "tokenStoreAfter": {
+                "kbsec:token:2f6506bc8b1a20daff3b7300414b5fff": "present"
+            },
+            "output": {
+                "dataHeader": {
+                    "processFlag": "A",
+                    "processCode": "0011",
+                    "processMessage": "정상적으로 조회되었습니다."
+                },
+                "dataBody": {
+                    "o_msg": "정상"
+                }
+            }
+        },
+        {
+            "description": "폐기가 세 본문 형태 모두 거절되면 재발급한 토큰으로 다시 보낸다",
+            "tokenStore": {
+                "kbsec:token:2f6506bc8b1a20daff3b7300414b5fff": {
+                    "accessToken": "hdr.eyJqdGkiOiJqdGktMDEifQ.s1",
+                    "expiresAt": 4102444800000
+                }
+            },
+            "method": "privatePostSsqm1801",
+            "args": [
+                {
+                    "inq_clsf": "1",
+                    "mkt_tm_ccd": "1",
+                    "nxt_key": ""
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm1801",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer hdr.eyJqdGkiOiJqdGktMDEifQ.s1"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"is_no\":\"\",\"mkt_tm_ccd\":\"1\",\"spclz_ordr_ccd\":\"\",\"act_cd\":\"\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 500,
+                        "body": {
+                            "dataHeader": {
+                                "resultCode": "200",
+                                "resultMessage": "성공",
+                                "processFlag": "B",
+                                "processCode": "I445",
+                                "processMessage": "토큰 검증에 실패했습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/oauth2/token",
+                        "headers": {
+                            "Content-Type": "application/json"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"\",\"macAddr\":\"\"},\"dataBody\":{\"appKey\":\"TEST-APPKEY-KBSEC-0001\",\"appSecret\":\"TEST-APPSECRET-KBSEC-0001\",\"grantType\":\"client_credentials\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0000"
+                            },
+                            "dataBody": {
+                                "access_token": "hdr.eyJqdGkiOiJqdGktMDEifQ.s2",
+                                "token_type": "Bearer",
+                                "expires_in": 86400
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/oauth2/revoke",
+                        "headers": {
+                            "Content-Type": "application/json"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"\",\"macAddr\":\"\"},\"dataBody\":{\"appKey\":\"TEST-APPKEY-KBSEC-0001\",\"appSecret\":\"TEST-APPSECRET-KBSEC-0001\",\"token\":\"hdr.eyJqdGkiOiJqdGktMDEifQ.s1\"}}"
+                    },
+                    "response": {
+                        "status": 500,
+                        "body": {
+                            "dataHeader": {
+                                "resultCode": "200",
+                                "resultMessage": "성공",
+                                "processFlag": "B",
+                                "processCode": "T022",
+                                "processMessage": "유효하지 않은 클라이언트 정보입니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/oauth2/revoke",
+                        "headers": {
+                            "Content-Type": "application/json"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"\",\"macAddr\":\"\"},\"dataBody\":{\"appKey\":\"TEST-APPKEY-KBSEC-0001\",\"appSecret\":\"TEST-APPSECRET-KBSEC-0001\",\"accessToken\":\"hdr.eyJqdGkiOiJqdGktMDEifQ.s1\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": "not json"
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/oauth2/revoke",
+                        "headers": {
+                            "Content-Type": "application/json"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"\",\"macAddr\":\"\"},\"dataBody\":{\"appKey\":\"TEST-APPKEY-KBSEC-0001\",\"appSecret\":\"TEST-APPSECRET-KBSEC-0001\",\"access_token\":\"hdr.eyJqdGkiOiJqdGktMDEifQ.s1\"}}"
+                    },
+                    "network": "reset"
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm1801",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer hdr.eyJqdGkiOiJqdGktMDEifQ.s2"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"is_no\":\"\",\"mkt_tm_ccd\":\"1\",\"spclz_ordr_ccd\":\"\",\"act_cd\":\"\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "o_msg": "정상"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "dataHeader": {
+                    "processFlag": "A",
+                    "processCode": "0011",
+                    "processMessage": "정상적으로 조회되었습니다."
+                },
+                "dataBody": {
+                    "o_msg": "정상"
+                }
+            }
+        },
+        {
+            "description": "다시 보낸 요청도 I445 면 AuthenticationError(TOKEN_INVALID)이고 더 보내지 않는다",
+            "method": "fetchTicker",
+            "args": [
+                "005930/KRW"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10140",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"shrt_cd\":\"005930\"}}"
+                    },
+                    "response": {
+                        "status": 500,
+                        "body": {
+                            "dataHeader": {
+                                "resultCode": "200",
+                                "resultMessage": "성공",
+                                "processFlag": "B",
+                                "processCode": "I445",
+                                "processMessage": "토큰 검증에 실패했습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/oauth2/token",
+                        "headers": {
+                            "Content-Type": "application/json"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"\",\"macAddr\":\"\"},\"dataBody\":{\"appKey\":\"TEST-APPKEY-KBSEC-0001\",\"appSecret\":\"TEST-APPSECRET-KBSEC-0001\",\"grantType\":\"client_credentials\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0000"
+                            },
+                            "dataBody": {
+                                "access_token": "kb-token-rotated",
+                                "token_type": "Bearer",
+                                "expires_in": 86400
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10140",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-rotated"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"shrt_cd\":\"005930\"}}"
+                    },
+                    "response": {
+                        "status": 500,
+                        "body": {
+                            "dataHeader": {
+                                "resultCode": "200",
+                                "resultMessage": "성공",
+                                "processFlag": "B",
+                                "processCode": "I445",
+                                "processMessage": "토큰 검증에 실패했습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                }
+            ],
+            "error": {
+                "class": "AuthenticationError",
+                "detail": "TOKEN_INVALID",
+                "brokerCode": "I445"
+            }
+        },
+        {
+            "description": "주문 TR 도 I445 는 접수 전 거절이라 재발급 뒤 한 번만 다시 보낸다",
+            "method": "privatePostSsam1802",
+            "args": [
+                {
+                    "ordr_jb_clsf": "2",
+                    "is_cd": "005930",
+                    "ordr_q": "1",
+                    "ordr_uprc": "70000",
+                    "ordr_ccd": "00"
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssam1802",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"mkt_tm_clsf\":\"\",\"ordr_jb_clsf\":\"2\",\"s_clsf\":\"\",\"is_cd\":\"005930\",\"ordr_q\":\"1\",\"ordr_uprc\":\"70000\",\"ordr_ccd\":\"00\",\"crdt_typ_cd\":\"\",\"ln_dt\":\"\",\"crct_clsf\":\"\",\"orgn_ordr_no\":\"\",\"gtc_ccd\":\"\",\"ordr_mng_no\":\"\",\"spclz_ordr_ccd\":\"\",\"acct_cd\":\"\",\"sor_ordr_ccd\":\"\",\"stpd_prc\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 500,
+                        "body": {
+                            "dataHeader": {
+                                "resultCode": "200",
+                                "resultMessage": "성공",
+                                "processFlag": "B",
+                                "processCode": "I445",
+                                "processMessage": "토큰 검증에 실패했습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/oauth2/token",
+                        "headers": {
+                            "Content-Type": "application/json"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"\",\"macAddr\":\"\"},\"dataBody\":{\"appKey\":\"TEST-APPKEY-KBSEC-0001\",\"appSecret\":\"TEST-APPSECRET-KBSEC-0001\",\"grantType\":\"client_credentials\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0000"
+                            },
+                            "dataBody": {
+                                "access_token": "kb-token-rotated",
+                                "token_type": "Bearer",
+                                "expires_in": 86400
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssam1802",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-rotated"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"mkt_tm_clsf\":\"\",\"ordr_jb_clsf\":\"2\",\"s_clsf\":\"\",\"is_cd\":\"005930\",\"ordr_q\":\"1\",\"ordr_uprc\":\"70000\",\"ordr_ccd\":\"00\",\"crdt_typ_cd\":\"\",\"ln_dt\":\"\",\"crct_clsf\":\"\",\"orgn_ordr_no\":\"\",\"gtc_ccd\":\"\",\"ordr_mng_no\":\"\",\"spclz_ordr_ccd\":\"\",\"acct_cd\":\"\",\"sor_ordr_ccd\":\"\",\"stpd_prc\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 500,
+                        "body": {
+                            "dataHeader": {
+                                "resultCode": "200",
+                                "resultMessage": "성공",
+                                "processFlag": "B",
+                                "processCode": "I445",
+                                "processMessage": "토큰 검증에 실패했습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                }
+            ],
+            "error": {
+                "class": "AuthenticationError",
+                "detail": "TOKEN_INVALID",
+                "brokerCode": "I445"
+            }
+        },
+        {
+            "description": "I445 뒤 재발급이 거절되면 그 오류를 던지고 TR 을 다시 보내지 않는다",
+            "method": "privatePostSsqm1801",
+            "args": [
+                {
+                    "inq_clsf": "1",
+                    "mkt_tm_ccd": "1",
+                    "nxt_key": ""
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm1801",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"is_no\":\"\",\"mkt_tm_ccd\":\"1\",\"spclz_ordr_ccd\":\"\",\"act_cd\":\"\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 500,
+                        "body": {
+                            "dataHeader": {
+                                "resultCode": "200",
+                                "resultMessage": "성공",
+                                "processFlag": "B",
+                                "processCode": "I445",
+                                "processMessage": "토큰 검증에 실패했습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/oauth2/token",
+                        "headers": {
+                            "Content-Type": "application/json"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"\",\"macAddr\":\"\"},\"dataBody\":{\"appKey\":\"TEST-APPKEY-KBSEC-0001\",\"appSecret\":\"TEST-APPSECRET-KBSEC-0001\",\"grantType\":\"client_credentials\"}}"
+                    },
+                    "response": {
+                        "status": 500,
+                        "body": {
+                            "dataHeader": {
+                                "resultCode": "200",
+                                "resultMessage": "성공",
+                                "processFlag": "B",
+                                "processCode": "E021",
+                                "processMessage": "앱키로 앱정보 추출 중 오류가 발생했습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/oauth2/token",
+                        "headers": {
+                            "Content-Type": "application/json"
+                        },
+                        "body": "{\"grant_type\":\"client_credentials\",\"appKey\":\"TEST-APPKEY-KBSEC-0001\",\"appSecret\":\"TEST-APPSECRET-KBSEC-0001\"}"
+                    },
+                    "response": {
+                        "status": 500,
+                        "body": {
+                            "dataHeader": {
+                                "resultCode": "200",
+                                "resultMessage": "성공",
+                                "processFlag": "B",
+                                "processCode": "E021",
+                                "processMessage": "앱키로 앱정보 추출 중 오류가 발생했습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                }
+            ],
+            "error": {
+                "class": "AuthenticationError",
+                "brokerCode": "E021"
+            },
+            "tokenStoreAfter": {
+                "kbsec:token:2f6506bc8b1a20daff3b7300414b5fff": "absent"
+            }
+        }
+    ]
+}

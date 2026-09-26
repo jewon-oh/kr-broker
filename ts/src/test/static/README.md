@@ -36,7 +36,7 @@ TypeScript 판이 실계좌로 확인한 기준 구현이므로, 새 케이스�
 ```
 
 - 케이스마다 새 인스턴스를 만든다. 호출 간격 조절은 꺼 두어 테스트가 기다리지 않는다.
-- 휴장일 캘린더(`market-calendar`)는 모듈 전역 상태라서 케이스가 끝날 때마다 비운다.
+- 휴장일 캘린더(`market-calendar`)와 KB증권 토큰 차단기는 모듈 전역 상태라서 케이스가 끝날 때마다 비운다.
 - `now`가 있으면 현재 시각을 그 값으로 고정한다. TypeScript 판은 `Date`만 바꾼다(`vi.useFakeTimers({ toFake: ['Date'] })`).
   Python 판은 패키지의 시계 `kr_broker.base.functions.milliseconds`를 바꿔 끼운다. 호출 간격 조절기의 단조 시계와 타이머는 그대로 둔다.
   주문 접수처럼 결과에 현재 시각이 실리는 케이스는 `now`를 적는다.

@@ -20,7 +20,7 @@
 
 한국투자증권(KIS), 토스증권, KB증권의 Open API를 같은 메서드와 같은 자료 구조로 사용합니다. 사용법은 [ccxt](https://github.com/ccxt/ccxt)를 따릅니다. `loadMarkets()`, `fetchTicker()`, `fetchBalance()`, `createOrder()`를 안다면 따로 배울 것이 거의 없습니다.
 
-TypeScript 판과 Python 판이 있습니다. Python 판은 ccxt처럼 동기(`kr_broker`), 비동기(`kr_broker.async_support`), 실시간(`kr_broker.pro`) 세 모듈로 부르고, 지금은 한국투자증권과 토스증권을 지원합니다. [Python](#python) 절을 보십시오.
+TypeScript 판과 Python 판이 있습니다. Python 판은 ccxt처럼 동기(`kr_broker`), 비동기(`kr_broker.async_support`), 실시간(`kr_broker.pro`) 세 모듈로 부르고, 지금은 한국투자증권과 토스증권을 지원합니다. KB증권은 옮기는 중이며, 지금은 시세 두 메서드와 암묵 메서드만 부를 수 있습니다. [Python](#python) 절을 보십시오.
 
 > [!IMPORTANT]
 > 이 프로젝트는 증권사와 관계가 없는 비공식 라이브러리입니다. 투자 조언이 아니며, 사용해서 생긴 손실은 작성자가 책임지지 않습니다. 각 증권사의 약관은 [약관과 시세 데이터](#약관과-시세-데이터) 절에 정리했습니다.
@@ -364,7 +364,7 @@ async def main():
 asyncio.run(main())
 ```
 
-- 한국투자증권과 토스증권의 통합 메서드(`fetch_ticker`, `fetch_balance`, `create_order` 등)와 실시간 메서드(`watch_*`)를 TypeScript 판과 같게 옮겼습니다. 모든 엔드포인트는 암묵 메서드로도 부를 수 있습니다. KB증권은 아직 없습니다.
+- 한국투자증권과 토스증권의 통합 메서드(`fetch_ticker`, `fetch_balance`, `create_order` 등)와 실시간 메서드(`watch_*`)를 TypeScript 판과 같게 옮겼습니다. 모든 엔드포인트는 암묵 메서드로도 부를 수 있습니다. KB증권은 옮기는 중이라 지금은 `fetch_ticker`, `fetch_order_book`과 암묵 메서드만 있습니다.
 - 두 판은 같은 엔드포인트 표(`ts/src/spec/`)와 요청 픽스처(`ts/src/test/static/request/`)를 씁니다. CI가 두 판에서 같은 픽스처를 돌려 같은 요청을 만들고 같은 오류를 던지는지 확인합니다.
 - 자세한 사용법은 [python/README.md](python/README.md)에 있습니다. PyPI에는 아직 게시하지 않았습니다.
 

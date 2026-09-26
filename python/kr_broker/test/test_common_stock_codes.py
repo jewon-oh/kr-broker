@@ -55,7 +55,11 @@ def _toss(config: Dict[str, Any]) -> Any:
     return kr_broker.toss(config)
 
 
-@pytest.mark.parametrize('make', [_kis, _toss], ids=['kis', 'toss'])
+def _kbsec(config: Dict[str, Any]) -> Any:
+    return kr_broker.kbsec(config)
+
+
+@pytest.mark.parametrize('make', [_kis, _toss, _kbsec], ids=['kis', 'toss', 'kbsec'])
 def test_market_accepts_ticker_old_symbol_and_table_code(make: Any) -> None:
     broker = make({})
     for symbol in ('USD', 'USD/USD', NAME, f'{NAME}/USD', f'{NAME.upper()}/USD'):
@@ -64,7 +68,7 @@ def test_market_accepts_ticker_old_symbol_and_table_code(make: Any) -> None:
     assert broker.market('AAPL/USD')['symbol'] == 'AAPL/USD'
 
 
-@pytest.mark.parametrize('make', [_kis, _toss], ids=['kis', 'toss'])
+@pytest.mark.parametrize('make', [_kis, _toss, _kbsec], ids=['kis', 'toss', 'kbsec'])
 def test_constructor_overrides_the_table_and_default_codes_still_resolve(make: Any) -> None:
     broker = make({'commonStockCodes': {'USD': 'Foo'}})
     assert broker.market('Foo/USD')['symbol'] == 'Foo/USD'

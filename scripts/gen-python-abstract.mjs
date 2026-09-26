@@ -17,8 +17,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-/** Python 판 클래스가 있는 증권사만 만든다. KB증권은 Python 판이 없다. */
-export const BROKERS = ['toss', 'kis'];
+/** Python 판 클래스가 있는 증권사만 만든다. */
+export const BROKERS = ['toss', 'kis', 'kbsec'];
 const SPEC_DIR = path.join(ROOT, 'ts/src/spec');
 const PY_ROOT = path.join(ROOT, 'python');
 

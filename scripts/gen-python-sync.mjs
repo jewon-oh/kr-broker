@@ -33,6 +33,7 @@ const PY_ROOT = path.join(ROOT, 'python');
 export const GENERATED_MODULES = [
     'kis.py',
     'toss.py',
+    'kbsec.py',
     'kis_candle_service.py',
     'kis_yahoo_candles.py',
     'execution_confirm.py',
