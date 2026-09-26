@@ -952,7 +952,7 @@
             }
         },
         {
-            "description": "fetchTicker 국내 장 밖의 0 현재가는 건너뛰고 전일 종가를 쓴다. 보합 등락률 0 은 그대로 둔다",
+            "description": "fetchTicker 국내 장 밖의 0 현재가는 건너뛰고 전일 종가를 쓴다. 보합 등락률 0 은 그대로 둔다. 거래량이 0 으로 오면 baseVolume 은 0 이다",
             "method": "fetchTicker",
             "args": [
                 "005930"
@@ -1185,7 +1185,7 @@
             }
         },
         {
-            "description": "fetchTicker 는 표의 통합 코드 심볼을 티커 USD 로 묻고 심볼은 통합 코드로 돌려준다",
+            "description": "fetchTicker 는 표의 통합 코드 심볼을 티커 USD 로 묻고 심볼은 통합 코드로 돌려준다. 거래량 필드가 없으면 baseVolume 을 비운다",
             "method": "fetchTicker",
             "args": [
                 "USD/USD"
@@ -1223,7 +1223,6 @@
                 "last": 52.1,
                 "open": 51.48221343873518,
                 "percentage": 1.2,
-                "baseVolume": 0,
                 "info": {
                     "now_prc_p4": "52.1000",
                     "up_dwn_r_p2": "1.20"

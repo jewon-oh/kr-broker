@@ -28,6 +28,16 @@ export function pickNum(row: Record<string, unknown> | undefined, ...keys: strin
     return 0;
 }
 
+/** `pickNum` 과 같되 후보를 하나도 읽지 못하면 0 이 아니라 `undefined` 다. 값이 없는 것과 0 을 가려야 하는 필드(거래량)에 쓴다. */
+export function pickOptionalNum(row: Record<string, unknown> | undefined, ...keys: string[]): number | undefined {
+    if (!row) return undefined;
+    for (const k of keys) {
+        const n = kbsecNumberOf(row[k]);
+        if (n !== undefined) return n;
+    }
+    return undefined;
+}
+
 /**
  * `pickNum` 과 같되 **양수인 첫 후보**를 고른다.
  *

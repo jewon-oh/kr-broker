@@ -24,6 +24,17 @@ def pick_num(row: Optional[Mapping[str, Any]], *keys: str) -> float:
     return 0
 
 
+def pick_optional_num(row: Optional[Mapping[str, Any]], *keys: str) -> Optional[float]:
+    """`pick_num` 과 같되 후보를 하나도 읽지 못하면 0 이 아니라 `None` 이다. 값이 없는 것과 0 을 가려야 하는 필드(거래량)에 쓴다."""
+    if not row:
+        return None
+    for key in keys:
+        n = kbsec_number_of(row.get(key))
+        if n is not None:
+            return n
+    return None
+
+
 def pick_positive_num(row: Optional[Mapping[str, Any]], *keys: str) -> float:
     """`pick_num` 과 같되 양수인 첫 후보를 고른다. KB 는 값 없음을 0 으로 준다(장 밖 국내 현재가의 `now_prc` 등)."""
     if not row:

@@ -59,7 +59,7 @@ from kr_broker.kbsec_error_codes import KBSEC_ERROR_DETAIL, kbsec_error_detail, 
 from kr_broker.kbsec_fee import kbsec_estimated_fee_rate
 from kr_broker.kbsec_fill_row import kbsec_resolve_fills, parse_kbsec_domestic_fill_row, parse_kbsec_overseas_fill_row
 from kr_broker.kbsec_fill_warnings import warn_fill_without_price, warn_if_fill_side_unreadable, warn_if_fill_totals_inconsistent
-from kr_broker.kbsec_pick import pick_array, pick_num, pick_positive_num, pick_str
+from kr_broker.kbsec_pick import pick_array, pick_num, pick_optional_num, pick_positive_num, pick_str
 from kr_broker.kbsec_token_breaker import record_kbsec_call_ok, record_token_failure, throw_if_token_breaker_open
 from kr_broker.kbsec_tr_inputs import fill_tr_inputs
 from kr_broker.kbsec_types import (
@@ -688,7 +688,8 @@ class kbsec(Exchange, ImplicitAPI):
                 'low': pick_num(ticker, 'lw_prc_p4'),
                 'open': pick_num(ticker, 'opn_prc_p4'),
                 'percentage': pick_num(ticker, 'up_dwn_r_p2'),
-                'baseVolume': pick_num(ticker, 'vlm', 'bdy_vlm'),
+                # 거래량 필드가 없으면 비운다. 0 으로 오면 0 이다.
+                'baseVolume': pick_optional_num(ticker, 'vlm', 'bdy_vlm'),
                 'info': ticker,
             }, market)
         else:
@@ -703,7 +704,7 @@ class kbsec(Exchange, ImplicitAPI):
                 'low': pick_num(ticker, 'lw_prc'),
                 'open': pick_num(ticker, 'opn_prc'),
                 'percentage': pick_num(ticker, 'up_dwn_r_p2'),
-                'baseVolume': pick_num(ticker, 'acml_vlm', 'bdy_vlm'),
+                'baseVolume': pick_optional_num(ticker, 'acml_vlm', 'bdy_vlm'),
                 'info': ticker,
             }, market)
         # 등락률은 `up_dwn_r_p2` 다. 보합이면 0 이 정상 값인데 `safe_ticker` 는 0 을 비우고 시가와 종가로 다시 계산하므로 KB 가 준 값으로 되돌린다.

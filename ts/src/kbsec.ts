@@ -97,7 +97,7 @@ import { kbsecNumberOf } from './kbsec/kbsec-number';
 import { buildKrOrderBody } from './kbsec/kbsec-order-body';
 import {
     isUsdCashRow, kbsecHoldingQuantity, OVERSEAS_QTY_CANDIDATES, pickArray, pickCashGrid, pickGrid, pickHoldingGrid, pickNum,
-    pickOverseasSettlementGrid, pickPositiveNum, pickSettlementGrid, pickStr, unknownGrids,
+    pickOptionalNum, pickOverseasSettlementGrid, pickPositiveNum, pickSettlementGrid, pickStr, unknownGrids,
 } from './kbsec/kbsec-pick';
 import {
     KBSEC_SETTLE_CLSF, KBSEC_SETTLE_TRD_CLSF, kbsecResolveSettlementRows, parseKbsecDomesticSettlementRow,
@@ -2610,7 +2610,8 @@ export class kbsec extends Exchange {
                 low: pickNum(ticker, 'lw_prc_p4'),
                 open: pickNum(ticker, 'opn_prc_p4'),
                 percentage: pickNum(ticker, 'up_dwn_r_p2'),
-                baseVolume: pickNum(ticker, 'vlm', 'bdy_vlm'),
+                // 거래량 필드가 없으면 비운다. 0 으로 오면 0 이다.
+                baseVolume: pickOptionalNum(ticker, 'vlm', 'bdy_vlm'),
                 info: ticker,
             }, market)
             : this.safeTicker({
@@ -2624,7 +2625,7 @@ export class kbsec extends Exchange {
                 low: pickNum(ticker, 'lw_prc'),
                 open: pickNum(ticker, 'opn_prc'),
                 percentage: pickNum(ticker, 'up_dwn_r_p2'),
-                baseVolume: pickNum(ticker, 'acml_vlm', 'bdy_vlm'),
+                baseVolume: pickOptionalNum(ticker, 'acml_vlm', 'bdy_vlm'),
                 info: ticker,
             }, market);
         // 등락률은 `up_dwn_r_p2` 다(국내의 `bdy_vlm_cmpr_p2` 는 전일 거래량 대비라 등락률이 아니다). 보합이면 0 이 정상 값인데 `safeTicker` 는
