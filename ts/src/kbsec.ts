@@ -2793,7 +2793,7 @@ export class kbsec extends Exchange {
         });
         const rows = pickArray(body);
         if (rows.length === 0) return [];
-        const stamps = kstTradeTimestamps(rows.map((row) => pickStr(row, 'ccls_tm')), await this.lastTradedDate(market.symbol), this.milliseconds());
+        const stamps = kstTradeTimestamps(rows.map((row) => pickStr(row, 'ccls_tm')), await this.lastTradedDate(market), this.milliseconds());
         const trades = rows.map((row, index) => {
             const timestamp = stamps[index];
             return this.safeTrade({
@@ -2815,11 +2815,16 @@ export class kbsec extends Exchange {
         return since !== undefined ? trades.filter((trade) => (trade.timestamp ?? 0) >= since) : trades;
     }
 
-    /** 거래량이 있는 가장 최근 영업일(`YYYYMMDD`). 일봉을 받지 못했거나 최근 30개에 그런 날이 없으면 `undefined`다. */
-    private async lastTradedDate(symbol: string): Promise<Str> {
+    /**
+     * 거래량이 있는 가장 최근 영업일(`YYYYMMDD`). 일봉을 받지 못했거나 최근 30개에 그런 날이 없으면 `undefined`다.
+     * 통합차트의 시장구분은 코스피(`0`)가 기본이고, `options.masterData`가 코스닥 종목이라고 알려 주면 코스닥(`1`)으로 조회한다.
+     */
+    private async lastTradedDate(market: MarketInterface): Promise<Str> {
+        const symbol = market.symbol;
+        const kosdaq = getKRXStockByCode(masterDataOf(this.options), market.id as string)?.market === 'KOSDAQ';
         let candles: OHLCV[];
         try {
-            candles = await this.fetchOHLCV(symbol, '1d', undefined, 30);
+            candles = await this.fetchOHLCV(symbol, '1d', undefined, 30, kosdaq ? { mkt_clsf: '1' } : {});
         } catch (err) {
             logger.warn({ err, symbol }, '[kbsec] fetchTrades 의 날짜를 정할 일봉을 받지 못해 체결 시각을 비운다');
             return undefined;

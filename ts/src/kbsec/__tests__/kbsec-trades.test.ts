@@ -9,6 +9,7 @@ global.fetch = mockFetch as unknown as typeof fetch;
 import { kbsec } from '../../kbsec';
 import { KBSEC_TR } from '../kbsec-types';
 import { __resetKbsecTokenBreaker } from '../../testing';
+import { KIS_MASTER_FIXTURE } from '../../__tests__/support/kis-master-fixture';
 import { CREDS, routeTr, trBody } from './support/kbsec-fetch';
 
 const newExchange = () => new kbsec({ ...CREDS, rateLimit: 0 });
@@ -94,6 +95,25 @@ describe('fetchTrades 체결 날짜(일봉 기준)', () => {
 
         expect(trBody(mockFetch, KBSEC_TR.CHART_KR).dataBody).toMatchObject({ is_cd: '005930', chrt_clsf: 'D', inq_cnt: '30' });
         expect(datetimes(result)).toEqual(['2026-03-25T01:00:20.000Z', '2026-03-25T00:59:58.000Z']);
+    });
+
+    it('코스닥 종목은 마스터 데이터로 알면 일봉을 코스닥 시장구분(1)으로 받아 장중 날짜를 붙인다. 모르면 코스피(0)로 받는다', async () => {
+        at(NOW);
+        // 명세의 시장구분은 0 이 코스피, 1 이 코스닥이다. 코스닥 종목을 코스피로 물으면 빈 응답이 온다고 본다.
+        routeTr(mockFetch, {
+            [KBSEC_TR.TRADES_TIMELINE_KR]: trades('100020', '095958'),
+            [KBSEC_TR.CHART_KR]: (sent: Record<string, unknown>) => (sent.mkt_clsf === '1' ? days(['20260325', '150000']) : {}),
+        });
+
+        const known = await new kbsec({ ...CREDS, rateLimit: 0, options: { masterData: KIS_MASTER_FIXTURE } }).fetchTrades('247540/KRW');
+
+        expect(trBody(mockFetch, KBSEC_TR.CHART_KR).dataBody).toMatchObject({ is_cd: '247540', mkt_clsf: '1' });
+        expect(datetimes(known)).toEqual(['2026-03-25T01:00:20.000Z', '2026-03-25T00:59:58.000Z']);
+
+        const unknown = await newExchange().fetchTrades('247540/KRW');
+
+        expect(trBody(mockFetch, KBSEC_TR.CHART_KR).dataBody).toMatchObject({ is_cd: '247540', mkt_clsf: '0' });
+        expect(datetimes(unknown)).toEqual([undefined, undefined]);
     });
 
     it.each([
