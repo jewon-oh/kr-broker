@@ -301,6 +301,17 @@ describe('fetchOverseasOrderStatus', () => {
             quantity: 2, price: 180.5, filledQuantity: 2, filledPrice: 180.4, remainingQuantity: 0,
         });
     });
+
+    it('기타매매구분코드(etc_trd_ccd)의 01 을 sell, 02 를 buy 로 옮기고 모르는 값은 비운다', async () => {
+        const row = (no: string, code: string) => ({ ordr_dt: '20260922', ordr_no: no, shrt_is_cd: 'AAPL', etc_trd_ccd: code });
+        routeTr(mockFetch, {
+            [KBSEC_TR.ORDER_STATUS_US]: { nxt_key: '', Record1: [row('9001', '01'), row('9002', '02'), row('9003', ''), row('9004', '99')] },
+        });
+
+        const result = await newExchange().fetchOverseasOrderStatus(Date.UTC(2026, 8, 21, 2, 0));
+
+        expect(result.rows.map((r) => r.side)).toEqual(['sell', 'buy', undefined, undefined]);
+    });
 });
 
 describe('배선', () => {

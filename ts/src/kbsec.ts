@@ -293,6 +293,12 @@ function kbsecTwoDigitSide(code: string): KbsecTradeSide {
     return KBSEC_TWO_DIGIT_SIDE[code] ?? 'unknown';
 }
 
+/**
+ * 해외 체결현황(`SPQM2204`) 기타매매구분코드(`etc_trd_ccd`)의 방향. 명세에 값 설명이 없다.
+ * 실계좌(2026-09-28)에서 입력 매매구분(`trd_clsf`)을 `01`로 거르면 `01` 행만, `02`로 거르면 `02` 행만 왔다.
+ */
+const KBSEC_OVERSEAS_ORDER_SIDE: Readonly<Record<string, 'buy' | 'sell'>> = { '01': 'sell', '02': 'buy' };
+
 /** 국내 소수점 매매내역 한 줄(`SSQM5765`). */
 export interface KbsecFractionalTrade extends KrTimestamped {
     /** 매매일자(`trd_dt`, YYYYMMDD) */
@@ -1354,6 +1360,8 @@ export interface KbsecOverseasOrderable {
 export interface KbsecOverseasOrderStatusEntry extends KbsecOverseasOrderEntry {
     /** 단축종목코드(`shrt_is_cd`) */
     shortCode: string;
+    /** 기타매매구분코드(`etc_trd_ccd`)에서 옮긴 방향. `01` 매도, `02` 매수이고 그 밖의 값이면 비어 있다 */
+    side: 'buy' | 'sell' | undefined;
 }
 
 export interface KbsecOverseasOrderStatusFetch {
@@ -4023,7 +4031,7 @@ export class kbsec extends Exchange {
      * 시작과 종료 주문일자가 필수 입력이라 `since`가 없으면 던진다. 날짜는 `fetchOverseasOrders`처럼 미국 현지 일자이고, 끝은 `params.until`,
      * 없으면 오늘이다. 체결구분, 매매구분, 거래구분은 설명된 전체(`0`, `99`, `0`)를 보낸다. 해외거래소구분, ISO코드, 원화통합증거금신청여부,
      * 다이렉트인덱싱여부는 설명이 없어 비워 보낸다. 미체결만 보려면 `params.ccls_clsf`를 `2`로 준다. 연속조회는 끝까지 따라가고,
-     * 상한(`holdingsMaxPages`)에 걸리면 `truncated`로 알린다.
+     * 상한(`holdingsMaxPages`)에 걸리면 `truncated`로 알린다. 방향(`side`)은 기타매매구분코드(`etc_trd_ccd`)의 `01` 매도, `02` 매수로 채운다.
      */
     async fetchOverseasOrderStatus(since: Int = undefined, params: Dict = {}): Promise<KbsecOverseasOrderStatusFetch> {
         if (since === undefined) throw new ArgumentsRequired(`${this.id} fetchOverseasOrderStatus() 는 since 인자가 필요하다(시작 주문일자가 필수 입력이다)`);
@@ -4040,6 +4048,7 @@ export class kbsec extends Exchange {
             originalId: pickStr(row, 'orgn_ordr_no'),
             standardCode: pickStr(row, 'stnd_is_cd'),
             shortCode: pickStr(row, 'shrt_is_cd'),
+            side: KBSEC_OVERSEAS_ORDER_SIDE[pickStr(row, 'etc_trd_ccd')],
             name: pickStr(row, 'shrt_is_nm'),
             statusName: pickStr(row, 'ordr_st_nm'),
             orderTypeName: pickStr(row, 'ordr_clsf_nm'),
@@ -5143,7 +5152,7 @@ export class kbsec extends Exchange {
             : amount > 0 && totalFilled >= amount ? 'closed'
             : status.rejectReason !== '' ? 'rejected' : 'canceled';
         return this.safeOrder({
-            id, symbol: market.symbol, status: orderStatus, side: trades[0]?.side, amount, filled: totalFilled, remaining,
+            id, symbol: market.symbol, status: orderStatus, side: trades[0]?.side ?? status.side, amount, filled: totalFilled, remaining,
             price: status.price > 0 ? status.price : undefined, cost: totalCost,
             average: totalFilled > 0 && totalCost > 0 ? totalCost / totalFilled : undefined,
             trades: [], info: { status: status.info, trades: tradeInfo },

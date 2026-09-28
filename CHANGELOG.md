@@ -108,6 +108,7 @@
 - KB증권에서 날짜를 주지 않은 국내 주문·체결 조회(`fetchOpenOrders`, `fetchOrders`, `fetchMyTrades` 등)와 미국 `fetchMyTrades`는 조회일자를 영업일로 되감습니다. 되감기 상한 `options.businessDateMaxBackoff`를 그날 이미 되감은 칸 수보다 작게 주면 이 조회가 `undefined`를 던졌습니다. 이제 요청 없이 `BadRequest`를 던집니다. 상한을 0보다 작게 줄 때도 같습니다. Python 판도 같습니다.
 - KB증권 토큰 발급이 거절돼도(`AuthenticationError`) 토큰 차단기를 풀지 않습니다. 예전에는 발급 거절을 TR의 업무 거절처럼 보고 연속 실패 수를 0으로 되돌렸습니다. 그래서 토큰 무효가 이어지는 사이에 발급 거절이 끼면 차단기가 늦게 열리거나 열리지 않았습니다. 토큰을 싣고 보낸 TR이 업무 오류로 거절되면 예전처럼 차단기를 풉니다. Python 판도 같습니다.
 - KB증권 국내 `fetchOrder`가 주문 상태를 `fetchOrders`와 같은 규칙으로 정합니다. 예전에는 미체결 목록에 없고 체결이 있으면 `closed`였습니다. 그래서 일부 체결 뒤 나머지가 취소된 주문이 `fetchOrders`에서는 `canceled`, `fetchOrder`에서는 `closed`였습니다. ccxt에서 `closed`는 전량 체결입니다. 이제 미체결 목록 대신 같은 날의 전체 주문 목록(`SSQM2341` 체결구분 0)에서 주문을 찾습니다. 미체결수량이 남았으면 `open`, 전량 체결이면 `closed`, 남지 않았는데 덜 체결됐으면 `canceled`입니다. 요청은 예전처럼 두 번입니다. `filled`, `cost`, `average`는 예전처럼 체결내역의 합이고, `remaining`은 `fetchOrders`처럼 목록의 미체결수량입니다. 끝난 주문의 `info`는 체결 행 목록(`info.trades`)이 아니라 목록의 주문 행이고, `type`, `price`, `amount`도 채웁니다. 전체 목록에 없는데 체결이 있으면 예전처럼 `closed`로 돌려줍니다. Python 판도 같습니다.
+- KB증권 미국 `fetchOrder`가 체결내역 없이 해외 체결현황(`SPQM2204`)만으로 주문을 만들 때 `side`를 채웁니다. 예전에는 비어 있었습니다. 방향은 체결현황의 기타매매구분코드(`etc_trd_ccd`)로 정하고, `01`은 매도, `02`는 매수입니다. 명세에는 이 코드의 값 설명이 없습니다. 실계좌(2026-09-28)에서 매매구분(`trd_clsf`)을 `01`로 거르면 `01` 행만, `02`로 거르면 `02` 행만 오는 것으로 확인했습니다. 그 밖의 값이면 예전처럼 비웁니다. 체결내역이 있으면 예전처럼 체결 행의 방향을 씁니다. `fetchOverseasOrderStatus`의 행에도 같은 `side`를 싣습니다. Python 판도 같습니다.
 
 ## [0.5.0] - 2026-09-25
 

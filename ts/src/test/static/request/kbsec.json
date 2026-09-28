@@ -6822,7 +6822,7 @@
             }
         },
         {
-            "description": "fetchOrder 미국은 체결내역에 없어도 해외 체결현황(SPQM2204, 최근 사흘)에 잔량이 있으면 open 이다",
+            "description": "fetchOrder 미국은 체결내역에 없어도 해외 체결현황(SPQM2204, 최근 사흘)에 잔량이 있으면 open 이다. 방향은 체결현황의 기타매매구분코드(etc_trd_ccd, 01 매도·02 매수)로 채운다",
             "now": 1790038800000,
             "method": "fetchOrder",
             "args": [
@@ -6890,6 +6890,7 @@
                                         "ordr_dt": "20260921",
                                         "ordr_no": "0000000051",
                                         "shrt_is_cd": "AAPL",
+                                        "etc_trd_ccd": "02",
                                         "frgn_ordr_q_p6": "5.000000",
                                         "frgn_ordr_prc_p6": "220.000000",
                                         "ccls_q_p6": "2.000000",
@@ -6907,6 +6908,7 @@
                 "id": "0000000051",
                 "symbol": "AAPL/USD",
                 "status": "open",
+                "side": "buy",
                 "amount": 5,
                 "filled": 2,
                 "remaining": 3,
@@ -6919,6 +6921,7 @@
                         "ordr_dt": "20260921",
                         "ordr_no": "0000000051",
                         "shrt_is_cd": "AAPL",
+                        "etc_trd_ccd": "02",
                         "frgn_ordr_q_p6": "5.000000",
                         "frgn_ordr_prc_p6": "220.000000",
                         "ccls_q_p6": "2.000000",

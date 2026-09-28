@@ -96,6 +96,9 @@ KBSEC_TOKEN_KEY_PREFIX = 'kbsec:token:'
 _EMPTY_HOST = {'ipAddr': '', 'macAddr': ''}
 # 국내 통합차트(`IVS11560`)의 차트구분 가운데 기간 봉의 타임프레임. 분봉은 없다. `'1mo'` 로 불러도 월봉(M)을 보내므로 `'1M'` 의 규칙을 쓴다.
 KBSEC_CHART_PERIOD = {KBSEC_CHART_KIND['DAY']: '1d', KBSEC_CHART_KIND['WEEK']: '1w', KBSEC_CHART_KIND['MONTH']: '1M'}
+# 해외 체결현황(`SPQM2204`) 기타매매구분코드(`etc_trd_ccd`)의 방향. 명세에 값 설명이 없다.
+# 실계좌(2026-09-28)에서 입력 매매구분(`trd_clsf`)을 `01` 로 거르면 `01` 행만, `02` 로 거르면 `02` 행만 왔다.
+KBSEC_OVERSEAS_ORDER_SIDE = {'01': 'sell', '02': 'buy'}
 
 
 def _now_ms() -> int:
@@ -1155,9 +1158,9 @@ class kbsec(Exchange, ImplicitAPI):
                         else 'closed' if amount > 0 and total_filled >= amount
                         else 'rejected' if status['rejectReason'] != '' else 'canceled')
         return self.safe_order({
-            'id': id, 'symbol': market['symbol'], 'status': order_status, 'side': trades[0]['side'] if trades else None, 'amount': amount,
-            'filled': total_filled, 'remaining': remaining, 'price': status['price'] if status['price'] > 0 else None, 'cost': total_cost,
-            'average': total_cost / total_filled if total_filled > 0 and total_cost > 0 else None,
+            'id': id, 'symbol': market['symbol'], 'status': order_status, 'side': (trades[0]['side'] if trades else None) or status['side'],
+            'amount': amount, 'filled': total_filled, 'remaining': remaining, 'price': status['price'] if status['price'] > 0 else None,
+            'cost': total_cost, 'average': total_cost / total_filled if total_filled > 0 and total_cost > 0 else None,
             'trades': [], 'info': {'status': status['info'], 'trades': trade_info},
         }, market)
 
@@ -1167,7 +1170,7 @@ class kbsec(Exchange, ImplicitAPI):
         시작과 종료 주문일자가 필수 입력이라 `since` 가 없으면 던진다. 날짜는 미국 현지 일자이고, 끝은 `params['until']`, 없으면 오늘이다.
         체결구분, 매매구분, 거래구분은 설명된 전체(`0`, `99`, `0`)를 보낸다. 해외거래소구분, ISO코드, 원화통합증거금신청여부,
         다이렉트인덱싱여부는 설명이 없어 비워 보낸다. 미체결만 보려면 `params['ccls_clsf']` 를 `2` 로 준다. 연속조회는 끝까지 따라가고,
-        상한(`holdingsMaxPages`)에 걸리면 `truncated` 로 알린다.
+        상한(`holdingsMaxPages`)에 걸리면 `truncated` 로 알린다. 방향(`side`)은 기타매매구분코드(`etc_trd_ccd`)의 `01` 매도, `02` 매수로 채운다.
         """
         params = {} if params is None else params
         if since is None:
@@ -1184,6 +1187,7 @@ class kbsec(Exchange, ImplicitAPI):
                 'originalId': pick_str(row, 'orgn_ordr_no'),
                 'standardCode': pick_str(row, 'stnd_is_cd'),
                 'shortCode': pick_str(row, 'shrt_is_cd'),
+                'side': KBSEC_OVERSEAS_ORDER_SIDE.get(pick_str(row, 'etc_trd_ccd')),
                 'name': pick_str(row, 'shrt_is_nm'),
                 'statusName': pick_str(row, 'ordr_st_nm'),
                 'orderTypeName': pick_str(row, 'ordr_clsf_nm'),
