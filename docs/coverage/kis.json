@@ -2347,7 +2347,7 @@
       "suggested": null,
       "proposal": null,
       "verified": "real",
-      "note": "TR FHKST01010300, 모의: FHKST01010300; 공개 메서드는 `fetchTrades`(통합)와 `fetchTradeTicks`(확장), 둘 다 국내만. 응답에 날짜가 없고 체결 시각만 있다. `fetchTrades`는 일자별 시세(inquire_daily_price)를 한 번 더 받아 거래량이 있는 가장 최근 영업일을 가장 새 체결의 날짜로 붙이고, 앞 행보다 시각이 늦은 행부터는 시각을 비운다. 행이 새 것부터 온다는 순서는 예제와 명세에 적혀 있지 않고, 실계좌로도 확인하지 못했다. `fetchTradeTicks`는 `KisTradeTick`(time은 HHMMSS 문자열)으로 돌려준다. 시장구분은 `fetchTicker`와 같다.",
+      "note": "TR FHKST01010300, 모의: FHKST01010300; 공개 메서드는 `fetchTrades`(통합)와 `fetchTradeTicks`(확장), 둘 다 국내만. 응답에 날짜가 없고 체결 시각만 있다. `fetchTrades`는 일자별 시세(inquire_daily_price)를 한 번 더 받아 거래량이 있는 가장 최근 영업일을 가장 새 체결의 날짜로 붙이고, 앞 행보다 시각이 늦은 행부터는 시각을 비운다. 행이 새 것부터 온다는 순서는 예제와 명세에 적혀 있지 않지만, 실계좌(2026-09-28)에서 005930의 30행을 받아 시각이 앞 행보다 늦어진 적이 없는 것으로 확인했다. `fetchTradeTicks`는 `KisTradeTick`(time은 HHMMSS 문자열)으로 돌려준다. 시장구분은 `fetchTicker`와 같다.",
       "spec": "https://github.com/koreainvestment/open-trading-api/blob/b4e6249/examples_llm/domestic_stock/inquire_ccnl/inquire_ccnl.py"
     },
     {
@@ -2630,7 +2630,7 @@
       "suggested": "fetchInvestorTrend",
       "proposal": "확장",
       "verified": "real",
-      "note": "TR FHKST01010900, 모의: FHKST01010900; 공개 메서드는 `fetchInvestorTrading`(국내만, 종목 단위). 필드명은 공식 저장소의 chk_inquire_investor.py COLUMN_MAPPING으로 확인했다. KB증권과 같은 공통 모양으로 개인, 외국인, 기관계의 순매수 대금만 싣고, 매수·매도 수량과 대금은 `info` 원문에 둔다",
+      "note": "TR FHKST01010900, 모의: FHKST01010900; 공개 메서드는 `fetchInvestorTrading`(국내만, 종목 단위). 필드명은 공식 저장소의 chk_inquire_investor.py COLUMN_MAPPING으로 확인했다. KB증권과 같은 공통 모양으로 개인, 외국인, 기관계의 순매수 대금만 싣고, 매수·매도 수량과 대금은 `info` 원문에 둔다. 대금은 백만 원 단위다. 실계좌(2026-09-28)에서 개인, 외국인, 기관 모두 순매수 대금 ÷ (순매수 수량 × 종가)가 약 1e-6이었다. 당일 행은 대금 필드가 비어 있었다(장 종료 뒤 채워진다는 공식 유의사항과 같다).",
       "spec": "https://github.com/koreainvestment/open-trading-api/blob/b4e6249/examples_llm/domestic_stock/inquire_investor/inquire_investor.py"
     },
     {
@@ -6045,8 +6045,8 @@
       ],
       "suggested": "fetchOrderBook",
       "proposal": "params 확대",
-      "verified": "spec-only",
-      "note": "TR HHDFS76200100, 모의: 예제에 env_dv 없음; 공개 메서드는 `fetchOverseasOrderBook(symbol)`(해외만). 매수·매도 1호가로 한 단계 호가를 돌려준다. 통합 `fetchOrderBook`은 해외에 NotSupported를 던지는 기존 동작을 유지한다(기존 호출자가 그 예외에 기댈 수 있다). 거래소는 종목 마스터의 시세 거래소다. 실계좌 호출(2026-09-24, 한국 시각 낮이라 미국 정규장 밖)은 정상처리(MCA00000)로 끝났지만 호가 블록이 없었다. 미국 정규장에 다시 확인해야 한다.",
+      "verified": "real",
+      "note": "TR HHDFS76200100, 모의: 예제에 env_dv 없음; 공개 메서드는 `fetchOverseasOrderBook(symbol)`(해외만). 매수·매도 1호가로 한 단계 호가를 돌려준다. 통합 `fetchOrderBook`은 해외에 NotSupported를 던지는 기존 동작을 유지한다(기존 호출자가 그 예외에 기댈 수 있다). 거래소는 종목 마스터의 시세 거래소다. 실계좌 호출(2026-09-24, 한국 시각 낮이라 미국 정규장 밖)은 정상처리(MCA00000)로 끝났지만 호가 블록이 없었다. 미국 정규장(2026-09-25 09:43 ET)에 AAPL로 다시 부르자 정상처리(MCA00000)와 함께 호가 블록이 왔고, 매수와 매도 한 줄씩 가격과 수량이 0이 아니었다.",
       "spec": "https://github.com/koreainvestment/open-trading-api/blob/b4e6249/examples_llm/overseas_stock/inquire_asking_price/inquire_asking_price.py"
     },
     {

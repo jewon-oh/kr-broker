@@ -151,8 +151,8 @@
       "evidence": ["ts/src/kbsec/kbsec-types.ts:132", "ts/src/kbsec.ts:2790-2851"],
       "suggested": null,
       "proposal": null,
-      "verified": "spec-only",
-      "note": "체결가와 체결수량, 체결시각만 채웁니다. 매도매수구분(sell_buy_ccd)은 코드값 의미가 명세에 없어 side는 채우지 않습니다. 해외 종목은 같은 fetchTrades가 GSA10020으로 갈라 부릅니다.",
+      "verified": "real",
+      "note": "체결가와 체결수량, 체결시각만 채웁니다. 매도매수구분(sell_buy_ccd)은 코드값 의미가 명세에 없어 side는 채우지 않습니다. 해외 종목은 같은 fetchTrades가 GSA10020으로 갈라 부릅니다. 행은 새 것부터 옵니다. 실계좌(2026-09-28)에서 005930의 30행을 받았고, 시각이 앞 행보다 늦어진 적이 없었습니다. 결과는 한국투자증권처럼 오래된 것부터 돌려주고 `limit`을 결과에도 적용합니다.",
       "spec": "https://github.com/kbsecurities/kb-openapi/blob/159480c/frontend/src/app/openapi-test/samples.generated.json#Tkb_IVU10080_B2C"
     },
     {
@@ -184,8 +184,8 @@
       ],
       "suggested": "fetchInvestorTrend",
       "proposal": "확장",
-      "verified": "spec-only",
-      "note": "종목별 투자자(개인, 외국인, 기관 등 13개 유형) 일별 매매. 국내만 지원한다. 한국투자증권과 같은 공통 모양으로 개인, 외국인, 기관만 싣고 나머지 유형은 `info` 원문에 둔다. 필드명은 공식 저장소 samples.generated.json의 Tkb_IVU10430_B2C inputSpec·outputSpec으로 확인했다",
+      "verified": "real",
+      "note": "종목별 투자자(개인, 외국인, 기관 등 13개 유형) 일별 매매. 국내만 지원한다. 한국투자증권과 같은 공통 모양으로 개인, 외국인, 기관만 싣고 나머지 유형은 `info` 원문에 둔다. 필드명은 공식 저장소 samples.generated.json의 Tkb_IVU10430_B2C inputSpec·outputSpec으로 확인했다. 실계좌(2026-09-28)에서 005930을 시작일 2021-01-04로 한 번 부르자 2026-09-28까지 1,405행이 최신순으로 왔다. 상장폐지 종목(043090)은 오류 없이 0행이었다. 금액 기준 대금은 백만 원 단위다. 5영업일의 모든 투자자 유형에서 순매수 대금 ÷ (순매수 수량 × 종가)가 약 1e-6이었다.",
       "spec": "https://github.com/kbsecurities/kb-openapi/blob/159480c/frontend/src/app/openapi-test/samples.generated.json#Tkb_IVU10430_B2C"
     },
     {
@@ -1527,7 +1527,7 @@
       "suggested": null,
       "proposal": null,
       "verified": "real",
-      "note": "체결구분 0 전체, 1 체결, 2 미체결의 주문 목록입니다. `fetchOverseasOrders`(SPQM1818)와 같은 모양에 단축종목코드(`shrt_is_cd`)를 더 줍니다. 시작과 종료 주문일자가 필수 입력이라 `since`가 없으면 `ArgumentsRequired`를 던지고, 날짜는 SPQM1818처럼 미국 현지 일자입니다. 체결구분, 매매구분, 거래구분은 설명된 전체(`0`, `99`, `0`)를 보내고, 설명이 없는 해외거래소구분, ISO코드, 원화통합증거금신청여부, 다이렉트인덱싱여부는 비워 보냅니다. `fetchOpenOrders`에는 합치지 않았습니다. 실계좌(2026-09-24) 최근 30일 조회에서 행 필드 이름(`shrt_is_cd`, `shrt_is_nm`, `ordr_st_nm` 등)이 명세와 같았습니다.",
+      "note": "체결구분 0 전체, 1 체결, 2 미체결의 주문 목록입니다. `fetchOverseasOrders`(SPQM1818)와 같은 모양에 단축종목코드(`shrt_is_cd`)를 더 줍니다. 시작과 종료 주문일자가 필수 입력이라 `since`가 없으면 `ArgumentsRequired`를 던지고, 날짜는 SPQM1818처럼 미국 현지 일자입니다. 체결구분, 매매구분, 거래구분은 설명된 전체(`0`, `99`, `0`)를 보내고, 설명이 없는 해외거래소구분, ISO코드, 원화통합증거금신청여부, 다이렉트인덱싱여부는 비워 보냅니다. `fetchOpenOrders`에는 합치지 않았습니다. 실계좌(2026-09-24) 최근 30일 조회에서 행 필드 이름(`shrt_is_cd`, `shrt_is_nm`, `ordr_st_nm` 등)이 명세와 같았습니다. 실계좌(2026-09-28, 9월 24일부터 27일까지 조회)에서 기타매매구분코드(`etc_trd_ccd`)는 `01` 5행, `02` 2행이었고, 거래구분명(`dl_clsf_nm`)의 매도 5행, 매수 2행과 짝지어 왔습니다. 입력 매매구분(`trd_clsf`)을 `01`로 주면 `01` 행만, `02`로 주면 `02` 행만 왔습니다. 그래서 `01`을 매도, `02`를 매수로 보고 `side`를 채웁니다.",
       "spec": "https://github.com/kbsecurities/kb-openapi/blob/159480c/frontend/src/app/openapi-test/samples.generated.json#Tkb_SPQM2204_B2C"
     },
     {
@@ -1556,8 +1556,8 @@
       "evidence": ["ts/src/kbsec.ts:5238", "ts/src/kbsec.ts:5239", "ts/src/kbsec/kbsec-types.ts:427"],
       "suggested": null,
       "proposal": null,
-      "verified": "spec-only",
-      "note": "체결구분 ccls_clsf의 값 체계가 국내와 다릅니다. 명세는 1 전체, 2 체결, 3 미체결입니다. 코드는 1(KBSEC_CCLS_FILLED)을 보내므로 명세대로면 전체 조회가 됩니다. 3을 보내 해외 fetchOpenOrders를 만들 수 있습니다. 실계좌 확인이 필요합니다.",
+      "verified": "real",
+      "note": "체결구분 ccls_clsf의 값 체계가 국내와 다릅니다. 명세는 1 전체, 2 체결, 3 미체결입니다. 코드는 1(KBSEC_CCLS_FILLED)을 보내므로 명세대로면 전체 조회가 됩니다. 3을 보내 해외 fetchOpenOrders를 만들 수 있습니다. 실계좌(2026-09-25)에서 4행을 받았고, 거래구분명(`dl_clsf_nm`)이 모두 매도여서 `side`를 모두 sell로 읽었습니다. 그날 미체결 주문이 없어 1이 전체인지 체결만인지는 판정하지 못했습니다.",
       "spec": "https://github.com/kbsecurities/kb-openapi/blob/159480c/frontend/src/app/openapi-test/samples.generated.json#Tkb_SPQM2103_B2C"
     }
   ],
