@@ -95,6 +95,7 @@
 - 이 저장소의 CI가 Python 의존성을 해시를 고정한 잠금 파일(`python/requirements/*.txt`)로 설치하고, `pip-audit`도 운영 의존성의 잠금 파일을 감사합니다. 예전에는 PyPI 최신판을 해시 없이 받아 감사했습니다. Dependabot은 Python 의존성을 `uv` 생태계로 올립니다. 사용하는 쪽의 설치와 `pyproject.toml`의 하한은 그대로입니다.
 - KB증권 `KbsecAuth.getAccessToken`(`kr-broker/kbsec/kbsec-auth`)은 토큰 발급이 거절되면 `Error` 대신 `AuthenticationError`를 던집니다. 증권사가 준 업무 코드는 `brokerCode`에 싣습니다. 본문 형태 두 가지가 모두 거절되면 먼저 보낸 형태의 코드를 싣습니다. 나중에 보내는 형태는 원인과 관계없이 `E021`을 받기 때문입니다. `detail`은 예전처럼 비어 있습니다. `kbsec` 클래스의 비공개 호출이 던지는 오류는 예전처럼 `AuthenticationError`입니다. 메시지 앞의 `kbsec 토큰을 받지 못했다:`는 빠집니다. 토큰 무효(`I445`) 뒤 재발급이 실패했을 때도 `Error` 대신 `AuthenticationError`를 던집니다.
 - KB증권 `fetchBalance`가 해외 예수금 그리드에서 달러 행을 가리지 못할 때 남기는 경고(`[kbsec] 해외 예수금 그리드에 USD 행이 없다`)에 행별 기준환율(`standardRates`, `std_exch_r` 원문)과 빈 행 수(`emptyRows`)를 더합니다. 빈 행은 통화구분명이 비고 기준환율, 전환환율, 예수금, 주문가능금액이 모두 0인 행입니다. 예수금과 주문가능금액 값은 예전처럼 남기지 않습니다. 실계좌(2026-09-28)에서는 예수금 그리드 5행이 모두 빈 행이었고, 달러 예수금이 있을 때의 행 모양은 아직 모릅니다. 달러 행을 가리는 규칙과 `info.unreadCurrencies`는 그대로입니다.
+- 한국투자증권과 KB증권 `fetchInvestorTrading`의 순매수 대금(`individual`, `foreign`, `institution`)이 백만 원 단위라는 것을 설명에 적었습니다. 실계좌(2026-09-28)에서 순매수 대금을 순매수 수량과 종가의 곱으로 나눈 값이 한국투자증권(`inquire-investor`)은 개인, 외국인, 기관 모두, KB증권(`IVU10430`)은 5영업일의 모든 투자자 유형에서 약 1e-6이었습니다. 값은 바꾸지 않았고, 예전처럼 응답 그대로 싣습니다. 원 단위로 쓰려면 100만을 곱합니다.
 
 ### 고침
 

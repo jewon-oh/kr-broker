@@ -623,7 +623,8 @@ class kbsec(Exchange, ImplicitAPI):
         """종목별 투자자 매매동향(`IVU10430`)을 하루 단위로 준다. 세 증권사 공통 모양이다. 국내만 지원한다.
         개인, 외국인, 기관의 값을 싣고, 등락률과 거래량, 나머지 10개 투자자 유형은 `info` 의 원문에 있다.
         기본은 오늘(KST) 하루, 순매수(`trd_clsf='1'`), 금액 기준(`amt_q_clsf='1'`)이다. `since` 와 `params['until']` 로 기간을 넓힌다.
-        `params` 로 `trd_clsf`(1 순매수, 2 매수, 3 매도)나 `amt_q_clsf`(1 금액, 2 수량)를 덮어쓰면 세 투자자 필드도 그 값이 된다."""
+        `params` 로 `trd_clsf`(1 순매수, 2 매수, 3 매도)나 `amt_q_clsf`(1 금액, 2 수량)를 덮어쓰면 세 투자자 필드도 그 값이 된다.
+        금액은 백만 원 단위이고 원으로 바꾸지 않는다. 실계좌(2026-09-28) 5영업일의 모든 투자자 유형에서 순매수 대금 ÷ (순매수 수량 × 종가)가 약 1e-6 이었다."""
         until, query = self.handle_until_param('fetchInvestorTrading', limit, {} if params is None else params)
         market = self.market(symbol)
         if self._is_us(market):
