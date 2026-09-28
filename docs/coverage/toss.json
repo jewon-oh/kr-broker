@@ -199,7 +199,7 @@
       "suggested": null,
       "proposal": null,
       "verified": "real",
-      "note": "국내 전용이며 미국 종목은 400 unsupported-market입니다. 거래대금 없이 주식 수만 줘서 순매수 대금을 싣는 공통 `fetchInvestorTrading`으로 옮기지 않습니다. 시장 단위 대금은 `fetchMarketInvestorTrading`입니다. 실계좌(2026-09-28)에서 005930을 `count` 100으로 부르고 응답의 `nextUntil`을 따라 19쪽, 1,840행(2019-04-01까지)을 받았습니다. 마지막 쪽에서 `nextUntil`이 없어졌습니다. 상장폐지 종목(043090)은 404 `stock-not-found`(`BadSymbol`)입니다.",
+      "note": "국내 전용이며 미국 종목은 400 unsupported-market입니다. 거래대금 없이 주식 수만 줘서 순매수 대금을 싣는 공통 `fetchInvestorTrading`으로 옮기지 않습니다. 시장 단위 대금은 `fetchMarketInvestorTrading`입니다. 실계좌(2026-09-28)에서 005930을 `count` 100으로 부르고 응답의 `nextUntil`을 따라 19쪽, 1,840행(2019-04-01까지)을 받았습니다. 마지막 쪽에서 `nextUntil`이 없어졌습니다. 상장폐지나 거래정지 예로 고른 종목(043090)은 404 `stock-not-found`(`BadSymbol`)입니다. 한국투자증권 일별 동향은 같은 코드로 2026-09-23까지 행을 주어, 두 경우 가운데 어느 쪽인지는 확인하지 못했습니다.",
       "spec": "https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1stocks~1{symbol}~1investor-trading/get"
     },
     {
