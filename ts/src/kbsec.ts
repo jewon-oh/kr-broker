@@ -3140,9 +3140,14 @@ export class kbsec extends Exchange {
             const cashRows = pickCashGrid(body);
             const usdCash = cashRows.find(isUsdCashRow);
             if (cashRows.length > 0 && usdCash === undefined) {
-                // 통화구분명은 금액이 아니라 남긴다. 금액 필드는 남기지 않는다.
-                logger.warn({ trCode: KBSEC_TR.HOLDINGS_US, currencyNames: cashRows.map((row) => row.crncy_clsf_nm) },
-                    '[kbsec] 해외 예수금 그리드에 USD 행이 없다 — currencyNames 가 받은 통화구분명이다');
+                // 통화구분명과 행별 기준환율(공개 환율)은 금액이 아니라 남긴다. 예수금과 주문가능금액은 남기지 않고, 통화구분명이 비고
+                // 환율과 두 금액이 모두 0 인 빈 행의 수만 센다. 달러 예수금이 있을 때 행 모양을 보고 `isUsdCashRow` 를 고치려는 진단이다.
+                const emptyRows = cashRows.filter((row) => pickStr(row, 'crncy_clsf_nm') === ''
+                    && ['std_exch_r', 'cnvr_exch_r_p4', 'tfnd', 'ordr_psbl_amt_p2'].every((key) => kbsecNumberOf(row[key]) === 0)).length;
+                logger.warn({
+                    trCode: KBSEC_TR.HOLDINGS_US, currencyNames: cashRows.map((row) => row.crncy_clsf_nm),
+                    standardRates: cashRows.map((row) => row.std_exch_r), emptyRows,
+                }, '[kbsec] 해외 예수금 그리드에 USD 행이 없다 — currencyNames 가 받은 통화구분명이다');
             }
             const out: HoldingRow[] = [];
             // 버린 이유를 세어서 남긴다. "종목코드가 비었다", "수량을 못 읽었다", "수량이 0 이다"는 원인도 조치도 다르다.

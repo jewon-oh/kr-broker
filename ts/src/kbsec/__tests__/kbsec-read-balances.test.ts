@@ -600,6 +600,34 @@ describe('KB fetchBalance — 달러 예수금 행', () => {
         warn.mockRestore();
     });
 
+    it('USD 행이 없으면 행별 기준환율과 빈 행 수도 남긴다. 금액은 남기지 않는다', async () => {
+        const warn = vi.spyOn(logger, 'warn');
+        // 실계좌(2026-09-28) 모양의 빈 행 5개와, 통화구분명만 빈 행 1개.
+        const empty = { crncy_clsf_nm: '          ', std_exch_r: '0000.0000', cnvr_exch_r_p4: '0000.0000', tfnd: '0', ordr_psbl_amt_p2: '0' };
+        const unnamed = { crncy_clsf_nm: '          ', std_exch_r: '1360.4000', cnvr_exch_r_p4: '1360.4000', tfnd: '4321.09', ordr_psbl_amt_p2: '4321.09' };
+        const cashRows = [...Array.from({ length: 5 }, () => empty), unnamed];
+        mockFetch.mockImplementation(async (url: string) => {
+            const u = String(url);
+            if (u.includes('/oauth2/token')) return tokenOk();
+            const tr = u.split('/api/v1/')[1] ?? '';
+            if (tr === KBSEC_TR.HOLDINGS_US.toLowerCase()) return jsonOk({ Record1: cashRows, Record2: OVERSEAS_OK.Record2 });
+            if (tr === KBSEC_TR.DEPOSIT.toLowerCase()) return jsonOk({ ordr_psbl_csh: '5000000' });
+            if (tr === KBSEC_TR.ASSET_EVAL.toLowerCase()) return jsonOk(DOMESTIC_ASSET_EVAL);
+            return jsonOk({});
+        });
+
+        await makeService().fetchBalance();
+
+        const logged = warn.mock.calls.filter((c) => String(c[1]).includes('USD 행이 없다'));
+        expect(logged).toHaveLength(1);
+        expect(logged[0]![0]).toMatchObject({
+            standardRates: ['0000.0000', '0000.0000', '0000.0000', '0000.0000', '0000.0000', '1360.4000'],
+            emptyRows: 5,
+        });
+        expect(JSON.stringify(logged[0]![0])).not.toContain('4321');
+        warn.mockRestore();
+    });
+
     it('USD 행이 있으면 통화구분명 경고를 남기지 않는다', async () => {
         const warn = vi.spyOn(logger, 'warn');
 
