@@ -7528,7 +7528,8 @@ export class kis extends Exchange {
 
     /**
      * 종목별 투자자 일별 동향(`investor-trade-by-stock-daily`, TR `FHPTJ04160001`). 국내만 지원한다. 투자자 유형 15종의 매수·매도를 정리한다.
-     * 입력 날짜(`params.until`의 한국 날짜)는 필수라 기본값을 오늘(한국 날짜)로 둔다. 수정주가와 기타 구분은 설명대로 공란이다. 연속조회는 따라가지 않는다.
+     * 입력 날짜(`params.until`의 한국 날짜)는 필수라 기본값을 오늘(한국 날짜)로 둔다. 수정주가와 기타 구분은 설명대로 공란이다. 한 호출은 입력 날짜까지 30영업일이고
+     * 연속조회가 없다(실계좌 응답의 `tr_cont`가 빈 값). 더 과거는 `params.until`을 옮겨 부른다. 거래일 15:40 전에는 KIS가 OPSQ2001로 거부한다.
      * `fetchInvestorTrading`(`inquire-investor`)은 개인, 외국인, 기관계 세 유형만 준다.
      */
     async fetchInvestorTradingHistory(symbol: string, since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<KisInvestorTradingDay[]> {
@@ -8685,7 +8686,8 @@ export class kis extends Exchange {
 
     /**
      * 해외 업종별 시세(`industry-theme`, TR `HHDFS76370000`). 거래소와 업종코드(`industryCode`, `fetchOverseasIndustries`의 `code`)는 필수다.
-     * 거래량 조건은 전체(`0`)다. 행을 순위 행 모양으로 정리하고(`seqn`을 순위로), 심볼에는 거래소의 거래 통화를 붙인다.
+     * 거래량 조건은 전체(`0`)다. 행을 순위 행 모양으로 정리하고(`seqn`을 순위로), 심볼에는 거래소의 거래 통화를 붙인다. 한 호출은 최대 100행이고,
+     * 업종 총수(응답 머리 `output1.trec`)가 100을 넘어도 다음 쪽을 받는 방법을 확인하지 못해 첫 100행만 돌려준다.
      */
     async fetchOverseasIndustryStocks(exchange: OverseasMarket, industryCode: string, params: Dict = {}): Promise<KisRankingItem[]> {
         const code = this.overseasExchange(exchange, 'fetchOverseasIndustryStocks');

@@ -1328,7 +1328,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:45", "ts/src/kis.ts:3139", "ts/src/kis.ts:9768", "ts/src/kis.ts:9781"],
+      "evidence": ["ts/src/spec/kis.json:45", "ts/src/kis.ts:3139", "ts/src/kis.ts:9770", "ts/src/kis.ts:9783"],
       "suggested": "fetchRanking('afterHourBalance')",
       "proposal": "확장",
       "verified": "real",
@@ -1404,7 +1404,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:46", "ts/src/kis.ts:3144", "ts/src/kis.ts:9768", "ts/src/kis.ts:9781"],
+      "evidence": ["ts/src/spec/kis.json:46", "ts/src/kis.ts:3144", "ts/src/kis.ts:9770", "ts/src/kis.ts:9783"],
       "suggested": "fetchRanking('bulkTransNum')",
       "proposal": "확장",
       "verified": "real",
@@ -1425,8 +1425,8 @@
         "ts/src/spec/kis.json:184",
         "ts/src/kis.ts:3321",
         "ts/src/kis.ts:3104",
-        "ts/src/kis.ts:9768",
-        "ts/src/kis.ts:9781"
+        "ts/src/kis.ts:9770",
+        "ts/src/kis.ts:9783"
       ],
       "suggested": "fetchLimitPriceHits",
       "proposal": "확장",
@@ -1524,7 +1524,7 @@
       "status": "extended",
       "method": "fetchMarketCalendar",
       "evidence": [
-        "ts/src/kis.ts:10491"
+        "ts/src/kis.ts:10493"
       ],
       "suggested": null,
       "proposal": null,
@@ -1544,7 +1544,7 @@
       "method": "fetchInterestRates",
       "evidence": [
         "ts/src/spec/kis.json:227",
-        "ts/src/kis.ts:8418"
+        "ts/src/kis.ts:8419"
       ],
       "suggested": "fetchBondRates",
       "proposal": "확장",
@@ -1602,7 +1602,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:56", "ts/src/kis.ts:3219", "ts/src/kis.ts:9768", "ts/src/kis.ts:9781"],
+      "evidence": ["ts/src/spec/kis.json:56", "ts/src/kis.ts:3219", "ts/src/kis.ts:9770", "ts/src/kis.ts:9783"],
       "suggested": "fetchRanking('creditBalance')",
       "proposal": "확장",
       "verified": "real",
@@ -1621,7 +1621,7 @@
       "method": "fetchCreditStocks",
       "evidence": [
         "ts/src/spec/kis.json:214",
-        "ts/src/kis.ts:8062"
+        "ts/src/kis.ts:8063"
       ],
       "suggested": "fetchCreditEligibleStocks",
       "proposal": "확장",
@@ -1699,7 +1699,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:47", "ts/src/kis.ts:3153", "ts/src/kis.ts:9768", "ts/src/kis.ts:9781"],
+      "evidence": ["ts/src/spec/kis.json:47", "ts/src/kis.ts:3153", "ts/src/kis.ts:9770", "ts/src/kis.ts:9783"],
       "suggested": "fetchRanking('disparity')",
       "proposal": "확장",
       "verified": "real",
@@ -1716,7 +1716,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:57", "ts/src/kis.ts:3227", "ts/src/kis.ts:9768", "ts/src/kis.ts:9781"],
+      "evidence": ["ts/src/spec/kis.json:57", "ts/src/kis.ts:3227", "ts/src/kis.ts:9770", "ts/src/kis.ts:9783"],
       "suggested": "fetchRanking('dividendRate')",
       "proposal": "확장",
       "verified": "real",
@@ -1816,8 +1816,8 @@
       "evidence": [
         "ts/src/spec/kis.json:66",
         "ts/src/kis.ts:3293",
-        "ts/src/kis.ts:9768",
-        "ts/src/kis.ts:9781"
+        "ts/src/kis.ts:9770",
+        "ts/src/kis.ts:9783"
       ],
       "suggested": "fetchClosingAuctionEstimates",
       "proposal": "확장",
@@ -1837,8 +1837,8 @@
       "method": "fetchExpectedIndexTrend",
       "evidence": [
         "ts/src/spec/kis.json:225",
-        "ts/src/kis.ts:8386",
-        "ts/src/kis.ts:8245"
+        "ts/src/kis.ts:8387",
+        "ts/src/kis.ts:8246"
       ],
       "suggested": "fetchIndexEstimates",
       "proposal": "확장",
@@ -1858,7 +1858,7 @@
       "method": "fetchExpectedPriceTrend",
       "evidence": [
         "ts/src/spec/kis.json:188",
-        "ts/src/kis.ts:7813"
+        "ts/src/kis.ts:7814"
       ],
       "suggested": "fetchExpectedPriceTrend",
       "proposal": "확장",
@@ -1878,8 +1878,8 @@
       "method": "fetchExpectedIndices",
       "evidence": [
         "ts/src/spec/kis.json:226",
-        "ts/src/kis.ts:8402",
-        "ts/src/kis.ts:8258"
+        "ts/src/kis.ts:8403",
+        "ts/src/kis.ts:8259"
       ],
       "suggested": "fetchIndexEstimates",
       "proposal": "확장",
@@ -1897,7 +1897,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:48", "ts/src/kis.ts:3158", "ts/src/kis.ts:9768", "ts/src/kis.ts:9781"],
+      "evidence": ["ts/src/spec/kis.json:48", "ts/src/kis.ts:3158", "ts/src/kis.ts:9770", "ts/src/kis.ts:9783"],
       "suggested": "fetchRanking('expectedUpdown')",
       "proposal": "확장",
       "verified": "real",
@@ -1917,7 +1917,7 @@
       "evidence": [
         "ts/src/spec/kis.json:195",
         "ts/src/kis.ts:3396",
-        "ts/src/kis.ts:8005"
+        "ts/src/kis.ts:8006"
       ],
       "suggested": "fetchFinancials('balanceSheet')",
       "proposal": "확장",
@@ -1938,7 +1938,7 @@
       "evidence": [
         "ts/src/spec/kis.json:197",
         "ts/src/kis.ts:3413",
-        "ts/src/kis.ts:8005"
+        "ts/src/kis.ts:8006"
       ],
       "suggested": "fetchFinancials('financialRatio')",
       "proposal": "확장",
@@ -1959,7 +1959,7 @@
       "evidence": [
         "ts/src/spec/kis.json:201",
         "ts/src/kis.ts:3436",
-        "ts/src/kis.ts:8005"
+        "ts/src/kis.ts:8006"
       ],
       "suggested": "fetchFinancials('growthRatio')",
       "proposal": "확장",
@@ -1980,7 +1980,7 @@
       "evidence": [
         "ts/src/spec/kis.json:196",
         "ts/src/kis.ts:3404",
-        "ts/src/kis.ts:8005"
+        "ts/src/kis.ts:8006"
       ],
       "suggested": "fetchFinancials('incomeStatement')",
       "proposal": "확장",
@@ -2001,7 +2001,7 @@
       "evidence": [
         "ts/src/spec/kis.json:199",
         "ts/src/kis.ts:3426",
-        "ts/src/kis.ts:8005"
+        "ts/src/kis.ts:8006"
       ],
       "suggested": "fetchFinancials('otherMajorRatios')",
       "proposal": "확장",
@@ -2022,7 +2022,7 @@
       "evidence": [
         "ts/src/spec/kis.json:198",
         "ts/src/kis.ts:3421",
-        "ts/src/kis.ts:8005"
+        "ts/src/kis.ts:8006"
       ],
       "suggested": "fetchFinancials('profitRatio')",
       "proposal": "확장",
@@ -2040,7 +2040,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:58", "ts/src/kis.ts:3235", "ts/src/kis.ts:9768", "ts/src/kis.ts:9781"],
+      "evidence": ["ts/src/spec/kis.json:58", "ts/src/kis.ts:3235", "ts/src/kis.ts:9770", "ts/src/kis.ts:9783"],
       "suggested": "fetchRanking('financeRatio')",
       "proposal": "확장",
       "verified": "real",
@@ -2060,7 +2060,7 @@
       "evidence": [
         "ts/src/spec/kis.json:200",
         "ts/src/kis.ts:3431",
-        "ts/src/kis.ts:8005"
+        "ts/src/kis.ts:8006"
       ],
       "suggested": "fetchFinancials('stabilityRatio')",
       "proposal": "확장",
@@ -2080,8 +2080,8 @@
       "method": "fetchRankings",
       "evidence": [
         "ts/src/spec/kis.json:44",
-        "ts/src/kis.ts:9768",
-        "ts/src/kis.ts:9804"
+        "ts/src/kis.ts:9770",
+        "ts/src/kis.ts:9806"
       ],
       "suggested": "fetchRanking('fluctuation')",
       "proposal": "확장",
@@ -2102,8 +2102,8 @@
       "evidence": [
         "ts/src/spec/kis.json:182",
         "ts/src/kis.ts:3303",
-        "ts/src/kis.ts:9768",
-        "ts/src/kis.ts:9781"
+        "ts/src/kis.ts:9770",
+        "ts/src/kis.ts:9783"
       ],
       "suggested": "fetchInvestorTrend",
       "proposal": "확장",
@@ -2123,7 +2123,7 @@
       "method": "fetchForeignTradeTicks",
       "evidence": [
         "ts/src/spec/kis.json:178",
-        "ts/src/kis.ts:7599"
+        "ts/src/kis.ts:7600"
       ],
       "suggested": "fetchForeignMemberTrend",
       "proposal": "확장",
@@ -2144,8 +2144,8 @@
       "evidence": [
         "ts/src/spec/kis.json:183",
         "ts/src/kis.ts:3311",
-        "ts/src/kis.ts:9768",
-        "ts/src/kis.ts:9781"
+        "ts/src/kis.ts:9770",
+        "ts/src/kis.ts:9783"
       ],
       "suggested": "fetchForeignMemberTrend",
       "proposal": "확장",
@@ -2183,7 +2183,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:59", "ts/src/kis.ts:3240", "ts/src/kis.ts:9768", "ts/src/kis.ts:9781"],
+      "evidence": ["ts/src/spec/kis.json:59", "ts/src/kis.ts:3240", "ts/src/kis.ts:9770", "ts/src/kis.ts:9783"],
       "suggested": "fetchRanking('htsTopView')",
       "proposal": "확장",
       "verified": "real",
@@ -2262,7 +2262,7 @@
       "method": "fetchAccountAssets",
       "evidence": [
         "ts/src/spec/kis.json:261",
-        "ts/src/kis.ts:8975"
+        "ts/src/kis.ts:8977"
       ],
       "suggested": "fetchAccountAssets",
       "proposal": "확장",
@@ -2320,7 +2320,7 @@
       "method": "fetchRealizedPnlBalance",
       "evidence": [
         "ts/src/spec/kis.json:262",
-        "ts/src/kis.ts:9015"
+        "ts/src/kis.ts:9017"
       ],
       "suggested": "fetchRealizedPnl",
       "proposal": "확장",
@@ -2362,7 +2362,7 @@
       "method": "fetchCreditBuyableAmount",
       "evidence": [
         "ts/src/spec/kis.json:263",
-        "ts/src/kis.ts:9063",
+        "ts/src/kis.ts:9065",
         "ts/src/kis.ts:3029"
       ],
       "suggested": "fetchCreditBuyingPower",
@@ -2382,7 +2382,7 @@
       "status": "integrated",
       "method": "fetchOrders",
       "evidence": [
-        "ts/src/kis.ts:10294"
+        "ts/src/kis.ts:10296"
       ],
       "suggested": null,
       "proposal": null,
@@ -2522,8 +2522,8 @@
       "method": "fetchIndexCategoryPrices",
       "evidence": [
         "ts/src/spec/kis.json:224",
-        "ts/src/kis.ts:8367",
-        "ts/src/kis.ts:8258"
+        "ts/src/kis.ts:8368",
+        "ts/src/kis.ts:8259"
       ],
       "suggested": "fetchSectorIndices",
       "proposal": "확장",
@@ -2543,7 +2543,7 @@
       "method": "fetchIndexDailyPrices",
       "evidence": [
         "ts/src/spec/kis.json:221",
-        "ts/src/kis.ts:8306"
+        "ts/src/kis.ts:8307"
       ],
       "suggested": "fetchIndexOHLCV",
       "proposal": "통합",
@@ -2563,7 +2563,7 @@
       "method": "fetchIndexQuote",
       "evidence": [
         "ts/src/spec/kis.json:220",
-        "ts/src/kis.ts:8275"
+        "ts/src/kis.ts:8276"
       ],
       "suggested": "fetchTicker",
       "proposal": "params 확대",
@@ -2583,8 +2583,8 @@
       "method": "fetchIndexTicks",
       "evidence": [
         "ts/src/spec/kis.json:223",
-        "ts/src/kis.ts:8353",
-        "ts/src/kis.ts:8245"
+        "ts/src/kis.ts:8354",
+        "ts/src/kis.ts:8246"
       ],
       "suggested": "fetchIndexTicks",
       "proposal": "확장",
@@ -2604,8 +2604,8 @@
       "method": "fetchIndexTimePrices",
       "evidence": [
         "ts/src/spec/kis.json:222",
-        "ts/src/kis.ts:8339",
-        "ts/src/kis.ts:8245"
+        "ts/src/kis.ts:8340",
+        "ts/src/kis.ts:8246"
       ],
       "suggested": "fetchIndexOHLCV",
       "proposal": "통합",
@@ -2645,8 +2645,8 @@
       "method": "fetchMarketInvestorTrading",
       "evidence": [
         "ts/src/spec/kis.json:186",
-        "ts/src/kis.ts:7753",
-        "ts/src/kis.ts:7564"
+        "ts/src/kis.ts:7754",
+        "ts/src/kis.ts:7565"
       ],
       "suggested": "fetchMarketInvestorTrend",
       "proposal": "확장",
@@ -2703,7 +2703,7 @@
       "method": "fetchMemberDailyTrading",
       "evidence": [
         "ts/src/spec/kis.json:179",
-        "ts/src/kis.ts:7625"
+        "ts/src/kis.ts:7626"
       ],
       "suggested": "fetchMemberTrend",
       "proposal": "확장",
@@ -2763,7 +2763,7 @@
       "method": "fetchDailyRealizedPnl",
       "evidence": [
         "ts/src/spec/kis.json:264",
-        "ts/src/kis.ts:9096"
+        "ts/src/kis.ts:9098"
       ],
       "suggested": "fetchPeriodProfit",
       "proposal": "확장",
@@ -2783,7 +2783,7 @@
       "method": "fetchDomesticSettlements",
       "evidence": [
         "ts/src/spec/kis.json:260",
-        "ts/src/kis.ts:9731"
+        "ts/src/kis.ts:9733"
       ],
       "suggested": "fetchTradeProfit",
       "proposal": "확장",
@@ -2860,7 +2860,7 @@
       "status": "integrated",
       "method": "fetchOpenOrders",
       "evidence": [
-        "ts/src/kis.ts:10199"
+        "ts/src/kis.ts:10201"
       ],
       "suggested": null,
       "proposal": null,
@@ -2880,7 +2880,7 @@
       "method": "fetchSellableQuantity",
       "evidence": [
         "ts/src/spec/kis.json:265",
-        "ts/src/kis.ts:9133"
+        "ts/src/kis.ts:9135"
       ],
       "suggested": "fetchSellableQuantity",
       "proposal": "확장",
@@ -3020,7 +3020,7 @@
       "method": "fetchIntegratedMargin",
       "evidence": [
         "ts/src/spec/kis.json:266",
-        "ts/src/kis.ts:9162"
+        "ts/src/kis.ts:9164"
       ],
       "suggested": "fetchIntegratedMargin",
       "proposal": "확장",
@@ -3040,8 +3040,8 @@
       "method": "fetchWatchlistGroups",
       "evidence": [
         "ts/src/spec/kis.json:191",
-        "ts/src/kis.ts:7901",
-        "ts/src/kis.ts:7891"
+        "ts/src/kis.ts:7902",
+        "ts/src/kis.ts:7892"
       ],
       "suggested": "fetchWatchlistGroups",
       "proposal": "확장",
@@ -3081,8 +3081,8 @@
       "method": "fetchWatchlist",
       "evidence": [
         "ts/src/spec/kis.json:192",
-        "ts/src/kis.ts:7924",
-        "ts/src/kis.ts:7891"
+        "ts/src/kis.ts:7925",
+        "ts/src/kis.ts:7892"
       ],
       "suggested": "fetchWatchlist",
       "proposal": "확장",
@@ -3102,8 +3102,8 @@
       "method": "fetchBrokerOpinions",
       "evidence": [
         "ts/src/spec/kis.json:215",
-        "ts/src/kis.ts:8125",
-        "ts/src/kis.ts:8080"
+        "ts/src/kis.ts:8126",
+        "ts/src/kis.ts:8081"
       ],
       "suggested": "fetchAnalystOpinions",
       "proposal": "확장",
@@ -3123,8 +3123,8 @@
       "method": "fetchInvestmentOpinions",
       "evidence": [
         "ts/src/spec/kis.json:216",
-        "ts/src/kis.ts:8104",
-        "ts/src/kis.ts:8080"
+        "ts/src/kis.ts:8105",
+        "ts/src/kis.ts:8081"
       ],
       "suggested": "fetchAnalystOpinions",
       "proposal": "확장",
@@ -3144,7 +3144,7 @@
       "method": "fetchProgramTradingByInvestor",
       "evidence": [
         "ts/src/spec/kis.json:185",
-        "ts/src/kis.ts:7722"
+        "ts/src/kis.ts:7723"
       ],
       "suggested": "fetchProgramTrading",
       "proposal": "확장",
@@ -3164,13 +3164,13 @@
       "method": "fetchInvestorTradingHistory",
       "evidence": [
         "ts/src/spec/kis.json:176",
-        "ts/src/kis.ts:7534",
+        "ts/src/kis.ts:7535",
         "ts/src/kis.ts:3585"
       ],
       "suggested": "fetchInvestorTrend",
       "proposal": "확장",
-      "verified": "spec-only",
-      "note": "TR FHPTJ04160001, 모의: 예제에 env_dv 없음; 공개 메서드는 `fetchInvestorTradingHistory(symbol, since?, limit?, { until })`(국내만). 투자자 유형 15종을 `KisInvestorAmounts`로 정리한다. 유형마다 필드 이름 규칙이 달라(_qty와 _vol, 외국인 등록·비등록의 askp·bidp) 표로 정했다. 입력 날짜는 필수라 기본값을 오늘로 둔다. 연속조회는 따라가지 않는다. 실계좌 호출(2026-09-24 03:49 KST)은 OPSQ2001(TIME LIMIT 00:00 ~ 15:40)로 거부돼 응답 필드는 확인하지 못했다. 호출일은 추석 연휴 휴장일이었다. 거래일 15:40 뒤에 다시 불러 시간 제한인지 확인해야 한다.",
+      "verified": "real",
+      "note": "TR FHPTJ04160001, 모의: 예제에 env_dv 없음; 공개 메서드는 `fetchInvestorTradingHistory(symbol, since?, limit?, { until })`(국내만). 투자자 유형 15종을 `KisInvestorAmounts`로 정리한다. 유형마다 필드 이름 규칙이 달라(_qty와 _vol, 외국인 등록·비등록의 askp·bidp) 표로 정했다. 입력 날짜는 필수라 기본값을 오늘로 둔다. 연속조회는 따라가지 않는다. 실계좌 호출(2026-09-24 03:49 KST)은 OPSQ2001(TIME LIMIT 00:00 ~ 15:40)로 거부됐다. 거래일 15:40 뒤(2026-09-28 15:47 KST)에는 응답이 왔고, 유형 15종의 필드 90개가 모두 응답에 있었다. 한 호출은 입력 날짜까지 30영업일이고(입력 20210104 → 2020-11-19~2021-01-04), 응답 헤더 tr_cont 가 빈 값이라 연속조회는 없다. 더 과거는 입력 날짜를 옮겨 부른다.",
       "spec": "https://github.com/koreainvestment/open-trading-api/blob/b4e6249/examples_llm/domestic_stock/investor_trade_by_stock_daily/investor_trade_by_stock_daily.py"
     },
     {
@@ -3185,7 +3185,7 @@
       "method": "fetchInvestorEstimates",
       "evidence": [
         "ts/src/spec/kis.json:177",
-        "ts/src/kis.ts:7580"
+        "ts/src/kis.ts:7581"
       ],
       "suggested": "fetchInvestorTrend",
       "proposal": "확장",
@@ -3206,7 +3206,7 @@
       "evidence": [
         "ts/src/spec/kis.json:203",
         "ts/src/kis.ts:3449",
-        "ts/src/kis.ts:8029"
+        "ts/src/kis.ts:8030"
       ],
       "suggested": "fetchCorporateActions('bonusIssue')",
       "proposal": "확장",
@@ -3227,7 +3227,7 @@
       "evidence": [
         "ts/src/spec/kis.json:208",
         "ts/src/kis.ts:3455",
-        "ts/src/kis.ts:8029"
+        "ts/src/kis.ts:8030"
       ],
       "suggested": "fetchCorporateActions('capitalReduction')",
       "proposal": "확장",
@@ -3248,7 +3248,7 @@
       "evidence": [
         "ts/src/spec/kis.json:204",
         "ts/src/kis.ts:3450",
-        "ts/src/kis.ts:8029"
+        "ts/src/kis.ts:8030"
       ],
       "suggested": "fetchCorporateActions('dividend')",
       "proposal": "확장",
@@ -3269,7 +3269,7 @@
       "evidence": [
         "ts/src/spec/kis.json:211",
         "ts/src/kis.ts:3459",
-        "ts/src/kis.ts:8029"
+        "ts/src/kis.ts:8030"
       ],
       "suggested": "fetchCorporateActions('forfeit')",
       "proposal": "확장",
@@ -3290,7 +3290,7 @@
       "evidence": [
         "ts/src/spec/kis.json:209",
         "ts/src/kis.ts:3457",
-        "ts/src/kis.ts:8029"
+        "ts/src/kis.ts:8030"
       ],
       "suggested": "fetchCorporateActions('listing')",
       "proposal": "확장",
@@ -3311,7 +3311,7 @@
       "evidence": [
         "ts/src/spec/kis.json:212",
         "ts/src/kis.ts:3460",
-        "ts/src/kis.ts:8029"
+        "ts/src/kis.ts:8030"
       ],
       "suggested": "fetchCorporateActions('mandatoryDeposit')",
       "proposal": "확장",
@@ -3332,7 +3332,7 @@
       "evidence": [
         "ts/src/spec/kis.json:206",
         "ts/src/kis.ts:3453",
-        "ts/src/kis.ts:8029"
+        "ts/src/kis.ts:8030"
       ],
       "suggested": "fetchCorporateActions('mergerSplit')",
       "proposal": "확장",
@@ -3353,7 +3353,7 @@
       "evidence": [
         "ts/src/spec/kis.json:202",
         "ts/src/kis.ts:3448",
-        "ts/src/kis.ts:8029"
+        "ts/src/kis.ts:8030"
       ],
       "suggested": "fetchCorporateActions('paidInCapital')",
       "proposal": "확장",
@@ -3374,7 +3374,7 @@
       "evidence": [
         "ts/src/spec/kis.json:210",
         "ts/src/kis.ts:3458",
-        "ts/src/kis.ts:8029"
+        "ts/src/kis.ts:8030"
       ],
       "suggested": "fetchCorporateActions('publicOffering')",
       "proposal": "확장",
@@ -3395,7 +3395,7 @@
       "evidence": [
         "ts/src/spec/kis.json:205",
         "ts/src/kis.ts:3451",
-        "ts/src/kis.ts:8029"
+        "ts/src/kis.ts:8030"
       ],
       "suggested": "fetchCorporateActions('appraisalRight')",
       "proposal": "확장",
@@ -3416,7 +3416,7 @@
       "evidence": [
         "ts/src/spec/kis.json:207",
         "ts/src/kis.ts:3454",
-        "ts/src/kis.ts:8029"
+        "ts/src/kis.ts:8030"
       ],
       "suggested": "fetchCorporateActions('parValueChange')",
       "proposal": "확장",
@@ -3437,7 +3437,7 @@
       "evidence": [
         "ts/src/spec/kis.json:213",
         "ts/src/kis.ts:3461",
-        "ts/src/kis.ts:8029"
+        "ts/src/kis.ts:8030"
       ],
       "suggested": "fetchCorporateActions('shareholderMeeting')",
       "proposal": "확장",
@@ -3457,7 +3457,7 @@
       "method": "fetchLendableStocks",
       "evidence": [
         "ts/src/spec/kis.json:219",
-        "ts/src/kis.ts:8202"
+        "ts/src/kis.ts:8203"
       ],
       "suggested": "fetchLendableStocks",
       "proposal": "확장",
@@ -3475,7 +3475,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:49", "ts/src/kis.ts:3167", "ts/src/kis.ts:9768", "ts/src/kis.ts:9781"],
+      "evidence": ["ts/src/spec/kis.json:49", "ts/src/kis.ts:3167", "ts/src/kis.ts:9770", "ts/src/kis.ts:9783"],
       "suggested": "fetchRanking('marketCap')",
       "proposal": "확장",
       "verified": "real",
@@ -3554,7 +3554,7 @@
       "method": "fetchMarketTime",
       "evidence": [
         "ts/src/spec/kis.json:228",
-        "ts/src/kis.ts:8441"
+        "ts/src/kis.ts:8442"
       ],
       "suggested": "fetchMarketTime",
       "proposal": "확장",
@@ -3572,7 +3572,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:60", "ts/src/kis.ts:3245", "ts/src/kis.ts:9768", "ts/src/kis.ts:9781"],
+      "evidence": ["ts/src/spec/kis.json:60", "ts/src/kis.ts:3245", "ts/src/kis.ts:9770", "ts/src/kis.ts:9783"],
       "suggested": "fetchRanking('marketValue')",
       "proposal": "확장",
       "verified": "real",
@@ -3651,7 +3651,7 @@
       "method": "fetchMarketFunds",
       "evidence": [
         "ts/src/spec/kis.json:187",
-        "ts/src/kis.ts:7784"
+        "ts/src/kis.ts:7785"
       ],
       "suggested": "fetchMarketFunds",
       "proposal": "확장",
@@ -3669,7 +3669,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:50", "ts/src/kis.ts:3172", "ts/src/kis.ts:3181", "ts/src/kis.ts:9768", "ts/src/kis.ts:9781"],
+      "evidence": ["ts/src/spec/kis.json:50", "ts/src/kis.ts:3172", "ts/src/kis.ts:3181", "ts/src/kis.ts:9770", "ts/src/kis.ts:9783"],
       "suggested": "fetchRanking('nearNewHighLow')",
       "proposal": "확장",
       "verified": "real",
@@ -3688,7 +3688,7 @@
       "method": "fetchNewsTitles",
       "evidence": [
         "ts/src/spec/kis.json:217",
-        "ts/src/kis.ts:8145"
+        "ts/src/kis.ts:8146"
       ],
       "suggested": "fetchNews",
       "proposal": "확장",
@@ -3768,7 +3768,7 @@
       "method": "fetchReservedOrders",
       "evidence": [
         "ts/src/spec/kis.json:267",
-        "ts/src/kis.ts:9190"
+        "ts/src/kis.ts:9192"
       ],
       "suggested": "fetchReservedOrders",
       "proposal": "확장",
@@ -3808,8 +3808,8 @@
       "status": "integrated",
       "method": "cancelOrder",
       "evidence": [
-        "ts/src/kis.ts:10017",
-        "ts/src/kis.ts:10069"
+        "ts/src/kis.ts:10019",
+        "ts/src/kis.ts:10071"
       ],
       "suggested": "editOrder",
       "proposal": "통합",
@@ -3887,7 +3887,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:61", "ts/src/kis.ts:3250", "ts/src/kis.ts:9768", "ts/src/kis.ts:9781"],
+      "evidence": ["ts/src/spec/kis.json:61", "ts/src/kis.ts:3250", "ts/src/kis.ts:9770", "ts/src/kis.ts:9783"],
       "suggested": "fetchRanking('overtimeExpectedFluctuation')",
       "proposal": "확장",
       "verified": "spec-only",
@@ -3904,7 +3904,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:62", "ts/src/kis.ts:3259", "ts/src/kis.ts:9768", "ts/src/kis.ts:9781"],
+      "evidence": ["ts/src/spec/kis.json:62", "ts/src/kis.ts:3259", "ts/src/kis.ts:9770", "ts/src/kis.ts:9783"],
       "suggested": "fetchRanking('overtimeFluctuation')",
       "proposal": "확장",
       "verified": "spec-only",
@@ -3921,7 +3921,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:63", "ts/src/kis.ts:3268", "ts/src/kis.ts:9768", "ts/src/kis.ts:9781"],
+      "evidence": ["ts/src/spec/kis.json:63", "ts/src/kis.ts:3268", "ts/src/kis.ts:9770", "ts/src/kis.ts:9783"],
       "suggested": "fetchRanking('overtimeVolume')",
       "proposal": "확장",
       "verified": "real",
@@ -3940,7 +3940,7 @@
       "method": "fetchVolumeProfile",
       "evidence": [
         "ts/src/spec/kis.json:189",
-        "ts/src/kis.ts:7841"
+        "ts/src/kis.ts:7842"
       ],
       "suggested": "fetchVolumeProfile",
       "proposal": "확장",
@@ -3960,7 +3960,7 @@
       "method": "fetchPensionBalance",
       "evidence": [
         "ts/src/spec/kis.json:269",
-        "ts/src/kis.ts:9277"
+        "ts/src/kis.ts:9279"
       ],
       "suggested": "fetchPensionBalance",
       "proposal": "확장",
@@ -3980,7 +3980,7 @@
       "method": "fetchPensionOrders",
       "evidence": [
         "ts/src/spec/kis.json:270",
-        "ts/src/kis.ts:9323"
+        "ts/src/kis.ts:9325"
       ],
       "suggested": "fetchPensionOpenOrders",
       "proposal": "확장",
@@ -4000,7 +4000,7 @@
       "method": "fetchPensionDeposit",
       "evidence": [
         "ts/src/spec/kis.json:271",
-        "ts/src/kis.ts:9360"
+        "ts/src/kis.ts:9362"
       ],
       "suggested": "fetchPensionDeposit",
       "proposal": "확장",
@@ -4020,7 +4020,7 @@
       "method": "fetchPensionExecutionBalance",
       "evidence": [
         "ts/src/spec/kis.json:272",
-        "ts/src/kis.ts:9380"
+        "ts/src/kis.ts:9382"
       ],
       "suggested": "fetchPensionBalance",
       "proposal": "확장",
@@ -4040,7 +4040,7 @@
       "method": "fetchPensionBuyableAmount",
       "evidence": [
         "ts/src/spec/kis.json:273",
-        "ts/src/kis.ts:9422"
+        "ts/src/kis.ts:9424"
       ],
       "suggested": "fetchPensionBuyingPower",
       "proposal": "확장",
@@ -4060,7 +4060,7 @@
       "method": "fetchAccountRights",
       "evidence": [
         "ts/src/spec/kis.json:268",
-        "ts/src/kis.ts:9235"
+        "ts/src/kis.ts:9237"
       ],
       "suggested": "fetchAccountRights",
       "proposal": "확장",
@@ -4078,7 +4078,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:51", "ts/src/kis.ts:3190", "ts/src/kis.ts:9768", "ts/src/kis.ts:9781"],
+      "evidence": ["ts/src/spec/kis.json:51", "ts/src/kis.ts:3190", "ts/src/kis.ts:9770", "ts/src/kis.ts:9783"],
       "suggested": "fetchRanking('preferredDisparity')",
       "proposal": "확장",
       "verified": "real",
@@ -4095,7 +4095,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:64", "ts/src/kis.ts:3277", "ts/src/kis.ts:9768", "ts/src/kis.ts:9781"],
+      "evidence": ["ts/src/spec/kis.json:64", "ts/src/kis.ts:3277", "ts/src/kis.ts:9770", "ts/src/kis.ts:9783"],
       "suggested": "fetchRanking('profitAssetIndex')",
       "proposal": "확장",
       "verified": "real",
@@ -4114,8 +4114,8 @@
       "method": "fetchProgramTradingTicks",
       "evidence": [
         "ts/src/spec/kis.json:180",
-        "ts/src/kis.ts:7667",
-        "ts/src/kis.ts:7653"
+        "ts/src/kis.ts:7668",
+        "ts/src/kis.ts:7654"
       ],
       "suggested": "fetchProgramTrading",
       "proposal": "확장",
@@ -4135,8 +4135,8 @@
       "method": "fetchProgramTradingHistory",
       "evidence": [
         "ts/src/spec/kis.json:181",
-        "ts/src/kis.ts:7689",
-        "ts/src/kis.ts:7653"
+        "ts/src/kis.ts:7690",
+        "ts/src/kis.ts:7654"
       ],
       "suggested": "fetchProgramTrading",
       "proposal": "확장",
@@ -4216,8 +4216,8 @@
       "method": "fetchScreenerResult",
       "evidence": [
         "ts/src/spec/kis.json:194",
-        "ts/src/kis.ts:7970",
-        "ts/src/kis.ts:7891"
+        "ts/src/kis.ts:7971",
+        "ts/src/kis.ts:7892"
       ],
       "suggested": "fetchScreenerResult",
       "proposal": "확장",
@@ -4237,8 +4237,8 @@
       "method": "fetchScreeners",
       "evidence": [
         "ts/src/spec/kis.json:193",
-        "ts/src/kis.ts:7953",
-        "ts/src/kis.ts:7891"
+        "ts/src/kis.ts:7954",
+        "ts/src/kis.ts:7892"
       ],
       "suggested": "fetchScreeners",
       "proposal": "확장",
@@ -4256,7 +4256,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:52", "ts/src/kis.ts:3195", "ts/src/kis.ts:9768", "ts/src/kis.ts:9781"],
+      "evidence": ["ts/src/spec/kis.json:52", "ts/src/kis.ts:3195", "ts/src/kis.ts:9770", "ts/src/kis.ts:9783"],
       "suggested": "fetchRanking('quoteBalance')",
       "proposal": "확장",
       "verified": "real",
@@ -4275,7 +4275,7 @@
       "method": "fetchProductInfo",
       "evidence": [
         "ts/src/spec/kis.json:218",
-        "ts/src/kis.ts:8174"
+        "ts/src/kis.ts:8175"
       ],
       "suggested": "fetchInstrumentInfo",
       "proposal": "확장",
@@ -4295,7 +4295,7 @@
       "method": "fetchStocks",
       "evidence": [
         "ts/src/kis.ts:4890",
-        "ts/src/kis.ts:9875"
+        "ts/src/kis.ts:9877"
       ],
       "suggested": "fetchStockInfo",
       "proposal": "확장",
@@ -4313,7 +4313,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:65", "ts/src/kis.ts:3282", "ts/src/kis.ts:9768", "ts/src/kis.ts:9781"],
+      "evidence": ["ts/src/spec/kis.json:65", "ts/src/kis.ts:3282", "ts/src/kis.ts:9770", "ts/src/kis.ts:9783"],
       "suggested": "fetchRanking('shortSale')",
       "proposal": "확장",
       "verified": "real",
@@ -4330,7 +4330,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:53", "ts/src/kis.ts:3200", "ts/src/kis.ts:9768", "ts/src/kis.ts:9781"],
+      "evidence": ["ts/src/spec/kis.json:53", "ts/src/kis.ts:3200", "ts/src/kis.ts:9770", "ts/src/kis.ts:9783"],
       "suggested": "fetchRanking('topInterest')",
       "proposal": "확장",
       "verified": "real",
@@ -4347,7 +4347,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:54", "ts/src/kis.ts:3205", "ts/src/kis.ts:9768", "ts/src/kis.ts:9781"],
+      "evidence": ["ts/src/spec/kis.json:54", "ts/src/kis.ts:3205", "ts/src/kis.ts:9770", "ts/src/kis.ts:9783"],
       "suggested": "fetchRanking('tradedByCompany')",
       "proposal": "확장",
       "verified": "spec-only",
@@ -4366,7 +4366,7 @@
       "method": "fetchTradeShareByAmount",
       "evidence": [
         "ts/src/spec/kis.json:190",
-        "ts/src/kis.ts:7866"
+        "ts/src/kis.ts:7867"
       ],
       "suggested": "fetchTradeShareByAmount",
       "proposal": "확장",
@@ -4384,7 +4384,7 @@
       ],
       "status": "extended",
       "method": "fetchRankings",
-      "evidence": ["ts/src/spec/kis.json:55", "ts/src/kis.ts:3214", "ts/src/kis.ts:9768", "ts/src/kis.ts:9781"],
+      "evidence": ["ts/src/spec/kis.json:55", "ts/src/kis.ts:3214", "ts/src/kis.ts:9770", "ts/src/kis.ts:9783"],
       "suggested": "fetchRanking('volumePower')",
       "proposal": "확장",
       "verified": "real",
@@ -4403,8 +4403,8 @@
       "method": "fetchRankings",
       "evidence": [
         "ts/src/spec/kis.json:43",
-        "ts/src/kis.ts:9768",
-        "ts/src/kis.ts:9835"
+        "ts/src/kis.ts:9770",
+        "ts/src/kis.ts:9837"
       ],
       "suggested": "fetchRanking('volume')",
       "proposal": "확장",
@@ -4546,8 +4546,8 @@
         "ts/src/spec/kis.json:88",
         "ts/src/kis.ts:3372",
         "ts/src/kis.ts:3124",
-        "ts/src/kis.ts:9768",
-        "ts/src/kis.ts:9781"
+        "ts/src/kis.ts:9770",
+        "ts/src/kis.ts:9783"
       ],
       "suggested": "fetchRanking('elwIndicator')",
       "proposal": "확장",
@@ -4669,8 +4669,8 @@
         "ts/src/spec/kis.json:90",
         "ts/src/kis.ts:3378",
         "ts/src/kis.ts:3124",
-        "ts/src/kis.ts:9768",
-        "ts/src/kis.ts:9781"
+        "ts/src/kis.ts:9770",
+        "ts/src/kis.ts:9783"
       ],
       "suggested": "fetchRanking('elwQuickChange')",
       "proposal": "확장",
@@ -4692,8 +4692,8 @@
         "ts/src/spec/kis.json:89",
         "ts/src/kis.ts:3374",
         "ts/src/kis.ts:3124",
-        "ts/src/kis.ts:9768",
-        "ts/src/kis.ts:9781"
+        "ts/src/kis.ts:9770",
+        "ts/src/kis.ts:9783"
       ],
       "suggested": "fetchRanking('elwSensitivity')",
       "proposal": "확장",
@@ -4795,8 +4795,8 @@
         "ts/src/spec/kis.json:86",
         "ts/src/kis.ts:3361",
         "ts/src/kis.ts:3124",
-        "ts/src/kis.ts:9768",
-        "ts/src/kis.ts:9781"
+        "ts/src/kis.ts:9770",
+        "ts/src/kis.ts:9783"
       ],
       "suggested": "fetchRanking('elwUpdownRate')",
       "proposal": "확장",
@@ -4898,8 +4898,8 @@
         "ts/src/spec/kis.json:87",
         "ts/src/kis.ts:3368",
         "ts/src/kis.ts:3124",
-        "ts/src/kis.ts:9768",
-        "ts/src/kis.ts:9781"
+        "ts/src/kis.ts:9770",
+        "ts/src/kis.ts:9783"
       ],
       "suggested": "fetchRanking('elwVolume')",
       "proposal": "확장",
@@ -5737,7 +5737,7 @@
       "method": "fetchOverseasAlgoOrders",
       "evidence": [
         "ts/src/spec/kis.json:280",
-        "ts/src/kis.ts:9448"
+        "ts/src/kis.ts:9450"
       ],
       "suggested": "fetchAlgoOrderIds",
       "proposal": "확장",
@@ -5777,7 +5777,7 @@
       "method": "fetchBreakingNewsTitles",
       "evidence": [
         "ts/src/spec/kis.json:248",
-        "ts/src/kis.ts:8737"
+        "ts/src/kis.ts:8739"
       ],
       "suggested": "fetchNews",
       "proposal": "확장",
@@ -5817,7 +5817,7 @@
       "method": "fetchOverseasLoanableStocks",
       "evidence": [
         "ts/src/spec/kis.json:251",
-        "ts/src/kis.ts:8834",
+        "ts/src/kis.ts:8836",
         "ts/src/kis.ts:3059"
       ],
       "suggested": "fetchLoanableStocks",
@@ -5838,7 +5838,7 @@
       "method": "fetchSettlementDates",
       "evidence": [
         "ts/src/spec/kis.json:247",
-        "ts/src/kis.ts:8714"
+        "ts/src/kis.ts:8716"
       ],
       "suggested": "fetchSettlementDates",
       "proposal": "확장",
@@ -5958,7 +5958,7 @@
       "method": "fetchOverseasMarginByCurrency",
       "evidence": [
         "ts/src/spec/kis.json:281",
-        "ts/src/kis.ts:9473"
+        "ts/src/kis.ts:9475"
       ],
       "suggested": "fetchForeignMargin",
       "proposal": "확장",
@@ -5978,8 +5978,8 @@
       "method": "fetchOverseasIndustries",
       "evidence": [
         "ts/src/spec/kis.json:245",
-        "ts/src/kis.ts:8673",
-        "ts/src/kis.ts:8464"
+        "ts/src/kis.ts:8674",
+        "ts/src/kis.ts:8465"
       ],
       "suggested": "fetchIndustryPrices",
       "proposal": "확장",
@@ -5999,13 +5999,13 @@
       "method": "fetchOverseasIndustryStocks",
       "evidence": [
         "ts/src/spec/kis.json:246",
-        "ts/src/kis.ts:8690",
-        "ts/src/kis.ts:8464"
+        "ts/src/kis.ts:8692",
+        "ts/src/kis.ts:8465"
       ],
       "suggested": "fetchIndustryPrices",
       "proposal": "확장",
       "verified": "real",
-      "note": "TR HHDFS76370000, 모의: 예제에 env_dv 없음; 공개 메서드는 `fetchOverseasIndustryStocks(exchange, industryCode)`. 거래량 조건은 전체(0)다. 순위 행 모양으로 정리하고 seqn을 순위로 쓴다. 심볼에는 거래소의 거래 통화를 붙인다.",
+      "note": "TR HHDFS76370000, 모의: 예제에 env_dv 없음; 공개 메서드는 `fetchOverseasIndustryStocks(exchange, industryCode)`. 거래량 조건은 전체(0)다. 순위 행 모양으로 정리하고 seqn을 순위로 쓴다. 심볼에는 거래소의 거래 통화를 붙인다. 실계좌(2026-09-28): 한 호출은 최대 100행(output1 crec)이고 trec 가 그 업종의 총수다. 100을 넘는 업종에 요청 헤더 tr_cont N 을 주면 첫 쪽과 같은 100행이 다시 와서 다음 쪽을 받지 못한다(연속 키 미확인). 업종은 NASDAQ·NYSE 모두 같은 42개(000 전체 포함)이고, 000 을 뺀 업종 trec 합은 전체의 NASDAQ 27%(1,390/5,243), NYSE 46%(1,298/2,844)다.",
       "spec": "https://github.com/koreainvestment/open-trading-api/blob/b4e6249/examples_llm/overseas_stock/industry_theme/industry_theme.py"
     },
     {
@@ -6040,8 +6040,8 @@
       "method": "fetchOverseasOrderBook",
       "evidence": [
         "ts/src/spec/kis.json:239",
-        "ts/src/kis.ts:8475",
-        "ts/src/kis.ts:8456"
+        "ts/src/kis.ts:8476",
+        "ts/src/kis.ts:8457"
       ],
       "suggested": "fetchOrderBook",
       "proposal": "params 확대",
@@ -6079,7 +6079,7 @@
       "status": "integrated",
       "method": "fetchOrders",
       "evidence": [
-        "ts/src/kis.ts:10323"
+        "ts/src/kis.ts:10325"
       ],
       "suggested": null,
       "proposal": null,
@@ -6099,7 +6099,7 @@
       "method": "fetchGlobalOHLCV",
       "evidence": [
         "ts/src/spec/kis.json:242",
-        "ts/src/kis.ts:8578"
+        "ts/src/kis.ts:8579"
       ],
       "suggested": "fetchIndexOHLCV",
       "proposal": "통합",
@@ -6118,7 +6118,7 @@
       "status": "integrated",
       "method": "fetchOpenOrders",
       "evidence": [
-        "ts/src/kis.ts:10212"
+        "ts/src/kis.ts:10214"
       ],
       "suggested": null,
       "proposal": null,
@@ -6138,7 +6138,7 @@
       "method": "fetchOverseasSettlementBalance",
       "evidence": [
         "ts/src/spec/kis.json:282",
-        "ts/src/kis.ts:9499"
+        "ts/src/kis.ts:9501"
       ],
       "suggested": "fetchSettlementBalance",
       "proposal": "확장",
@@ -6158,7 +6158,7 @@
       "method": "fetchOverseasRealizedPnl",
       "evidence": [
         "ts/src/spec/kis.json:283",
-        "ts/src/kis.ts:9552"
+        "ts/src/kis.ts:9554"
       ],
       "suggested": "fetchPeriodProfit",
       "proposal": "확장",
@@ -6178,7 +6178,7 @@
       "method": "fetchOverseasTransactions",
       "evidence": [
         "ts/src/spec/kis.json:284",
-        "ts/src/kis.ts:9602"
+        "ts/src/kis.ts:9604"
       ],
       "suggested": "fetchLedger",
       "proposal": "통합",
@@ -6217,7 +6217,7 @@
       "method": "fetchOverseasBuyableAmount",
       "evidence": [
         "ts/src/spec/kis.json:285",
-        "ts/src/kis.ts:9651"
+        "ts/src/kis.ts:9653"
       ],
       "suggested": "fetchBuyingPower",
       "proposal": "확장",
@@ -6237,7 +6237,7 @@
       "method": "fetchOverseasScreener",
       "evidence": [
         "ts/src/spec/kis.json:250",
-        "ts/src/kis.ts:8800",
+        "ts/src/kis.ts:8802",
         "ts/src/kis.ts:3044"
       ],
       "suggested": "fetchScreenerResult",
@@ -6258,7 +6258,7 @@
       "method": "fetchGlobalMinuteBars",
       "evidence": [
         "ts/src/spec/kis.json:243",
-        "ts/src/kis.ts:8616"
+        "ts/src/kis.ts:8617"
       ],
       "suggested": "fetchIndexOHLCV",
       "proposal": "통합",
@@ -6278,8 +6278,8 @@
       "method": "fetchOverseasMinuteOHLCV",
       "evidence": [
         "ts/src/spec/kis.json:244",
-        "ts/src/kis.ts:8644",
-        "ts/src/kis.ts:8456"
+        "ts/src/kis.ts:8645",
+        "ts/src/kis.ts:8457"
       ],
       "suggested": "fetchOHLCV",
       "proposal": "params 확대",
@@ -6301,8 +6301,8 @@
         "ts/src/spec/kis.json:229",
         "ts/src/kis.ts:3335",
         "ts/src/kis.ts:3064",
-        "ts/src/kis.ts:9768",
-        "ts/src/kis.ts:9781"
+        "ts/src/kis.ts:9770",
+        "ts/src/kis.ts:9783"
       ],
       "suggested": "fetchRanking('overseasMarketCap')",
       "proposal": "확장",
@@ -6325,8 +6325,8 @@
         "ts/src/kis.ts:3337",
         "ts/src/kis.ts:3339",
         "ts/src/kis.ts:3064",
-        "ts/src/kis.ts:9768",
-        "ts/src/kis.ts:9781"
+        "ts/src/kis.ts:9770",
+        "ts/src/kis.ts:9783"
       ],
       "suggested": "fetchRanking('overseasNewHighLow')",
       "proposal": "확장",
@@ -6346,7 +6346,7 @@
       "method": "fetchOverseasNewsTitles",
       "evidence": [
         "ts/src/spec/kis.json:249",
-        "ts/src/kis.ts:8766"
+        "ts/src/kis.ts:8768"
       ],
       "suggested": "fetchNews",
       "proposal": "확장",
@@ -6365,7 +6365,7 @@
       "status": "integrated",
       "method": "createOrder",
       "evidence": [
-        "ts/src/kis.ts:9988"
+        "ts/src/kis.ts:9990"
       ],
       "suggested": null,
       "proposal": null,
@@ -6425,7 +6425,7 @@
       "method": "fetchOverseasReservedOrders",
       "evidence": [
         "ts/src/spec/kis.json:286",
-        "ts/src/kis.ts:9683"
+        "ts/src/kis.ts:9685"
       ],
       "suggested": "fetchReservedOrders",
       "proposal": "확장",
@@ -6444,8 +6444,8 @@
       "status": "integrated",
       "method": "cancelOrder",
       "evidence": [
-        "ts/src/kis.ts:10042",
-        "ts/src/kis.ts:10114"
+        "ts/src/kis.ts:10044",
+        "ts/src/kis.ts:10116"
       ],
       "suggested": "editOrder",
       "proposal": "통합",
@@ -6465,7 +6465,7 @@
       "method": "fetchOverseasCorporateActions",
       "evidence": [
         "ts/src/spec/kis.json:252",
-        "ts/src/kis.ts:8873"
+        "ts/src/kis.ts:8875"
       ],
       "suggested": "fetchCorporateActions",
       "proposal": "확장",
@@ -6504,8 +6504,8 @@
       "method": "fetchOverseasStockDetail",
       "evidence": [
         "ts/src/spec/kis.json:240",
-        "ts/src/kis.ts:8495",
-        "ts/src/kis.ts:8456"
+        "ts/src/kis.ts:8496",
+        "ts/src/kis.ts:8457"
       ],
       "suggested": "fetchTicker",
       "proposal": "params 확대",
@@ -6528,8 +6528,8 @@
         "ts/src/kis.ts:3341",
         "ts/src/kis.ts:3343",
         "ts/src/kis.ts:3064",
-        "ts/src/kis.ts:9768",
-        "ts/src/kis.ts:9781"
+        "ts/src/kis.ts:9770",
+        "ts/src/kis.ts:9783"
       ],
       "suggested": "fetchRanking('overseasPriceFluct')",
       "proposal": "확장",
@@ -6549,8 +6549,8 @@
       "method": "fetchOverseasTradeTicks",
       "evidence": [
         "ts/src/spec/kis.json:241",
-        "ts/src/kis.ts:8544",
-        "ts/src/kis.ts:8456"
+        "ts/src/kis.ts:8545",
+        "ts/src/kis.ts:8457"
       ],
       "suggested": "fetchTrades",
       "proposal": "통합",
@@ -6570,7 +6570,7 @@
       "method": "fetchOverseasRights",
       "evidence": [
         "ts/src/spec/kis.json:253",
-        "ts/src/kis.ts:8915",
+        "ts/src/kis.ts:8917",
         "ts/src/kis.ts:3054"
       ],
       "suggested": "fetchCorporateActions",
@@ -6591,7 +6591,7 @@
       "method": "fetchOverseasProductInfo",
       "evidence": [
         "ts/src/spec/kis.json:254",
-        "ts/src/kis.ts:8941",
+        "ts/src/kis.ts:8943",
         "ts/src/kis.ts:3049"
       ],
       "suggested": "fetchInstrumentInfo",
@@ -6614,8 +6614,8 @@
         "ts/src/spec/kis.json:235",
         "ts/src/kis.ts:3353",
         "ts/src/kis.ts:3064",
-        "ts/src/kis.ts:9768",
-        "ts/src/kis.ts:9781"
+        "ts/src/kis.ts:9770",
+        "ts/src/kis.ts:9783"
       ],
       "suggested": "fetchRanking('overseasTradeGrowth')",
       "proposal": "확장",
@@ -6637,8 +6637,8 @@
         "ts/src/spec/kis.json:234",
         "ts/src/kis.ts:3351",
         "ts/src/kis.ts:3064",
-        "ts/src/kis.ts:9768",
-        "ts/src/kis.ts:9781"
+        "ts/src/kis.ts:9770",
+        "ts/src/kis.ts:9783"
       ],
       "suggested": "fetchRanking('overseasTradeAmount')",
       "proposal": "확장",
@@ -6660,8 +6660,8 @@
         "ts/src/spec/kis.json:236",
         "ts/src/kis.ts:3355",
         "ts/src/kis.ts:3064",
-        "ts/src/kis.ts:9768",
-        "ts/src/kis.ts:9781"
+        "ts/src/kis.ts:9770",
+        "ts/src/kis.ts:9783"
       ],
       "suggested": "fetchRanking('overseasTradeTurnover')",
       "proposal": "확장",
@@ -6683,8 +6683,8 @@
         "ts/src/spec/kis.json:233",
         "ts/src/kis.ts:3349",
         "ts/src/kis.ts:3064",
-        "ts/src/kis.ts:9768",
-        "ts/src/kis.ts:9781"
+        "ts/src/kis.ts:9770",
+        "ts/src/kis.ts:9783"
       ],
       "suggested": "fetchRanking('overseasVolume')",
       "proposal": "확장",
@@ -6707,8 +6707,8 @@
         "ts/src/kis.ts:3345",
         "ts/src/kis.ts:3347",
         "ts/src/kis.ts:3064",
-        "ts/src/kis.ts:9768",
-        "ts/src/kis.ts:9781"
+        "ts/src/kis.ts:9770",
+        "ts/src/kis.ts:9783"
       ],
       "suggested": "fetchRanking('overseasUpdownRate')",
       "proposal": "확장",
@@ -6730,8 +6730,8 @@
         "ts/src/spec/kis.json:237",
         "ts/src/kis.ts:3357",
         "ts/src/kis.ts:3064",
-        "ts/src/kis.ts:9768",
-        "ts/src/kis.ts:9781"
+        "ts/src/kis.ts:9770",
+        "ts/src/kis.ts:9783"
       ],
       "suggested": "fetchRanking('overseasVolumePower')",
       "proposal": "확장",
@@ -6753,8 +6753,8 @@
         "ts/src/spec/kis.json:238",
         "ts/src/kis.ts:3359",
         "ts/src/kis.ts:3064",
-        "ts/src/kis.ts:9768",
-        "ts/src/kis.ts:9781"
+        "ts/src/kis.ts:9770",
+        "ts/src/kis.ts:9783"
       ],
       "suggested": "fetchRanking('overseasVolumeSurge')",
       "proposal": "확장",
