@@ -72,6 +72,11 @@ const US_BODIES = {
     renamedCodeNoCash: { Record2: [{ mkt_clsf_nm: '나스닥', crncy_clsf_nm: 'USD', shrt_is_cd: 'JNJ', hld_q_p6: '2' }] },
     /** 종목 그리드가 객체 안에 들어 있다 */
     nestedGrid: { Record1: CASH_GRID, Output2: { grid: [{ shrt_is_cd: 'JNJ', hld_q_p6: '2' }] } },
+    /** 운영 로그(2026-09-27)의 모양. 예수금 그리드 5행의 통화구분명이 모두 공백 10칸이라 달러 행을 가리지 못한다 */
+    blankCurrencyNames: {
+        Record1: Array.from({ length: 5 }, () => ({ crncy_clsf_nm: '          ', tfnd: '0', ordr_psbl_amt_p2: '0' })),
+        Record2: OVERSEAS_OK.Record2,
+    },
 };
 let usMode: UsMode = 'ok';
 let depositFails = false;
@@ -166,7 +171,29 @@ describe('KB fetchBalance — 완전성 상태', () => {
 
         expect(b.info.readStatus).toBe('COMPLETE');
         expect(b.info.unreadMarkets).toEqual([]);
+        expect(b.info.unreadCurrencies).toEqual([]);
         expect(codesOf(b)).toEqual(expect.arrayContaining(['005930', 'JNJ']));
+    });
+
+    it('미국 시장은 읽었는데 달러 예수금 행을 가리지 못하면 USD 항목이 없고 unreadCurrencies 에 USD 가 있다', async () => {
+        usMode = 'blankCurrencyNames';
+
+        const b = await makeService().fetchBalance();
+
+        expect(b.info.readStatus).toBe('COMPLETE');
+        expect(b.info.unreadMarkets).toEqual([]);
+        expect(b.info.unreadCurrencies).toEqual(['USD']);
+        expect(codesOf(b)).not.toContain('USD');
+        expect(codesOf(b)).toContain('JNJ');
+    });
+
+    it('미국 시장을 못 읽었으면 USD 는 unreadMarkets 가 알리고 unreadCurrencies 는 비어 있다', async () => {
+        usMode = 'timeout';
+
+        const b = await makeService().fetchBalance();
+
+        expect(b.info.unreadMarkets).toEqual(['US']);
+        expect(b.info.unreadCurrencies).toEqual([]);
     });
 
     it('해외 조회가 실패하면 PARTIAL 이다 — 국내 보유는 담기고, 해외 시장이 읽지 못한 시장으로 표시된다', async () => {
@@ -570,6 +597,34 @@ describe('KB fetchBalance — 달러 예수금 행', () => {
         const text = JSON.stringify(logged[0]![0]);
         expect(text).not.toContain('1234');
         expect(text).not.toContain('78.9');
+        warn.mockRestore();
+    });
+
+    it('USD 행이 없으면 행별 기준환율과 빈 행 수도 남긴다. 금액은 남기지 않는다', async () => {
+        const warn = vi.spyOn(logger, 'warn');
+        // 실계좌(2026-09-28) 모양의 빈 행 5개와, 통화구분명만 빈 행 1개.
+        const empty = { crncy_clsf_nm: '          ', std_exch_r: '0000.0000', cnvr_exch_r_p4: '0000.0000', tfnd: '0', ordr_psbl_amt_p2: '0' };
+        const unnamed = { crncy_clsf_nm: '          ', std_exch_r: '1360.4000', cnvr_exch_r_p4: '1360.4000', tfnd: '4321.09', ordr_psbl_amt_p2: '4321.09' };
+        const cashRows = [...Array.from({ length: 5 }, () => empty), unnamed];
+        mockFetch.mockImplementation(async (url: string) => {
+            const u = String(url);
+            if (u.includes('/oauth2/token')) return tokenOk();
+            const tr = u.split('/api/v1/')[1] ?? '';
+            if (tr === KBSEC_TR.HOLDINGS_US.toLowerCase()) return jsonOk({ Record1: cashRows, Record2: OVERSEAS_OK.Record2 });
+            if (tr === KBSEC_TR.DEPOSIT.toLowerCase()) return jsonOk({ ordr_psbl_csh: '5000000' });
+            if (tr === KBSEC_TR.ASSET_EVAL.toLowerCase()) return jsonOk(DOMESTIC_ASSET_EVAL);
+            return jsonOk({});
+        });
+
+        await makeService().fetchBalance();
+
+        const logged = warn.mock.calls.filter((c) => String(c[1]).includes('USD 행이 없다'));
+        expect(logged).toHaveLength(1);
+        expect(logged[0]![0]).toMatchObject({
+            standardRates: ['0000.0000', '0000.0000', '0000.0000', '0000.0000', '0000.0000', '1360.4000'],
+            emptyRows: 5,
+        });
+        expect(JSON.stringify(logged[0]![0])).not.toContain('4321');
         warn.mockRestore();
     });
 

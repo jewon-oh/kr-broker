@@ -2842,7 +2842,7 @@
             }
         },
         {
-            "description": "fetchTrades 국내는 IVU10080 에 KRX, 정규장, 조회건수 30 을 보내고, 일봉 30개(IVS11560)를 받아 거래량이 있는 가장 최근 날짜를 체결 시각에 붙인다. 장중이면 오늘이고 시계 차이 1분 안의 체결은 받아들인다. 방향과 체결 id 는 비운다",
+            "description": "fetchTrades 국내는 IVU10080 에 KRX, 정규장, 조회건수 30 을 보내고, 일봉 30개(IVS11560)를 받아 거래량이 있는 가장 최근 날짜를 체결 시각에 붙인다. 장중이면 오늘이고 시계 차이 1분 안의 체결은 받아들인다. 새 것부터 온 행을 오래된 것부터 돌려주고, 방향과 체결 id 는 비운다",
             "now": 1774400400000,
             "method": "fetchTrades",
             "args": [
@@ -2935,6 +2935,22 @@
             "output": [
                 {
                     "info": {
+                        "ccls_tm": "095958",
+                        "ccls_prc": "71000",
+                        "ccls_q": "1",
+                        "sell_buy_ccd": "1"
+                    },
+                    "timestamp": 1774400398000,
+                    "datetime": "2026-03-25T00:59:58.000Z",
+                    "symbol": "005930/KRW",
+                    "price": 71000,
+                    "amount": 1,
+                    "cost": 71000,
+                    "fee": {},
+                    "fees": []
+                },
+                {
+                    "info": {
                         "ccls_tm": "100020",
                         "ccls_prc": "71000",
                         "ccls_q": "1",
@@ -2948,16 +2964,112 @@
                     "cost": 71000,
                     "fee": {},
                     "fees": []
+                }
+            ]
+        },
+        {
+            "description": "fetchTrades 는 since 없이 limit 을 주면 조회건수로 보내고, 결과에서 가장 최근 것을 남긴다",
+            "now": 1774400400000,
+            "method": "fetchTrades",
+            "args": [
+                "005930/KRW",
+                null,
+                1
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10080",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"is_cd\":\"005930\",\"ovtm_mkt_clsf\":\"0\",\"inq_cnt\":\"1\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "ccls_tm": "100020",
+                                        "ccls_prc": "71000",
+                                        "ccls_q": "1",
+                                        "sell_buy_ccd": "1"
+                                    },
+                                    {
+                                        "ccls_tm": "095958",
+                                        "ccls_prc": "71000",
+                                        "ccls_q": "1",
+                                        "sell_buy_ccd": "1"
+                                    }
+                                ]
+                            }
+                        }
+                    }
                 },
                 {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivs11560",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"info_ccd\":\"1\",\"mkt_clsf\":\"0\",\"chrt_clsf\":\"D\",\"minute_tck_indx\":\"\",\"is_cd\":\"005930\",\"inq_clsf\":\"2\",\"strt_dy\":\"\",\"inq_cnt\":\"30\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "dt": "20260325",
+                                        "tm": "0",
+                                        "opn_prc_p2": "71000.00",
+                                        "hgh_prc_p2": "71500.00",
+                                        "lw_prc_p2": "70500.00",
+                                        "cls_prc_p2": "71000.00",
+                                        "vlm": "1520000"
+                                    },
+                                    {
+                                        "dt": "20260324",
+                                        "tm": "0",
+                                        "opn_prc_p2": "71000.00",
+                                        "hgh_prc_p2": "71500.00",
+                                        "lw_prc_p2": "70500.00",
+                                        "cls_prc_p2": "71000.00",
+                                        "vlm": "9800000"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
                     "info": {
-                        "ccls_tm": "095958",
+                        "ccls_tm": "100020",
                         "ccls_prc": "71000",
                         "ccls_q": "1",
                         "sell_buy_ccd": "1"
                     },
-                    "timestamp": 1774400398000,
-                    "datetime": "2026-03-25T00:59:58.000Z",
+                    "timestamp": 1774400420000,
+                    "datetime": "2026-03-25T01:00:20.000Z",
                     "symbol": "005930/KRW",
                     "price": 71000,
                     "amount": 1,
@@ -3061,13 +3173,13 @@
             "output": [
                 {
                     "info": {
-                        "ccls_tm": "153000",
+                        "ccls_tm": "152959",
                         "ccls_prc": "71000",
                         "ccls_q": "1",
                         "sell_buy_ccd": "1"
                     },
-                    "timestamp": 1774333800000,
-                    "datetime": "2026-03-24T06:30:00.000Z",
+                    "timestamp": 1774333799000,
+                    "datetime": "2026-03-24T06:29:59.000Z",
                     "symbol": "005930/KRW",
                     "price": 71000,
                     "amount": 1,
@@ -3077,13 +3189,13 @@
                 },
                 {
                     "info": {
-                        "ccls_tm": "152959",
+                        "ccls_tm": "153000",
                         "ccls_prc": "71000",
                         "ccls_q": "1",
                         "sell_buy_ccd": "1"
                     },
-                    "timestamp": 1774333799000,
-                    "datetime": "2026-03-24T06:29:59.000Z",
+                    "timestamp": 1774333800000,
+                    "datetime": "2026-03-24T06:30:00.000Z",
                     "symbol": "005930/KRW",
                     "price": 71000,
                     "amount": 1,
@@ -3187,13 +3299,13 @@
             "output": [
                 {
                     "info": {
-                        "ccls_tm": "153000",
+                        "ccls_tm": "152959",
                         "ccls_prc": "71000",
                         "ccls_q": "1",
                         "sell_buy_ccd": "1"
                     },
-                    "timestamp": 1774593000000,
-                    "datetime": "2026-03-27T06:30:00.000Z",
+                    "timestamp": 1774592999000,
+                    "datetime": "2026-03-27T06:29:59.000Z",
                     "symbol": "005930/KRW",
                     "price": 71000,
                     "amount": 1,
@@ -3203,13 +3315,13 @@
                 },
                 {
                     "info": {
-                        "ccls_tm": "152959",
+                        "ccls_tm": "153000",
                         "ccls_prc": "71000",
                         "ccls_q": "1",
                         "sell_buy_ccd": "1"
                     },
-                    "timestamp": 1774592999000,
-                    "datetime": "2026-03-27T06:29:59.000Z",
+                    "timestamp": 1774593000000,
+                    "datetime": "2026-03-27T06:30:00.000Z",
                     "symbol": "005930/KRW",
                     "price": 71000,
                     "amount": 1,
@@ -3340,13 +3452,13 @@
             "output": [
                 {
                     "info": {
-                        "ccls_tm": "143000",
+                        "ccls_tm": "110000",
                         "ccls_prc": "71000",
                         "ccls_q": "1",
                         "sell_buy_ccd": "1"
                     },
-                    "timestamp": 1773984600000,
-                    "datetime": "2026-03-20T05:30:00.000Z",
+                    "timestamp": 1773972000000,
+                    "datetime": "2026-03-20T02:00:00.000Z",
                     "symbol": "247540/KRW",
                     "price": 71000,
                     "amount": 1,
@@ -3356,13 +3468,13 @@
                 },
                 {
                     "info": {
-                        "ccls_tm": "110000",
+                        "ccls_tm": "143000",
                         "ccls_prc": "71000",
                         "ccls_q": "1",
                         "sell_buy_ccd": "1"
                     },
-                    "timestamp": 1773972000000,
-                    "datetime": "2026-03-20T02:00:00.000Z",
+                    "timestamp": 1773984600000,
+                    "datetime": "2026-03-20T05:30:00.000Z",
                     "symbol": "247540/KRW",
                     "price": 71000,
                     "amount": 1,
@@ -3478,13 +3590,25 @@
             "output": [
                 {
                     "info": {
-                        "ccls_tm": "093500",
+                        "ccls_tm": "140000",
                         "ccls_prc": "71000",
                         "ccls_q": "1",
                         "sell_buy_ccd": "1"
                     },
-                    "timestamp": 1774398900000,
-                    "datetime": "2026-03-25T00:35:00.000Z",
+                    "symbol": "005930/KRW",
+                    "price": 71000,
+                    "amount": 1,
+                    "cost": 71000,
+                    "fee": {},
+                    "fees": []
+                },
+                {
+                    "info": {
+                        "ccls_tm": "152000",
+                        "ccls_prc": "71000",
+                        "ccls_q": "1",
+                        "sell_buy_ccd": "1"
+                    },
                     "symbol": "005930/KRW",
                     "price": 71000,
                     "amount": 1,
@@ -3510,25 +3634,13 @@
                 },
                 {
                     "info": {
-                        "ccls_tm": "152000",
+                        "ccls_tm": "093500",
                         "ccls_prc": "71000",
                         "ccls_q": "1",
                         "sell_buy_ccd": "1"
                     },
-                    "symbol": "005930/KRW",
-                    "price": 71000,
-                    "amount": 1,
-                    "cost": 71000,
-                    "fee": {},
-                    "fees": []
-                },
-                {
-                    "info": {
-                        "ccls_tm": "140000",
-                        "ccls_prc": "71000",
-                        "ccls_q": "1",
-                        "sell_buy_ccd": "1"
-                    },
+                    "timestamp": 1774398900000,
+                    "datetime": "2026-03-25T00:35:00.000Z",
                     "symbol": "005930/KRW",
                     "price": 71000,
                     "amount": 1,
@@ -3539,7 +3651,7 @@
             ]
         },
         {
-            "description": "fetchTrades 는 since 를 주면 timestamp 가 빈 행을 빼고 since 이후의 체결만 남긴다. limit 은 조회건수로 보낸다",
+            "description": "fetchTrades 는 since 를 주면 timestamp 가 빈 행을 빼고 since 이후의 체결만 남긴다. limit 은 조회건수로 보내고 결과에도 적용한다",
             "now": 1774400400000,
             "method": "fetchTrades",
             "args": [
@@ -3737,7 +3849,7 @@
             "output": [
                 {
                     "info": {
-                        "ccls_tm": "095959",
+                        "ccls_tm": "095958",
                         "ccls_prc": "71000",
                         "ccls_q": "1",
                         "sell_buy_ccd": "1"
@@ -3751,7 +3863,7 @@
                 },
                 {
                     "info": {
-                        "ccls_tm": "095958",
+                        "ccls_tm": "095959",
                         "ccls_prc": "71000",
                         "ccls_q": "1",
                         "sell_buy_ccd": "1"
@@ -3859,7 +3971,7 @@
             "output": [
                 {
                     "info": {
-                        "ccls_tm": "153000",
+                        "ccls_tm": "152959",
                         "ccls_prc": "71000",
                         "ccls_q": "1",
                         "sell_buy_ccd": "1"
@@ -3873,7 +3985,7 @@
                 },
                 {
                     "info": {
-                        "ccls_tm": "152959",
+                        "ccls_tm": "153000",
                         "ccls_prc": "71000",
                         "ccls_q": "1",
                         "sell_buy_ccd": "1"
@@ -3994,13 +4106,13 @@
             "output": [
                 {
                     "info": {
-                        "ccls_tm": "100020",
+                        "ccls_tm": "095958",
                         "ccls_prc": "260000",
                         "ccls_q": "1",
                         "sell_buy_ccd": "1"
                     },
-                    "timestamp": 1774400420000,
-                    "datetime": "2026-03-25T01:00:20.000Z",
+                    "timestamp": 1774400398000,
+                    "datetime": "2026-03-25T00:59:58.000Z",
                     "symbol": "247540/KRW",
                     "price": 260000,
                     "amount": 1,
@@ -4010,13 +4122,13 @@
                 },
                 {
                     "info": {
-                        "ccls_tm": "095958",
+                        "ccls_tm": "100020",
                         "ccls_prc": "260000",
                         "ccls_q": "1",
                         "sell_buy_ccd": "1"
                     },
-                    "timestamp": 1774400398000,
-                    "datetime": "2026-03-25T00:59:58.000Z",
+                    "timestamp": 1774400420000,
+                    "datetime": "2026-03-25T01:00:20.000Z",
                     "symbol": "247540/KRW",
                     "price": 260000,
                     "amount": 1,
@@ -6822,7 +6934,7 @@
             }
         },
         {
-            "description": "fetchOrder 미국은 체결내역에 없어도 해외 체결현황(SPQM2204, 최근 사흘)에 잔량이 있으면 open 이다",
+            "description": "fetchOrder 미국은 체결내역에 없어도 해외 체결현황(SPQM2204, 최근 사흘)에 잔량이 있으면 open 이다. 방향은 체결현황의 기타매매구분코드(etc_trd_ccd, 01 매도·02 매수)로 채운다",
             "now": 1790038800000,
             "method": "fetchOrder",
             "args": [
@@ -6890,6 +7002,7 @@
                                         "ordr_dt": "20260921",
                                         "ordr_no": "0000000051",
                                         "shrt_is_cd": "AAPL",
+                                        "etc_trd_ccd": "02",
                                         "frgn_ordr_q_p6": "5.000000",
                                         "frgn_ordr_prc_p6": "220.000000",
                                         "ccls_q_p6": "2.000000",
@@ -6907,6 +7020,7 @@
                 "id": "0000000051",
                 "symbol": "AAPL/USD",
                 "status": "open",
+                "side": "buy",
                 "amount": 5,
                 "filled": 2,
                 "remaining": 3,
@@ -6919,6 +7033,7 @@
                         "ordr_dt": "20260921",
                         "ordr_no": "0000000051",
                         "shrt_is_cd": "AAPL",
+                        "etc_trd_ccd": "02",
                         "frgn_ordr_q_p6": "5.000000",
                         "frgn_ordr_prc_p6": "220.000000",
                         "ccls_q_p6": "2.000000",

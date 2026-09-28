@@ -147,7 +147,7 @@ const TRADE_CLOCK_SKEW_MS = 60_000;
 
 /**
  * 날짜 없이 시각(`HHMMSS`)만 오는 최근 체결 행의 UTC 밀리초. 한국투자증권과 KB증권의 `fetchTrades`가 쓴다.
- * 행은 새 것부터 온다고 보고, 가장 새 행에 한국 날짜 `ymd`를 붙인다. 앞 행보다 시각이 늦은 행(날짜가 바뀐 행)이나 시각을 읽을 수 없는
+ * 행은 새 것부터 온다(두 증권사 모두 실계좌 2026-09-28 확인). 가장 새 행에 한국 날짜 `ymd`를 붙인다. 앞 행보다 시각이 늦은 행(날짜가 바뀐 행)이나 시각을 읽을 수 없는
  * 행이 나오면 그 행부터 끝까지 비운다. `ymd`가 없거나 가장 새 행이 `now`보다 1분 넘게 늦으면 모두 비운다.
  */
 export function kstTradeTimestamps(times: readonly string[], ymd: Str, now: number): Int[] {

@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { BrokerTokenStore } from '../options';
 import { tokenStoreKey } from '../token-store-key';
+import { tokenStoreKey as testingTokenStoreKey } from '../testing';
 import { TossAuth } from '../toss/toss-auth';
 
 function makeStore(): BrokerTokenStore & { data: Map<string, string> } {
@@ -46,5 +47,16 @@ describe('토스 인증과 공유 저장소', () => {
         expect(await a.getAccessToken()).toBe('token-A');
         expect(await b.getAccessToken()).toBe('token-B');
         expect(issueB).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('kr-broker/testing 의 tokenStoreKey', () => {
+    it('토스 인증이 저장소에 쓴 키와 같다', async () => {
+        const raw = makeStore();
+        const auth = new TossAuth('toss-client-testing', async () => ({ accessToken: 'token-T', expiresInSeconds: 86400 }), () => raw);
+
+        await auth.getAccessToken();
+
+        expect([...raw.data.keys()]).toEqual([testingTokenStoreKey('toss:token:', 'toss-client-testing')]);
     });
 });

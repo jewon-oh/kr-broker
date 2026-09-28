@@ -273,6 +273,8 @@ export interface Status {
 /**
  * 종목의 투자자별 매매동향 하루치(`fetchInvestorTrading`). `timestamp` 는 그 영업일의 00:00 KST 다.
  * 세 투자자 필드는 순매수 대금이다. 다른 투자자 유형과 매수·매도 값은 `info` 의 원문에 있다.
+ * 대금은 증권사 응답 그대로 싣고 원으로 바꾸지 않는다. 한국투자증권(`inquire-investor`)과 KB증권(`IVU10430`)은 백만 원 단위다.
+ * 실계좌(2026-09-28)에서 두 증권사 모두 순매수 대금 ÷ (순매수 수량 × 종가)가 약 1e-6 이었다.
  */
 export interface InvestorTradingRecord extends KrTimestamped {
     /** 영업일 `YYYYMMDD`(한국 날짜) */
@@ -281,11 +283,11 @@ export interface InvestorTradingRecord extends KrTimestamped {
     close: Num;
     /** 전일 대비 */
     change: Num;
-    /** 개인 순매수 대금. 단위는 증권사 응답 그대로다. 증권사마다 다를 수 있으므로 증권사를 섞어 더하지 않는다. */
+    /** 개인 순매수 대금. 단위는 증권사 응답 그대로다(한국투자증권과 KB증권은 백만 원). */
     individual: Num;
-    /** 외국인 순매수 대금. 단위는 증권사 응답 그대로다. 증권사마다 다를 수 있으므로 증권사를 섞어 더하지 않는다. */
+    /** 외국인 순매수 대금. 단위는 증권사 응답 그대로다(한국투자증권과 KB증권은 백만 원). */
     foreign: Num;
-    /** 기관 순매수 대금. 단위는 증권사 응답 그대로다. 증권사마다 다를 수 있으므로 증권사를 섞어 더하지 않는다. */
+    /** 기관 순매수 대금. 단위는 증권사 응답 그대로다(한국투자증권과 KB증권은 백만 원). */
     institution: Num;
     info: Dict;
 }

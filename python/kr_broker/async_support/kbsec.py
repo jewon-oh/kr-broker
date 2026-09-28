@@ -96,6 +96,9 @@ KBSEC_TOKEN_KEY_PREFIX = 'kbsec:token:'
 _EMPTY_HOST = {'ipAddr': '', 'macAddr': ''}
 # 국내 통합차트(`IVS11560`)의 차트구분 가운데 기간 봉의 타임프레임. 분봉은 없다. `'1mo'` 로 불러도 월봉(M)을 보내므로 `'1M'` 의 규칙을 쓴다.
 KBSEC_CHART_PERIOD = {KBSEC_CHART_KIND['DAY']: '1d', KBSEC_CHART_KIND['WEEK']: '1w', KBSEC_CHART_KIND['MONTH']: '1M'}
+# 해외 체결현황(`SPQM2204`) 기타매매구분코드(`etc_trd_ccd`)의 방향. 명세에 값 설명이 없다.
+# 실계좌(2026-09-28)에서 입력 매매구분(`trd_clsf`)을 `01` 로 거르면 `01` 행만, `02` 로 거르면 `02` 행만 왔다.
+KBSEC_OVERSEAS_ORDER_SIDE = {'01': 'sell', '02': 'buy'}
 
 
 def _now_ms() -> int:
@@ -619,7 +622,8 @@ class kbsec(Exchange, ImplicitAPI):
         """종목별 투자자 매매동향(`IVU10430`)을 하루 단위로 준다. 세 증권사 공통 모양이다. 국내만 지원한다.
         개인, 외국인, 기관의 값을 싣고, 등락률과 거래량, 나머지 10개 투자자 유형은 `info` 의 원문에 있다.
         기본은 오늘(KST) 하루, 순매수(`trd_clsf='1'`), 금액 기준(`amt_q_clsf='1'`)이다. `since` 와 `params['until']` 로 기간을 넓힌다.
-        `params` 로 `trd_clsf`(1 순매수, 2 매수, 3 매도)나 `amt_q_clsf`(1 금액, 2 수량)를 덮어쓰면 세 투자자 필드도 그 값이 된다."""
+        `params` 로 `trd_clsf`(1 순매수, 2 매수, 3 매도)나 `amt_q_clsf`(1 금액, 2 수량)를 덮어쓰면 세 투자자 필드도 그 값이 된다.
+        금액은 백만 원 단위이고 원으로 바꾸지 않는다. 실계좌(2026-09-28) 5영업일의 모든 투자자 유형에서 순매수 대금 ÷ (순매수 수량 × 종가)가 약 1e-6 이었다."""
         until, query = self.handle_until_param('fetchInvestorTrading', limit, {} if params is None else params)
         market = self.market(symbol)
         if self._is_us(market):
@@ -812,7 +816,9 @@ class kbsec(Exchange, ImplicitAPI):
         국내는 체결가, 체결수량, 체결시각만 채운다. 방향(매도매수구분, `sell_buy_ccd`)과 체결 ID 는 코드값 의미를 확정할 근거가 없어(명세에 설명 없음)
         채우지 않고, `info` 에 원본이 남아 있다. 체결 행에는 시각(`ccls_tm`, HHMMSS)만 있어서, 일봉(`fetch_ohlcv`)을 한 번 더 받아 거래량이 있는
         가장 최근 영업일을 가장 새 체결의 날짜로 쓴다. 날짜가 바뀐 행부터 비우는 규칙은 한국투자증권과 같다(`kst_trade_timestamps`).
-        행이 새 것부터 온다는 순서는 명세에 없고 실계좌로 확인하지 못했다. `since` 를 주면 `timestamp` 가 빈 행은 빠진다.
+        행은 새 것부터 온다. 명세에는 없지만 실계좌(2026-09-28) 30행에서 시각이 앞 행보다 늦어진 적이 없었다.
+        결과는 한국투자증권처럼 오래된 것부터 둔다. `limit` 은 조회건수(`inq_cnt`)로 보내고 결과에도 적용한다(`since` 가 없으면 가장 최근 것이다).
+        `since` 를 주면 `timestamp` 가 빈 행은 빠진다.
 
         해외는 체결구분(`ccls_clsf`, `1` 매수자체결, `2` 매도자체결)이 명세에 있어 `side` 를 채운다. 시각은 한국 시각 변환 필드(`kor_dt`·`kor_tm`)를
         쓴다(국내와 달리 여러 날짜를 한 번에 준다). 거래소코드(`krx_cd`)는 `fetch_ticker` 가 쓰는 캐시를 그대로 쓰고, 없으면 먼저 현재가 조회로 채운다."""
@@ -842,7 +848,8 @@ class kbsec(Exchange, ImplicitAPI):
             'cost': None,
             'fee': None,
         }, market) for row, timestamp in zip(rows, stamps)]
-        return trades if since is None else [trade for trade in trades if (trade['timestamp'] or 0) >= since]
+        trades.reverse()
+        return self.filter_by_since_limit(trades, since, limit, 'timestamp', since is None)
 
     async def _last_traded_date(self, market: MarketInterface) -> Str:
         """거래량이 있는 가장 최근 영업일(`YYYYMMDD`). 일봉을 받지 못했거나 최근 30개에 그런 날이 없으면 `None` 이다.
@@ -1155,9 +1162,9 @@ class kbsec(Exchange, ImplicitAPI):
                         else 'closed' if amount > 0 and total_filled >= amount
                         else 'rejected' if status['rejectReason'] != '' else 'canceled')
         return self.safe_order({
-            'id': id, 'symbol': market['symbol'], 'status': order_status, 'side': trades[0]['side'] if trades else None, 'amount': amount,
-            'filled': total_filled, 'remaining': remaining, 'price': status['price'] if status['price'] > 0 else None, 'cost': total_cost,
-            'average': total_cost / total_filled if total_filled > 0 and total_cost > 0 else None,
+            'id': id, 'symbol': market['symbol'], 'status': order_status, 'side': (trades[0]['side'] if trades else None) or status['side'],
+            'amount': amount, 'filled': total_filled, 'remaining': remaining, 'price': status['price'] if status['price'] > 0 else None,
+            'cost': total_cost, 'average': total_cost / total_filled if total_filled > 0 and total_cost > 0 else None,
             'trades': [], 'info': {'status': status['info'], 'trades': trade_info},
         }, market)
 
@@ -1167,7 +1174,7 @@ class kbsec(Exchange, ImplicitAPI):
         시작과 종료 주문일자가 필수 입력이라 `since` 가 없으면 던진다. 날짜는 미국 현지 일자이고, 끝은 `params['until']`, 없으면 오늘이다.
         체결구분, 매매구분, 거래구분은 설명된 전체(`0`, `99`, `0`)를 보낸다. 해외거래소구분, ISO코드, 원화통합증거금신청여부,
         다이렉트인덱싱여부는 설명이 없어 비워 보낸다. 미체결만 보려면 `params['ccls_clsf']` 를 `2` 로 준다. 연속조회는 끝까지 따라가고,
-        상한(`holdingsMaxPages`)에 걸리면 `truncated` 로 알린다.
+        상한(`holdingsMaxPages`)에 걸리면 `truncated` 로 알린다. 방향(`side`)은 기타매매구분코드(`etc_trd_ccd`)의 `01` 매도, `02` 매수로 채운다.
         """
         params = {} if params is None else params
         if since is None:
@@ -1184,6 +1191,7 @@ class kbsec(Exchange, ImplicitAPI):
                 'originalId': pick_str(row, 'orgn_ordr_no'),
                 'standardCode': pick_str(row, 'stnd_is_cd'),
                 'shortCode': pick_str(row, 'shrt_is_cd'),
+                'side': KBSEC_OVERSEAS_ORDER_SIDE.get(pick_str(row, 'etc_trd_ccd')),
                 'name': pick_str(row, 'shrt_is_nm'),
                 'statusName': pick_str(row, 'ordr_st_nm'),
                 'orderTypeName': pick_str(row, 'ordr_clsf_nm'),

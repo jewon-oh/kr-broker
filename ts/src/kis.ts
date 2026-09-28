@@ -4961,6 +4961,7 @@ export class kis extends Exchange {
      * 종목의 투자자별 매매동향(`inquire-investor`)을 최근 영업일 순으로 돌려준다. 세 증권사 공통 모양이다(`InvestorTradingRecord`).
      * 개인, 외국인, 기관계의 순매수 대금을 싣고, 매수·매도 수량과 대금은 `info` 의 원문에 있다. 국내만 지원한다
      * (공식 API 목록에 해외 종목 투자자 매매동향이 없다). 당일 값은 장 종료 후에 채워진다(공식 문서 유의사항).
+     * 대금은 백만 원 단위이고 원으로 바꾸지 않는다. 실계좌(2026-09-28)에서 개인, 외국인, 기관 모두 순매수 대금 ÷ (순매수 수량 × 종가)가 약 1e-6 이었다.
      *
      * 조회 기간을 받는 입력이 없어 받은 영업일을 `since`, `params.until`, `limit` 으로 거른다.
      * 둘째 인자로 `params` 를 넘기던 옛 호출은 한 판 동안 경고를 남기고 받는다.
@@ -5021,7 +5022,7 @@ export class kis extends Exchange {
      * 시장구분은 `fetchTicker`와 같다.
      *
      * 체결 행에는 시각(HHMMSS)만 있고 날짜가 없으며, 장 밖에서는 직전 거래일의 체결이 온다. 그래서 같은 시장구분으로 일자별 시세(`fetchDailyPrices`)를
-     * 한 번 더 받아, 거래량이 있는 가장 최근 영업일을 가장 새 체결의 날짜로 쓴다. 행은 새 것부터 온다고 보고, 앞 행보다 시각이 늦은 행이 나오면
+     * 한 번 더 받아, 거래량이 있는 가장 최근 영업일을 가장 새 체결의 날짜로 쓴다. 행은 새 것부터 온다(실계좌 2026-09-28 확인). 앞 행보다 시각이 늦은 행이 나오면
      * 날짜가 바뀐 것이므로 그 행부터는 `timestamp`를 비운다. 일자별 시세를 받지 못했거나, 거래량이 있는 날이 없거나, 가장 새 체결이 지금보다
      * 1분 넘게 늦으면 모든 행의 `timestamp`를 비운다. `since`를 주면 `timestamp`가 빈 행은 빠진다.
      */
@@ -7527,7 +7528,8 @@ export class kis extends Exchange {
 
     /**
      * 종목별 투자자 일별 동향(`investor-trade-by-stock-daily`, TR `FHPTJ04160001`). 국내만 지원한다. 투자자 유형 15종의 매수·매도를 정리한다.
-     * 입력 날짜(`params.until`의 한국 날짜)는 필수라 기본값을 오늘(한국 날짜)로 둔다. 수정주가와 기타 구분은 설명대로 공란이다. 연속조회는 따라가지 않는다.
+     * 입력 날짜(`params.until`의 한국 날짜)는 필수라 기본값을 오늘(한국 날짜)로 둔다. 수정주가와 기타 구분은 설명대로 공란이다. 한 호출은 입력 날짜까지 30영업일이고
+     * 연속조회가 없다(실계좌 응답의 `tr_cont`가 빈 값). 더 과거는 `params.until`을 옮겨 부른다. 거래일 15:40 전에는 KIS가 OPSQ2001로 거부한다.
      * `fetchInvestorTrading`(`inquire-investor`)은 개인, 외국인, 기관계 세 유형만 준다.
      */
     async fetchInvestorTradingHistory(symbol: string, since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<KisInvestorTradingDay[]> {
@@ -8684,7 +8686,8 @@ export class kis extends Exchange {
 
     /**
      * 해외 업종별 시세(`industry-theme`, TR `HHDFS76370000`). 거래소와 업종코드(`industryCode`, `fetchOverseasIndustries`의 `code`)는 필수다.
-     * 거래량 조건은 전체(`0`)다. 행을 순위 행 모양으로 정리하고(`seqn`을 순위로), 심볼에는 거래소의 거래 통화를 붙인다.
+     * 거래량 조건은 전체(`0`)다. 행을 순위 행 모양으로 정리하고(`seqn`을 순위로), 심볼에는 거래소의 거래 통화를 붙인다. 한 호출은 최대 100행이고,
+     * 업종 총수(응답 머리 `output1.trec`)가 100을 넘어도 다음 쪽을 받는 방법을 확인하지 못해 첫 100행만 돌려준다.
      */
     async fetchOverseasIndustryStocks(exchange: OverseasMarket, industryCode: string, params: Dict = {}): Promise<KisRankingItem[]> {
         const code = this.overseasExchange(exchange, 'fetchOverseasIndustryStocks');

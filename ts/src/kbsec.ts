@@ -293,6 +293,12 @@ function kbsecTwoDigitSide(code: string): KbsecTradeSide {
     return KBSEC_TWO_DIGIT_SIDE[code] ?? 'unknown';
 }
 
+/**
+ * 해외 체결현황(`SPQM2204`) 기타매매구분코드(`etc_trd_ccd`)의 방향. 명세에 값 설명이 없다.
+ * 실계좌(2026-09-28)에서 입력 매매구분(`trd_clsf`)을 `01`로 거르면 `01` 행만, `02`로 거르면 `02` 행만 왔다.
+ */
+const KBSEC_OVERSEAS_ORDER_SIDE: Readonly<Record<string, 'buy' | 'sell'>> = { '01': 'sell', '02': 'buy' };
+
 /** 국내 소수점 매매내역 한 줄(`SSQM5765`). */
 export interface KbsecFractionalTrade extends KrTimestamped {
     /** 매매일자(`trd_dt`, YYYYMMDD) */
@@ -1354,6 +1360,8 @@ export interface KbsecOverseasOrderable {
 export interface KbsecOverseasOrderStatusEntry extends KbsecOverseasOrderEntry {
     /** 단축종목코드(`shrt_is_cd`) */
     shortCode: string;
+    /** 기타매매구분코드(`etc_trd_ccd`)에서 옮긴 방향. `01` 매도, `02` 매수이고 그 밖의 값이면 비어 있다 */
+    side: 'buy' | 'sell' | undefined;
 }
 
 export interface KbsecOverseasOrderStatusFetch {
@@ -2083,6 +2091,7 @@ export class kbsec extends Exchange {
      * 개인, 외국인, 기관의 값을 싣고, 등락률과 거래량, 나머지 10개 투자자 유형은 `info` 의 원문에 있다.
      * 기본은 오늘(KST) 하루, 순매수(`trd_clsf='1'`), 금액 기준(`amt_q_clsf='1'`)이다. `since`와 `params.until`로 기간을 넓힌다.
      * `params`로 `trd_clsf`(1순매수·2매수·3매도)나 `amt_q_clsf`(1금액·2수량)를 덮어쓰면 세 투자자 필드도 그 값이 된다.
+     * 금액은 백만 원 단위이고 원으로 바꾸지 않는다. 실계좌(2026-09-28) 5영업일의 모든 투자자 유형에서 순매수 대금 ÷ (순매수 수량 × 종가)가 약 1e-6 이었다.
      */
     async fetchInvestorTrading(symbol: string, since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<InvestorTradingRecord[]> {
         const [until, query] = this.handleUntilParam('fetchInvestorTrading', limit, params);
@@ -2784,7 +2793,9 @@ export class kbsec extends Exchange {
      * 국내는 체결가·체결수량·체결시각만 채운다. 방향(매도매수구분, `sell_buy_ccd`)과 체결ID는 코드값 의미를 확정할 근거가
      * 없어(명세에 설명 없음) 채우지 않고, `info`에 원본이 남아 있다. 체결 행에는 시각(`ccls_tm`, HHMMSS)만 있어서, 일봉(`fetchOHLCV`)을
      * 한 번 더 받아 거래량이 있는 가장 최근 영업일을 가장 새 체결의 날짜로 쓴다. 날짜가 바뀐 행부터 비우는 규칙은 한국투자증권과 같다
-     * (`kstTradeTimestamps`). 행이 새 것부터 온다는 순서는 명세에 없고 실계좌로 확인하지 못했다. `since`를 주면 `timestamp`가 빈 행은 빠진다.
+     * (`kstTradeTimestamps`). 행은 새 것부터 온다. 명세에는 없지만 실계좌(2026-09-28) 30행에서 시각이 앞 행보다 늦어진 적이 없었다.
+     * 결과는 한국투자증권처럼 오래된 것부터 둔다. `limit`은 조회건수(`inq_cnt`)로 보내고 결과에도 적용한다(`since`가 없으면 가장 최근 것이다).
+     * `since`를 주면 `timestamp`가 빈 행은 빠진다.
      *
      * 해외는 체결구분(`ccls_clsf`, `1`:매수자체결 `2`:매도자체결)이 명세에 명시돼 있어 `side`를 채운다. 시각은 한국시각
      * 변환 필드(`kor_dt`·`kor_tm`)를 그대로 쓴다(국내와 달리 여러 날짜를 한 번에 준다). 거래소코드(`krx_cd`)는 `fetchTicker`가
@@ -2817,8 +2828,8 @@ export class kbsec extends Exchange {
                 cost: undefined,
                 fee: undefined,
             }, market);
-        });
-        return since !== undefined ? trades.filter((trade) => (trade.timestamp ?? 0) >= since) : trades;
+        }).reverse();
+        return this.filterBySinceLimit(trades as unknown as Dict[], since, limit, 'timestamp', since === undefined) as unknown as Trade[];
     }
 
     /**
@@ -2887,7 +2898,8 @@ export class kbsec extends Exchange {
      *   읽지 못한 보유 행이 있으면 못 읽은 것이다. 이름이 어긋난 종목 그리드를 "보유 없음"으로 읽지 않으려는 것이다.
      *
      * `USD` 항목은 해외 잔고평가(`SPQM2226`)의 통화별 예수금 그리드에서 온다(예수금·주문가능금액). 그 그리드를 못 읽었으면 `USD` 항목이 없다.
-     * **없다는 것은 0 이 아니라 모른다는 뜻이다.** `options.krwIntegratedMargin` 이 켜져 있고 원화환산 외화예수금이 있으면 그것을 환율로 환산한 USD 가 우선한다.
+     * **없다는 것은 0 이 아니라 모른다는 뜻이다.** 미국 시장은 읽었는데 달러 행을 가리지 못해 `USD` 항목이 없으면 `info.unreadCurrencies` 에 `USD` 가 있다.
+     * `readStatus` 는 보유의 완전성만 알리므로 이때도 `COMPLETE` 일 수 있다. `options.krwIntegratedMargin` 이 켜져 있고 원화환산 외화예수금이 있으면 그것을 환율로 환산한 USD 가 우선한다.
      *
      * `free` 는 지금 주문에 쓸 수 있는 양, `total` 은 정산 뒤 계좌에 남을 양, `used` 는 `total − free` 다(ccxt 정의). 모르는 값은 비운다.
      * - 국내 보유: `free` 는 주문가능수량(`ordr_psbl_q`)이다. 해외 보유는 매도 가능 수량을 읽지 않아 `free` 가 비어 있다.
@@ -2950,6 +2962,7 @@ export class kbsec extends Exchange {
             info: {
                 readStatus: (unreadMarkets.length === 0 ? 'COMPLETE' : 'PARTIAL') as KbsecReadStatus,
                 unreadMarkets,
+                unreadCurrencies: [] as string[],
                 deposit: response.deposit,
             },
             timestamp: undefined,
@@ -2966,6 +2979,9 @@ export class kbsec extends Exchange {
             const free = numberToString(pickNum(usdCash, 'ordr_psbl_amt_p2'));
             result['USD'] = { free, used: undefined, total: Precise.stringGt(free, deposit) ? undefined : deposit, info: usdCash };
         }
+        // 미국 시장을 읽었는데 달러 예수금 행을 가리지 못하면 USD 항목이 없다. 0 이 아니라 모르는 것이라 따로 밝힌다.
+        // 미국 시장을 못 읽었으면 `unreadMarkets` 가 이미 알린다.
+        if (overseas.read && result['USD'] === undefined) (result['info'] as { unreadCurrencies: string[] }).unreadCurrencies.push('USD');
         const held: Dict = {};
         for (const holding of response.holdings as HoldingRow[]) {
             held[this.commonStockCode(holding.code)] = {
@@ -3125,9 +3141,14 @@ export class kbsec extends Exchange {
             const cashRows = pickCashGrid(body);
             const usdCash = cashRows.find(isUsdCashRow);
             if (cashRows.length > 0 && usdCash === undefined) {
-                // 통화구분명은 금액이 아니라 남긴다. 금액 필드는 남기지 않는다.
-                logger.warn({ trCode: KBSEC_TR.HOLDINGS_US, currencyNames: cashRows.map((row) => row.crncy_clsf_nm) },
-                    '[kbsec] 해외 예수금 그리드에 USD 행이 없다 — currencyNames 가 받은 통화구분명이다');
+                // 통화구분명과 행별 기준환율(공개 환율)은 금액이 아니라 남긴다. 예수금과 주문가능금액은 남기지 않고, 통화구분명이 비고
+                // 환율과 두 금액이 모두 0 인 빈 행의 수만 센다. 달러 예수금이 있을 때 행 모양을 보고 `isUsdCashRow` 를 고치려는 진단이다.
+                const emptyRows = cashRows.filter((row) => pickStr(row, 'crncy_clsf_nm') === ''
+                    && ['std_exch_r', 'cnvr_exch_r_p4', 'tfnd', 'ordr_psbl_amt_p2'].every((key) => kbsecNumberOf(row[key]) === 0)).length;
+                logger.warn({
+                    trCode: KBSEC_TR.HOLDINGS_US, currencyNames: cashRows.map((row) => row.crncy_clsf_nm),
+                    standardRates: cashRows.map((row) => row.std_exch_r), emptyRows,
+                }, '[kbsec] 해외 예수금 그리드에 USD 행이 없다 — currencyNames 가 받은 통화구분명이다');
             }
             const out: HoldingRow[] = [];
             // 버린 이유를 세어서 남긴다. "종목코드가 비었다", "수량을 못 읽었다", "수량이 0 이다"는 원인도 조치도 다르다.
@@ -4018,7 +4039,7 @@ export class kbsec extends Exchange {
      * 시작과 종료 주문일자가 필수 입력이라 `since`가 없으면 던진다. 날짜는 `fetchOverseasOrders`처럼 미국 현지 일자이고, 끝은 `params.until`,
      * 없으면 오늘이다. 체결구분, 매매구분, 거래구분은 설명된 전체(`0`, `99`, `0`)를 보낸다. 해외거래소구분, ISO코드, 원화통합증거금신청여부,
      * 다이렉트인덱싱여부는 설명이 없어 비워 보낸다. 미체결만 보려면 `params.ccls_clsf`를 `2`로 준다. 연속조회는 끝까지 따라가고,
-     * 상한(`holdingsMaxPages`)에 걸리면 `truncated`로 알린다.
+     * 상한(`holdingsMaxPages`)에 걸리면 `truncated`로 알린다. 방향(`side`)은 기타매매구분코드(`etc_trd_ccd`)의 `01` 매도, `02` 매수로 채운다.
      */
     async fetchOverseasOrderStatus(since: Int = undefined, params: Dict = {}): Promise<KbsecOverseasOrderStatusFetch> {
         if (since === undefined) throw new ArgumentsRequired(`${this.id} fetchOverseasOrderStatus() 는 since 인자가 필요하다(시작 주문일자가 필수 입력이다)`);
@@ -4035,6 +4056,7 @@ export class kbsec extends Exchange {
             originalId: pickStr(row, 'orgn_ordr_no'),
             standardCode: pickStr(row, 'stnd_is_cd'),
             shortCode: pickStr(row, 'shrt_is_cd'),
+            side: KBSEC_OVERSEAS_ORDER_SIDE[pickStr(row, 'etc_trd_ccd')],
             name: pickStr(row, 'shrt_is_nm'),
             statusName: pickStr(row, 'ordr_st_nm'),
             orderTypeName: pickStr(row, 'ordr_clsf_nm'),
@@ -5138,7 +5160,7 @@ export class kbsec extends Exchange {
             : amount > 0 && totalFilled >= amount ? 'closed'
             : status.rejectReason !== '' ? 'rejected' : 'canceled';
         return this.safeOrder({
-            id, symbol: market.symbol, status: orderStatus, side: trades[0]?.side, amount, filled: totalFilled, remaining,
+            id, symbol: market.symbol, status: orderStatus, side: trades[0]?.side ?? status.side, amount, filled: totalFilled, remaining,
             price: status.price > 0 ? status.price : undefined, cost: totalCost,
             average: totalFilled > 0 && totalCost > 0 ? totalCost / totalFilled : undefined,
             trades: [], info: { status: status.info, trades: tradeInfo },

@@ -49,6 +49,7 @@
 - KB증권 국내 `fetchOHLCV`를 `'1mo'`로 부르면 봉의 `timestamp`를 `'1M'`처럼 그 달 1일의 00:00 UTC로 맞춥니다. 예전에도 `'1mo'`를 월봉으로 조회했지만, 봉 시각은 KB가 준 날짜(`dt`)의 00:00 KST였습니다. 그래서 `dt`가 `20260803`인 봉이 `'1M'`이면 2026-08-01T00:00Z, `'1mo'`면 2026-08-02T15:00Z였습니다. 일봉, 주봉, 분봉은 그대로입니다. Python 판도 같습니다.
 - KB증권 토큰 발급 요청이 전송 계층의 시간 초과로 끝나면 `NetworkError` 대신 `RequestTimeout`을 던집니다. 전송 계층이 `TimeoutError`나 `AbortError`를 던진 경우입니다. TR 요청과 Python 판은 이미 `RequestTimeout`이었습니다. `RequestTimeout`은 `NetworkError`의 하위 클래스라 `instanceof NetworkError`로 잡던 코드는 그대로 동작합니다. 오류의 `name`을 `'NetworkError'`와 비교하던 코드는 `'RequestTimeout'`도 받게 고칩니다.
 - KB증권 `fetchTicker`는 응답에 거래량 필드가 없으면 `baseVolume`을 비웁니다. 예전에는 0을 실었습니다. 거래량이 0으로 오면 예전처럼 0입니다. ccxt처럼 모르는 값을 0으로 채우지 않습니다. `baseVolume`이 늘 숫자라고 보던 코드는 빈 값도 다룹니다. Python 판도 같습니다.
+- KB증권 국내 `fetchTrades`가 결과를 한국투자증권처럼 오래된 것부터 돌려주고, `limit`을 결과에도 적용합니다. 예전에는 응답 순서(새 것부터) 그대로 돌려주고 `limit`은 조회건수(`inq_cnt`)로만 보냈습니다. 이제 `since` 없이 `limit`을 주면 가장 최근 체결을, `since`와 함께 주면 `since` 뒤의 가장 이른 체결을 `limit`개 남깁니다. ccxt와 같은 규칙입니다. 결과의 첫 항목을 가장 새 체결로 읽던 코드는 마지막 항목을 읽도록 바꿉니다. 날짜가 바뀌어 `timestamp`를 비운 더 오래된 행은 이제 앞쪽에 옵니다. 행이 새 것부터 온다는 것은 실계좌(2026-09-28) 30행에서 확인했습니다. 한국투자증권 `fetchTrades`의 행 순서도 같은 날 같은 방법으로 확인했습니다. 미국 종목의 체결(`GSA10020`)은 순서를 확인하지 않아 그대로입니다. Python 판도 같습니다.
 
 ### 추가
 
@@ -69,6 +70,8 @@
   - 국내 `fetch_trades`는 TypeScript 판처럼 일봉을 한 번 더 조회해 체결 날짜를 붙입니다. 국내 `fetch_ohlcv`와 이 일봉 조회는 `options['masterData']`로 코스닥 종목임을 알면 코스닥 시장구분으로 보냅니다.
   - KB증권은 웹소켓을 제공하지 않아서 ccxt처럼 `kr_broker.pro`에 넣지 않았습니다. 그래서 `kr_broker.pro.exchanges`는 이제 `kr_broker.exchanges`의 일부입니다.
   - 테스트 훅 `reset_kbsec_token_breaker`와 `reset_fill_side_warn`을 `kr_broker.testing`에서 가져옵니다.
+- 테스트 전용 경로 `kr-broker/testing`에서 `tokenStoreKey(prefix, credentialId)`를 내보냅니다. 증권사 인증이 토큰 저장소에 쓰는 키를 테스트가 규칙을 흉내 내지 않고 만들 수 있습니다. 접두사와 자격증명은 증권사마다 다르고, `testing` 모듈 설명에 적었습니다. Python 판은 `kr_broker.testing`에서 `token_store_key`를 가져옵니다.
+- KB증권 `fetchBalance`는 미국 시장을 읽었는데 달러 예수금 행을 가리지 못하면 `info.unreadCurrencies`에 `USD`를 싣습니다. 이때 `USD` 항목은 없고 `readStatus`는 `COMPLETE`일 수 있습니다. 예전에는 달러 현금이 빠진 것을 결과로 알 수 없었습니다. 운영에서는 해외 잔고평가(`SPQM2226`) 예수금 그리드의 통화구분명이 모두 빈 값으로 와서 이 경우가 됩니다. 달러 행을 가리는 규칙은 실계좌로 확인한 뒤 고칩니다(#29). 미국 시장을 못 읽었으면 예전처럼 `unreadMarkets`가 알리고 `unreadCurrencies`는 비어 있습니다.
 
 ### 바뀜
 
@@ -91,6 +94,8 @@
 - 이 저장소의 CI가 커밋 이력도 검사합니다. `pnpm hygiene:history`는 위생 검사의 패턴으로 모든 커밋의 메시지와 추가된 줄을 봅니다. 작성자 이메일은 GitHub noreply 주소(`…@users.noreply.github.com`)만 받습니다. 커미터 이메일은 웹에서 병합할 때 GitHub이 적는 서비스 주소도 받습니다. PR에서는 PR 브랜치의 커밋과, 스쿼시 병합 커밋의 제목이 될 PR 제목도 봅니다. 위생 검사의 이메일 규칙은 `example.*` 도메인에 더해 GitHub noreply 주소, `noreply@anthropic.com`(공동 작성자 트레일러), `support@github.com`(Dependabot 서명 트레일러)을 허용합니다.
 - 이 저장소의 CI가 Python 의존성을 해시를 고정한 잠금 파일(`python/requirements/*.txt`)로 설치하고, `pip-audit`도 운영 의존성의 잠금 파일을 감사합니다. 예전에는 PyPI 최신판을 해시 없이 받아 감사했습니다. Dependabot은 Python 의존성을 `uv` 생태계로 올립니다. 사용하는 쪽의 설치와 `pyproject.toml`의 하한은 그대로입니다.
 - KB증권 `KbsecAuth.getAccessToken`(`kr-broker/kbsec/kbsec-auth`)은 토큰 발급이 거절되면 `Error` 대신 `AuthenticationError`를 던집니다. 증권사가 준 업무 코드는 `brokerCode`에 싣습니다. 본문 형태 두 가지가 모두 거절되면 먼저 보낸 형태의 코드를 싣습니다. 나중에 보내는 형태는 원인과 관계없이 `E021`을 받기 때문입니다. `detail`은 예전처럼 비어 있습니다. `kbsec` 클래스의 비공개 호출이 던지는 오류는 예전처럼 `AuthenticationError`입니다. 메시지 앞의 `kbsec 토큰을 받지 못했다:`는 빠집니다. 토큰 무효(`I445`) 뒤 재발급이 실패했을 때도 `Error` 대신 `AuthenticationError`를 던집니다.
+- KB증권 `fetchBalance`가 해외 예수금 그리드에서 달러 행을 가리지 못할 때 남기는 경고(`[kbsec] 해외 예수금 그리드에 USD 행이 없다`)에 행별 기준환율(`standardRates`, `std_exch_r` 원문)과 빈 행 수(`emptyRows`)를 더합니다. 빈 행은 통화구분명이 비고 기준환율, 전환환율, 예수금, 주문가능금액이 모두 0인 행입니다. 예수금과 주문가능금액 값은 예전처럼 남기지 않습니다. 실계좌(2026-09-28)에서는 예수금 그리드 5행이 모두 빈 행이었고, 달러 예수금이 있을 때의 행 모양은 아직 모릅니다. 달러 행을 가리는 규칙과 `info.unreadCurrencies`는 그대로입니다.
+- 한국투자증권과 KB증권 `fetchInvestorTrading`의 순매수 대금(`individual`, `foreign`, `institution`)이 백만 원 단위라는 것을 설명에 적었습니다. 실계좌(2026-09-28)에서 순매수 대금을 순매수 수량과 종가의 곱으로 나눈 값이 한국투자증권(`inquire-investor`)은 개인, 외국인, 기관 모두, KB증권(`IVU10430`)은 5영업일의 모든 투자자 유형에서 약 1e-6이었습니다. 값은 바꾸지 않았고, 예전처럼 응답 그대로 싣습니다. 원 단위로 쓰려면 100만을 곱합니다.
 
 ### 고침
 
@@ -106,6 +111,7 @@
 - KB증권에서 날짜를 주지 않은 국내 주문·체결 조회(`fetchOpenOrders`, `fetchOrders`, `fetchMyTrades` 등)와 미국 `fetchMyTrades`는 조회일자를 영업일로 되감습니다. 되감기 상한 `options.businessDateMaxBackoff`를 그날 이미 되감은 칸 수보다 작게 주면 이 조회가 `undefined`를 던졌습니다. 이제 요청 없이 `BadRequest`를 던집니다. 상한을 0보다 작게 줄 때도 같습니다. Python 판도 같습니다.
 - KB증권 토큰 발급이 거절돼도(`AuthenticationError`) 토큰 차단기를 풀지 않습니다. 예전에는 발급 거절을 TR의 업무 거절처럼 보고 연속 실패 수를 0으로 되돌렸습니다. 그래서 토큰 무효가 이어지는 사이에 발급 거절이 끼면 차단기가 늦게 열리거나 열리지 않았습니다. 토큰을 싣고 보낸 TR이 업무 오류로 거절되면 예전처럼 차단기를 풉니다. Python 판도 같습니다.
 - KB증권 국내 `fetchOrder`가 주문 상태를 `fetchOrders`와 같은 규칙으로 정합니다. 예전에는 미체결 목록에 없고 체결이 있으면 `closed`였습니다. 그래서 일부 체결 뒤 나머지가 취소된 주문이 `fetchOrders`에서는 `canceled`, `fetchOrder`에서는 `closed`였습니다. ccxt에서 `closed`는 전량 체결입니다. 이제 미체결 목록 대신 같은 날의 전체 주문 목록(`SSQM2341` 체결구분 0)에서 주문을 찾습니다. 미체결수량이 남았으면 `open`, 전량 체결이면 `closed`, 남지 않았는데 덜 체결됐으면 `canceled`입니다. 요청은 예전처럼 두 번입니다. `filled`, `cost`, `average`는 예전처럼 체결내역의 합이고, `remaining`은 `fetchOrders`처럼 목록의 미체결수량입니다. 끝난 주문의 `info`는 체결 행 목록(`info.trades`)이 아니라 목록의 주문 행이고, `type`, `price`, `amount`도 채웁니다. 전체 목록에 없는데 체결이 있으면 예전처럼 `closed`로 돌려줍니다. Python 판도 같습니다.
+- KB증권 미국 `fetchOrder`가 체결내역 없이 해외 체결현황(`SPQM2204`)만으로 주문을 만들 때 `side`를 채웁니다. 예전에는 비어 있었습니다. 방향은 체결현황의 기타매매구분코드(`etc_trd_ccd`)로 정하고, `01`은 매도, `02`는 매수입니다. 명세에는 이 코드의 값 설명이 없습니다. 실계좌(2026-09-28)에서 매매구분(`trd_clsf`)을 `01`로 거르면 `01` 행만, `02`로 거르면 `02` 행만 오는 것으로 확인했습니다. 그 밖의 값이면 예전처럼 비웁니다. 체결내역이 있으면 예전처럼 체결 행의 방향을 씁니다. `fetchOverseasOrderStatus`의 행에도 같은 `side`를 싣습니다. Python 판도 같습니다.
 
 ## [0.5.0] - 2026-09-25
 
