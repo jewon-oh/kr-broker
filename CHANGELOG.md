@@ -49,6 +49,7 @@
 - KB증권 국내 `fetchOHLCV`를 `'1mo'`로 부르면 봉의 `timestamp`를 `'1M'`처럼 그 달 1일의 00:00 UTC로 맞춥니다. 예전에도 `'1mo'`를 월봉으로 조회했지만, 봉 시각은 KB가 준 날짜(`dt`)의 00:00 KST였습니다. 그래서 `dt`가 `20260803`인 봉이 `'1M'`이면 2026-08-01T00:00Z, `'1mo'`면 2026-08-02T15:00Z였습니다. 일봉, 주봉, 분봉은 그대로입니다. Python 판도 같습니다.
 - KB증권 토큰 발급 요청이 전송 계층의 시간 초과로 끝나면 `NetworkError` 대신 `RequestTimeout`을 던집니다. 전송 계층이 `TimeoutError`나 `AbortError`를 던진 경우입니다. TR 요청과 Python 판은 이미 `RequestTimeout`이었습니다. `RequestTimeout`은 `NetworkError`의 하위 클래스라 `instanceof NetworkError`로 잡던 코드는 그대로 동작합니다. 오류의 `name`을 `'NetworkError'`와 비교하던 코드는 `'RequestTimeout'`도 받게 고칩니다.
 - KB증권 `fetchTicker`는 응답에 거래량 필드가 없으면 `baseVolume`을 비웁니다. 예전에는 0을 실었습니다. 거래량이 0으로 오면 예전처럼 0입니다. ccxt처럼 모르는 값을 0으로 채우지 않습니다. `baseVolume`이 늘 숫자라고 보던 코드는 빈 값도 다룹니다. Python 판도 같습니다.
+- KB증권 국내 `fetchTrades`가 결과를 한국투자증권처럼 오래된 것부터 돌려주고, `limit`을 결과에도 적용합니다. 예전에는 응답 순서(새 것부터) 그대로 돌려주고 `limit`은 조회건수(`inq_cnt`)로만 보냈습니다. 이제 `since` 없이 `limit`을 주면 가장 최근 체결을, `since`와 함께 주면 `since` 뒤의 가장 이른 체결을 `limit`개 남깁니다. ccxt와 같은 규칙입니다. 결과의 첫 항목을 가장 새 체결로 읽던 코드는 마지막 항목을 읽도록 바꿉니다. 날짜가 바뀌어 `timestamp`를 비운 더 오래된 행은 이제 앞쪽에 옵니다. 행이 새 것부터 온다는 것은 실계좌(2026-09-28) 30행에서 확인했습니다. 한국투자증권 `fetchTrades`의 행 순서도 같은 날 같은 방법으로 확인했습니다. 미국 종목의 체결(`GSA10020`)은 순서를 확인하지 않아 그대로입니다. Python 판도 같습니다.
 
 ### 추가
 

@@ -1355,7 +1355,7 @@ class kis(Exchange, ImplicitAPI):
 
         체결 행에는 시각(HHMMSS)만 있고 날짜가 없으며, 장 밖에서는 직전 거래일의 체결이 온다. 그래서 같은 시장구분으로 일자별 시세
         (`inquire-daily-price`, TR `FHKST01010400`)를 한 번 더 받아, 거래량이 있는 가장 최근 영업일을 가장 새 체결의 날짜로 쓴다. 행은 새 것부터
-        온다고 보고, 앞 행보다 시각이 늦은 행이 나오면 날짜가 바뀐 것이므로 그 행부터는 `timestamp` 를 비운다. 일자별 시세를 받지 못했거나,
+        온다(실계좌 2026-09-28 확인). 앞 행보다 시각이 늦은 행이 나오면 날짜가 바뀐 것이므로 그 행부터는 `timestamp` 를 비운다. 일자별 시세를 받지 못했거나,
         거래량이 있는 날이 없거나, 가장 새 체결이 지금보다 1분 넘게 늦으면 모든 행의 `timestamp` 를 비운다. `since` 를 주면 `timestamp` 가 빈 행은 빠진다."""
         instrument = self._instrument_of(symbol)
         if instrument.overseas:

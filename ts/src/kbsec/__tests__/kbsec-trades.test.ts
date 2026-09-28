@@ -94,7 +94,8 @@ describe('fetchTrades 체결 날짜(일봉 기준)', () => {
         const result = await newExchange().fetchTrades('005930/KRW');
 
         expect(trBody(mockFetch, KBSEC_TR.CHART_KR).dataBody).toMatchObject({ is_cd: '005930', chrt_clsf: 'D', inq_cnt: '30' });
-        expect(datetimes(result)).toEqual(['2026-03-25T01:00:20.000Z', '2026-03-25T00:59:58.000Z']);
+        // 행은 새 것부터 오고(실계좌 2026-09-28 확인) 결과는 오래된 것부터다.
+        expect(datetimes(result)).toEqual(['2026-03-25T00:59:58.000Z', '2026-03-25T01:00:20.000Z']);
     });
 
     it('코스닥 종목은 마스터 데이터로 알면 일봉을 코스닥 시장구분(1)으로 받아 장중 날짜를 붙인다. 모르면 코스피(0)로 받는다', async () => {
@@ -108,7 +109,7 @@ describe('fetchTrades 체결 날짜(일봉 기준)', () => {
         const known = await new kbsec({ ...CREDS, rateLimit: 0, options: { masterData: KIS_MASTER_FIXTURE } }).fetchTrades('247540/KRW');
 
         expect(trBody(mockFetch, KBSEC_TR.CHART_KR).dataBody).toMatchObject({ is_cd: '247540', mkt_clsf: '1' });
-        expect(datetimes(known)).toEqual(['2026-03-25T01:00:20.000Z', '2026-03-25T00:59:58.000Z']);
+        expect(datetimes(known)).toEqual(['2026-03-25T00:59:58.000Z', '2026-03-25T01:00:20.000Z']);
 
         const unknown = await newExchange().fetchTrades('247540/KRW');
 
@@ -125,7 +126,7 @@ describe('fetchTrades 체결 날짜(일봉 기준)', () => {
 
         const result = await newExchange().fetchTrades('005930/KRW');
 
-        expect(datetimes(result)).toEqual([`${day}T06:30:00.000Z`, `${day}T06:29:59.000Z`]);
+        expect(datetimes(result)).toEqual([`${day}T06:29:59.000Z`, `${day}T06:30:00.000Z`]);
     });
 
     it('저유동 종목이면 거래량이 있는 마지막 일봉(며칠 전)의 날짜를 붙인다', async () => {
@@ -137,7 +138,7 @@ describe('fetchTrades 체결 날짜(일봉 기준)', () => {
 
         const result = await newExchange().fetchTrades('247540/KRW');
 
-        expect(datetimes(result)).toEqual(['2026-03-20T05:30:00.000Z', '2026-03-20T02:00:00.000Z']);
+        expect(datetimes(result)).toEqual(['2026-03-20T02:00:00.000Z', '2026-03-20T05:30:00.000Z']);
     });
 
     it('앞 행보다 시각이 늦은 행이 나오면 그 행부터 끝까지 timestamp 를 비운다. since 를 주면 빈 행은 빠진다', async () => {
@@ -148,8 +149,21 @@ describe('fetchTrades 체결 날짜(일봉 기준)', () => {
         });
         const exchange = newExchange();
 
-        expect(datetimes(await exchange.fetchTrades('005930/KRW'))).toEqual(['2026-03-25T00:35:00.000Z', '2026-03-25T00:10:00.000Z', undefined, undefined]);
+        expect(datetimes(await exchange.fetchTrades('005930/KRW'))).toEqual([undefined, undefined, '2026-03-25T00:10:00.000Z', '2026-03-25T00:35:00.000Z']);
         expect(datetimes(await exchange.fetchTrades('005930/KRW', Date.UTC(2026, 2, 25, 0, 20)))).toEqual(['2026-03-25T00:35:00.000Z']);
+    });
+
+    it('limit 은 조회건수로 보내고 결과에도 적용한다. since 가 없으면 가장 최근 것을, 있으면 since 뒤의 가장 이른 것을 남긴다', async () => {
+        at(NOW);
+        routeTr(mockFetch, {
+            [KBSEC_TR.TRADES_TIMELINE_KR]: trades('095500', '094000', '093000'),
+            [KBSEC_TR.CHART_KR]: days(['20260325', '1520000']),
+        });
+        const exchange = newExchange();
+
+        expect(datetimes(await exchange.fetchTrades('005930/KRW', undefined, 2))).toEqual(['2026-03-25T00:40:00.000Z', '2026-03-25T00:55:00.000Z']);
+        expect(trBody(mockFetch, KBSEC_TR.TRADES_TIMELINE_KR).dataBody).toMatchObject({ inq_cnt: '2' });
+        expect(datetimes(await exchange.fetchTrades('005930/KRW', Date.UTC(2026, 2, 25, 0, 0), 2))).toEqual(['2026-03-25T00:30:00.000Z', '2026-03-25T00:40:00.000Z']);
     });
 
     it('일봉 조회가 실패하면 던지지 않고 모든 행의 timestamp 를 비운다', async () => {

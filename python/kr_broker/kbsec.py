@@ -816,7 +816,9 @@ class kbsec(Exchange, ImplicitAPI):
         국내는 체결가, 체결수량, 체결시각만 채운다. 방향(매도매수구분, `sell_buy_ccd`)과 체결 ID 는 코드값 의미를 확정할 근거가 없어(명세에 설명 없음)
         채우지 않고, `info` 에 원본이 남아 있다. 체결 행에는 시각(`ccls_tm`, HHMMSS)만 있어서, 일봉(`fetch_ohlcv`)을 한 번 더 받아 거래량이 있는
         가장 최근 영업일을 가장 새 체결의 날짜로 쓴다. 날짜가 바뀐 행부터 비우는 규칙은 한국투자증권과 같다(`kst_trade_timestamps`).
-        행이 새 것부터 온다는 순서는 명세에 없고 실계좌로 확인하지 못했다. `since` 를 주면 `timestamp` 가 빈 행은 빠진다.
+        행은 새 것부터 온다. 명세에는 없지만 실계좌(2026-09-28) 30행에서 시각이 앞 행보다 늦어진 적이 없었다.
+        결과는 한국투자증권처럼 오래된 것부터 둔다. `limit` 은 조회건수(`inq_cnt`)로 보내고 결과에도 적용한다(`since` 가 없으면 가장 최근 것이다).
+        `since` 를 주면 `timestamp` 가 빈 행은 빠진다.
 
         해외는 체결구분(`ccls_clsf`, `1` 매수자체결, `2` 매도자체결)이 명세에 있어 `side` 를 채운다. 시각은 한국 시각 변환 필드(`kor_dt`·`kor_tm`)를
         쓴다(국내와 달리 여러 날짜를 한 번에 준다). 거래소코드(`krx_cd`)는 `fetch_ticker` 가 쓰는 캐시를 그대로 쓰고, 없으면 먼저 현재가 조회로 채운다."""
@@ -846,7 +848,8 @@ class kbsec(Exchange, ImplicitAPI):
             'cost': None,
             'fee': None,
         }, market) for row, timestamp in zip(rows, stamps)]
-        return trades if since is None else [trade for trade in trades if (trade['timestamp'] or 0) >= since]
+        trades.reverse()
+        return self.filter_by_since_limit(trades, since, limit, 'timestamp', since is None)
 
     def _last_traded_date(self, market: MarketInterface) -> Str:
         """거래량이 있는 가장 최근 영업일(`YYYYMMDD`). 일봉을 받지 못했거나 최근 30개에 그런 날이 없으면 `None` 이다.
