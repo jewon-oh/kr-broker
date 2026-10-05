@@ -241,12 +241,12 @@
     "verify": "node scripts/verify.mjs"
   },
   "dependencies": {
-    "ws": "^8.19.0"
+    "ws": "^8.22.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/ws": "^8.18.1",
-    "tsc-alias": "1.8.17",
+    "tsc-alias": "1.9.5",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },
