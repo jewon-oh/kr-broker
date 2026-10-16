@@ -230,8 +230,9 @@ class FakeSession:
         return reply
 
 
-def yahoo_ok(candles: List[List[float]]) -> FakeResponse:
+def yahoo_ok(candles: List[List[float]], meta: Optional[Dict[str, Any]] = None) -> FakeResponse:
     return FakeResponse(200, {'chart': {'result': [{
+        **({'meta': meta} if meta else {}),
         'timestamp': [c[0] // 1000 for c in candles],
         'indicators': {'quote': [{
             'open': [c[1] for c in candles], 'high': [c[2] for c in candles], 'low': [c[3] for c in candles],
@@ -321,6 +322,23 @@ def test_yahoo_since_until_takes_first_limit_from_since(no_backoff: None, monkey
     assert 'range=5y' in session.urls[0]
     out = fetch_yahoo_candles('AAPL', '1d', 2, None, utc('2024-01-06T00:00:00'), exchange=exchange)
     assert [c[0] for c in out] == [utc('2024-01-04T00:00:00'), utc('2024-01-05T00:00:00')]
+
+
+def test_yahoo_kr_index_daily_uses_exchange_timezone(no_backoff: None) -> None:
+    # 2026-10-12(월)~10-16(금) 코스피 일봉. 야후는 09:00 KST(00:00 UTC)에 둔다.
+    days = ['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16']
+    bars: List[List[float]] = [[utc(f'{d}T00:00:00'), 1, 1, 1, 1, 1] for d in days]
+    session = FakeSession([yahoo_ok(bars, {'symbol': '^KS11', 'exchangeTimezoneName': 'Asia/Seoul'})])
+    out = fetch_yahoo_candles('^KS11', '1d', 10, exchange=Exchange({'session': session}))
+    # 예전에는 접미사가 없어 미국으로 잡혀 뉴욕 날짜(전날)가 돼 10-11(일)~10-15 로 나왔다.
+    assert [c[0] for c in out] == [utc(f'{d}T00:00:00') for d in days]
+
+
+def test_yahoo_us_timezone_daily_moves_to_trade_date(no_backoff: None) -> None:
+    session = FakeSession([yahoo_ok([[utc('2026-10-15T13:30:00'), 1, 1, 1, 1, 1]],
+                                    {'symbol': '^GSPC', 'exchangeTimezoneName': 'America/New_York'})])
+    out = fetch_yahoo_candles('^GSPC', '1d', 10, exchange=Exchange({'session': session}))
+    assert [c[0] for c in out] == [utc('2026-10-15T00:00:00')]
 
 
 def test_yahoo_minute_since_beyond_cap_warns(no_backoff: None, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:

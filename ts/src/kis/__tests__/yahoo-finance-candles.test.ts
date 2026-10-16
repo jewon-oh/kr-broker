@@ -34,11 +34,12 @@ function fakeResponse(status: number, body: unknown): Response {
     return { ok: status >= 200 && status < 300, status, statusText: '', headers: new Headers(), text: async () => JSON.stringify(body), json: async () => body } as unknown as Response;
 }
 
-/** Yahoo chart API 정상 응답 mock (candles: [tsMs, o, h, l, c, v][]). */
-function yahooOk(candles: OHLCV[]): Response {
+/** Yahoo chart API 정상 응답 mock (candles: [tsMs, o, h, l, c, v][]). `meta` 를 주면 응답에 싣는다. */
+function yahooOk(candles: OHLCV[], meta?: Record<string, unknown>): Response {
     return fakeResponse(200, {
             chart: {
                 result: [{
+                    ...(meta ? { meta } : {}),
                     timestamp: candles.map(c => Math.floor(c[0] / 1000)), // ms → s (코드가 다시 *1000)
                     indicators: {
                         quote: [{
@@ -261,6 +262,27 @@ describe('fetchYahooCandles — 일·주·월봉 시각', () => {
 
         expect(kr.map((c) => c[0])).toEqual([Date.parse('2026-09-22T00:00:00Z'), Date.parse('2026-09-23T00:00:00Z')]);
         expect(us.map((c) => c[0])).toEqual([Date.parse('2026-09-22T00:00:00Z'), Date.parse('2026-09-23T00:00:00Z')]);
+    });
+
+    it('★국내 지수(^KS11)는 응답의 거래소 시간대로 국내 일봉으로 읽는다 — 접미사가 없어도 날짜를 하루 당기지 않는다', async () => {
+        // 2026-10-12(월)~10-16(금) 코스피 일봉. 야후는 09:00 KST(00:00 UTC)에 둔다.
+        const days = ['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16'];
+        const bars = days.map((d): OHLCV => [Date.parse(`${d}T00:00:00Z`), 1, 1, 1, 1, 1]);
+        vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(yahooOk(bars, { symbol: '^KS11', exchangeTimezoneName: 'Asia/Seoul' }));
+
+        const out = await fetchYahooCandles('^KS11', '1d', 10);
+
+        // 예전에는 미국으로 잡혀 뉴욕 날짜(전날)가 돼 10-11(일)~10-15 로 나왔다.
+        expect(out.map((c) => new Date(c[0]!).toISOString().slice(0, 10))).toEqual(days);
+    });
+
+    it('응답의 시간대가 미국이면 접미사와 관계없이 미국 일봉으로 옮긴다', async () => {
+        vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+            yahooOk([[Date.parse('2026-10-15T13:30:00Z'), 1, 1, 1, 1, 1]], { symbol: '^GSPC', exchangeTimezoneName: 'America/New_York' }));
+
+        const out = await fetchYahooCandles('^GSPC', '1d', 10);
+
+        expect(out.map((c) => c[0])).toEqual([Date.parse('2026-10-15T00:00:00Z')]);
     });
 
     it('주봉은 월요일의 00:00 UTC 이고, 끝에 붙는 하루치 시세 봉은 같은 주의 기간 봉을 남기고 버린다', async () => {
