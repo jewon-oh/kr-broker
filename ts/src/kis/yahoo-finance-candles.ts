@@ -15,7 +15,7 @@ import type { HttpResponseLike } from '../base/Exchange';
 import { logger } from '../logger';
 import { resampleCandles } from './candle-resample';
 import { candlePeriodUtcMs, isDailyOrLongerTimeframe, timeframeToMs } from '../broker-time';
-import { symbolBaseCode } from '../broker-market-group';
+import { symbolBaseCode, type StockMarketGroup } from '../broker-market-group';
 import { isKrxDomesticCode } from './kis-types';
 import { sliceCandleWindow } from './kis-candle-pagination';
 
@@ -151,11 +151,12 @@ function releaseYahooSlot(): void {
 interface YahooChartResponse {
     chart: {
         result: Array<{
-            meta: {
-                symbol: string;
-                currency: string;
-                exchangeTimezoneName: string;
-                regularMarketPrice: number;
+            meta?: {
+                symbol?: string;
+                currency?: string;
+                /** 거래소 시간대(IANA). 국내 종목과 지수는 `Asia/Seoul` 이다. */
+                exchangeTimezoneName?: string;
+                regularMarketPrice?: number;
             };
             timestamp: number[];
             indicators: {
@@ -355,7 +356,7 @@ export async function fetchYahooCandles(
                 // 일·주·월봉은 기간 첫날의 00:00 UTC 로 옮긴다(`candlePeriodUtcMs`). 야후는 일봉을 개장 시각에, 주·월봉을 현지 자정에 둔다.
                 // 주·월봉 끝에는 오늘 하루치 시세 봉이 한 번 더 붙는다. 같은 기간의 앞 봉이 오늘까지 담은 기간 봉이라 뒤엣것을 버린다.
                 if (isDailyOrLongerTimeframe(timeframe)) {
-                    const market = /\.(KS|KQ)$/.test(yahooSymbol) ? 'KR' : 'US';
+                    const market = yahooCandleMarket(yahooSymbol, result.meta?.exchangeTimezoneName);
                     for (const candle of candles) candle[0] = candlePeriodUtcMs(candle[0]!, timeframe, market);
                     if (!timeframe.endsWith('d')) dedupeByTimestampKeepFirst(candles);
                 }
@@ -400,6 +401,19 @@ export async function fetchYahooCandles(
 }
 
 // ============ 내부 유틸 ============
+
+/** 국내 거래소의 야후 시간대 이름. */
+const YAHOO_KR_TIMEZONE = 'Asia/Seoul';
+
+/**
+ * 일·주·월봉의 날짜를 셀 시장. 야후 응답의 거래소 시간대(`meta.exchangeTimezoneName`)로 정한다.
+ * 티커 접미사로 정하면 `.KS`·`.KQ` 가 붙지 않는 국내 지수(`^KS11`, `^KQ11`)가 미국으로 잡혀 봉 날짜가 하루 앞당겨진다.
+ * 응답에 시간대가 없을 때만 접미사를 본다.
+ */
+function yahooCandleMarket(yahooSymbol: string, exchangeTimezoneName: string | undefined): StockMarketGroup {
+    if (exchangeTimezoneName) return exchangeTimezoneName === YAHOO_KR_TIMEZONE ? 'KR' : 'US';
+    return /\.(KS|KQ)$/.test(yahooSymbol) ? 'KR' : 'US';
+}
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

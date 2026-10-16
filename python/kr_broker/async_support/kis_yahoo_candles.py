@@ -25,6 +25,8 @@ logger = logging.getLogger('kr_broker')
 
 YAHOO_CHART_BASE_URL = 'https://query1.finance.yahoo.com/v8/finance/chart'
 YAHOO_KR_SUFFIX = {'KOSPI': '.KS', 'KOSDAQ': '.KQ'}
+# 국내 거래소의 야후 시간대 이름.
+YAHOO_KR_TIMEZONE = 'Asia/Seoul'
 
 # 타임프레임 → 야후 interval. 야후에 4h 가 없어 1h 로 받아 합친다.
 YAHOO_INTERVAL_MAP = {
@@ -143,6 +145,15 @@ def to_yahoo_ticker(stock_code: str, kr_market: Optional[str] = None) -> str:
     return code.replace('.', '-')
 
 
+def _yahoo_candle_market(yahoo_symbol: str, exchange_timezone_name: Any) -> str:
+    """일·주·월봉의 날짜를 셀 시장(`'KR'`, `'US'`). 야후 응답의 거래소 시간대(`meta.exchangeTimezoneName`)로 정한다.
+    티커 접미사로 정하면 `.KS`·`.KQ` 가 붙지 않는 국내 지수(`^KS11`, `^KQ11`)가 미국으로 잡혀 봉 날짜가 하루 앞당겨진다.
+    응답에 시간대가 없을 때만 접미사를 본다."""
+    if isinstance(exchange_timezone_name, str) and exchange_timezone_name:
+        return 'KR' if exchange_timezone_name == YAHOO_KR_TIMEZONE else 'US'
+    return 'KR' if yahoo_symbol.endswith(('.KS', '.KQ')) else 'US'
+
+
 async def _backoff(attempt: int) -> None:
     await sleep_seconds((YAHOO_RETRY_BASE_MS * attempt + math.floor(random.random() * 250)) / 1000)
 
@@ -239,7 +250,8 @@ async def fetch_yahoo_candles(stock_code: str, timeframe: str = '1d', limit: int
                 # 일·주·월봉은 기간 첫날의 00:00 UTC 로 옮긴다(`candle_period_utc_ms`). 야후는 일봉을 개장 시각에, 주·월봉을 현지 자정에 둔다.
                 # 주·월봉 끝에는 오늘 하루치 시세 봉이 한 번 더 붙는다. 같은 기간의 앞 봉이 오늘까지 담은 기간 봉이라 뒤엣것을 버린다.
                 if is_daily_or_longer_timeframe(timeframe):
-                    market = 'KR' if yahoo_symbol.endswith(('.KS', '.KQ')) else 'US'
+                    meta = result.get('meta')
+                    market = _yahoo_candle_market(yahoo_symbol, meta.get('exchangeTimezoneName') if isinstance(meta, dict) else None)
                     for candle in candles:
                         candle[0] = candle_period_utc_ms(candle[0], timeframe, market)
                     if not timeframe.endswith('d'):
