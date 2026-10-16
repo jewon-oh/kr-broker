@@ -96,7 +96,7 @@ import {
 import { kbsecNumberOf } from './kbsec/kbsec-number';
 import { buildKrOrderBody } from './kbsec/kbsec-order-body';
 import {
-    isUsdCashRow, kbsecHoldingQuantity, OVERSEAS_QTY_CANDIDATES, pickArray, pickCashGrid, pickGrid, pickHoldingGrid, pickNum,
+    isEmptyCashRow, isUsdCashRow, kbsecHoldingQuantity, OVERSEAS_QTY_CANDIDATES, pickArray, pickCashGrid, pickGrid, pickHoldingGrid, pickNum,
     pickOptionalNum, pickOverseasSettlementGrid, pickPositiveNum, pickSettlementGrid, pickStr, unknownGrids,
 } from './kbsec/kbsec-pick';
 import {
@@ -1642,6 +1642,8 @@ export interface KbsecSymbolRealizedPnlFetch {
 interface OverseasHoldings {
     rows: HoldingRow[];
     usdCash: Dict | undefined;
+    /** 통화별 예수금 그리드가 왔고 그 행이 모두 빈 행이며, 알아보지 못한 배열이 없다. 외화 예수금이 없다는 뜻이다. */
+    noForeignCash: boolean;
     read: boolean;
 }
 
@@ -2899,6 +2901,8 @@ export class kbsec extends Exchange {
      *
      * `USD` 항목은 해외 잔고평가(`SPQM2226`)의 통화별 예수금 그리드에서 온다(예수금·주문가능금액). 그 그리드를 못 읽었으면 `USD` 항목이 없다.
      * **없다는 것은 0 이 아니라 모른다는 뜻이다.** 미국 시장은 읽었는데 달러 행을 가리지 못해 `USD` 항목이 없으면 `info.unreadCurrencies` 에 `USD` 가 있다.
+     * 예수금 그리드의 행이 모두 빈 행이면 외화 예수금이 없으므로 `USD` 의 `total` 은 0 이다. 원마켓 계좌는 달러 예수금 없이 원화로 미국 주식을 사므로
+     * 이때 `free` 는 0 이 아니라 모르는 값이라 비운다. 0 으로 두면 호출하는 쪽의 잔액 검사가 원화로 살 수 있는 미국 매수를 모두 막는다.
      * `readStatus` 는 보유의 완전성만 알리므로 이때도 `COMPLETE` 일 수 있다. `options.krwIntegratedMargin` 이 켜져 있고 원화환산 외화예수금이 있으면 그것을 환율로 환산한 USD 가 우선한다.
      *
      * `free` 는 지금 주문에 쓸 수 있는 양, `total` 은 정산 뒤 계좌에 남을 양, `used` 는 `total − free` 다(ccxt 정의). 모르는 값은 비운다.
@@ -2978,6 +2982,9 @@ export class kbsec extends Exchange {
             const deposit = numberToString(pickNum(usdCash, 'tfnd'));
             const free = numberToString(pickNum(usdCash, 'ordr_psbl_amt_p2'));
             result['USD'] = { free, used: undefined, total: Precise.stringGt(free, deposit) ? undefined : deposit, info: usdCash };
+        } else if (overseas.noForeignCash) {
+            // 예수금 그리드가 빈 행뿐이면 달러 예수금은 0 이다. 주문에 쓸 수 있는 양은 원마켓 여부에 달려 이 조회로는 모른다.
+            result['USD'] = { free: undefined, used: undefined, total: 0 };
         }
         // 미국 시장을 읽었는데 달러 예수금 행을 가리지 못하면 USD 항목이 없다. 0 이 아니라 모르는 것이라 따로 밝힌다.
         // 미국 시장을 못 읽었으면 `unreadMarkets` 가 이미 알린다.
@@ -3125,9 +3132,9 @@ export class kbsec extends Exchange {
      * 권한이 없거나 업무 오류면 그 뒤로 부르지 않는다. 국내 잔고는 그대로 반환하므로 이 실패가 잔고 조회 전체를 실패시키지 않는다.
      */
     private async fetchOverseasHoldings(): Promise<OverseasHoldings> {
-        if (this.overseasHoldingsUnavailable) return { rows: [], usdCash: undefined, read: false };
+        if (this.overseasHoldingsUnavailable) return { rows: [], usdCash: undefined, noForeignCash: false, read: false };
         // 일시 오류 직후에는 호출 빈도를 제한한다. 이 구간의 빈 결과는 "보유 없음"이 아니라 "안 물어봤다"이며, `read: false` 가 그 사실을 전한다.
-        if (this.milliseconds() < this.overseasHoldingsRetryAt) return { rows: [], usdCash: undefined, read: false };
+        if (this.milliseconds() < this.overseasHoldingsRetryAt) return { rows: [], usdCash: undefined, noForeignCash: false, read: false };
         try {
             const body = await this.callTr(KBSEC_TR.HOLDINGS_US, {
                 std_crncy_f: KBSEC_STD_CURRENCY_FOREIGN,
@@ -3140,11 +3147,12 @@ export class kbsec extends Exchange {
             const { rows, seen } = pickHoldingGrid(body);
             const cashRows = pickCashGrid(body);
             const usdCash = cashRows.find(isUsdCashRow);
-            if (cashRows.length > 0 && usdCash === undefined) {
-                // 통화구분명과 행별 기준환율(공개 환율)은 금액이 아니라 남긴다. 예수금과 주문가능금액은 남기지 않고, 통화구분명이 비고
-                // 환율과 두 금액이 모두 0 인 빈 행의 수만 센다. 달러 예수금이 있을 때 행 모양을 보고 `isUsdCashRow` 를 고치려는 진단이다.
-                const emptyRows = cashRows.filter((row) => pickStr(row, 'crncy_clsf_nm') === ''
-                    && ['std_exch_r', 'cnvr_exch_r_p4', 'tfnd', 'ordr_psbl_amt_p2'].every((key) => kbsecNumberOf(row[key]) === 0)).length;
+            const emptyRows = cashRows.filter(isEmptyCashRow).length;
+            // 빈 행만 왔으면 가릴 달러 행이 없는 것이다. 외화 예수금이 없는 계좌는 조회할 때마다 이 모양이라 경고하지 않는다.
+            const noForeignCash = cashRows.length > 0 && emptyRows === cashRows.length;
+            if (cashRows.length > 0 && usdCash === undefined && !noForeignCash) {
+                // 통화구분명과 행별 기준환율(공개 환율)은 금액이 아니라 남긴다. 예수금과 주문가능금액은 남기지 않고 빈 행의 수만 센다.
+                // 달러 예수금이 있을 때 행 모양을 보고 `isUsdCashRow` 를 고치려는 진단이다.
                 logger.warn({
                     trCode: KBSEC_TR.HOLDINGS_US, currencyNames: cashRows.map((row) => row.crncy_clsf_nm),
                     standardRates: cashRows.map((row) => row.std_exch_r), emptyRows,
@@ -3213,7 +3221,8 @@ export class kbsec extends Exchange {
             }
             // 호출이 예외 없이 끝났다. 직전의 실패 상태를 푼다(자가 치유).
             this.overseasHoldingsRetryAt = 0;
-            return { rows: out, usdCash, read };
+            // 알아보지 못한 배열이 있으면 이름이 어긋난 예수금 그리드일 수 있어 외화 예수금이 없다고 하지 않는다.
+            return { rows: out, usdCash, noForeignCash: noForeignCash && unknown.length === 0, read };
         } catch (err) {
             const permanent = this.isPermanentFailure(err);
             if (permanent) {
@@ -3225,7 +3234,7 @@ export class kbsec extends Exchange {
                 permanent
                     ? '[kbsec] 해외 잔고 조회 실패(업무 오류) — 이 인스턴스에서 재시도하지 않는다(반복 실패는 계정 제한 사유)'
                     : '[kbsec] 해외 잔고 조회 실패(일시 오류) — 냉각 후 재시도한다');
-            return { rows: [], usdCash: undefined, read: false };
+            return { rows: [], usdCash: undefined, noForeignCash: false, read: false };
         }
     }
 

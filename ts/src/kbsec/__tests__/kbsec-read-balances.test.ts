@@ -53,6 +53,8 @@ const tokenOk = () => {
 type UsMode = 'ok' | 'empty' | 'timeout' | 'business' | keyof typeof US_BODIES;
 
 const CASH_GRID = OVERSEAS_OK.Record1;
+/** 예수금 그리드의 빈 행. 실계좌(2026-09-28)와 운영 로그에서 본 모양이다 */
+const EMPTY_CASH_ROW = { crncy_clsf_nm: '          ', std_exch_r: '0000.0000', cnvr_exch_r_p4: '0000.0000', tfnd: '0', ordr_psbl_amt_p2: '0' };
 /** 해외 잔고평가(SPQM2226)가 성공으로 주는 응답 모양들. 모두 해외 보유 행을 읽을 수 있는지가 판정을 가른다. */
 const US_BODIES = {
     /** 보유 0 건. 예수금 그리드만 온다 */
@@ -72,10 +74,29 @@ const US_BODIES = {
     renamedCodeNoCash: { Record2: [{ mkt_clsf_nm: '나스닥', crncy_clsf_nm: 'USD', shrt_is_cd: 'JNJ', hld_q_p6: '2' }] },
     /** 종목 그리드가 객체 안에 들어 있다 */
     nestedGrid: { Record1: CASH_GRID, Output2: { grid: [{ shrt_is_cd: 'JNJ', hld_q_p6: '2' }] } },
-    /** 운영 로그(2026-09-27)의 모양. 예수금 그리드 5행의 통화구분명이 모두 공백 10칸이라 달러 행을 가리지 못한다 */
+    /**
+     * 운영 로그(2026-09-27)의 모양. 예수금 그리드 5행의 통화구분명이 모두 공백 10칸이라 달러 행을 가리지 못한다.
+     * 환율 필드가 없어 빈 행인지도 알 수 없다
+     */
     blankCurrencyNames: {
         Record1: Array.from({ length: 5 }, () => ({ crncy_clsf_nm: '          ', tfnd: '0', ordr_psbl_amt_p2: '0' })),
         Record2: OVERSEAS_OK.Record2,
+    },
+    /** 운영 로그(2026-09-29~10-16)의 모양. 외화 예수금이 없어 예수금 그리드 5행이 모두 빈 행이다 */
+    emptyCashRows: { Record1: Array.from({ length: 5 }, () => EMPTY_CASH_ROW), Record2: OVERSEAS_OK.Record2 },
+    /** 빈 행 4개와 통화구분명만 빈 행 1개. 이름 없는 행에 금액이 있어 달러 예수금을 모른다 */
+    unnamedCashRow: {
+        Record1: [
+            ...Array.from({ length: 4 }, () => EMPTY_CASH_ROW),
+            { crncy_clsf_nm: '          ', std_exch_r: '1360.4000', cnvr_exch_r_p4: '1360.4000', tfnd: '4321.09', ordr_psbl_amt_p2: '4321.09' },
+        ],
+        Record2: OVERSEAS_OK.Record2,
+    },
+    /** 예수금 그리드는 빈 행뿐인데, 이름이 어긋난 배열이 하나 더 있다 */
+    emptyCashRowsWithUnknownGrid: {
+        Record1: Array.from({ length: 5 }, () => EMPTY_CASH_ROW),
+        Record2: OVERSEAS_OK.Record2,
+        Record3: [{ crncy_cd: 'USD', frgn_tfnd: '4321.09' }],
     },
 };
 let usMode: UsMode = 'ok';
@@ -185,6 +206,50 @@ describe('KB fetchBalance — 완전성 상태', () => {
         expect(b.info.unreadCurrencies).toEqual(['USD']);
         expect(codesOf(b)).not.toContain('USD');
         expect(codesOf(b)).toContain('JNJ');
+    });
+
+    // 운영(2026-09-29~10-16)에서 예수금 그리드는 매번 5행 모두 빈 행이었다. 이것을 "달러 행을 못 가렸다"로 읽어 조회마다 경고했고,
+    // 달러 예수금이 0 인 계좌를 달러 현금을 모르는 계좌로 보고했다.
+    it('예수금 그리드가 빈 행뿐이면 USD 의 total 은 0 이고 free 는 비어 있으며 unreadCurrencies 는 비어 있다', async () => {
+        usMode = 'emptyCashRows';
+
+        const b = await makeService().fetchBalance();
+
+        expect(b.info.readStatus).toBe('COMPLETE');
+        expect(b.info.unreadCurrencies).toEqual([]);
+        // 원마켓 계좌는 달러 예수금 없이 원화로 미국 주식을 산다. 주문에 쓸 수 있는 달러를 0 으로 두면 잔액 검사가 그 매수를 막는다.
+        expect(b.USD).toEqual({ free: undefined, used: undefined, total: 0 });
+        expect(codesOf(b)).toContain('JNJ');
+    });
+
+    it('빈 행 사이에 금액이 있는 이름 없는 행이 있으면 USD 항목이 없고 unreadCurrencies 에 USD 가 있다', async () => {
+        usMode = 'unnamedCashRow';
+
+        const b = await makeService().fetchBalance();
+
+        expect(b.USD).toBeUndefined();
+        expect(b.info.unreadCurrencies).toEqual(['USD']);
+    });
+
+    it('예수금 그리드가 빈 행뿐이어도 알아보지 못한 배열이 있으면 달러 예수금이 0 이라고 하지 않는다', async () => {
+        usMode = 'emptyCashRowsWithUnknownGrid';
+
+        const b = await makeService().fetchBalance();
+
+        expect(b.USD).toBeUndefined();
+        expect(b.info.unreadMarkets).toEqual(['US']);
+    });
+
+    it('krwIntegratedMargin 으로 환산한 USD 가 있으면 빈 행뿐인 예수금 그리드보다 그것을 싣는다', async () => {
+        usMode = 'emptyCashRows';
+        const svc = new kbsec({ apiKey: CREDS.appKey, secret: CREDS.appSecret, rateLimit: 0, options: { krwIntegratedMargin: true } });
+        vi.spyOn(svc, 'fetchOneMarketMargin').mockResolvedValue({ krwEquivalentForeign: 1_250_000 } as Awaited<ReturnType<kbsec['fetchOneMarketMargin']>>);
+        vi.spyOn(svc as unknown as { usdKrwRate: () => Promise<number> }, 'usdKrwRate').mockResolvedValue(1250);
+
+        const b = await svc.fetchBalance();
+
+        expect(b.USD).toMatchObject({ free: 1000, total: undefined });
+        expect(b.USD!.info).toMatchObject({ sourceCurrency: 'KRW' });
     });
 
     it('미국 시장을 못 읽었으면 USD 는 unreadMarkets 가 알리고 unreadCurrencies 는 비어 있다', async () => {
@@ -625,6 +690,17 @@ describe('KB fetchBalance — 달러 예수금 행', () => {
             emptyRows: 5,
         });
         expect(JSON.stringify(logged[0]![0])).not.toContain('4321');
+        warn.mockRestore();
+    });
+
+    it('예수금 그리드가 빈 행뿐이면 USD 행 경고를 남기지 않는다', async () => {
+        // 운영(2026-10-16)에서 이 경고가 하루 2천 번 넘게 찍혔다. 빈 행뿐인 그리드에는 가릴 달러 행이 없다.
+        const warn = vi.spyOn(logger, 'warn');
+        usMode = 'emptyCashRows';
+
+        await makeService().fetchBalance();
+
+        expect(warn.mock.calls.filter((c) => String(c[1]).includes('USD 행이 없다'))).toHaveLength(0);
         warn.mockRestore();
     });
 
