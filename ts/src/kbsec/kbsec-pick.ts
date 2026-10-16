@@ -165,6 +165,18 @@ export function isUsdCashRow(row: Record<string, unknown>): boolean {
     return pickStr(row, 'crncy_clsf_nm').toUpperCase() === 'USD';
 }
 
+/** 빈 행이 되려면 숫자 0 이어야 하는 필드. 기준환율이 0 인 통화는 없으므로 이 행은 어느 통화의 행도 아니다. */
+const EMPTY_CASH_ROW_ZERO_KEYS = ['std_exch_r', 'cnvr_exch_r_p4', 'tfnd', 'ordr_psbl_amt_p2'] as const;
+
+/**
+ * 통화별 예수금 그리드의 빈 행인가. 통화구분명이 비고 기준환율, 전환환율, 예수금, 주문가능금액이 모두 숫자 0 인 행이다.
+ * 외화 예수금이 없는 계좌에서 KB 는 이 그리드를 빈 행으로 채운다(실계좌 2026-09-28, 운영 로그 2026-09-29~10-16 은 매번 5행 모두 빈 행).
+ * 필드가 없거나 비어 있으면 0 으로 보지 않는다. 그 행은 빈 행인지 알 수 없다.
+ */
+export function isEmptyCashRow(row: Record<string, unknown>): boolean {
+    return pickStr(row, 'crncy_clsf_nm') === '' && EMPTY_CASH_ROW_ZERO_KEYS.every((key) => kbsecNumberOf(row[key]) === 0);
+}
+
 /** 응답 dataBody 에서 배열을 찾는다. TR 마다 배열 필드 이름이 달라 첫 배열을 집는다. 배열이 하나뿐인 TR 에만 쓴다. */
 export function pickArray(body: Record<string, unknown> | undefined): Record<string, unknown>[] {
     if (!body) return [];
