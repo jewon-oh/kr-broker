@@ -137,6 +137,35 @@ def pick_array(body: Optional[Mapping[str, Any]]) -> List[Dict[str, Any]]:
     return []
 
 
+def pick_settlement_grid(body: Optional[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    """국내 정산(`SSQM2121`) 응답의 종목 그리드. 못 고르면 무엇을 봤는지 남긴다."""
+    picked = pick_grid(body, lambda first: 'is_no' in first or 'ec_amt' in first)
+    if len(picked['rows']) == 0 and len(picked['seen']) > 0:
+        logger.warning('[kbsec] 정산 그리드를 못 골랐다 — 필드명 대조 필요: seen=%s', picked['seen'])
+    return picked['rows']
+
+
+def pick_overseas_settlement_grid(body: Optional[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    """해외 정산(`SPQM2205`) 응답의 종목 그리드. 못 고르면 무엇을 봤는지 남긴다."""
+    picked = pick_grid(body, lambda first: 'shrt_is_cd' in first or 'frgn_stmt_amt_p4' in first)
+    if len(picked['rows']) == 0 and len(picked['seen']) > 0:
+        logger.warning('[kbsec] 해외 정산 그리드를 못 골랐다 — 필드명 대조 필요: seen=%s', picked['seen'])
+    return picked['rows']
+
+
+def kbsec_raw_response(body: Mapping[str, Any]) -> Dict[str, Any]:
+    """그리드를 필드 이름으로 가를 수 없는 TR 의 응답 원문(`fetch_one_market_margin_usage`, `fetch_deposit_details`). TypeScript 판 `kbsecRawResponse` 와 같다.
+    배열이 아닌 필드는 `fields` 에, 배열(그리드)은 응답에 나온 순서대로 `grids` 에 담는다. 그리드마다 무엇인지는 명세에 없다."""
+    fields: Dict[str, Any] = {}
+    grids: List[Any] = []
+    for key, value in body.items():
+        if isinstance(value, list):
+            grids.append(value)
+        else:
+            fields[key] = value
+    return {'fields': fields, 'grids': grids, 'info': body}
+
+
 def kbsec_raw_fields(body: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     """응답 본문에서 배열이 아닌 필드만 모은다. TypeScript 판 `kbsecRawResponse(body).fields` 와 같다."""
     if not body:

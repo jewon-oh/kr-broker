@@ -107,6 +107,73 @@ KBSEC_TR = {
     'ONEMARKET_MARGIN': 'SPQM3390',
     # 해외 잔고평가. 그리드가 둘이다(통화별 예수금과 종목별 보유). 첫 배열을 집으면 예수금 쪽을 집는다.
     'HOLDINGS_US': 'SPQM2226',
+    # 주식자산평가조회(실시간)
+    'ASSET_EVAL_REALTIME': 'SSQN2952',
+    # 총 잔고 조회. 계좌별 평가액, 예수금, 출금가능금액이다.
+    'ACCOUNT_SUMMARY': 'SSQM0005',
+    # 종합계좌 잔고현황 조회(종합위탁계좌, 신연금저축계좌)
+    'INTEGRATED_BALANCE': 'SSQM2932',
+    # 평가손익 조회
+    'UNREALIZED_PNL': 'SSQM0006',
+    # 국내주식 소수점 매매 보유잔고내역 조회
+    'FRAC_HOLDINGS_KR': 'SSQM5472',
+    # 계좌원장 거래내역 조회(위탁·금융상품·저축)
+    'LEDGER': 'SWQA2301',
+    # 계좌원장 거래내역 조회(CMA)
+    'LEDGER_CMA': 'SWQB2301',
+    # 익일·익익일 출금가능금액 조회
+    'WITHDRAWABLE': 'SWQN2302',
+    # 개인별쿠폰 조회
+    'COUPONS': 'SZQM6019',
+    # 거래내역상세 조회. 거래 한 건(일자와 거래일련번호)의 상세다.
+    'LEDGER_DETAIL': 'SWQM2412',
+    # 예수금조회. 대용총액(`sbt_tl_amt`)이 한 레코드에 두 번 있다.
+    'DEPOSIT_DETAIL': 'SWQM2302',
+    # 글로벌원마켓 증거금사용현황
+    'ONEMARKET_MARGIN_USAGE': 'SPQN3390',
+    # 매매정산현황상세(원마켓플러스)
+    'ONEMARKET_SETTLEMENT_DETAIL': 'SKQO3390',
+    # 매수주문가능금액 조회(국내)
+    'BUYABLE_KR': 'SSQM1802',
+    # 계좌별매매가정산현황(국내). KB 가 실제로 청구한 국내 매매비용의 정본이다. 행 파서는 `kbsec_settlement_row` 다.
+    'SETTLEMENT_KR': 'SSQM2121',
+    # 일자별실현손익상세. 매체구분(`md_clsf`)은 호출하는 쪽이 고른다.
+    'PNL_DAILY': 'SSQM2442',
+    # 종목별기간실현손익. 종목 단위 기간 합계라 개별 매매로 나눌 수 없다.
+    'PNL_BY_SYMBOL': 'SSQM2443',
+    # 기간매매손익현황
+    'PNL_PERIOD': 'SSQM2392',
+    # 소수점 주문가능금액(국내)
+    'FRAC_BUYABLE_KR': 'SSQN5472',
+    # 소수점 매매 내역 조회(국내)
+    'FRAC_TRADES_KR': 'SSQM5765',
+    # 온주/소수점 주문체결내역 조회(국내)
+    'FRAC_ORDERS_KR': 'SSQM5475',
+    # 예약주문처리 조회(국내)
+    'RESERVED_RESULTS_KR': 'SSQM0831',
+    # 예약주문접수 조회(국내)
+    'RESERVED_ORDERS_KR': 'SSQM0834',
+    # 계좌권리발생내역
+    'CORPORATE_ACTIONS': 'SRQM3051',
+    # 해외 소수점 주문가능금액 조회
+    'FRAC_BUYABLE_US': 'SPQN5472',
+    # 해외 소수점 보유잔고내역 조회
+    'FRAC_HOLDINGS_US': 'SPQM5472',
+    # 해외 소수점 주문접수내역 조회(주문용)
+    'FRAC_ORDERS_US': 'SPQN5473',
+    # 해외 소수점 주문접수내역조회. 기간, 체결 결과와 요약 그리드를 준다.
+    'FRAC_ORDER_HISTORY_US': 'SPQM5473',
+    # 해외 주문번호별주문내역
+    'ORDER_HISTORY_US': 'SPQM1818',
+    # 원마켓플러스 주문가능금액(종목·가격 지정). 원화환산 주문가능액을 준다.
+    'ONEMARKET_BUYABLE': 'SKQM2106',
+    # 원마켓플러스 주문가능금액 현황(통화별 총괄)
+    'ONEMARKET_BUYABLE_ALL': 'SKQM3350',
+    # 해외 주문가능금액. 원마켓이 아닌 계좌용이다.
+    'BUYABLE_US': 'SPQM2106',
+    # 매매가정산현황(해외). KB 가 실제로 청구한 해외 매매비용의 정본이다. 국내 `SETTLEMENT_KR` 과 매매구분 도메인이 다르다(`99`/`01`/`02`).
+    # 행 파서는 `kbsec_overseas_settlement_row` 다.
+    'SETTLEMENT_US': 'SPQM2205',
     # 현금매수주문(국내)
     'BUY_KR': 'SSAM1802',
     # 현금매도주문(국내)
@@ -212,6 +279,8 @@ KBSEC_INVESTOR_CODE = {
 KBSEC_INVESTOR_RANKING_TYPE_CODE = {'BUY': '0', 'SELL': '1', 'HOLDING_UP': '2', 'HOLDING_DOWN': '3', 'CONSECUTIVE_BUY': '4', 'CONSECUTIVE_SELL': '5'}
 # 업종랭킹(`IVM30010`)의 시장구분(`mkt_clsf`).
 KBSEC_SECTOR_MARKET_CODE = {'KOSPI': '1', 'KOSDAQ': '2'}
+# 종목별기간실현손익(`SSQM2443`)의 매체구분(`md_clsf`). 설명대로 오프라인 `1`, 온라인 `2`, 지점 `3` 이다.
+KBSEC_MEDIA_CLASS_CODE = {'OFFLINE': '1', 'ONLINE': '2', 'BRANCH': '3'}
 
 _A_PREFIXED_CODE = re.compile(r'A([0-9A-Za-z]{6})')
 _KR_ISIN = re.compile(r'KR7([0-9A-Za-z]{6})[0-9A-Za-z]{3}')

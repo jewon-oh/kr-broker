@@ -20,7 +20,7 @@
 
 한국투자증권(KIS), 토스증권, KB증권의 Open API를 같은 메서드와 같은 자료 구조로 사용합니다. 사용법은 [ccxt](https://github.com/ccxt/ccxt)를 따릅니다. `loadMarkets()`, `fetchTicker()`, `fetchBalance()`, `createOrder()`를 안다면 따로 배울 것이 거의 없습니다.
 
-TypeScript 판과 Python 판이 있습니다. Python 판은 ccxt처럼 동기(`kr_broker`), 비동기(`kr_broker.async_support`), 실시간(`kr_broker.pro`) 세 모듈로 부르고, 지금은 한국투자증권과 토스증권을 지원합니다. KB증권은 옮기는 중이며, 통합 메서드(시세, 잔고, 주문, 주문·체결 조회 등)는 모두 옮겨서 `has`가 TypeScript 판과 같습니다. 시세와 종목 정보의 확장 메서드도 옮겼습니다. 정산과 매수가능금액 같은 계좌 확장 메서드는 아직 옮기지 않았고, 암묵 메서드로 부를 수 있습니다. [Python](#python) 절을 보십시오.
+TypeScript 판과 Python 판이 있습니다. Python 판은 ccxt처럼 동기(`kr_broker`), 비동기(`kr_broker.async_support`), 실시간(`kr_broker.pro`) 세 모듈로 부르고, 세 증권사를 지원합니다. KB증권은 통합 메서드(시세, 잔고, 주문, 주문·체결 조회 등)와 확장 메서드(시세·종목 정보, 매수가능금액, 계좌원장, 정산 등)를 옮겨서 `has`가 TypeScript 판과 같습니다. 예약주문을 내고 취소하는 메서드만 아직 옮기지 않았습니다. KB증권은 웹소켓을 제공하지 않아서 실시간 모듈에는 없습니다. [Python](#python) 절을 보십시오.
 
 > [!IMPORTANT]
 > 이 프로젝트는 증권사와 관계가 없는 비공식 라이브러리입니다. 투자 조언이 아니며, 사용해서 생긴 손실은 작성자가 책임지지 않습니다. 각 증권사의 약관은 [약관과 시세 데이터](#약관과-시세-데이터) 절에 정리했습니다.
@@ -364,7 +364,7 @@ async def main():
 asyncio.run(main())
 ```
 
-- 한국투자증권과 토스증권의 통합 메서드(`fetch_ticker`, `fetch_balance`, `create_order` 등)와 실시간 메서드(`watch_*`)를 TypeScript 판과 같게 옮겼습니다. 모든 엔드포인트는 암묵 메서드로도 부를 수 있습니다. KB증권은 옮기는 중이라 지금은 시세(`fetch_ticker`, `fetch_order_book`, `fetch_ohlcv`, `fetch_trades`), `fetch_trading_fee`, `fetch_market_calendar`, `fetch_investor_trading`, 주문·체결 조회(`fetch_order`, `fetch_orders`, `fetch_open_orders`, `fetch_closed_orders`, `fetch_canceled_orders`, `fetch_my_trades`, `fetch_overseas_order_status`), 잔고(`fetch_balance`), 주문(`create_order`, `create_trigger_order`, `create_market_buy_order_with_cost`, `edit_order`, `cancel_order`, `cancel_all_orders`), 시세·종목 정보 확장 메서드(`fetch_stocks`, `fetch_rankings`, `fetch_market_overview`, `fetch_overseas_candles` 등)와 암묵 메서드가 있습니다. 통합 메서드의 `has`는 TypeScript 판과 같고, 정산과 매수가능금액 같은 계좌 확장 메서드는 아직 없습니다.
+- 한국투자증권과 토스증권의 통합 메서드(`fetch_ticker`, `fetch_balance`, `create_order` 등)와 실시간 메서드(`watch_*`)를 TypeScript 판과 같게 옮겼습니다. 모든 엔드포인트는 암묵 메서드로도 부를 수 있습니다. KB증권은 시세(`fetch_ticker`, `fetch_order_book`, `fetch_ohlcv`, `fetch_trades`), `fetch_trading_fee`, `fetch_market_calendar`, `fetch_investor_trading`, 주문·체결 조회(`fetch_order`, `fetch_orders`, `fetch_open_orders`, `fetch_closed_orders`, `fetch_canceled_orders`, `fetch_my_trades`, `fetch_overseas_order_status`), 잔고(`fetch_balance`), 주문(`create_order`, `create_trigger_order`, `create_market_buy_order_with_cost`, `edit_order`, `cancel_order`, `cancel_all_orders`), 시세·종목 정보 확장 메서드(`fetch_stocks`, `fetch_rankings`, `fetch_market_overview`, `fetch_overseas_candles` 등), 계좌 확장 메서드(`fetch_buyable_amount`, `fetch_account_ledger`, `fetch_domestic_settlements`, `fetch_fractional_holdings`, `fetch_corporate_actions` 등)와 암묵 메서드가 있습니다. 통합 메서드의 `has`는 TypeScript 판과 같고, 예약주문을 내고 취소하는 메서드(`createReservedOrder`, `cancelReservedOrder`)만 아직 없습니다.
 - 두 판은 같은 엔드포인트 표(`ts/src/spec/`)와 요청 픽스처(`ts/src/test/static/request/`)를 씁니다. CI가 두 판에서 같은 픽스처를 돌려 같은 요청을 만들고 같은 오류를 던지는지 확인합니다.
 - 자세한 사용법은 [python/README.md](python/README.md)에 있습니다. PyPI에는 아직 게시하지 않았습니다.
 

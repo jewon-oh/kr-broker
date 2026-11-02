@@ -1,15 +1,22 @@
 # 이 파일은 scripts/gen-python-sync.mjs 가 python/kr_broker/async_support/kbsec.py 에서 만든다. 직접 고치지 않는다.
-"""KB증권 Open API(`class kbsec(Exchange, ImplicitAPI)`). TypeScript 판 `ts/src/kbsec.ts` 와 `ts/src/kbsec/kbsec-auth.ts` 를 옮기는 중이다.
-지금은 인증과 요청 봉투, 오류 처리, 토큰 복구, 시세(`fetch_ticker`, `fetch_order_book`, `fetch_ohlcv`, `fetch_trades`), 수수료 추정
+"""KB증권 Open API(`class kbsec(Exchange, ImplicitAPI)`). TypeScript 판 `ts/src/kbsec.ts` 와 `ts/src/kbsec/kbsec-auth.ts` 를 옮겼다.
+인증과 요청 봉투, 오류 처리, 토큰 복구, 시세(`fetch_ticker`, `fetch_order_book`, `fetch_ohlcv`, `fetch_trades`), 수수료 추정
 (`fetch_trading_fee`), 휴장일(`fetch_market_calendar`, `refresh_market_calendar`), 투자자 매매동향(`fetch_investor_trading`), 주문·체결 조회
 (`fetch_order`, `fetch_orders`, `fetch_open_orders`, `fetch_closed_orders`, `fetch_canceled_orders`, `fetch_my_trades`, `fetch_overseas_order_status`),
 잔고(`fetch_balance`, `fetch_one_market_margin`), 주문(`create_order`, `create_trigger_order`, `create_market_buy_order_with_cost`, `edit_order`,
 `cancel_order`, `cancel_all_orders`, `fetch_marketable_buy_price`), 시세·정보 확장 메서드(`fetch_stocks`, `fetch_trading_restriction`,
 `fetch_stock_warnings`, `fetch_company_profile`, `fetch_foreign_brokers`, `fetch_program_trading_trend`, `fetch_market_overview`, `fetch_rankings`,
 `fetch_new_high_low`, `fetch_investor_ranking`, `fetch_theme_groups`, `fetch_sector_ranking`, `fetch_market_fund_flow`, `fetch_exchange_rates`,
-`fetch_world_indices`, `fetch_holidays`, `fetch_overseas_candles`)를 옮겼다. 통합 메서드의 `has` 는 TypeScript 판과 같다.
-TypeScript 판의 계좌 확장 메서드(정산, 매수가능금액, 소수점 내역, 예약주문, 계좌원장, 권리 발생 내역 등)는 아직 옮기지 않았다. 모든 TR 은 암묵 메서드로
-부를 수 있다.
+`fetch_world_indices`, `fetch_holidays`, `fetch_overseas_candles`), 계좌 조회 확장 메서드(매수가능금액 `fetch_buyable_amount`,
+`fetch_overseas_buyable_amount`, `fetch_one_market_buying_power`, `fetch_overseas_orderable_amount`, `fetch_fractional_buyable_amount`, 잔고·손익
+`fetch_unrealized_pnl`, `fetch_account_summary`, `fetch_realtime_asset_valuation`, `fetch_integrated_balance`, `fetch_realized_pnl`,
+`fetch_realized_pnl_daily`, `fetch_realized_pnl_by_symbol`, 소수점 `fetch_fractional_holdings`, `fetch_overseas_fractional_holdings`,
+`fetch_fractional_trades`, `fetch_fractional_orders`, `fetch_overseas_fractional_orders`, `fetch_overseas_fractional_order_history`, 예약주문 조회
+`fetch_reserved_order_results`, `fetch_reserved_orders`, 계좌원장 `fetch_account_ledger`, `fetch_cma_ledger`, `fetch_ledger_entry_detail`,
+예수금 `fetch_withdrawable_amount`, `fetch_deposit_details`, `fetch_one_market_margin_usage`, `fetch_one_market_settlement_detail`, 그 밖에
+`fetch_corporate_actions`, `fetch_coupons`, `fetch_overseas_orders`, 정산 `fetch_domestic_settlements`, `fetch_overseas_settlements`)를 옮겼다.
+통합 메서드의 `has` 는 TypeScript 판과 같다. TypeScript 판의 예약주문(`createReservedOrder`, `cancelReservedOrder`)은 아직 옮기지 않았다. 모든 TR 은
+암묵 메서드로 부를 수 있다.
 
 .. code-block:: python
 
@@ -83,17 +90,23 @@ from kr_broker.kbsec_fill_row import kbsec_resolve_fills, parse_kbsec_domestic_f
 from kr_broker.kbsec_fill_warnings import warn_fill_without_price, warn_if_fill_side_unreadable, warn_if_fill_totals_inconsistent
 from kr_broker.kbsec_number import kbsec_number_of
 from kr_broker.kbsec_order_body import build_kr_order_body
-from kr_broker.kbsec_pick import (
-    OVERSEAS_QTY_CANDIDATES, is_empty_cash_row, is_usd_cash_row, kbsec_holding_quantity, kbsec_raw_fields, kbsec_sector_index, pick_array,
-    pick_cash_grid, pick_grid, pick_holding_grid, pick_num, pick_optional_num, pick_positive_num, pick_str, unknown_grids,
+from kr_broker.kbsec_overseas_settlement_row import (
+    KBSEC_OVERSEAS_SETTLE_DL_CLSF, KBSEC_OVERSEAS_SETTLE_FX_AXIS, KBSEC_OVERSEAS_SETTLE_TRD_CLSF, kbsec_resolve_overseas_settlement_rows,
+    parse_kbsec_overseas_settlement_row,
 )
+from kr_broker.kbsec_pick import (
+    OVERSEAS_QTY_CANDIDATES, is_empty_cash_row, is_usd_cash_row, kbsec_holding_quantity, kbsec_raw_fields, kbsec_raw_response, kbsec_sector_index,
+    pick_array, pick_cash_grid, pick_grid, pick_holding_grid, pick_num, pick_optional_num, pick_overseas_settlement_grid, pick_positive_num,
+    pick_settlement_grid, pick_str, unknown_grids,
+)
+from kr_broker.kbsec_settlement_row import KBSEC_SETTLE_CLSF, KBSEC_SETTLE_TRD_CLSF, kbsec_resolve_settlement_rows, parse_kbsec_domestic_settlement_row
 from kr_broker.kbsec_token_breaker import record_kbsec_call_ok, record_token_failure, throw_if_token_breaker_open
 from kr_broker.kbsec_tr_inputs import fill_tr_inputs
 from kr_broker.kbsec_types import (
     KBSEC_API_BASE, KBSEC_CCLS_ALL, KBSEC_CCLS_FILLED, KBSEC_CCLS_PENDING, KBSEC_CHART_KIND, KBSEC_CONT_FIRST, KBSEC_CONT_NEXT,
     KBSEC_EXCH_RATE_MARKET, KBSEC_FEE_EXCLUDED, KBSEC_HIGH_LOW_TYPE_CODE, KBSEC_INQ_ALL, KBSEC_INQ_STOCK, KBSEC_INVESTOR_CODE,
-    KBSEC_INVESTOR_RANKING_TYPE_CODE, KBSEC_ORDER_SIDE_KR, KBSEC_ORDER_SIDE_US, KBSEC_ORDER_TYPE_KR, KBSEC_ORDER_TYPE_US, KBSEC_REVOKE_PATH,
-    KBSEC_SECTOR_MARKET_CODE, KBSEC_SESSION_REGULAR, KBSEC_SOR, KBSEC_STD_CURRENCY_FOREIGN, KBSEC_TOKEN_DEFAULT_TTL_MS, KBSEC_TOKEN_PATH,
+    KBSEC_INVESTOR_RANKING_TYPE_CODE, KBSEC_MEDIA_CLASS_CODE, KBSEC_ORDER_SIDE_KR, KBSEC_ORDER_SIDE_US, KBSEC_ORDER_TYPE_KR, KBSEC_ORDER_TYPE_US,
+    KBSEC_REVOKE_PATH, KBSEC_SECTOR_MARKET_CODE, KBSEC_SESSION_REGULAR, KBSEC_SOR, KBSEC_STD_CURRENCY_FOREIGN, KBSEC_TOKEN_DEFAULT_TTL_MS, KBSEC_TOKEN_PATH,
     KBSEC_TOKEN_SAFETY_MARGIN_MS, KBSEC_TR, KBSEC_TR_PATH_PREFIX, KBSEC_US_EXCHANGES, KBSEC_WORLD_INDEX_SCOPE_CODE, kbsec_base_symbol,
     kbsec_business_date_kst, kbsec_business_date_us_eastern, kbsec_market_of, kbsec_normalize_code, kbsec_num,
 )
@@ -129,6 +142,8 @@ KBSEC_CHART_PERIOD = {KBSEC_CHART_KIND['DAY']: '1d', KBSEC_CHART_KIND['WEEK']: '
 # 해외 체결현황(`SPQM2204`) 기타매매구분코드(`etc_trd_ccd`)의 방향. 명세에 값 설명이 없다.
 # 실계좌(2026-09-28)에서 입력 매매구분(`trd_clsf`)을 `01` 로 거르면 `01` 행만, `02` 로 거르면 `02` 행만 왔다.
 KBSEC_OVERSEAS_ORDER_SIDE = {'01': 'sell', '02': 'buy'}
+# 소수점·예약주문 조회의 매매거래구분코드(`trd_dl_ccd`)·매매구분(`trd_clsf`) 방향. 명세에 설명된 코드다.
+KBSEC_TWO_DIGIT_SIDE = {'01': 'sell', '02': 'buy'}
 # 접수 응답에 주문번호가 없을 때의 값(`pick_str` 가 빈 문자열을 돌려준다). 이때 주문의 `id` 를 비우고 체결 확정을 하지 않는다.
 NO_ORDER_ID = ''
 # 종목 순위(`fetch_rankings`)의 종류별 TR, 기본 입력, 거래량 필드, 순위를 배열 순서로 매기는지(응답에 순위 필드가 없는 TR).
@@ -156,6 +171,11 @@ def _js_truthy(value: Any) -> bool:
     if value is None or value == 0 or value == '':
         return False
     return not (isinstance(value, float) and math.isnan(value))
+
+
+def _kbsec_two_digit_side(code: str) -> str:
+    """소수점·예약주문 조회의 매매 방향. 명세에 설명된 코드(`01` 매도, `02` 매수) 밖의 값은 `unknown` 이다."""
+    return KBSEC_TWO_DIGIT_SIDE.get(code, 'unknown')
 
 
 def _code_of(table: Dict[str, str], key: Any) -> Str:
@@ -515,6 +535,10 @@ class kbsec(Exchange, ImplicitAPI):
                 'masterData': None,
                 # 연속조회 페이지 상한. 호출 급증을 막는 값이지 정상 한도가 아니다.
                 'holdingsMaxPages': 20,
+                # 정산 연속조회 페이지 상한.
+                'settlementMaxPages': 20,
+                # 계좌원장 연속조회 페이지 상한. 기간이 길면 걸릴 수 있고, 걸리면 `truncated` 로 알린다(기간을 좁혀 다시 부른다).
+                'ledgerMaxPages': 20,
                 # 조회일자 되감기 상한. 연휴를 덮되 날짜와 무관한 실패를 끝없이 다시 부르지 않는다.
                 'businessDateMaxBackoff': 5,
                 # 잔고 평가에 쓰는 현재가 캐시 시간(ms).
@@ -2919,6 +2943,889 @@ class kbsec(Exchange, ImplicitAPI):
                            permanent, err)
             return None
 
+    # ============ 계좌 확장 조회 ============
+
+    def _today_kst(self) -> str:
+        """인스턴스 시계(`milliseconds()`)로 본 오늘의 한국 날짜 `YYYYMMDD`."""
+        return kst_ymd(self.milliseconds())
+
+    def fetch_buyable_amount(self, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> Optional[float]:
+        """국내 매수주문가능금액(원, `SSQM1802`). 예수금만 보면 미수·증거금 규칙이 빠져 주문가능액을 과대평가하므로 KB 가 계산한 값을 그대로 쓴다.
+        값이 없거나 0 이하면 `None` 이다."""
+        body = self._call_tr(KBSEC_TR['BUYABLE_KR'], self.extend({
+            'is_no': kbsec_base_symbol(symbol) if symbol is not None else '',
+            'bnd_mktio_ccd': '1',
+        }, params))
+        amount = pick_num(body, 'ordr_psbl_csh')
+        return amount if amount > 0 else None
+
+    def fetch_overseas_buyable_amount(self, symbol: str, price: Num = None) -> Optional[Dict[str, Any]]:
+        """해외 매수여력(`SKQM2106`). 원마켓(통합증거금)을 지원한다. 결과는 `{'amount', 'quoteCurrency', 'maxQuantity'}` 다.
+
+        KB 원마켓플러스는 원화로 미국 주식을 사서 매수여력이 두 갈래로 온다. `fcrncy_ordr_psbl_amt`(외화 주문가능금액)와
+        `krw_exch_unty_ordr_psbl_amt`(원화환산 통합 주문가능금액)다. `krwIntegratedMargin` 옵션이 켜져 있으면 통합 기준을 쓰고, 꺼져 있으면 순수
+        외화만 본다. `fcrncy_unty_ordr_psbl_amt_p2` 의 `unty` 는 통합이라 원화를 환산해 더한 값이므로, 옵션을 꺼도 통합 금액이 USD 로 둔갑하지 않게
+        이 값은 순수 외화로 쓰지 않는다.
+
+        `quoteCurrency` 로 어느 통화 기준인지 함께 돌려준다. 통화를 모른 채 숫자만 받으면 원화 금액을 달러로 오해해 수량이 ~1,400배가 된다.
+        여력이 없으면 `None` 이다.
+        """
+        price = cast(Optional[float], fn.decimal_to_float(price))
+        body = self._call_tr(KBSEC_TR['ONEMARKET_BUYABLE'], {
+            'crncy_cd': '',
+            'iso_cd': '',
+            'stnd_is_cd': self.stock_ticker(kbsec_base_symbol(symbol)),
+            'frgn_ordr_prc_p4': kbsec_num(price, 4) if price is not None else '',
+            'ordr_prc': kbsec_num(price, 4) if price is not None else '',
+        })
+        use_krw = self.is_option_enabled('krwIntegratedMargin')
+        krw = pick_num(body, 'krw_exch_unty_ordr_psbl_amt', 'krw_exch_fcrncy_ordr_psbl_amt')
+        usd_cash = pick_num(body, 'fcrncy_ordr_psbl_amt')
+        usd_unified = pick_num(body, 'fcrncy_unty_ordr_psbl_amt_p2')
+        amount = (krw if krw > 0 else usd_unified) if use_krw else usd_cash
+        if amount <= 0:
+            return None
+        return {
+            'amount': amount,
+            'quoteCurrency': 'KRW' if use_krw and krw > 0 else 'USD',
+            'maxQuantity': pick_num(body, 'ordr_psbl_q', 'ordr_psbl_q1', 'ordr_psbl_q2'),
+        }
+
+    def fetch_one_market_buying_power(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """원마켓플러스 주문가능금액 현황(`SKQM3350`). 입력이 없다. 원화 기준 머리 금액과 통화별 외화 금액(`currencies`)을 함께 준다. 실계좌 응답의
+        통화 행 10개 중 4개는 통화코드가 빈 채움 행이라 거른다. 종목과 가격을 정해 묻는 조회는 `fetch_overseas_buyable_amount`(`SKQM2106`)다."""
+        body = self._call_tr(KBSEC_TR['ONEMARKET_BUYABLE_ALL'], self.extend({}, params))
+        return {
+            'domesticOrderable': pick_num(body, 'dmstc_orgn_ordr_psbl_amt'),
+            'domesticProvidedKrw': pick_num(body, 'dmstc_ofr_use_psbl_krw_amt'),
+            'domesticOtherCurrencyUsed': pick_num(body, 'dmstc_otr_crncy_use_amt'),
+            'foreignDepositInKrw': pick_num(body, 'fcr_tfnd_krw_exch_amt'),
+            'unsettledOverseasInKrw': pick_num(body, 'frsk_ust_sum_krw_amt'),
+            'exchangeOrderMarginKrw': pick_num(body, 'exch_mny_trgt_krw_ordr_mgn'),
+            'currencies': [{
+                'currency': pick_str(row, 'crncy_cd'),
+                'country': pick_str(row, 'ntn_nm'),
+                'deposit': pick_num(row, 'fcrncy_tfnd'),
+                'usable': pick_num(row, 'fcrncy_use_psbl_amt_p2'),
+                'unifiedOrderable': pick_num(row, 'fcrncy_unty_ordr_psbl_amt_p2'),
+                'receivableOrderable': pick_num(row, 'fcrncy_rcvbl_ordr_psbl_amt_p2'),
+                'info': row,
+            } for row in pick_array(body) if pick_str(row, 'crncy_cd') != ''],
+            'info': body,
+        }
+
+    def fetch_overseas_orderable_amount(self, symbol: str, price: Num = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """해외 주문가능금액(`SPQM2106`). 원마켓이 아닌 계좌용 조회이고, 원마켓 계좌는 `fetch_overseas_buyable_amount` 를 쓴다. 해외 종목만 지원한다
+        (국내 종목은 요청 없이 `NotSupported`). 해외주문가격(`frgn_ordr_prc_p4`)은 `price` 를 주면 보낸다. 통화코드와 ISO코드는 공식 예제처럼 비워
+        보내고, 설명이 없는 적용환율과 주문가격(`ordr_prc`)도 비워 보낸다."""
+        price = cast(Optional[float], fn.decimal_to_float(price))
+        market = self.market(symbol)
+        if not self._is_us(market):
+            raise NotSupported(f'{self.id} fetchOverseasOrderableAmount() 는 해외 종목만 지원한다: {symbol}')
+        body = self._call_tr(KBSEC_TR['BUYABLE_US'], self.extend({
+            'crncy_cd': '',
+            'stnd_is_cd': market['id'],
+            'iso_cd': '',
+            'frgn_ordr_prc_p4': kbsec_num(price, 4) if price is not None else '',
+            'aplc_exch_r': '',
+            'ordr_prc': '',
+        }, params))
+        return {
+            'foreignAmount': pick_num(body, 'fcrncy_ordr_psbl_amt'),
+            'krwAmount': pick_num(body, 'krw_ordr_psbl_amt'),
+            'maxQuantity': pick_num(body, 'ordr_psbl_q'),
+            'fullMarginQuantity': pick_num(body, 'pcnt100_ordr_psbl_q'),
+            'price': pick_num(body, 'frgn_ordr_prc_p4'),
+            'marginRate': pick_num(body, 'is_mgn_r_p4'),
+            'appliedMarginRate': pick_num(body, 'aplc_mgn_r_p4'),
+            'info': body,
+        }
+
+    def fetch_unrealized_pnl(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """평가손익 조회(`SSQM0006`, 국내만). 결과는 `{'rows', 'truncated'}` 다. 조회구분(`inq_clsf`)과 매매구분(`trd_clsf`) 둘 다 명세에 "전체" 코드값이
+        있어(`2`·`00`) 그 값을 기본으로 쓴다. 공식 예제는 신용(`1`)·자기융자(`1`)만 좁혀 보여 주지만 잔고 전체를 보는 것이 이 메서드의 목적에 맞다.
+        연속조회는 끝까지 따라간다(상한 `options['holdingsMaxPages']`)."""
+        result = self._collect_tr_pages(KBSEC_TR['UNREALIZED_PNL'], self.extend({
+            'inq_clsf': '2', 'spclz_ordr_ccd': '', 'trd_clsf': '00', 'act_cd': '', 'is_cd': '',
+        }, params), lambda row: {
+            'symbol': f"{kbsec_normalize_code(pick_str(row, 'is_cd'))}/KRW",
+            'name': pick_str(row, 'is_nm'),
+            'quantity': pick_num(row, 'ec_q'),
+            'averagePrice': pick_num(row, 'avr_uprc'),
+            'last': pick_num(row, 'now_prc'),
+            'unrealizedPnl': pick_num(row, 'val_pl_amt'),
+            'info': row,
+        })
+        if result['truncated']:
+            logger.warning('[kbsec] 평가손익 연속조회가 잘렸다 — 목록에 없는 종목은 0이 아니라 미확인이다: rows=%s', len(result['rows']))
+        return result
+
+    def fetch_fractional_holdings(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """국내주식 소수점 매매 보유잔고(`SSQM5472`). `create_order` 의 `params['fractional']` 로 산 소수점 보유를 읽는다. 결과는 `{'rows', 'truncated'}` 다.
+
+        업무구분코드(`jb_ccd`)는 명세 설명이 "고정"이고 값이 없어 공식 예제의 `1` 을 쓴다. 기준일자(`std_dt`)는 선택 입력이라 비워 보낸다. 비웠을 때
+        서버가 어느 날짜를 기준으로 삼는지는 명세에 없으니, 날짜를 정하려면 `params['std_dt']` 로 넘긴다. 연속조회는 끝까지 따라간다
+        (상한 `options['holdingsMaxPages']`).
+        """
+        result = self._collect_tr_pages(KBSEC_TR['FRAC_HOLDINGS_KR'], self.extend({
+            'jb_ccd': '1', 'is_cd': '', 'std_dt': '', 'hd_pin_no': '',
+        }, params), lambda row: {
+            'symbol': f"{kbsec_normalize_code(pick_str(row, 'is_cd', 'iso_cd'))}/KRW",
+            'name': pick_str(row, 'is_nm'),
+            'quantity': pick_num(row, 'hld_q'),
+            'orderableQuantity': pick_num(row, 'ordr_psbl_q'),
+            'averagePrice': pick_num(row, 'avr_uprc'),
+            'cost': pick_num(row, 'byng_amt'),
+            'marketValue': pick_num(row, 'val_amt'),
+            'unrealizedPnl': pick_num(row, 'val_pl'),
+            'unrealizedPnlRate': pick_num(row, 'val_pl_r'),
+            'info': row,
+        })
+        if result['truncated']:
+            logger.warning('[kbsec] 소수점 보유 연속조회가 잘렸다 — 목록에 없는 종목은 보유 0이 아니라 미확인이다: rows=%s', len(result['rows']))
+        return result
+
+    def fetch_overseas_fractional_holdings(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """해외 소수점 보유잔고(`SPQM5472`). 국내 `fetch_fractional_holdings` 의 해외 짝이다. 결과는 `{'rows', 'truncated'}` 다.
+
+        원화외화구분코드(`krw_fcrncy_ccd`)는 설명된 값 중 외화(`2`)를 보낸다. 해외 정산 조회처럼 금액을 외화 축으로 받고, 행마다 통화코드를
+        `currency` 로 돌려준다. 거래소 구분(`frgn_krx_ccd`)과 기준일자(`std_dt`)는 설명이 없는 선택 입력이라 비워 보낸다. 연속조회는 끝까지
+        따라간다(상한 `options['holdingsMaxPages']`).
+        """
+        def parse(row: Dict[str, Any]) -> Dict[str, Any]:
+            currency = pick_str(row, 'crncy_cd')
+            return {
+                'symbol': f"{kbsec_normalize_code(pick_str(row, 'is_cd'))}/{currency or 'USD'}",
+                'name': pick_str(row, 'is_nm'),
+                'quantity': pick_num(row, 'hld_q'),
+                'orderableQuantity': pick_num(row, 'ordr_psbl_q'),
+                'averagePrice': pick_num(row, 'avr_uprc'),
+                'cost': pick_num(row, 'byng_amt'),
+                'marketValue': pick_num(row, 'val_amt'),
+                'unrealizedPnl': pick_num(row, 'val_pl'),
+                'unrealizedPnlRate': pick_num(row, 'val_pl_r'),
+                'currency': currency,
+                'info': row,
+            }
+
+        result = self._collect_tr_pages(KBSEC_TR['FRAC_HOLDINGS_US'], self.extend({
+            'is_cd': '', 'frgn_krx_ccd': '', 'std_dt': '', 'krw_fcrncy_ccd': '2',
+        }, params), parse)
+        if result['truncated']:
+            logger.warning('[kbsec] 해외 소수점 보유 연속조회가 잘렸다 — 목록에 없는 종목은 보유 0이 아니라 미확인이다: rows=%s', len(result['rows']))
+        return result
+
+    def fetch_fractional_buyable_amount(self, symbol: str, amount: Num = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """소수점 주문가능금액. 국내 종목은 `SSQN5472`, 미국 종목은 `SPQN5472` 를 부른다. `amount`(주문금액)를 주면 그 금액으로 살 수 있는
+        예상 수량과 예상 수수료가 함께 온다. 주문금액은 소수점 아래를 버린다(`create_market_buy_order_with_cost` 와 같다).
+
+        미국 쪽 입력은 이 TR 명세에 설명이 없어, 같은 필드를 쓰는 짝 주문 TR(`SKAM2201`) 명세의 값을 따른다. 거래소 `US`, 금액 기준
+        (`amt_q_clsf=0`), 외화(`crncy_ccd=1`, USD), 유사시장가(`frgn_ordr_typ_cd=E`)다. 국내의 100%주문가능금액(`pcnt100_ordr_psbl_amt`)과 미국의
+        원화환산 통합주문가능금액은 `info` 에 남는다.
+        """
+        amount = cast(Optional[float], fn.decimal_to_float(amount))
+        market = self.market(symbol)
+        # JavaScript `Math.floor` 는 무한대와 NaN 을 그대로 두고 `kbsec_num` 이 `'0'` 으로 바꾼다. Python `math.floor` 는 그 값에 던지므로 거른다.
+        ordr_amt = '' if amount is None else kbsec_num(math.floor(amount) if math.isfinite(amount) else amount)
+
+        def common(body: Dict[str, Any]) -> Dict[str, Any]:
+            return {
+                'expectedQuantity': pick_num(body, 'expct_stk_q_p6'),
+                'feeRate': pick_num(body, 'fee_r_p10'),
+                'referencePrice': pick_num(body, 'val_sprc_p8'),
+                'info': body,
+            }
+
+        if not self._is_us(market):
+            body = self._call_tr(KBSEC_TR['FRAC_BUYABLE_KR'], self.extend({'is_cd': market['id'], 'ordr_amt': ordr_amt}, params))
+            return self.extend({'amount': pick_num(body, 'mx_ordr_psbl_amt'), 'currency': 'KRW', 'expectedFee': pick_num(body, 'expct_fee')}, common(body))
+        body = self._call_tr(KBSEC_TR['FRAC_BUYABLE_US'], self.extend({
+            'is_cd': market['id'], 'frgn_krx_ccd': 'US', 'ordr_amt': ordr_amt, 'dcml_ordr_q_p6': '', 'amt_q_clsf': '0', 'crncy_ccd': '1',
+            'frgn_ordr_typ_cd': 'E', 'frgn_ordr_prc_p4': '',
+        }, params))
+        return self.extend({'amount': pick_num(body, 'fcrncy_unty_ordr_psbl_amt_p2'), 'currency': 'USD', 'expectedFee': pick_num(body, 'fcrncy_fee_p2')},
+                           common(body))
+
+    def fetch_fractional_trades(self, since: Int = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """국내 소수점 매매내역(`SSQM5765`). 결과는 `{'rows', 'truncated'}` 다. 주문구분(`ordr_clsf`)과 매매구분(`trd_clsf`)은 설명된 전체(`0`)를 보낸다.
+        매매일자는 설명이 없는 선택 입력이라 `since` 를 줄 때만 채우고(끝은 `params['until']`, 없으면 오늘), 없으면 비워 보낸다.
+        방향은 매매거래구분코드(`trd_dl_ccd`)를 `01` 매도, `02` 매수로 옮긴다(`SSAM5764` 명세의 설명). 그 밖의 값은 `unknown` 이다."""
+        params = {} if params is None else params
+        until = self.safe_integer(params, 'until')
+        date_from = kst_ymd(since) if since is not None else ''
+        date_to = kst_ymd(until) if until is not None else (self._today_kst() if since is not None else '')
+        result = self._collect_tr_pages(KBSEC_TR['FRAC_TRADES_KR'], self.extend({
+            'ordr_clsf': '0', 'trd_clsf': '0', 'trd_strt_dt': date_from, 'trd_end_dt': date_to, 'is_cd': '',
+        }, self.omit(params, 'until')), lambda row: self.extend(self.kst_stamp(pick_str(row, 'trd_dt')), {
+            'date': pick_str(row, 'trd_dt'),
+            'acceptNo': pick_str(row, 'acpt_no'),
+            'symbol': f"{kbsec_normalize_code(pick_str(row, 'is_cd'))}/KRW",
+            'name': pick_str(row, 'is_nm'),
+            'side': _kbsec_two_digit_side(pick_str(row, 'trd_dl_ccd')),
+            'orderAmount': pick_num(row, 'ordr_amt'),
+            'orderQuantity': pick_num(row, 'dmstc_stk_dcml_ordr_q_p6'),
+            'orderPrice': pick_num(row, 'ordr_prc'),
+            'filledQuantity': pick_num(row, 'dmstc_stk_dcml_ccls_q_p6'),
+            'filledPrice': pick_num(row, 'ccls_prc'),
+            'filledAmount': pick_num(row, 'ccls_amt'),
+            'fee': pick_num(row, 'fee'),
+            'tax': pick_num(row, 'dl_tx'),
+            'settledAmount': pick_num(row, 'ec_amt'),
+            'rejectReason': pick_str(row, 'rfsl_rsn'),
+            'info': row,
+        }))
+        if result['truncated']:
+            logger.warning('[kbsec] 소수점 매매내역 연속조회가 잘렸다 — 기간을 좁혀 다시 불러야 한다: rows=%s from=%s to=%s', len(result['rows']), date_from, date_to)
+        return result
+
+    def fetch_fractional_orders(self, since: Int = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """국내 온주/소수점 주문체결내역(`SSQM5475`). 소수점 서비스로 낸 주문을 온주(1주 단위) 부분까지 함께 준다. 결과는 `{'rows', 'truncated'}` 다.
+
+        매매구분(`trd_clsf`)은 설명된 전체(`99`), 주문상태(`ordr_st`)와 거래구분(`dl_clsf`)은 설명된 전체(`0`)를 보낸다. 조회일자는 필수라 `since` 가
+        없으면 오늘 하루다(끝은 `params['until']`, 없으면 오늘). 출력에 매매구분 코드가 없어 방향은 매매구분명(`sideName`) 원문으로만 준다.
+        기간별 매수·매도 합계(`prd_pr_*_sum`)는 옮기지 않는다.
+        """
+        params = {} if params is None else params
+        until = self.safe_integer(params, 'until')
+        date_to = kst_ymd(until) if until is not None else self._today_kst()
+        date_from = kst_ymd(since) if since is not None else date_to
+        result = self._collect_tr_pages(KBSEC_TR['FRAC_ORDERS_KR'], self.extend({
+            'inq_strt_dt': date_from, 'inq_end_dt': date_to, 'trd_clsf': '99', 'is_cd': '', 'ordr_st': '0', 'dl_clsf': '0',
+        }, self.omit(params, 'until')), lambda row: self.extend(self.kst_stamp(pick_str(row, 'ordr_dt'), pick_str(row, 'ordr_tm')), {
+            'date': pick_str(row, 'ordr_dt'),
+            'time': pick_str(row, 'ordr_tm'),
+            'id': pick_str(row, 'ordr_no'),
+            'originalId': pick_str(row, 'orgn_ordr_no'),
+            'symbol': f"{kbsec_normalize_code(pick_str(row, 'shrt_is_cd', 'stnd_is_cd'))}/KRW",
+            'name': pick_str(row, 'hngl_shrt_nm'),
+            'dealType': pick_str(row, 'dl_clsf'),
+            'sideName': pick_str(row, 'trd_clsf_nm'),
+            'orderAmount': pick_num(row, 'krw_ordr_amt'),
+            'orderQuantity': pick_num(row, 'ordr_q_p6'),
+            'orderPrice': pick_num(row, 'ordr_prc_p4'),
+            'filledQuantity': pick_num(row, 'dcml_ccls_q_p6'),
+            'filledPrice': pick_num(row, 'ccls_prc_p4'),
+            'filledAmount': pick_num(row, 'ccls_amt', 'ccls_amt_p3'),
+            'fee': pick_num(row, 'fee', 'fee_p4'),
+            'remainingQuantity': pick_num(row, 'nccls_q'),
+            'result': pick_str(row, 'hndl_rslt'),
+            'rejectReason': pick_str(row, 'rfsl_rsn_cntnt'),
+            'info': row,
+        }))
+        if result['truncated']:
+            logger.warning('[kbsec] 소수점 주문체결내역 연속조회가 잘렸다 — 기간을 좁혀 다시 불러야 한다: rows=%s from=%s to=%s', len(result['rows']), date_from,
+                           date_to)
+        return result
+
+    def fetch_overseas_fractional_orders(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """해외 소수점 주문접수내역(`SPQN5473`, 주문 화면용). 기간 입력이 없는 TR 이다. 결과는 `{'rows', 'truncated'}` 다.
+        매매구분(`trd_clsf`)은 설명된 전체(`99`), 주문상태(`ordr_st`)는 설명된 전체(`3`)를 보낸다. 거래소 구분과 특화주문구분은 설명이 없어
+        비워 보낸다. 방향은 매매구분 코드(`01` 매도, `02` 매수)를 옮기고, 통화는 행마다 `currency` 로 준다."""
+        def parse(row: Dict[str, Any]) -> Dict[str, Any]:
+            currency = pick_str(row, 'crncy_cd')
+            return {
+                'date': pick_str(row, 'ordr_dt'),
+                'time': pick_str(row, 'acpt_tm'),
+                'acceptNo': pick_str(row, 'acpt_no'),
+                'symbol': f"{kbsec_normalize_code(pick_str(row, 'shrt_is_cd'))}/{currency or 'USD'}",
+                'name': pick_str(row, 'is_nm'),
+                'side': _kbsec_two_digit_side(pick_str(row, 'trd_clsf')),
+                'currency': currency,
+                'amount': pick_num(row, 'fcrncy_ordr_amt'),
+                'quantity': pick_num(row, 'ordr_q'),
+                'price': pick_num(row, 'frgn_ordr_prc_p4'),
+                'fee': pick_num(row, 'fee'),
+                'statusCode': pick_str(row, 'ordr_st'),
+                'result': pick_str(row, 'hndl_rslt'),
+                'info': row,
+            }
+
+        result = self._collect_tr_pages(KBSEC_TR['FRAC_ORDERS_US'], self.extend({
+            'trd_clsf': '99', 'is_cd': '', 'frgn_krx_ccd': '', 'ordr_st': '3', 'spclz_ordr_ccd': '',
+        }, params), parse)
+        if result['truncated']:
+            logger.warning('[kbsec] 해외 소수점 주문접수내역 연속조회가 잘렸다: rows=%s', len(result['rows']))
+        return result
+
+    def fetch_overseas_fractional_order_history(self, since: Int = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """해외 소수점 주문접수내역(`SPQM5473`). 주문 화면용 `fetch_overseas_fractional_orders`(`SPQN5473`)와 달리 매매일자, 체결 결과와 요약 그리드를
+        준다. 결과는 `{'rows', 'truncated'}` 다.
+
+        부점구분, 지점번호, 조회구분은 설명의 고정값(`1`, `999`, `1`)을 보낸다(공식 예제는 지점번호를 비운다). 주문상태, 매매구분, 원화외화구분은
+        설명된 전체(`3`, `99`, `0`)를 보낸다. 합계구분, 해외거래소구분, 관리자사번은 설명이 없어 비워 보낸다. 매매일자도 설명이 없는 선택 입력이라
+        `since` 를 줄 때만 `fetch_overseas_orders` 처럼 미국 현지 일자로 채운다(끝은 `params['until']`, 없으면 오늘). 행은 접수번호(`acpt_no`)가 있는
+        그리드에서 읽고, 요약 그리드는 내보내지 않는다. 연속조회는 끝까지 따라가고, 상한(`holdingsMaxPages`)에 걸리면 `truncated` 로 알린다.
+        """
+        params = {} if params is None else params
+        until = self.safe_integer(params, 'until')
+        date_from = et_ymd(since) if since is not None else ''
+        date_to = et_ymd(until) if until is not None else (et_ymd(self.milliseconds()) if since is not None else '')
+        result = self._collect_tr_pages(KBSEC_TR['FRAC_ORDER_HISTORY_US'], self.extend({
+            'dprt_clsf': '1', 'brn_no': '999', 'inq_clsf': '1', 'sum_clsf': '', 'ordr_st': '3', 'trd_strt_dt': date_from, 'trd_end_dt': date_to,
+            'trd_clsf': '99', 'krw_fcrncy_ccd': '0', 'is_cd': '', 'frgn_krx_ccd': '', 'mngr_eno': '',
+        }, self.omit(params, 'until')), lambda row: {
+            'date': pick_str(row, 'trd_dt'),
+            'acceptNumber': pick_str(row, 'acpt_no'),
+            'shortCode': pick_str(row, 'shrt_is_cd'),
+            'standardCode': pick_str(row, 'stnd_is_cd'),
+            'name': pick_str(row, 'is_nm'),
+            'currency': pick_str(row, 'crncy_cd'),
+            'sideName': pick_str(row, 'trd_clsf_nm'),
+            'orderStatus': pick_str(row, 'ordr_st'),
+            'processStatus': pick_str(row, 'hndl_st'),
+            'quantity': pick_num(row, 'ordr_q'),
+            'filledQuantity': pick_num(row, 'ccls_q'),
+            'acceptTime': pick_str(row, 'ordr_acpt_tm'),
+            'info': row,
+        }, None, lambda body: pick_grid(body, lambda first: 'acpt_no' in first)['rows'])
+        if result['truncated']:
+            logger.warning('[kbsec] 해외 소수점 주문접수내역 연속조회가 잘렸다 — 기간을 좁혀 다시 불러야 한다: rows=%s from=%s to=%s', len(result['rows']),
+                           date_from, date_to)
+        return result
+
+    # ============ 예약주문 조회 ============
+
+    def fetch_reserved_order_results(self, since: Int = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """국내 예약주문 처리 결과(`SSQM0831`). 결과는 `{'rows', 'truncated'}` 다. 매매구분, 처리구분, 전량잔량구분은 설명된 전체(`0`)를 보낸다.
+        주문일자는 필수라 `since` 가 없으면 오늘이다. 종료일자는 선택 입력이라 `params['until']` 이나 `since` 가 있을 때만 채운다(없으면 오늘)."""
+        params = {} if params is None else params
+        until = self.safe_integer(params, 'until')
+        date_from = kst_ymd(since) if since is not None else self._today_kst()
+        date_to = kst_ymd(until) if until is not None else (self._today_kst() if since is not None else '')
+        result = self._collect_tr_pages(KBSEC_TR['RESERVED_RESULTS_KR'], self.extend({
+            'ordr_dt': date_from, 'trd_clsf': '0', 'hndl_clsf': '0', 'tv_rv_ccd': '0', 'end_dt': date_to, 'is_cd': '',
+        }, self.omit(params, 'until')), lambda row: self.extend(self.kst_stamp(pick_str(row, 'ordr_dt')), {
+            'date': pick_str(row, 'ordr_dt'),
+            'sequence': pick_str(row, 'sq'),
+            'symbol': f"{kbsec_normalize_code(pick_str(row, 'is_no'))}/KRW",
+            'name': pick_str(row, 'is_nm'),
+            'sideName': pick_str(row, 'ordr_clsf_nm'),
+            'orderTypeCode': pick_str(row, 'ordr_ccd'),
+            'quantity': pick_num(row, 'ordr_q'),
+            'price': pick_num(row, 'ordr_uprc'),
+            'orderId': pick_str(row, 'ordr_no'),
+            'orderedName': pick_str(row, 'ordr_f_nm'),
+            'message': pick_str(row, 'msg'),
+            'info': row,
+        }))
+        if result['truncated']:
+            logger.warning('[kbsec] 예약주문 처리 결과 연속조회가 잘렸다: rows=%s from=%s to=%s', len(result['rows']), date_from, date_to)
+        return result
+
+    def fetch_reserved_orders(self, since: Int = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """국내 예약주문 접수 목록(`SSQM0834`). 결과는 `{'rows', 'truncated'}` 다. 처리구분은 설명된 고정값(`1`), 선택구분은 설명된 일반예약주문(`1`),
+        조회구분은 설명된 전체(`3`)를 보낸다. 기간은 선택 입력이라 `since` 를 줄 때만 채운다(끝은 `params['until']`, 없으면 오늘)."""
+        params = {} if params is None else params
+        until = self.safe_integer(params, 'until')
+        date_from = kst_ymd(since) if since is not None else ''
+        date_to = kst_ymd(until) if until is not None else (self._today_kst() if since is not None else '')
+        result = self._collect_tr_pages(KBSEC_TR['RESERVED_ORDERS_KR'], self.extend({
+            'hndl_clsf': '1', 'chc_clsf': '1', 'inq_clsf': '3', 'strt_dt': date_from, 'end_dt': date_to, 'is_cd': '',
+        }, self.omit(params, 'until')), lambda row: self.extend({
+            'sequence': pick_str(row, 'sq'),
+            'symbol': f"{kbsec_normalize_code(pick_str(row, 'is_no'))}/KRW",
+            'name': pick_str(row, 'is_nm'),
+            'side': _kbsec_two_digit_side(pick_str(row, 'trd_dl_ccd')),
+            'sideName': pick_str(row, 'trd_ccd_nm'),
+            'quantity': pick_num(row, 'ordr_q'),
+            'price': pick_num(row, 'ordr_uprc'),
+            'reservationTypeName': pick_str(row, 'tv_rv_ccd_nm'),
+            'cancelName': pick_str(row, 'cncl_clsf_nm'),
+            'registeredDate': pick_str(row, 'rgst_dt'),
+        }, self.kst_stamp(pick_str(row, 'ordr_dt')), {
+            'orderDate': pick_str(row, 'ordr_dt'),
+            'info': row,
+        }))
+        if result['truncated']:
+            logger.warning('[kbsec] 예약주문 접수 목록 연속조회가 잘렸다: rows=%s from=%s to=%s', len(result['rows']), date_from, date_to)
+        return result
+
+    # ============ 거래 상세, 권리, 해외 주문내역 ============
+
+    def fetch_ledger_entry_detail(self, date: str, sequence: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """거래 한 건의 상세(`SWQM2412`). `fetch_account_ledger` 행의 일자(`date`)와 거래일련번호(`sequence`)를 넣어 부른다.
+
+        출력에 그리드 표지(`grid_cnt` 등)가 없어 한 건짜리 응답으로 읽는다. 목록을 주는 KB TR 은 모두 그리드 표지가 있고, 표지가 없는
+        `SWQN2302` 는 한 건짜리였다. 거래일련번호와 거래종류 필드가 둘 다 응답에 없으면 0 을 채운 빈 거래를 만들지 않고 `BadResponse` 를 던진다.
+        """
+        body = self._call_tr(KBSEC_TR['LEDGER_DETAIL'], self.extend({'inq_dt': date, 'dl_sq': sequence}, params))
+        if 'dl_sq' not in body and 'dl_knd_cd' not in body:
+            raise BadResponse(f"{self.id} 거래내역상세 응답에 거래일련번호와 거래종류 필드가 없다 ({KBSEC_TR['LEDGER_DETAIL']})")
+        return {
+            'sequence': pick_str(body, 'dl_sq'),
+            'kindCode': pick_str(body, 'dl_knd_cd'),
+            'kindName': pick_str(body, 'dl_knd_nm'),
+            'code': pick_str(body, 'is_no'),
+            'name': pick_str(body, 'is_nm'),
+            'quantity': pick_num(body, 'dl_q'),
+            'price': pick_num(body, 'uprc_p4'),
+            'amount': pick_num(body, 'dl_amt'),
+            'fee': pick_num(body, 'fee'),
+            'tax': pick_num(body, 'dl_tx'),
+            'settledAmount': pick_num(body, 'ec_amt'),
+            'summary': pick_str(body, 'smry'),
+            'cashBalance': pick_num(body, 'tfnd_tdy_ra'),
+            'info': body,
+        }
+
+    def fetch_corporate_actions(self, since: Int = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """계좌 권리 발생 내역(`SRQM3051`). 배당, 유상증자, 무상증자 같은 권리의 배정과 지급을 준다. 결과는 `{'rows', 'truncated'}` 다.
+        권리구분(`rgt_clsf`)은 설명된 전체(`0`)를 보낸다. 시작일자는 설명이 없는 선택 입력이라 `since` 를 줄 때만 채운다."""
+        date_from = kst_ymd(since) if since is not None else ''
+        result = self._collect_tr_pages(KBSEC_TR['CORPORATE_ACTIONS'], self.extend({
+            'strt_dt': date_from, 'rgt_clsf': '0', 'is_cd': '',
+        }, params), lambda row: self.extend(self.kst_stamp(pick_str(row, 'bss_dt')), {
+            'baseDate': pick_str(row, 'bss_dt'),
+            'symbol': f"{kbsec_normalize_code(pick_str(row, 'is_cd'))}/KRW",
+            'name': pick_str(row, 'is_nm'),
+            'rightName': pick_str(row, 'rgt_ccd_nm'),
+            'quantity': pick_num(row, 'hld_q'),
+            'allocatedQuantity': pick_num(row, 'alct_q'),
+            'rightRatio': pick_num(row, 'rgt_rt'),
+            'issuePrice': pick_num(row, 'isng_prc'),
+            'cashPaymentDate': pick_str(row, 'csh_py_dt'),
+            'stockDate': pick_str(row, 'stck_io_stck_dt'),
+            'expectedDividend': pick_num(row, 'dvdnd_expt_amt'),
+            'confirmedDividend': pick_num(row, 'dvdnd_dfnt_amt'),
+            'info': row,
+        }))
+        if result['truncated']:
+            logger.warning('[kbsec] 권리 발생 내역 연속조회가 잘렸다: rows=%s from=%s', len(result['rows']), date_from)
+        return result
+
+    def fetch_overseas_orders(self, since: Int = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """해외 주문내역(`SPQM1818`, 주문번호별). 체결과 미체결 주문을 함께 준다. 결과는 `{'rows', 'truncated'}` 다.
+
+        체결구분과 거래구분은 설명된 전체(`0`), 매매구분은 설명된 전체(`99`), 원화통합증거금신청여부는 설명된 외화(`0`)를 보낸다. 주문일자는
+        설명이 없는 선택 입력이라 `since` 를 줄 때만 미국 현지 일자로 채운다(끝은 `params['until']`, 없으면 오늘). 해외 정산 조회(`SPQM2205`)가
+        미국 현지 일자로 확인됐다. 시작시간과 종료시간은 설명이 없어 비워 보낸다(공식 예제의 `090000` 은 시간 필터다). 응답에 티커가 없어
+        표준종목코드를 원문으로 주고, 주문상태도 이름만 오므로 원문으로 준다. 미체결만 보려면 `params['ccls_clsf']` 를 `2` 로 준다.
+        """
+        params = {} if params is None else params
+        until = self.safe_integer(params, 'until')
+        date_from = et_ymd(since) if since is not None else ''
+        date_to = et_ymd(until) if until is not None else (et_ymd(self.milliseconds()) if since is not None else '')
+        result = self._collect_tr_pages(KBSEC_TR['ORDER_HISTORY_US'], self.extend({
+            'strt_ordr_dt': date_from, 'end_ordr_dt': date_to, 'ccls_clsf': '0', 'frgn_krx_ccd': '', 'trd_clsf': '99', 'stnd_is_cd': '', 'iso_cd': '',
+            'krw_unty_mgn_rqst_f': '0', 'start_tm': '', 'end_tm': '', 'dl_clsf': '0',
+        }, self.omit(params, 'until')), lambda row: {
+            'date': pick_str(row, 'ordr_dt'),
+            'time': pick_str(row, 'ordr_tm'),
+            'id': pick_str(row, 'ordr_no'),
+            'originalId': pick_str(row, 'orgn_ordr_no'),
+            'standardCode': pick_str(row, 'stnd_is_cd'),
+            'name': pick_str(row, 'is_nm'),
+            'statusName': pick_str(row, 'ordr_st_nm'),
+            'orderTypeName': pick_str(row, 'ordr_clsf_nm'),
+            'currency': pick_str(row, 'crncy_cd'),
+            'quantity': pick_num(row, 'frgn_ordr_q_p6'),
+            'price': pick_num(row, 'frgn_ordr_prc_p6'),
+            'filledQuantity': pick_num(row, 'ccls_q_p6'),
+            'filledPrice': pick_num(row, 'frgn_ccls_prc_p6'),
+            'remainingQuantity': pick_num(row, 'nccls_q_p6'),
+            'rejectReason': pick_str(row, 'rfsl_rsn'),
+            'info': row,
+        })
+        if result['truncated']:
+            logger.warning('[kbsec] 해외 주문내역 연속조회가 잘렸다 — 기간을 좁혀 다시 불러야 한다: rows=%s from=%s to=%s', len(result['rows']), date_from, date_to)
+        return result
+
+    def fetch_account_ledger(self, since: Int = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """계좌원장 거래내역(`SWQA2301`, 위탁·금융상품·저축 계좌). 입금·출금·입고·출고·매수·매도를 날짜 범위로 준다. 결과는 `{'rows', 'truncated'}` 다.
+
+        ccxt `fetch_ledger` 로 옮기지 않는다. 원장 항목의 `type`(trade·transaction·fee)과 `direction`(in·out)을 채우려면 적요유형코드(`smry_typ_cd`)·
+        거래유형코드(`dl_typ_cd`)의 뜻을 알아야 하는데 명세에 없고, 한글 적요명을 문자열로 가르는 것은 추측이다.
+
+        입력은 세 규칙으로 채운다. 필수 입력 조회구분(`inq_clsf`)은 공식 예제값 `1`, 설명이 있는 선택 입력은 설명대로(입금~매도 여섯 플래그
+        `1:설정`, 정렬 `1:과거순`), 설명이 없는 선택 입력(`dl_md_ccd` 거래매체구분코드, `onl_prt_ccd`, `md_isnc_tno`, `crdt_crd_isnc_info`,
+        `isng_bl_at_trsns_xcl_f`)은 비워 보낸다. 필터일 수 있는 값을 예제대로 채우면 일부 거래가 조용히 빠질 수 있고, 비워서 거부되면 오류로
+        드러난다. 거래구분(`dl_clsf`, `1:간편거래로 출력`)은 필드가 줄 수 있어 비운다.
+
+        기간은 한국 날짜 단위다. `since` 가 있으면 그날부터, 없으면 오늘 하루치다. 끝은 `params['until']`(ms)이 있으면 그날, 없으면 오늘이다.
+        연속조회 상한은 `options['ledgerMaxPages']` 이고, 걸리면 `truncated` 가 참이다(기간을 좁혀 다시 부른다).
+        """
+        return self._fetch_ledger_rows(KBSEC_TR['LEDGER'], {'dl_clsf': ''}, since, params)
+
+    def fetch_cma_ledger(self, since: Int = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """CMA 계좌원장 거래내역(`SWQB2301`). 입력 규칙과 기간, 연속조회는 `fetch_account_ledger` 와 같다. 다른 점은 셋이다.
+        거래구분(`dl_clsf`) 입력이 없다. 설명이 없는 선택 입력 현금자산이자입금제외여부(`csh_asts_itst_i_amt_xcl_f`)가 하나 더 있어 비워 보낸다.
+        출력의 거래단가가 `dl_uprc` 가 아니라 `uprc`(단가)다."""
+        return self._fetch_ledger_rows(KBSEC_TR['LEDGER_CMA'], {'csh_asts_itst_i_amt_xcl_f': ''}, since, params)
+
+    def _fetch_ledger_rows(self, tr_code: str, tr_fields: Dict[str, Any], since: Int, params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """두 계좌원장 TR(`SWQA2301`·`SWQB2301`)의 공통 조회. `tr_fields` 는 TR 마다 다른 입력이다."""
+        params = {} if params is None else params
+        until = self.safe_integer(params, 'until')
+        end_dt = kst_ymd(until) if until is not None else self._today_kst()
+        strt_dt = kst_ymd(since) if since is not None else end_dt
+        result = self._collect_tr_pages(tr_code, self.extend({
+            'inq_clsf': '1',
+            'inq_clsf1': '1', 'inq_clsf2': '1', 'inq_clsf3': '1', 'inq_clsf4': '1', 'inq_clsf5': '1', 'inq_clsf6': '1',
+            'strt_dt': strt_dt, 'end_dt': end_dt, 'is_no': '', 'strt_no': '', 'srt_clsf': '1',
+            'dl_md_ccd': '', 'md_isnc_tno': '', 'crdt_crd_isnc_info': '', 'onl_prt_ccd': '', 'isng_bl_at_trsns_xcl_f': '',
+        }, tr_fields, self.omit(params, 'until')), lambda row: self.extend(self.kst_stamp(pick_str(row, 'dl_dt')), {
+            'date': pick_str(row, 'dl_dt'),
+            'sequence': pick_str(row, 'dl_sq'),
+            'summary': pick_str(row, 'smry_nm'),
+            'standardCode': pick_str(row, 'stnd_is_cd'),
+            'name': pick_str(row, 'is_nm'),
+            'quantity': pick_num(row, 'q'),
+            'price': pick_num(row, 'dl_uprc', 'uprc'),
+            'amount': pick_num(row, 'dl_amt'),
+            'settledAmount': pick_num(row, 'ec_amt'),
+            'fee': pick_num(row, 'fee'),
+            'cashBalance': pick_num(row, 'tfnd_blnc'),
+            'info': row,
+        }), self.options['ledgerMaxPages'])
+        if result['truncated']:
+            logger.warning('[kbsec] 계좌원장 연속조회가 잘렸다 — 기간을 좁혀 다시 불러야 한다: trCode=%s rows=%s strtDt=%s endDt=%s', tr_code, len(result['rows']),
+                           strt_dt, end_dt)
+        return result
+
+    def fetch_withdrawable_amount(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """익일·익익일 출금가능금액(`SWQN2302`). 매도대금이 결제되는 날을 기준으로 출금할 수 있는 금액이다.
+
+        구분코드(`ccd`)는 명세에 설명이 있는 값 `1`(익일·익익일 예수금 포함)을 보낸다. 다른 값의 뜻은 명세에 없다. 출금가능금액 두 필드가 응답에
+        모두 없으면 0 을 돌려주지 않고 `BadResponse` 를 던진다. 0 이면 "출금할 돈이 없다"와 "모른다"가 섞인다.
+        """
+        body = self._call_tr(KBSEC_TR['WITHDRAWABLE'], self.extend({'ccd': '1'}, params))
+        if 'ndy_o_amt_psbl_amt' not in body and 'nxt2_dy_o_amt_psbl_amt' not in body:
+            raise BadResponse(f"{self.id} 출금가능금액 응답에 익일·익익일 출금가능금액 필드가 없다 ({KBSEC_TR['WITHDRAWABLE']})")
+        return {
+            'nextDay': pick_num(body, 'ndy_o_amt_psbl_amt'),
+            'dayAfterNext': pick_num(body, 'nxt2_dy_o_amt_psbl_amt'),
+            'deposit': pick_num(body, 'tfnd_amt'),
+            'nextDayDeposit': pick_num(body, 'ndy_tfnd_amt'),
+            'dayAfterNextDeposit': pick_num(body, 'nxt2_dy_tfnd_amt'),
+            'info': body,
+        }
+
+    def fetch_deposit_details(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """예수금 상세(`SWQM2302`). 증거금, 대용, 담보, 대출, 미수 금액 100여 필드를 한 레코드로 준다. 응답을 원문(`{'fields', 'grids', 'info'}`)으로
+        돌려준다. 대용총액(`sbt_tl_amt`)이 한 레코드에 두 번 있어서 JSON 에는 한 값만 남고, 어느 쪽이 남는지 명세로 가를 수 없다.
+        익일·익익일 출금가능금액만 필요하면 `fetch_withdrawable_amount` 를 쓴다."""
+        return kbsec_raw_response(self._call_tr(KBSEC_TR['DEPOSIT_DETAIL'], self.extend({}, params)))
+
+    def fetch_one_market_margin_usage(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """글로벌원마켓 증거금사용현황(`SPQN3390`). 응답을 원문(`{'fields', 'grids', 'info'}`)으로 돌려준다. 결제일자별 출금액 필드와 증거금구분별
+        그리드가 같은 이름(`iso_cd`, `prt_clsf`, `o_amt1`~`o_amt4`)을 쓰는데, 그리드 경계와 데이터1~4(`data1`~`data4`)의 뜻이 명세에 없다."""
+        return kbsec_raw_response(self._call_tr(KBSEC_TR['ONEMARKET_MARGIN_USAGE'], self.extend({}, params)))
+
+    def fetch_one_market_settlement_detail(self, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """원마켓플러스 매매정산현황 상세(`SKQO3390`). 항목명과 항목데이터1~4로 된 표다. 항목데이터가 무엇인지 명세에 없어 원문 문자열(`values`)로 준다."""
+        body = self._call_tr(KBSEC_TR['ONEMARKET_SETTLEMENT_DETAIL'], self.extend({}, params))
+        return [{
+            'index': pick_str(row, 'idx'),
+            'isoCode': pick_str(row, 'iso_cd'),
+            'currency': pick_str(row, 'crncy_cd'),
+            'name': pick_str(row, 'item_hngl_nm'),
+            'englishName': pick_str(row, 'item_eng_nm'),
+            'values': [pick_str(row, key) for key in ('item_data1', 'item_data2', 'item_data3', 'item_data4')],
+            'info': row,
+        } for row in pick_array(body)]
+
+    def fetch_account_summary(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """총 잔고 조회(`SSQM0005`). 계좌마다 평가액, 예수금액, 출금가능금액을 준다. 결과는 `{'rows', 'truncated'}` 다. 조회구분은 설명대로
+        계좌정보(`3`)를 보낸다(공식 예제는 `1`). 상품그룹코드는 설명된 전체(`00`)를, 체결결제구분은 공식 예제처럼 체결기준(`1`)을 보낸다. 출력 이름과
+        같은 입력 세 개(`tl_val_amt` 등)는 비워 보낸다. 응답 머리의 총액은 내보내지 않는다. 연속조회에서 페이지별 합계인지 전체 합계인지 명세에 없다."""
+        result = self._collect_tr_pages(KBSEC_TR['ACCOUNT_SUMMARY'], self.extend({
+            'inq_clsf': '3', 'tl_val_amt': '', 'tl_tfnd_amt': '', 'tl_o_amt_psbl_amt': '', 'gds_grp_cd': '00', 'ccls_stmt_clsf': '1',
+        }, params), lambda row: {
+            'accountNumber': pick_str(row, 'ac_no'),
+            'nickname': pick_str(row, 'ac_ncknm'),
+            'productTypeCode': pick_str(row, 'gds_typ_cd'),
+            'productTypeName': pick_str(row, 'gds_typ_dtls_nm'),
+            'statusCode': pick_str(row, 'gds_st_ccd'),
+            'valuation': pick_num(row, 'val_amt'),
+            'deposit': pick_num(row, 'tfnd_amt'),
+            'withdrawable': pick_num(row, 'o_amt_psbl_amt'),
+            'dayAfterNextDeposit': pick_num(row, 'nxt2_dy_tfnd'),
+            'lastTradeDate': pick_str(row, 'fnl_dl_dt'),
+            'info': row,
+        })
+        if result['truncated']:
+            logger.warning('[kbsec] 총 잔고 연속조회가 잘렸다: rows=%s', len(result['rows']))
+        return result
+
+    def fetch_realtime_asset_valuation(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """주식자산평가 실시간(`SSQN2952`). 거래소시세구분은 설명대로 통합(`A`)을 보낸다(공식 예제는 `1`). 같은 이름의 입력을 계좌자산평가(`SSQM2952`)가
+        A, K, N 으로 받는 것은 실계좌로 확인했다. 특화주문구분은 설명에 퇴직연금 코드(51, 52)만 있어 일반 계좌로 부를 때는 비워 보낸다. 합계구분은
+        공식 예제처럼 합산(`1`)을, 익익일예수금제외여부는 공식 예제처럼 빈값을 보낸다. 종목코드는 설명이 없는 선택 입력이라 비워 보낸다."""
+        body = self._call_tr(KBSEC_TR['ASSET_EVAL_REALTIME'], self.extend({
+            'is_cd': '', 'sum_clsf': '1', 'spclz_ordr_ccd': '', 'nxt2_dy_tfnd_xcl_f': '', 'excg_mktpr_ccd': 'A',
+        }, params))
+        return {
+            'realizedPnlToday': pick_num(body, 'thdy_rlztn_pl'),
+            'purchaseAmount': pick_num(body, 'byng_amt_sum'),
+            'creditLoan': pick_num(body, 'tl_crdt_ln_amt'),
+            'nextDayDeposit': pick_num(body, 'ndy_tfnd'),
+            'dayAfterNextDeposit': pick_num(body, 'nxt2_dy_tfnd'),
+            'holdings': [{
+                'shortCode': pick_str(row, 'shrt_is_cd'),
+                'standardCode': pick_str(row, 'stnd_is_cd'),
+                'name': pick_str(row, 'is_nm'),
+                'creditTypeName': pick_str(row, 'crdt_typ_nm'),
+                'quantity': pick_num(row, 'blnc_q_p6'),
+                'orderableQuantity': pick_num(row, 'ordr_psbl_q_p6'),
+                'averagePrice': pick_num(row, 'byng_avr_prc'),
+                'purchaseAmount': pick_num(row, 'byng_amt'),
+                'price': pick_num(row, 'now_prc'),
+                'valuation': pick_num(row, 'val_amt'),
+                'unrealizedPnl': pick_num(row, 'val_pl'),
+                'returnRate': pick_num(row, 'val_yld'),
+                'info': row,
+            } for row in pick_array(body)],
+            'info': body,
+        }
+
+    def fetch_integrated_balance(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """종합계좌 잔고현황(`SSQM2932`, 종합위탁계좌와 신연금저축계좌). 조회구분은 설명의 계좌별(`1`), 유가증권구분은 설명된 전체(`0`)를 보낸다.
+        채권평가방법은 공식 예제처럼 빈 값을 보낸다. 설명이 없는 거래소시세구분(`excg_mktpr_ccd`)은 실계좌에서 공식 예제값 `1` 과 형제 TR 의
+        통합(`A`)이 모두 받아들여졌고 결과가 같아서, 형제 TR 과 맞춰 `A` 를 보낸다. 종목코드가 빈 행은 보유가 아니라서 거른다."""
+        body = self._call_tr(KBSEC_TR['INTEGRATED_BALANCE'], self.extend({
+            'inq_clsf': '1', 'scrts_ccd': '0', 'bnd_val_wy_cd': '', 'excg_mktpr_ccd': 'A',
+        }, params))
+        return {
+            'valuation': pick_num(body, 'val_amt_sum'),
+            'purchaseAmount': pick_num(body, 'byng_amt_sum'),
+            'pnl': pick_num(body, 'pl_amt_sum'),
+            'deposit': pick_num(body, 'tfnd'),
+            'orderableCash': pick_num(body, 'ordr_psbl_csh'),
+            'withdrawable': pick_num(body, 'o_amt_psbl_amt'),
+            'holdings': [{
+                'code': pick_str(row, 'is_cd'),
+                'name': pick_str(row, 'is_nm'),
+                'productType': pick_str(row, 'gds_typ'),
+                'kind': pick_str(row, 'clsf'),
+                'currency': pick_str(row, 'crncy_cd'),
+                'quantity': pick_num(row, 'blnc_q_p6'),
+                'orderableQuantity': pick_num(row, 'ordr_psbl_q_p6'),
+                'averagePrice': pick_num(row, 'byng_avr_prc'),
+                'price': pick_num(row, 'now_prc'),
+                'valuation': pick_num(row, 'val_amt'),
+                'pnl': pick_num(row, 'pl_amt'),
+                'returnRate': pick_num(row, 'yld'),
+                'info': row,
+            } for row in pick_array(body) if pick_str(row, 'is_cd') != ''],
+            'info': body,
+        }
+
+    def fetch_coupons(self, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """개인별 쿠폰(`SZQM6019`). 수수료 혜택 같은 쿠폰의 금액과 유효기간을 읽는다.
+
+        상태구분(`st_clsf`)은 설명이 없는 선택 입력이라 비워 보낸다. 공식 예시값 `1` 이 어느 상태를 고르는지 모르므로, 예시값을 따르면 다른 상태의
+        쿠폰이 조용히 빠질 수 있다. 대표고객번호(`rprst_cs_no`)는 "계좌 또는 고객번호 필수"지만 계좌가 앱키에 묶이므로 비워 보낸다. 연속조회 키가
+        없는 TR 이라 한 번만 부른다. 쿠폰코드와 쿠폰명이 모두 빈 행은 쿠폰이 아니라서 거른다.
+        """
+        body = self._call_tr(KBSEC_TR['COUPONS'], self.extend({'rprst_cs_no': '', 'st_clsf': ''}, params))
+        return [{
+            'code': pick_str(row, 'cpn_cd'),
+            'name': pick_str(row, 'cpn_isng_nm'),
+            'statusCode': pick_str(row, 'st_clsf'),
+            'amount': pick_num(row, 'amt'),
+            'remainingDays': pick_num(row, 'rmd_dy_c'),
+            'startDate': pick_str(row, 'strt_dt'),
+            'endDate': pick_str(row, 'end_dt'),
+            'usedDate': pick_str(row, 'use_dt'),
+            'applicableProduct': pick_str(row, 'cpn_aplc_psbl_gds_nm'),
+            'info': row,
+        } for row in pick_array(body) if pick_str(row, 'cpn_cd') != '' or pick_str(row, 'cpn_isng_nm') != '']
+
+    def fetch_realized_pnl(self, since: Int = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """기간매매손익현황(`SSQM2392`). 주문일자와 종목 단위로 매매손익, 제비용, 순손익을 읽는다. 결과는 `{'rows', 'truncated'}` 다.
+
+        입력은 모두 설명이 없는 선택 입력이다. 주문일자는 `since` 를 주면 한국 날짜로 바꿔 보내고, 끝은 `params['until']`, 없으면 오늘이다.
+        `since` 가 없으면 두 날짜를 비워 보낸다. 그때 KB 가 어느 기간을 주는지는 명세에 없다. 조회구분(`inq_clsf`)은 예시값 `1` 이 무엇을
+        고르는지 몰라 비워 보낸다. 출력 이름과 같은 입력 세 개(`trd_pl` 등)와 종목번호(`is_no`)도 비워 보낸다.
+
+        응답 머리의 합계(매매손익, 제비용, 순손익)는 내보내지 않는다. 연속조회에서 페이지별 합계인지 기간 전체 합계인지 명세에 없다.
+        연속조회는 끝까지 따라가고, 상한(`holdingsMaxPages`)에 걸리면 `truncated` 로 알린다.
+        """
+        params = {} if params is None else params
+        until = self.safe_integer(params, 'until')
+        date_from = kst_ymd(since) if since is not None else ''
+        date_to = kst_ymd(until) if until is not None else (self._today_kst() if since is not None else '')
+        result = self._collect_tr_pages(KBSEC_TR['PNL_PERIOD'], self.extend({
+            'is_no': '', 'ordr_dt_from': date_from, 'ordr_dt_to': date_to, 'trd_svrl_cst': '', 'trd_pl': '', 'trd_nt_pl': '', 'inq_clsf': '',
+        }, self.omit(params, 'until')), lambda row: self.extend(self.kst_stamp(pick_str(row, 'ordr_dt')), {
+            'date': pick_str(row, 'ordr_dt'),
+            'symbol': f"{kbsec_normalize_code(pick_str(row, 'is_no'))}/KRW",
+            'name': pick_str(row, 'is_nm'),
+            'quantity': pick_num(row, 'ccls_q'),
+            'buyQuantity': pick_num(row, 'b_q'),
+            'buyPrice': pick_num(row, 'byng_prc'),
+            'sellPrice': pick_num(row, 's_prc'),
+            'pnl': pick_num(row, 'trd_pl'),
+            'costs': pick_num(row, 'trd_svrl_cst'),
+            'netPnl': pick_num(row, 'trd_nt_pl'),
+            'creditType': pick_str(row, 'crdt_typ_nm'),
+            'info': row,
+        }))
+        if result['truncated']:
+            logger.warning('[kbsec] 기간매매손익 연속조회가 잘렸다 — 기간을 좁혀 다시 불러야 한다: rows=%s from=%s to=%s', len(result['rows']), date_from, date_to)
+        return result
+
+    def _realized_pnl_request(self, method: str, md_clsf: str, since: Int, params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """실현손익 조회(`SSQM2442`, `SSQM2443`)의 공통 입력. 시작일자를 검사하고 한국 날짜로 기간을 채운다."""
+        if since is None:
+            raise ArgumentsRequired(f'{self.id} {method}() 는 since 인자가 필요하다(조회 시작일자가 필수 입력이다)')
+        params = {} if params is None else params
+        until = self.safe_integer(params, 'until')
+        return self.extend({
+            'inq_strt_dt': kst_ymd(since),
+            'inq_end_dt': kst_ymd(until) if until is not None else self._today_kst(),
+            'md_clsf': md_clsf,
+        }, self.omit(params, 'until'))
+
+    def fetch_realized_pnl_daily(self, since: Int = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """일자별실현손익상세(`SSQM2442`, 국내). 결과는 `{'rows', 'truncated'}` 다. 필수 입력 매체구분(`md_clsf`, 1 오프라인, 2 온라인, 3 지점)은
+        공식 예제값 `1` 을 보낸다. 실계좌(2026-09-24)에서 1, 2, 3 의 첫 페이지 행과 머리 합계가 모두 같아 행을 거르는 값이 아니었다.
+        `params['md_clsf']` 로 바꿀 수 있다. 조회 시작일자와 종료일자가 필수라 `since` 가 없으면 요청 없이 `ArgumentsRequired` 다. 날짜는 한국
+        날짜이고, 끝은 `params['until']`, 없으면 오늘이다. 종목코드는 설명이 없는 선택 입력이라 비워 보낸다. 응답 머리의 합계는 내보내지 않는다."""
+        request = self.extend({'is_cd': ''}, self._realized_pnl_request('fetchRealizedPnlDaily', '1', since, params))
+        result = self._collect_tr_pages(KBSEC_TR['PNL_DAILY'], request, lambda row: self.extend(self.kst_stamp(pick_str(row, 'trd_dt')), {
+            'date': pick_str(row, 'trd_dt'),
+            'shortCode': pick_str(row, 'shrt_is_cd'),
+            'standardCode': pick_str(row, 'stnd_is_cd'),
+            'name': pick_str(row, 'is_nm'),
+            'creditTypeCode': pick_str(row, 'crdt_typ_cd'),
+            'tradeTypeCode': pick_str(row, 'trd_dl_ccd'),
+            'quantity': pick_num(row, 'ccls_q'),
+            'price': pick_num(row, 'ccls_uprc'),
+            'buyPrice': pick_num(row, 'b_uprc'),
+            'sellAmount': pick_num(row, 's_amt'),
+            'buyAmount': pick_num(row, 'b_amt'),
+            'fee': pick_num(row, 'fee'),
+            'tax': pick_num(row, 'svrl_tx'),
+            'realizedPnl': pick_num(row, 'rlztn_pl'),
+            'returnRate': pick_num(row, 'yld'),
+            'info': row,
+        }))
+        if result['truncated']:
+            logger.warning('[kbsec] 일자별실현손익 연속조회가 잘렸다 — 기간을 좁혀 다시 불러야 한다: rows=%s from=%s to=%s', len(result['rows']),
+                           request.get('inq_strt_dt'), request.get('inq_end_dt'))
+        return result
+
+    def fetch_realized_pnl_by_symbol(self, media: str, since: Int = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """종목별기간실현손익(`SSQM2443`, 국내). 종목 단위 기간 합계라 개별 매매로 나눌 수 없다. 결과는 `{'rows', 'truncated'}` 다. 기간과 연속조회는
+        `fetch_realized_pnl_daily` 와 같다. 매체구분(`OFFLINE`, `ONLINE`, `BRANCH`)은 기본값 없이 호출하는 쪽이 고르고, 모르는 값이면 요청 없이
+        `NotSupported` 다. 권한이 없는 계정에서는 I446 을 준다."""
+        md_clsf = _code_of(KBSEC_MEDIA_CLASS_CODE, media)
+        if md_clsf is None:
+            raise NotSupported(f'{self.id} fetchRealizedPnlBySymbol() 는 {media} 매체구분을 지원하지 않는다')
+        request = self._realized_pnl_request('fetchRealizedPnlBySymbol', md_clsf, since, params)
+        result = self._collect_tr_pages(KBSEC_TR['PNL_BY_SYMBOL'], request, lambda row: {
+            'code': pick_str(row, 'is_cd'),
+            'shortCode': pick_str(row, 'shrt_is_cd'),
+            'name': pick_str(row, 'is_nm'),
+            'realizedPnl': pick_num(row, 'rlztn_pl'),
+            'pnlRate': pick_num(row, 'pl_r'),
+            'sellQuantity': pick_num(row, 'thdy_s_q'),
+            'sellPrice': pick_num(row, 's_ccls_uprc'),
+            'sellAmount': pick_num(row, 's_amt'),
+            'sellFee': pick_num(row, 's_fee'),
+            'sellTax': pick_num(row, 's_svrl_tx'),
+            'buyAveragePrice': pick_num(row, 'b_avr_uprc'),
+            'buyAmount': pick_num(row, 'b_amt'),
+            'buyFee': pick_num(row, 'b_fee'),
+            'info': row,
+        })
+        if result['truncated']:
+            logger.warning('[kbsec] 종목별기간실현손익 연속조회가 잘렸다 — 기간을 좁혀 다시 불러야 한다: rows=%s from=%s to=%s', len(result['rows']),
+                           request.get('inq_strt_dt'), request.get('inq_end_dt'))
+        return result
+
+    # ============ 정산 ============
+
+    def fetch_domestic_settlements(self, trade_date_kst: str) -> Dict[str, Any]:
+        """국내 하루치 정산 행(`SSQM2121`, 계좌별매매가정산현황). KB 가 실제로 청구한 국내 매매비용(위탁수수료·거래세·농특세)의 정본이다.
+
+        조회 실패와 정산 없음을 같은 값으로 돌려주지 않는다. 성공은 `{'ok': True, 'rows', 'truncated'}`, 실패는 `{'ok': False, 'error'}` 이고
+        `ok` 가 참이고 `rows` 가 빈 것만 정상적인 0건이다. 실패를 빈 목록으로 삼키면 호출하는 쪽이 "그날 매매가 없었나 보다"로 읽는다.
+
+        매도(`1`)와 매수(`2`)를 따로 부른다. 명세에는 `9: 전체` 가 있지만 실응답이 잘린 부분집합이고, 그 잘림이 연속조회처럼 보인다(그 키를
+        되보내면 같은 행이 그대로 다시 온다). 매도·매수는 각각 완결된다. 행은 `kbsec_settlement_row` 가 정규화하고, 연속 행 귀속과 묶음 검산을 거친다.
+
+        `trade_date_kst` 는 매매일자 `YYYYMMDD`(한국 날짜)다.
+        """
+        raw: List[Dict[str, Any]] = []
+        truncated = False
+        for side in (KBSEC_SETTLE_TRD_CLSF['SELL'], KBSEC_SETTLE_TRD_CLSF['BUY']):
+            page = self._fetch_settlement_side(trade_date_kst, side)
+            if not page['ok']:
+                return page
+            raw.extend(page['rows'])
+            truncated = truncated or page['truncated']
+        # 연속 행 귀속과 묶음 단위 검산. `clsf=1` 은 한 종목을 단가마다 쪼개고 비용을 마지막 행에만 싣는다. 행 단위로 보면 비용을 든 행이 버려진다.
+        resolved = kbsec_resolve_settlement_rows(raw)
+        if resolved['inconsistent'] > 0:
+            logger.warning('[kbsec] 정산 묶음 검산 실패 — 필드 대조 필요(그 묶음은 버렸다): tradeDateKst=%s inconsistent=%s kept=%s', trade_date_kst,
+                           resolved['inconsistent'], len(resolved['rows']))
+        if resolved['orphaned'] > 0:
+            logger.warning('[kbsec] 주인 없는 정산 연속 행 — 귀속할 헤더가 없어 버렸다: tradeDateKst=%s orphaned=%s', trade_date_kst, resolved['orphaned'])
+        return {'ok': True, 'rows': resolved['rows'], 'truncated': truncated}
+
+    def _fetch_settlement_side(self, trade_date_kst: str, trd_clsf: str) -> Dict[str, Any]:
+        """한 매매구분의 하루치 정산 행. 연속조회는 `_collect_tr_pages` 를 따른다. 같은 키가 또 오면 그 페이지를 버리고 잘렸다고 표시한다."""
+        try:
+            result = self._collect_tr_pages(KBSEC_TR['SETTLEMENT_KR'], {
+                'trd_dt': trade_date_kst,
+                'clsf': KBSEC_SETTLE_CLSF['BY_PRICE'],
+                'trd_clsf': trd_clsf,
+                # KB 공식 예제가 결제일자에 매매일자와 같은 값을 넣는다. 실측상 필터가 아니다. 빈 값으로 보내도 같은 행 수가 온다.
+                'stmt_dt': trade_date_kst,
+            }, parse_kbsec_domestic_settlement_row, self.options['settlementMaxPages'], pick_settlement_grid)
+        except Exception as err:
+            logger.warning('[kbsec] 국내 정산 조회 실패 — 추정치를 유지한다(0건 아님): tradeDateKst=%s trdClsf=%s err=%s', trade_date_kst, trd_clsf, err)
+            return {'ok': False, 'error': str(err)}
+        if result['truncated']:
+            logger.warning('[kbsec] 정산이 잘렸다 — 그룹 합계가 모자랄 수 있다: tradeDateKst=%s trdClsf=%s rows=%s', trade_date_kst, trd_clsf, len(result['rows']))
+        return {'ok': True, 'rows': result['rows'], 'truncated': result['truncated']}
+
+    def fetch_overseas_settlements(self, start_date_us: str, end_date_us: str) -> Dict[str, Any]:
+        """해외 구간 정산 행(`SPQM2205`, 매매가정산현황). 결과 모양은 `fetch_domestic_settlements` 와 같고 행은 USD 축이다. 국내와 호출 모양이 다르다.
+
+        1. 구간 조회다. `strt_ordr_dt`~`end_ordr_dt` 라 하루씩 부를 이유가 없다.
+        2. 전체(`99`)를 한 번에 부른다. 국내 `9` 는 잘린 부분집합이지만 해외 `99` 는 정상 완결한다.
+        3. 매매구분이 두 자리다(`99`/`01`/`02`). 국내의 `9` 를 보내면 1861(조회할 자료가 없습니다)이 와서 거부가 "거래 없음"과 똑같아 보인다.
+
+        통화 축은 외화(USD)다. 원화 축은 같은 행을 환산해 주지만 세금 필드를 채우지 않는다. USD 가 아닌 행과 검산에 실패한 묶음은 버린다.
+        `start_date_us`·`end_date_us` 는 시작·종료 주문일자 `YYYYMMDD` 로, 미국 현지 일자다.
+        """
+        try:
+            # 같은 키가 또 오면 앞 페이지와 같은 내용이다. `_collect_tr_pages` 는 그 페이지를 버린다. 담으면 비용이 몇 배로 부풀고 완주한 것처럼 보인다.
+            result = self._collect_tr_pages(KBSEC_TR['SETTLEMENT_US'], {
+                'strt_ordr_dt': start_date_us,
+                'end_ordr_dt': end_date_us,
+                # 거래소·종목·ISO 는 비워 전체를 받는다(명세상 선택 필드).
+                'frgn_krx_ccd': '',
+                'trd_clsf': KBSEC_OVERSEAS_SETTLE_TRD_CLSF['ALL'],
+                'stnd_is_cd': '',
+                'iso_cd': '',
+                # 합계 입력칸. 조회에는 빈 값으로 보낸다.
+                's_stmt_amt_sum_p4': '',
+                'b_stmt_amt_sum_p4': '',
+                'tl_s_ccls_q_p6': '',
+                'tl_b_ccls_q_p6': '',
+                'fcrncy_fee_p4': '',
+                'krw_unty_mgn_rqst_f': KBSEC_OVERSEAS_SETTLE_FX_AXIS['FOREIGN'],
+                'dl_clsf': KBSEC_OVERSEAS_SETTLE_DL_CLSF['ALL'],
+            }, parse_kbsec_overseas_settlement_row, self.options['settlementMaxPages'], pick_overseas_settlement_grid)
+        except Exception as err:
+            logger.warning('[kbsec] 해외 정산 조회 실패 — 추정치를 유지한다(0건 아님): startDateUs=%s endDateUs=%s err=%s', start_date_us, end_date_us, err)
+            return {'ok': False, 'error': str(err)}
+        resolved = kbsec_resolve_overseas_settlement_rows(result['rows'])
+        if resolved['inconsistent'] > 0:
+            logger.warning('[kbsec] 해외 정산 묶음 검산 실패 — 필드 대조 필요(그 묶음은 버렸다): startDateUs=%s endDateUs=%s inconsistent=%s kept=%s',
+                           start_date_us, end_date_us, resolved['inconsistent'], len(resolved['rows']))
+        if resolved['foreignCurrency'] > 0:
+            logger.warning('[kbsec] 해외 정산에 USD 아닌 행이 있다 — 축이 다른 금액이라 버렸다: startDateUs=%s endDateUs=%s foreignCurrency=%s', start_date_us,
+                           end_date_us, resolved['foreignCurrency'])
+        if result['truncated']:
+            logger.warning('[kbsec] 해외 정산이 잘렸다 — 그룹 합계가 모자랄 수 있다: startDateUs=%s endDateUs=%s rows=%s', start_date_us, end_date_us,
+                           len(resolved['rows']))
+        return {'ok': True, 'rows': resolved['rows'], 'truncated': result['truncated']}
+
     # 생성자가 붙이는 camelCase 별칭을 타입 검사기에 알린다. 빠지거나 남는 줄은 test_base.py 가 잡는다.
     if TYPE_CHECKING:
         handleErrors = handle_errors
@@ -2962,6 +3869,38 @@ class kbsec(Exchange, ImplicitAPI):
         fetchBalance = fetch_balance
         parseBalance = parse_balance
         fetchOneMarketMargin = fetch_one_market_margin
+        fetchBuyableAmount = fetch_buyable_amount
+        fetchOverseasBuyableAmount = fetch_overseas_buyable_amount
+        fetchOneMarketBuyingPower = fetch_one_market_buying_power
+        fetchOverseasOrderableAmount = fetch_overseas_orderable_amount
+        fetchUnrealizedPnl = fetch_unrealized_pnl
+        fetchFractionalHoldings = fetch_fractional_holdings
+        fetchOverseasFractionalHoldings = fetch_overseas_fractional_holdings
+        fetchFractionalBuyableAmount = fetch_fractional_buyable_amount
+        fetchFractionalTrades = fetch_fractional_trades
+        fetchFractionalOrders = fetch_fractional_orders
+        fetchOverseasFractionalOrders = fetch_overseas_fractional_orders
+        fetchOverseasFractionalOrderHistory = fetch_overseas_fractional_order_history
+        fetchReservedOrderResults = fetch_reserved_order_results
+        fetchReservedOrders = fetch_reserved_orders
+        fetchLedgerEntryDetail = fetch_ledger_entry_detail
+        fetchCorporateActions = fetch_corporate_actions
+        fetchOverseasOrders = fetch_overseas_orders
+        fetchAccountLedger = fetch_account_ledger
+        fetchCmaLedger = fetch_cma_ledger
+        fetchWithdrawableAmount = fetch_withdrawable_amount
+        fetchDepositDetails = fetch_deposit_details
+        fetchOneMarketMarginUsage = fetch_one_market_margin_usage
+        fetchOneMarketSettlementDetail = fetch_one_market_settlement_detail
+        fetchAccountSummary = fetch_account_summary
+        fetchRealtimeAssetValuation = fetch_realtime_asset_valuation
+        fetchIntegratedBalance = fetch_integrated_balance
+        fetchCoupons = fetch_coupons
+        fetchRealizedPnl = fetch_realized_pnl
+        fetchRealizedPnlDaily = fetch_realized_pnl_daily
+        fetchRealizedPnlBySymbol = fetch_realized_pnl_by_symbol
+        fetchDomesticSettlements = fetch_domestic_settlements
+        fetchOverseasSettlements = fetch_overseas_settlements
         fetchMarketableBuyPrice = fetch_marketable_buy_price
         createOrder = create_order
         createTriggerOrder = create_trigger_order
