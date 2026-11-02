@@ -12,6 +12,10 @@ updates:
     cooldown:
       default-days: 7
     open-pull-requests-limit: 5
+    # @types/node는 지원하는 가장 낮은 Node.js(22)에 맞춥니다. 메이저 판을 올리면 Node.js 22에 없는 API를 써도 타입 검사가 잡지 못합니다.
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: "chore(deps)"
     groups:

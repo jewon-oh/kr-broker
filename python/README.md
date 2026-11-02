@@ -8,12 +8,12 @@ TypeScript 판과 같은 저장소에 있고, 같은 엔드포인트 표(`ts/src
 PyPI 에는 아직 게시하지 않았습니다. GitHub 주소로 설치합니다.
 
 ```bash
-pip install "kr-broker @ git+https://github.com/jewon-oh/kr-broker.git@v0.5.0#subdirectory=python"
+pip install "kr-broker @ git+https://github.com/jewon-oh/kr-broker.git@v0.6.0#subdirectory=python"
 ```
 
-위 명령은 태그 `v0.5.0`에 고정합니다. 다른 버전이나 커밋은 `@` 뒤를 바꿉니다(`...kr-broker.git@9759def#subdirectory=python`).
+위 명령은 태그 `v0.6.0`에 고정합니다. 다른 버전이나 커밋은 `@` 뒤를 바꿉니다(`...kr-broker.git@9759def#subdirectory=python`).
 
-Python 3.10 이상이 필요하고, 의존성은 `requests`(동기 판), `aiohttp`(비동기 판과 실시간 판), `cryptography`(한국투자증권 체결통보 복호)입니다.
+Python 3.11 이상이 필요하고, 의존성은 `requests`(동기 판), `aiohttp`(비동기 판과 실시간 판), `cryptography`(한국투자증권 체결통보 복호)입니다.
 
 ## 지금 되는 것
 

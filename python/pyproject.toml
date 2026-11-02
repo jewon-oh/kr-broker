@@ -4,10 +4,10 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kr-broker"
-version = "0.5.0"
+version = "0.6.0"
 description = "한국투자증권·토스증권 Open API 를 ccxt 방식으로 부르는 Python 라이브러리"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = "MIT"
 dependencies = ["requests>=2.33.0", "aiohttp>=3.14.4", "cryptography>=50.0.0"]
 classifiers = [
@@ -34,5 +34,5 @@ filterwarnings = ["error::RuntimeWarning", "error::pytest.PytestUnraisableExcept
 [tool.pyright]
 include = ["kr_broker"]
 typeCheckingMode = "basic"
-# 지원하는 가장 낮은 버전으로 본다. 3.11 이후에 생긴 표준 라이브러리 API 를 쓰면 오류다.
-pythonVersion = "3.10"
+# 지원하는 가장 낮은 버전으로 본다. 3.12 이후에 생긴 표준 라이브러리 API 를 쓰면 오류다.
+pythonVersion = "3.11"

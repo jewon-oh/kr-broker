@@ -1,6 +1,6 @@
 {
   "name": "kr-broker",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "description": "한국 증권사(KB증권·한국투자증권·토스증권) API 를 ccxt 처럼 쓰는 TypeScript 라이브러리",
   "license": "MIT",
@@ -241,14 +241,15 @@
     "verify": "node scripts/verify.mjs"
   },
   "dependencies": {
-    "ws": "^8.19.0"
+    "ws": "^8.22.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "@types/ws": "^8.18.1",
-    "tsc-alias": "1.8.17",
+    "@types/ws": "^8.18.2",
+    "tsc-alias": "1.9.7",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
+    "vite": "^8.3.5",
+    "vitest": "^5.0.1"
   },
   "engines": {
     "node": ">=22"

@@ -15,7 +15,7 @@ from kr_broker.kbsec import kbsec
 from kr_broker.kis import kis
 from kr_broker.toss import toss
 
-__version__ = '0.5.0'
+__version__ = '0.6.0'
 
 exchanges = ['kbsec', 'kis', 'toss']
 
