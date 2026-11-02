@@ -10253,6 +10253,2722 @@
                 "class": "NotSupported",
                 "brokerCode": null
             }
+        },
+        {
+            "description": "fetchStocks 는 종목마다 SIQM4900 을 차례로 부르고 이름과 유형을 정리한다. 빈 필드는 비운다",
+            "method": "fetchStocks",
+            "args": [
+                [
+                    "005930/KRW",
+                    "000660/KRW"
+                ]
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/siqm4900",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"stnd_is_cd\":\"005930\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "stnd_is_cd": "KR7005930003",
+                                "shrt_is_cd": "A005930",
+                                "hngl_is_nm": "삼성전자",
+                                "hngl_shrt_nm": "삼성전자",
+                                "eng_is_nm": "SAMSUNG ELECTRONICS",
+                                "is_typ_nm": "주권",
+                                "is_dtl_typ_nm": "보통주",
+                                "trd_rstn_clsf_nm": "",
+                                "trd_rstn_strt_dt": "",
+                                "trd_rstn_end_dt": "",
+                                "io_rstn_clsf_nm": "",
+                                "rsk_grd_clsf_cd": "1",
+                                "rsk_grd_nm": "초저위험"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/siqm4900",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"stnd_is_cd\":\"000660\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "stnd_is_cd": "KR7000660001",
+                                "shrt_is_cd": "A000660",
+                                "hngl_is_nm": "SK하이닉스",
+                                "hngl_shrt_nm": "SK하이닉스",
+                                "eng_is_nm": "",
+                                "is_typ_nm": "주권",
+                                "is_dtl_typ_nm": "",
+                                "trd_rstn_clsf_nm": "",
+                                "trd_rstn_strt_dt": "",
+                                "trd_rstn_end_dt": "",
+                                "io_rstn_clsf_nm": "",
+                                "rsk_grd_clsf_cd": "1",
+                                "rsk_grd_nm": "초저위험"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "symbol": "005930/KRW",
+                    "standardCode": "KR7005930003",
+                    "shortCode": "A005930",
+                    "name": "삼성전자",
+                    "shortName": "삼성전자",
+                    "englishName": "SAMSUNG ELECTRONICS",
+                    "typeName": "주권",
+                    "detailTypeName": "보통주",
+                    "info": {
+                        "stnd_is_cd": "KR7005930003",
+                        "shrt_is_cd": "A005930",
+                        "hngl_is_nm": "삼성전자",
+                        "hngl_shrt_nm": "삼성전자",
+                        "eng_is_nm": "SAMSUNG ELECTRONICS",
+                        "is_typ_nm": "주권",
+                        "is_dtl_typ_nm": "보통주",
+                        "trd_rstn_clsf_nm": "",
+                        "trd_rstn_strt_dt": "",
+                        "trd_rstn_end_dt": "",
+                        "io_rstn_clsf_nm": "",
+                        "rsk_grd_clsf_cd": "1",
+                        "rsk_grd_nm": "초저위험"
+                    }
+                },
+                {
+                    "symbol": "000660/KRW",
+                    "standardCode": "KR7000660001",
+                    "shortCode": "A000660",
+                    "name": "SK하이닉스",
+                    "shortName": "SK하이닉스",
+                    "typeName": "주권",
+                    "info": {
+                        "stnd_is_cd": "KR7000660001",
+                        "shrt_is_cd": "A000660",
+                        "hngl_is_nm": "SK하이닉스",
+                        "hngl_shrt_nm": "SK하이닉스",
+                        "eng_is_nm": "",
+                        "is_typ_nm": "주권",
+                        "is_dtl_typ_nm": "",
+                        "trd_rstn_clsf_nm": "",
+                        "trd_rstn_strt_dt": "",
+                        "trd_rstn_end_dt": "",
+                        "io_rstn_clsf_nm": "",
+                        "rsk_grd_clsf_cd": "1",
+                        "rsk_grd_nm": "초저위험"
+                    }
+                }
+            ]
+        },
+        {
+            "description": "fetchStocks 는 해외 종목이 있으면 요청 없이 NotSupported 다",
+            "method": "fetchStocks",
+            "args": [
+                [
+                    "AAPL/USD"
+                ]
+            ],
+            "http": [],
+            "error": {
+                "class": "NotSupported",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "fetchTradingRestriction 은 SIQM4900 의 매매제한과 위험등급을 정리하고 params 를 본문에 합친다",
+            "method": "fetchTradingRestriction",
+            "args": [
+                "005930/KRW",
+                {
+                    "memo": "x"
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/siqm4900",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"stnd_is_cd\":\"005930\",\"memo\":\"x\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "stnd_is_cd": "KR7005930003",
+                                "shrt_is_cd": "A005930",
+                                "hngl_is_nm": "삼성전자",
+                                "hngl_shrt_nm": "삼성전자",
+                                "eng_is_nm": "SAMSUNG ELECTRONICS",
+                                "is_typ_nm": "주권",
+                                "is_dtl_typ_nm": "보통주",
+                                "trd_rstn_clsf_nm": "거래정지",
+                                "trd_rstn_strt_dt": "20260901",
+                                "trd_rstn_end_dt": "20261231",
+                                "io_rstn_clsf_nm": "입고제한",
+                                "rsk_grd_clsf_cd": "5",
+                                "rsk_grd_nm": "초고위험"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "tradingRestriction": "거래정지",
+                "tradingRestrictionStart": "20260901",
+                "tradingRestrictionEnd": "20261231",
+                "depositWithdrawalRestriction": "입고제한",
+                "riskGradeCode": "5",
+                "riskGradeName": "초고위험",
+                "info": {
+                    "stnd_is_cd": "KR7005930003",
+                    "shrt_is_cd": "A005930",
+                    "hngl_is_nm": "삼성전자",
+                    "hngl_shrt_nm": "삼성전자",
+                    "eng_is_nm": "SAMSUNG ELECTRONICS",
+                    "is_typ_nm": "주권",
+                    "is_dtl_typ_nm": "보통주",
+                    "trd_rstn_clsf_nm": "거래정지",
+                    "trd_rstn_strt_dt": "20260901",
+                    "trd_rstn_end_dt": "20261231",
+                    "io_rstn_clsf_nm": "입고제한",
+                    "rsk_grd_clsf_cd": "5",
+                    "rsk_grd_nm": "초고위험"
+                }
+            }
+        },
+        {
+            "description": "fetchTradingRestriction 은 제한이 없으면 제한 필드를 비운다",
+            "method": "fetchTradingRestriction",
+            "args": [
+                "005930"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/siqm4900",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"stnd_is_cd\":\"005930\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "stnd_is_cd": "KR7005930003",
+                                "shrt_is_cd": "A005930",
+                                "hngl_is_nm": "삼성전자",
+                                "hngl_shrt_nm": "삼성전자",
+                                "eng_is_nm": "SAMSUNG ELECTRONICS",
+                                "is_typ_nm": "주권",
+                                "is_dtl_typ_nm": "보통주",
+                                "trd_rstn_clsf_nm": "",
+                                "trd_rstn_strt_dt": "",
+                                "trd_rstn_end_dt": "",
+                                "io_rstn_clsf_nm": "",
+                                "rsk_grd_clsf_cd": "1",
+                                "rsk_grd_nm": "초저위험"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "riskGradeCode": "1",
+                "riskGradeName": "초저위험",
+                "info": {
+                    "stnd_is_cd": "KR7005930003",
+                    "shrt_is_cd": "A005930",
+                    "hngl_is_nm": "삼성전자",
+                    "hngl_shrt_nm": "삼성전자",
+                    "eng_is_nm": "SAMSUNG ELECTRONICS",
+                    "is_typ_nm": "주권",
+                    "is_dtl_typ_nm": "보통주",
+                    "trd_rstn_clsf_nm": "",
+                    "trd_rstn_strt_dt": "",
+                    "trd_rstn_end_dt": "",
+                    "io_rstn_clsf_nm": "",
+                    "rsk_grd_clsf_cd": "1",
+                    "rsk_grd_nm": "초저위험"
+                }
+            }
+        },
+        {
+            "description": "fetchTradingRestriction 은 해외 종목이면 요청 없이 NotSupported 다",
+            "method": "fetchTradingRestriction",
+            "args": [
+                "AAPL/USD"
+            ],
+            "http": [],
+            "error": {
+                "class": "NotSupported",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "fetchStockWarnings(옛 이름)는 fetchTradingRestriction 과 같은 요청을 보내고 같은 결과를 준다",
+            "method": "fetchStockWarnings",
+            "args": [
+                "005930/KRW"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/siqm4900",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"stnd_is_cd\":\"005930\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "stnd_is_cd": "KR7005930003",
+                                "shrt_is_cd": "A005930",
+                                "hngl_is_nm": "삼성전자",
+                                "hngl_shrt_nm": "삼성전자",
+                                "eng_is_nm": "SAMSUNG ELECTRONICS",
+                                "is_typ_nm": "주권",
+                                "is_dtl_typ_nm": "보통주",
+                                "trd_rstn_clsf_nm": "거래정지",
+                                "trd_rstn_strt_dt": "20260901",
+                                "trd_rstn_end_dt": "20261231",
+                                "io_rstn_clsf_nm": "입고제한",
+                                "rsk_grd_clsf_cd": "5",
+                                "rsk_grd_nm": "초고위험"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "tradingRestriction": "거래정지",
+                "tradingRestrictionStart": "20260901",
+                "tradingRestrictionEnd": "20261231",
+                "depositWithdrawalRestriction": "입고제한",
+                "riskGradeCode": "5",
+                "riskGradeName": "초고위험",
+                "info": {
+                    "stnd_is_cd": "KR7005930003",
+                    "shrt_is_cd": "A005930",
+                    "hngl_is_nm": "삼성전자",
+                    "hngl_shrt_nm": "삼성전자",
+                    "eng_is_nm": "SAMSUNG ELECTRONICS",
+                    "is_typ_nm": "주권",
+                    "is_dtl_typ_nm": "보통주",
+                    "trd_rstn_clsf_nm": "거래정지",
+                    "trd_rstn_strt_dt": "20260901",
+                    "trd_rstn_end_dt": "20261231",
+                    "io_rstn_clsf_nm": "입고제한",
+                    "rsk_grd_clsf_cd": "5",
+                    "rsk_grd_nm": "초고위험"
+                }
+            }
+        },
+        {
+            "description": "fetchForeignBrokers 는 IVU10420 에 KRX 로 묻고 매도와 매수 거래원을 짝지으며 빈 줄은 거른다",
+            "method": "fetchForeignBrokers",
+            "args": [
+                "005930/KRW"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10420",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"is_cd\":\"005930\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "s_scrts_cmpny1": "036",
+                                        "s_scrts_cmpny_nm1": "가나증권",
+                                        "s_q1": "12000",
+                                        "s_incrs_dcrs1": "-300",
+                                        "s_rt1_p2": "12.5",
+                                        "b_scrts_cmpny1": "045",
+                                        "b_scrts_cmpny_nm1": "다라증권",
+                                        "b_q1": "9000",
+                                        "b_incrs_dcrs1": "150",
+                                        "b_rt1_p2": "9.75"
+                                    },
+                                    {
+                                        "s_scrts_cmpny1": "",
+                                        "s_scrts_cmpny_nm1": "",
+                                        "s_q1": "0",
+                                        "s_incrs_dcrs1": "0",
+                                        "s_rt1_p2": "0",
+                                        "b_scrts_cmpny1": "",
+                                        "b_scrts_cmpny_nm1": "",
+                                        "b_q1": "0",
+                                        "b_incrs_dcrs1": "0",
+                                        "b_rt1_p2": "0"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "sell": {
+                        "code": "036",
+                        "name": "가나증권",
+                        "quantity": 12000,
+                        "change": -300,
+                        "ratio": 12.5
+                    },
+                    "buy": {
+                        "code": "045",
+                        "name": "다라증권",
+                        "quantity": 9000,
+                        "change": 150,
+                        "ratio": 9.75
+                    },
+                    "info": {
+                        "s_scrts_cmpny1": "036",
+                        "s_scrts_cmpny_nm1": "가나증권",
+                        "s_q1": "12000",
+                        "s_incrs_dcrs1": "-300",
+                        "s_rt1_p2": "12.5",
+                        "b_scrts_cmpny1": "045",
+                        "b_scrts_cmpny_nm1": "다라증권",
+                        "b_q1": "9000",
+                        "b_incrs_dcrs1": "150",
+                        "b_rt1_p2": "9.75"
+                    }
+                }
+            ]
+        },
+        {
+            "description": "fetchForeignBrokers 는 params 로 거래소 구분을 바꾼다",
+            "method": "fetchForeignBrokers",
+            "args": [
+                "005930/KRW",
+                {
+                    "excg_clsf": "0"
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10420",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"0\",\"is_cd\":\"005930\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": []
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": []
+        },
+        {
+            "description": "fetchForeignBrokers 는 해외 종목이면 요청 없이 NotSupported 다",
+            "method": "fetchForeignBrokers",
+            "args": [
+                "AAPL/USD"
+            ],
+            "http": [],
+            "error": {
+                "class": "NotSupported",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "fetchProgramTradingTrend 는 IVU10450 에 시간별·금액으로 묻고 limit 을 조회건수로 보낸다. params 가 기본값을 덮는다",
+            "method": "fetchProgramTradingTrend",
+            "args": [
+                "005930/KRW",
+                5,
+                {
+                    "prd_clsf": "2"
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10450",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"is_cd\":\"005930\",\"amt_q_clsf\":\"1\",\"prd_clsf\":\"2\",\"inq_cnt\":\"5\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "dt": "20260922",
+                                        "tm": "153000",
+                                        "excg_cd": "KRX",
+                                        "now_prc": "71000",
+                                        "bdy_cmpr": "500",
+                                        "up_dwn_r_p2": "0.71",
+                                        "acml_vlm": "1234567",
+                                        "nt_b_amt": "-2500",
+                                        "nt_b_amt_incrs_dcrs": "-100",
+                                        "s_amt": "9000",
+                                        "b_amt": "6500",
+                                        "nt_b_q": "-35000",
+                                        "nt_b_q_incrs_dcrs": "-1500",
+                                        "s_q": "125000",
+                                        "b_q": "90000"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "timestamp": 1790058600000,
+                    "datetime": "2026-09-22T06:30:00.000Z",
+                    "date": "20260922",
+                    "time": "153000",
+                    "exchange": "KRX",
+                    "price": 71000,
+                    "change": 500,
+                    "percentage": 0.71,
+                    "volume": 1234567,
+                    "netBuyAmount": -2500,
+                    "netBuyAmountChange": -100,
+                    "sellAmount": 9000,
+                    "buyAmount": 6500,
+                    "netBuyQuantity": -35000,
+                    "netBuyQuantityChange": -1500,
+                    "sellQuantity": 125000,
+                    "buyQuantity": 90000,
+                    "info": {
+                        "dt": "20260922",
+                        "tm": "153000",
+                        "excg_cd": "KRX",
+                        "now_prc": "71000",
+                        "bdy_cmpr": "500",
+                        "up_dwn_r_p2": "0.71",
+                        "acml_vlm": "1234567",
+                        "nt_b_amt": "-2500",
+                        "nt_b_amt_incrs_dcrs": "-100",
+                        "s_amt": "9000",
+                        "b_amt": "6500",
+                        "nt_b_q": "-35000",
+                        "nt_b_q_incrs_dcrs": "-1500",
+                        "s_q": "125000",
+                        "b_q": "90000"
+                    }
+                }
+            ]
+        },
+        {
+            "description": "fetchProgramTradingTrend 는 limit 이 없으면 조회건수를 비워 보낸다",
+            "method": "fetchProgramTradingTrend",
+            "args": [
+                "005930/KRW"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10450",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"is_cd\":\"005930\",\"amt_q_clsf\":\"1\",\"prd_clsf\":\"1\",\"inq_cnt\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": []
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": []
+        },
+        {
+            "description": "fetchProgramTradingTrend 는 해외 종목이면 요청 없이 NotSupported 다",
+            "method": "fetchProgramTradingTrend",
+            "args": [
+                "AAPL/USD"
+            ],
+            "http": [],
+            "error": {
+                "class": "NotSupported",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "fetchMarketOverview 는 IVSA0070 을 입력 없이 부르고 그리드를 필드 이름으로 골라 옮긴다",
+            "method": "fetchMarketOverview",
+            "args": [],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivsa0070",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "inq_dy_tm": "20260922153000",
+                                "kspi_ulmt_is_c": "3",
+                                "kspi_up_is_c": "512",
+                                "kspi_unchng_is_c": "80",
+                                "kspi_dwn_is_c": "350",
+                                "kspi_llmt_is_c": "1",
+                                "ksdq_ulmt_is_c": "7",
+                                "ksdq_up_is_c": "900",
+                                "ksdq_unchng_is_c": "120",
+                                "ksdq_dwn_is_c": "600",
+                                "ksdq_llmt_is_c": "2",
+                                "mprft_nt_b": "-120",
+                                "nmp_nt_b": "450",
+                                "cs_dpst_5": "50000000",
+                                "Record1": [
+                                    {
+                                        "indx_id": "KGG01P",
+                                        "indx_nm": "코스피",
+                                        "now_indx_p2": "2650.12",
+                                        "bdy_cmpr_ccd": "2",
+                                        "bdy_cmpr_p2": "12.34",
+                                        "up_dwn_r_p2": "0.47",
+                                        "vlm": "400000",
+                                        "dl_tw_amt": "9000000"
+                                    }
+                                ],
+                                "Record2": [
+                                    {
+                                        "is_cd": "101W9000",
+                                        "is_nm": "코스피200 선물",
+                                        "now_prc_p2": "350.25",
+                                        "bdy_cmpr_p2": "-1.5",
+                                        "up_dwn_r_p2": "-0.43",
+                                        "vlm": "150000",
+                                        "nstmt_agr_q": "320000"
+                                    }
+                                ],
+                                "Record3": [
+                                    {
+                                        "symbl_cd": "DJI@DJI",
+                                        "symbl_nm": "다우존스",
+                                        "now_prc": "42000.5",
+                                        "bdy_cmpr_p2": "100.25",
+                                        "up_dwn_r_p2": "0.24",
+                                        "dt_tm": "20260922060000"
+                                    }
+                                ],
+                                "Record4": [
+                                    {
+                                        "invstr_cd": "8",
+                                        "invstr_clsf_nm": "개인",
+                                        "kspi_nt_b": "-1500",
+                                        "ksdq_nt_b": "800",
+                                        "fts_nt_b": "-20",
+                                        "call_opt_nt_b": "5",
+                                        "put_opt_nt_b": "-3",
+                                        "star_fts_nt_b": "0",
+                                        "stk_fts_nt_b": "12"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "queriedAt": "20260922153000",
+                "kospi": {
+                    "upperLimit": 3,
+                    "advancing": 512,
+                    "unchanged": 80,
+                    "declining": 350,
+                    "lowerLimit": 1
+                },
+                "kosdaq": {
+                    "upperLimit": 7,
+                    "advancing": 900,
+                    "unchanged": 120,
+                    "declining": 600,
+                    "lowerLimit": 2
+                },
+                "arbitrageNetBuy": -120,
+                "nonArbitrageNetBuy": 450,
+                "indices": [
+                    {
+                        "id": "KGG01P",
+                        "name": "코스피",
+                        "value": 2650.12,
+                        "change": 12.34,
+                        "percentage": 0.47,
+                        "volume": 400000,
+                        "tradingValue": 9000000,
+                        "info": {
+                            "indx_id": "KGG01P",
+                            "indx_nm": "코스피",
+                            "now_indx_p2": "2650.12",
+                            "bdy_cmpr_ccd": "2",
+                            "bdy_cmpr_p2": "12.34",
+                            "up_dwn_r_p2": "0.47",
+                            "vlm": "400000",
+                            "dl_tw_amt": "9000000"
+                        }
+                    }
+                ],
+                "derivatives": [
+                    {
+                        "code": "101W9000",
+                        "name": "코스피200 선물",
+                        "price": 350.25,
+                        "change": -1.5,
+                        "percentage": -0.43,
+                        "volume": 150000,
+                        "openInterest": 320000,
+                        "info": {
+                            "is_cd": "101W9000",
+                            "is_nm": "코스피200 선물",
+                            "now_prc_p2": "350.25",
+                            "bdy_cmpr_p2": "-1.5",
+                            "up_dwn_r_p2": "-0.43",
+                            "vlm": "150000",
+                            "nstmt_agr_q": "320000"
+                        }
+                    }
+                ],
+                "globals": [
+                    {
+                        "code": "DJI@DJI",
+                        "name": "다우존스",
+                        "price": 42000.5,
+                        "change": 100.25,
+                        "percentage": 0.24,
+                        "dateTime": "20260922060000",
+                        "info": {
+                            "symbl_cd": "DJI@DJI",
+                            "symbl_nm": "다우존스",
+                            "now_prc": "42000.5",
+                            "bdy_cmpr_p2": "100.25",
+                            "up_dwn_r_p2": "0.24",
+                            "dt_tm": "20260922060000"
+                        }
+                    }
+                ],
+                "investors": [
+                    {
+                        "code": "8",
+                        "name": "개인",
+                        "kospi": -1500,
+                        "kosdaq": 800,
+                        "futures": -20,
+                        "callOptions": 5,
+                        "putOptions": -3,
+                        "starFutures": 0,
+                        "stockFutures": 12,
+                        "info": {
+                            "invstr_cd": "8",
+                            "invstr_clsf_nm": "개인",
+                            "kspi_nt_b": "-1500",
+                            "ksdq_nt_b": "800",
+                            "fts_nt_b": "-20",
+                            "call_opt_nt_b": "5",
+                            "put_opt_nt_b": "-3",
+                            "star_fts_nt_b": "0",
+                            "stk_fts_nt_b": "12"
+                        }
+                    }
+                ],
+                "info": {
+                    "inq_dy_tm": "20260922153000",
+                    "kspi_ulmt_is_c": "3",
+                    "kspi_up_is_c": "512",
+                    "kspi_unchng_is_c": "80",
+                    "kspi_dwn_is_c": "350",
+                    "kspi_llmt_is_c": "1",
+                    "ksdq_ulmt_is_c": "7",
+                    "ksdq_up_is_c": "900",
+                    "ksdq_unchng_is_c": "120",
+                    "ksdq_dwn_is_c": "600",
+                    "ksdq_llmt_is_c": "2",
+                    "mprft_nt_b": "-120",
+                    "nmp_nt_b": "450",
+                    "cs_dpst_5": "50000000",
+                    "Record1": [
+                        {
+                            "indx_id": "KGG01P",
+                            "indx_nm": "코스피",
+                            "now_indx_p2": "2650.12",
+                            "bdy_cmpr_ccd": "2",
+                            "bdy_cmpr_p2": "12.34",
+                            "up_dwn_r_p2": "0.47",
+                            "vlm": "400000",
+                            "dl_tw_amt": "9000000"
+                        }
+                    ],
+                    "Record2": [
+                        {
+                            "is_cd": "101W9000",
+                            "is_nm": "코스피200 선물",
+                            "now_prc_p2": "350.25",
+                            "bdy_cmpr_p2": "-1.5",
+                            "up_dwn_r_p2": "-0.43",
+                            "vlm": "150000",
+                            "nstmt_agr_q": "320000"
+                        }
+                    ],
+                    "Record3": [
+                        {
+                            "symbl_cd": "DJI@DJI",
+                            "symbl_nm": "다우존스",
+                            "now_prc": "42000.5",
+                            "bdy_cmpr_p2": "100.25",
+                            "up_dwn_r_p2": "0.24",
+                            "dt_tm": "20260922060000"
+                        }
+                    ],
+                    "Record4": [
+                        {
+                            "invstr_cd": "8",
+                            "invstr_clsf_nm": "개인",
+                            "kspi_nt_b": "-1500",
+                            "ksdq_nt_b": "800",
+                            "fts_nt_b": "-20",
+                            "call_opt_nt_b": "5",
+                            "put_opt_nt_b": "-3",
+                            "star_fts_nt_b": "0",
+                            "stk_fts_nt_b": "12"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "description": "fetchRankings FLUCTUATION 은 IVU10240 에 통합·전체·상승율로 묻고 순위 필드를 쓴다",
+            "method": "fetchRankings",
+            "args": [
+                "FLUCTUATION"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10240",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"0\",\"mkt_clsf\":\"1\",\"inq_cnt\":\"\",\"srt_clsf\":\"1\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "is_cd": "005930",
+                                        "is_nm": "삼성전자",
+                                        "now_prc": "71000",
+                                        "bdy_cmpr": "1500",
+                                        "up_dwn_r_p2": "2.16",
+                                        "vlm": "1234567",
+                                        "rnk": "1"
+                                    },
+                                    {
+                                        "is_cd": "000660",
+                                        "is_nm": "SK하이닉스",
+                                        "now_prc": "120000",
+                                        "bdy_cmpr": "-2000",
+                                        "up_dwn_r_p2": "-1.64",
+                                        "vlm": "765432",
+                                        "rnk": "2"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "rank": 1,
+                    "symbol": "005930/KRW",
+                    "name": "삼성전자",
+                    "last": 71000,
+                    "change": 1500,
+                    "percentage": 2.16,
+                    "volume": 1234567,
+                    "info": {
+                        "is_cd": "005930",
+                        "is_nm": "삼성전자",
+                        "now_prc": "71000",
+                        "bdy_cmpr": "1500",
+                        "up_dwn_r_p2": "2.16",
+                        "vlm": "1234567",
+                        "rnk": "1"
+                    }
+                },
+                {
+                    "rank": 2,
+                    "symbol": "000660/KRW",
+                    "name": "SK하이닉스",
+                    "last": 120000,
+                    "change": -2000,
+                    "percentage": -1.64,
+                    "volume": 765432,
+                    "info": {
+                        "is_cd": "000660",
+                        "is_nm": "SK하이닉스",
+                        "now_prc": "120000",
+                        "bdy_cmpr": "-2000",
+                        "up_dwn_r_p2": "-1.64",
+                        "vlm": "765432",
+                        "rnk": "2"
+                    }
+                }
+            ]
+        },
+        {
+            "description": "fetchRankings VOLUME 은 IVU10280 에 묻고 누적거래량을 거래량으로 쓴다",
+            "method": "fetchRankings",
+            "args": [
+                "VOLUME",
+                {
+                    "mkt_clsf": "2"
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10280",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"0\",\"mkt_clsf\":\"2\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "is_cd": "005930",
+                                        "is_nm": "삼성전자",
+                                        "now_prc": "71000",
+                                        "bdy_cmpr": "1500",
+                                        "up_dwn_r_p2": "2.16",
+                                        "acml_vlm": "1234567",
+                                        "rnk": "1"
+                                    },
+                                    {
+                                        "is_cd": "000660",
+                                        "is_nm": "SK하이닉스",
+                                        "now_prc": "120000",
+                                        "bdy_cmpr": "-2000",
+                                        "up_dwn_r_p2": "-1.64",
+                                        "acml_vlm": "765432",
+                                        "rnk": "2"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "rank": 1,
+                    "symbol": "005930/KRW",
+                    "name": "삼성전자",
+                    "last": 71000,
+                    "change": 1500,
+                    "percentage": 2.16,
+                    "volume": 1234567,
+                    "info": {
+                        "is_cd": "005930",
+                        "is_nm": "삼성전자",
+                        "now_prc": "71000",
+                        "bdy_cmpr": "1500",
+                        "up_dwn_r_p2": "2.16",
+                        "acml_vlm": "1234567",
+                        "rnk": "1"
+                    }
+                },
+                {
+                    "rank": 2,
+                    "symbol": "000660/KRW",
+                    "name": "SK하이닉스",
+                    "last": 120000,
+                    "change": -2000,
+                    "percentage": -1.64,
+                    "volume": 765432,
+                    "info": {
+                        "is_cd": "000660",
+                        "is_nm": "SK하이닉스",
+                        "now_prc": "120000",
+                        "bdy_cmpr": "-2000",
+                        "up_dwn_r_p2": "-1.64",
+                        "acml_vlm": "765432",
+                        "rnk": "2"
+                    }
+                }
+            ]
+        },
+        {
+            "description": "fetchRankings PROGRAM_TRADING 은 IVS10920 에 조회건수만 보낸다",
+            "method": "fetchRankings",
+            "args": [
+                "PROGRAM_TRADING"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivs10920",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_cnt\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "is_cd": "005930",
+                                        "is_nm": "삼성전자",
+                                        "now_prc": "71000",
+                                        "bdy_cmpr": "1500",
+                                        "up_dwn_r_p2": "2.16",
+                                        "vlm": "1234567",
+                                        "rnk": "1"
+                                    },
+                                    {
+                                        "is_cd": "000660",
+                                        "is_nm": "SK하이닉스",
+                                        "now_prc": "120000",
+                                        "bdy_cmpr": "-2000",
+                                        "up_dwn_r_p2": "-1.64",
+                                        "vlm": "765432",
+                                        "rnk": "2"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "rank": 1,
+                    "symbol": "005930/KRW",
+                    "name": "삼성전자",
+                    "last": 71000,
+                    "change": 1500,
+                    "percentage": 2.16,
+                    "volume": 1234567,
+                    "info": {
+                        "is_cd": "005930",
+                        "is_nm": "삼성전자",
+                        "now_prc": "71000",
+                        "bdy_cmpr": "1500",
+                        "up_dwn_r_p2": "2.16",
+                        "vlm": "1234567",
+                        "rnk": "1"
+                    }
+                },
+                {
+                    "rank": 2,
+                    "symbol": "000660/KRW",
+                    "name": "SK하이닉스",
+                    "last": 120000,
+                    "change": -2000,
+                    "percentage": -1.64,
+                    "volume": 765432,
+                    "info": {
+                        "is_cd": "000660",
+                        "is_nm": "SK하이닉스",
+                        "now_prc": "120000",
+                        "bdy_cmpr": "-2000",
+                        "up_dwn_r_p2": "-1.64",
+                        "vlm": "765432",
+                        "rnk": "2"
+                    }
+                }
+            ]
+        },
+        {
+            "description": "fetchRankings TRADING_VALUE 는 IVU10210 에 공식 예제 기본값을 보낸다",
+            "method": "fetchRankings",
+            "args": [
+                "TRADING_VALUE"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10210",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"mkt_clsf\":\"1\",\"thdy_bdy_clsf\":\"1\",\"inq_cnt\":\"10\",\"srt_clsf\":\"1\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "is_cd": "005930",
+                                        "is_nm": "삼성전자",
+                                        "now_prc": "71000",
+                                        "bdy_cmpr": "1500",
+                                        "up_dwn_r_p2": "2.16",
+                                        "vlm": "1234567",
+                                        "rnk": "1"
+                                    },
+                                    {
+                                        "is_cd": "000660",
+                                        "is_nm": "SK하이닉스",
+                                        "now_prc": "120000",
+                                        "bdy_cmpr": "-2000",
+                                        "up_dwn_r_p2": "-1.64",
+                                        "vlm": "765432",
+                                        "rnk": "2"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "rank": 1,
+                    "symbol": "005930/KRW",
+                    "name": "삼성전자",
+                    "last": 71000,
+                    "change": 1500,
+                    "percentage": 2.16,
+                    "volume": 1234567,
+                    "info": {
+                        "is_cd": "005930",
+                        "is_nm": "삼성전자",
+                        "now_prc": "71000",
+                        "bdy_cmpr": "1500",
+                        "up_dwn_r_p2": "2.16",
+                        "vlm": "1234567",
+                        "rnk": "1"
+                    }
+                },
+                {
+                    "rank": 2,
+                    "symbol": "000660/KRW",
+                    "name": "SK하이닉스",
+                    "last": 120000,
+                    "change": -2000,
+                    "percentage": -1.64,
+                    "volume": 765432,
+                    "info": {
+                        "is_cd": "000660",
+                        "is_nm": "SK하이닉스",
+                        "now_prc": "120000",
+                        "bdy_cmpr": "-2000",
+                        "up_dwn_r_p2": "-1.64",
+                        "vlm": "765432",
+                        "rnk": "2"
+                    }
+                }
+            ]
+        },
+        {
+            "description": "fetchRankings OPEN_CHANGE_RATE 는 IVS10910 에 공식 예제 기본값을 보낸다",
+            "method": "fetchRankings",
+            "args": [
+                "OPEN_CHANGE_RATE"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivs10910",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"mkt_clsf\":\"1\",\"inq_cnt\":\"10\",\"srt_clsf\":\"1\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "is_cd": "005930",
+                                        "is_nm": "삼성전자",
+                                        "now_prc": "71000",
+                                        "bdy_cmpr": "1500",
+                                        "up_dwn_r_p2": "2.16",
+                                        "vlm": "1234567",
+                                        "rnk": "1"
+                                    },
+                                    {
+                                        "is_cd": "000660",
+                                        "is_nm": "SK하이닉스",
+                                        "now_prc": "120000",
+                                        "bdy_cmpr": "-2000",
+                                        "up_dwn_r_p2": "-1.64",
+                                        "vlm": "765432",
+                                        "rnk": "2"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "rank": 1,
+                    "symbol": "005930/KRW",
+                    "name": "삼성전자",
+                    "last": 71000,
+                    "change": 1500,
+                    "percentage": 2.16,
+                    "volume": 1234567,
+                    "info": {
+                        "is_cd": "005930",
+                        "is_nm": "삼성전자",
+                        "now_prc": "71000",
+                        "bdy_cmpr": "1500",
+                        "up_dwn_r_p2": "2.16",
+                        "vlm": "1234567",
+                        "rnk": "1"
+                    }
+                },
+                {
+                    "rank": 2,
+                    "symbol": "000660/KRW",
+                    "name": "SK하이닉스",
+                    "last": 120000,
+                    "change": -2000,
+                    "percentage": -1.64,
+                    "volume": 765432,
+                    "info": {
+                        "is_cd": "000660",
+                        "is_nm": "SK하이닉스",
+                        "now_prc": "120000",
+                        "bdy_cmpr": "-2000",
+                        "up_dwn_r_p2": "-1.64",
+                        "vlm": "765432",
+                        "rnk": "2"
+                    }
+                }
+            ]
+        },
+        {
+            "description": "fetchRankings EXTENDED_HOURS_CHANGE_RATE 는 IVS11190 에 묻고 순위 필드가 없어 배열 순서를 순위로 쓴다",
+            "method": "fetchRankings",
+            "args": [
+                "EXTENDED_HOURS_CHANGE_RATE"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivs11190",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"mkt_clsf\":\"1\",\"srt_clsf\":\"1\",\"thdy_bdy_clsf\":\"1\",\"inq_cnt\":\"10\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "is_cd": "005930",
+                                        "is_nm": "삼성전자",
+                                        "now_prc": "71000",
+                                        "bdy_cmpr": "1500",
+                                        "up_dwn_r_p2": "2.16",
+                                        "vlm": "1234567"
+                                    },
+                                    {
+                                        "is_cd": "000660",
+                                        "is_nm": "SK하이닉스",
+                                        "now_prc": "120000",
+                                        "bdy_cmpr": "-2000",
+                                        "up_dwn_r_p2": "-1.64",
+                                        "vlm": "765432"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "rank": 1,
+                    "symbol": "005930/KRW",
+                    "name": "삼성전자",
+                    "last": 71000,
+                    "change": 1500,
+                    "percentage": 2.16,
+                    "volume": 1234567,
+                    "info": {
+                        "is_cd": "005930",
+                        "is_nm": "삼성전자",
+                        "now_prc": "71000",
+                        "bdy_cmpr": "1500",
+                        "up_dwn_r_p2": "2.16",
+                        "vlm": "1234567"
+                    }
+                },
+                {
+                    "rank": 2,
+                    "symbol": "000660/KRW",
+                    "name": "SK하이닉스",
+                    "last": 120000,
+                    "change": -2000,
+                    "percentage": -1.64,
+                    "volume": 765432,
+                    "info": {
+                        "is_cd": "000660",
+                        "is_nm": "SK하이닉스",
+                        "now_prc": "120000",
+                        "bdy_cmpr": "-2000",
+                        "up_dwn_r_p2": "-1.64",
+                        "vlm": "765432"
+                    }
+                }
+            ]
+        },
+        {
+            "description": "fetchRankings SURGE_PLUNGE 는 IVU10270 에 묻고 params 로 급락을 고른다. 순위는 배열 순서다",
+            "method": "fetchRankings",
+            "args": [
+                "SURGE_PLUNGE",
+                {
+                    "up_dwn_ccd": "2"
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10270",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"mkt_clsf\":\"1\",\"inq_cnt\":\"10\",\"up_dwn_ccd\":\"2\",\"minute_dy_ccd\":\"1\",\"minute_dy_unt\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "is_cd": "005930",
+                                        "is_nm": "삼성전자",
+                                        "now_prc": "71000",
+                                        "bdy_cmpr": "1500",
+                                        "up_dwn_r_p2": "2.16",
+                                        "vlm": "1234567"
+                                    },
+                                    {
+                                        "is_cd": "000660",
+                                        "is_nm": "SK하이닉스",
+                                        "now_prc": "120000",
+                                        "bdy_cmpr": "-2000",
+                                        "up_dwn_r_p2": "-1.64",
+                                        "vlm": "765432"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "rank": 1,
+                    "symbol": "005930/KRW",
+                    "name": "삼성전자",
+                    "last": 71000,
+                    "change": 1500,
+                    "percentage": 2.16,
+                    "volume": 1234567,
+                    "info": {
+                        "is_cd": "005930",
+                        "is_nm": "삼성전자",
+                        "now_prc": "71000",
+                        "bdy_cmpr": "1500",
+                        "up_dwn_r_p2": "2.16",
+                        "vlm": "1234567"
+                    }
+                },
+                {
+                    "rank": 2,
+                    "symbol": "000660/KRW",
+                    "name": "SK하이닉스",
+                    "last": 120000,
+                    "change": -2000,
+                    "percentage": -1.64,
+                    "volume": 765432,
+                    "info": {
+                        "is_cd": "000660",
+                        "is_nm": "SK하이닉스",
+                        "now_prc": "120000",
+                        "bdy_cmpr": "-2000",
+                        "up_dwn_r_p2": "-1.64",
+                        "vlm": "765432"
+                    }
+                }
+            ]
+        },
+        {
+            "description": "fetchRankings 는 모르는 종류면 요청 없이 NotSupported 다",
+            "method": "fetchRankings",
+            "args": [
+                "MARKET_CAP"
+            ],
+            "http": [],
+            "error": {
+                "class": "NotSupported",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "fetchExchangeRates 는 IVA60190 을 입력 없이 부르고 통화마다 종가를 옮긴다",
+            "method": "fetchExchangeRates",
+            "args": [],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/iva60190",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "crncy_cd": "USD",
+                                        "ntn_nm": "미국",
+                                        "crncy_cd_nm": "달러",
+                                        "cls_prc_p4": "1385.5",
+                                        "bdy_cmpr_p4": "-2.3",
+                                        "bdy_cmpr_r_p2": "-0.17"
+                                    },
+                                    {
+                                        "crncy_cd": "JPY",
+                                        "ntn_nm": "일본",
+                                        "crncy_cd_nm": "엔",
+                                        "cls_prc_p4": "9.2512",
+                                        "bdy_cmpr_p4": "0.0125",
+                                        "bdy_cmpr_r_p2": "0.14"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "currency": "USD",
+                    "countryName": "미국",
+                    "currencyName": "달러",
+                    "close": 1385.5,
+                    "change": -2.3,
+                    "percentage": -0.17,
+                    "info": {
+                        "crncy_cd": "USD",
+                        "ntn_nm": "미국",
+                        "crncy_cd_nm": "달러",
+                        "cls_prc_p4": "1385.5",
+                        "bdy_cmpr_p4": "-2.3",
+                        "bdy_cmpr_r_p2": "-0.17"
+                    }
+                },
+                {
+                    "currency": "JPY",
+                    "countryName": "일본",
+                    "currencyName": "엔",
+                    "close": 9.2512,
+                    "change": 0.0125,
+                    "percentage": 0.14,
+                    "info": {
+                        "crncy_cd": "JPY",
+                        "ntn_nm": "일본",
+                        "crncy_cd_nm": "엔",
+                        "cls_prc_p4": "9.2512",
+                        "bdy_cmpr_p4": "0.0125",
+                        "bdy_cmpr_r_p2": "0.14"
+                    }
+                }
+            ]
+        },
+        {
+            "description": "fetchExchangeRates 는 업무 오류를 ExchangeError 로 던지고 processCode 를 남긴다",
+            "method": "fetchExchangeRates",
+            "args": [],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/iva60190",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "B",
+                                "processCode": "9999",
+                                "processMessage": "처리 중 오류가 발생했습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                }
+            ],
+            "error": {
+                "class": "ExchangeError",
+                "brokerCode": "9999"
+            }
+        },
+        {
+            "description": "fetchWorldIndices 는 기본으로 주요지수(lnd_clsf 1)를 묻는다",
+            "method": "fetchWorldIndices",
+            "args": [],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/iva60140",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"lnd_clsf\":\"1\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "ntn_nm": "미국",
+                                        "is_cd": "DJI@DJI",
+                                        "is_cd_nm": "다우존스",
+                                        "cls_prc_p2": "42000.5",
+                                        "bdy_cmpr_p2": "100.25",
+                                        "bdy_cmpr_r_p2": "0.24"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "countryName": "미국",
+                    "code": "DJI@DJI",
+                    "name": "다우존스",
+                    "close": 42000.5,
+                    "change": 100.25,
+                    "percentage": 0.24,
+                    "info": {
+                        "ntn_nm": "미국",
+                        "is_cd": "DJI@DJI",
+                        "is_cd_nm": "다우존스",
+                        "cls_prc_p2": "42000.5",
+                        "bdy_cmpr_p2": "100.25",
+                        "bdy_cmpr_r_p2": "0.24"
+                    }
+                }
+            ]
+        },
+        {
+            "description": "fetchWorldIndices 는 범위를 설명된 코드로 보낸다(ASIA 는 S)",
+            "method": "fetchWorldIndices",
+            "args": [
+                "ASIA"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/iva60140",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"lnd_clsf\":\"S\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": []
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": []
+        },
+        {
+            "description": "fetchCompanyProfile 은 IVM10050 의 단일 객체를 옮기고 숫자로 못 읽는 PER 는 0 이다",
+            "method": "fetchCompanyProfile",
+            "args": [
+                "005930/KRW"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivm10050",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"is_cd\":\"005930\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "cptl_amt": "897514",
+                                "lstng_stk_c": "5969782550",
+                                "opn_prc_tl_amt": "4238545",
+                                "dvdnd_yld_p2": "2.03",
+                                "per": "N/A",
+                                "pbr_p2": "1.25",
+                                "eps_p2": "4950.5",
+                                "bps_p2": "56000",
+                                "fgnr_hld_sgrvt_p2": "53.21"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "capital": 897514,
+                "sharesOutstanding": 5969782550,
+                "marketCap": 4238545,
+                "dividendYield": 2.03,
+                "per": 0,
+                "pbr": 1.25,
+                "eps": 4950.5,
+                "bps": 56000,
+                "foreignHoldingRate": 53.21,
+                "info": {
+                    "cptl_amt": "897514",
+                    "lstng_stk_c": "5969782550",
+                    "opn_prc_tl_amt": "4238545",
+                    "dvdnd_yld_p2": "2.03",
+                    "per": "N/A",
+                    "pbr_p2": "1.25",
+                    "eps_p2": "4950.5",
+                    "bps_p2": "56000",
+                    "fgnr_hld_sgrvt_p2": "53.21"
+                }
+            }
+        },
+        {
+            "description": "fetchMarketFundFlow 는 IVA10370 을 입력 없이 부르고 기준일자를 한국 날짜로 읽는다",
+            "method": "fetchMarketFundFlow",
+            "args": [],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/iva10370",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "dt": "20260921",
+                                "cs_dpst": "5500000",
+                                "cs_dpst_cmpr_amt": "-12000",
+                                "rcvamt": "9500",
+                                "rcvamt_cmpr_amt": "300",
+                                "crdt_blnc": "1800000",
+                                "crdt_blnc_cmpr_amt": "-4500",
+                                "fts_tfnd": "1200000",
+                                "fts_tfnd_cmpr_amt": "2500",
+                                "gvbnd_3y_yld_p3": "2.512"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "timestamp": 1789916400000,
+                "datetime": "2026-09-20T15:00:00.000Z",
+                "date": "20260921",
+                "customerDeposit": 5500000,
+                "customerDepositChange": -12000,
+                "receivables": 9500,
+                "receivablesChange": 300,
+                "creditBalance": 1800000,
+                "creditBalanceChange": -4500,
+                "futuresDeposit": 1200000,
+                "futuresDepositChange": 2500,
+                "info": {
+                    "dt": "20260921",
+                    "cs_dpst": "5500000",
+                    "cs_dpst_cmpr_amt": "-12000",
+                    "rcvamt": "9500",
+                    "rcvamt_cmpr_amt": "300",
+                    "crdt_blnc": "1800000",
+                    "crdt_blnc_cmpr_amt": "-4500",
+                    "fts_tfnd": "1200000",
+                    "fts_tfnd_cmpr_amt": "2500",
+                    "gvbnd_3y_yld_p3": "2.512"
+                }
+            }
+        },
+        {
+            "description": "fetchNewHighLow 는 IVU10550 에 공식 예제 기본값과 신고가 구분을 보내고 기본 조회건수는 10 이다",
+            "method": "fetchNewHighLow",
+            "args": [
+                "HIGH"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10550",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"mkt_clsf\":\"1\",\"inq_cnt\":\"10\",\"nw_stk_lw_ccd\":\"1\",\"std_clsf\":\"1\",\"prd_clsf\":\"1\",\"excd_clsf\":\"1\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "is_cd": "005930",
+                                        "is_nm": "삼성전자",
+                                        "now_prc": "71000",
+                                        "bdy_cmpr": "1500",
+                                        "up_dwn_r_p2": "2.16",
+                                        "vlm": "1234567",
+                                        "hgh_prc": "72000",
+                                        "lw_prc": "69500"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "symbol": "005930/KRW",
+                    "name": "삼성전자",
+                    "last": 71000,
+                    "change": 1500,
+                    "percentage": 2.16,
+                    "volume": 1234567,
+                    "high": 72000,
+                    "low": 69500,
+                    "info": {
+                        "is_cd": "005930",
+                        "is_nm": "삼성전자",
+                        "now_prc": "71000",
+                        "bdy_cmpr": "1500",
+                        "up_dwn_r_p2": "2.16",
+                        "vlm": "1234567",
+                        "hgh_prc": "72000",
+                        "lw_prc": "69500"
+                    }
+                }
+            ]
+        },
+        {
+            "description": "fetchNewHighLow 는 신저가 구분과 조회건수를 보내고 params 가 기본값을 덮는다",
+            "method": "fetchNewHighLow",
+            "args": [
+                "LOW",
+                20,
+                {
+                    "mkt_clsf": "2"
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10550",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"mkt_clsf\":\"2\",\"inq_cnt\":\"20\",\"nw_stk_lw_ccd\":\"2\",\"std_clsf\":\"1\",\"prd_clsf\":\"1\",\"excd_clsf\":\"1\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": []
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": []
+        },
+        {
+            "description": "fetchInvestorRanking 은 IVU10020 에 투자자구분과 순위구분을 설명된 코드로 보낸다",
+            "method": "fetchInvestorRanking",
+            "args": [
+                "FOREIGNER",
+                "BUY"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10020",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"mkt_clsf\":\"1\",\"invstr_ccd\":\"0\",\"prd_clsf\":\"1\",\"rnk_clsf\":\"0\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "shrt_is_cd": "005930",
+                                        "is_nm": "삼성전자",
+                                        "now_prc": "71000",
+                                        "bdy_cmpr": "1500",
+                                        "bdy_cmpr_r_p2": "2.16",
+                                        "vlm": "1234567",
+                                        "nt_b_s_q": "350000",
+                                        "hld_rt_p2": "53.21",
+                                        "dl_tw_amt": "880000"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "symbol": "005930/KRW",
+                    "name": "삼성전자",
+                    "last": 71000,
+                    "change": 1500,
+                    "percentage": 2.16,
+                    "volume": 1234567,
+                    "netQuantity": 350000,
+                    "holdingRate": 53.21,
+                    "info": {
+                        "shrt_is_cd": "005930",
+                        "is_nm": "삼성전자",
+                        "now_prc": "71000",
+                        "bdy_cmpr": "1500",
+                        "bdy_cmpr_r_p2": "2.16",
+                        "vlm": "1234567",
+                        "nt_b_s_q": "350000",
+                        "hld_rt_p2": "53.21",
+                        "dl_tw_amt": "880000"
+                    }
+                }
+            ]
+        },
+        {
+            "description": "fetchInvestorRanking 은 개인·연속순매도를 C·5 로 보낸다",
+            "method": "fetchInvestorRanking",
+            "args": [
+                "INDIVIDUAL",
+                "CONSECUTIVE_SELL",
+                {
+                    "mkt_clsf": "2"
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10020",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"mkt_clsf\":\"2\",\"invstr_ccd\":\"C\",\"prd_clsf\":\"1\",\"rnk_clsf\":\"5\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": []
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": []
+        },
+        {
+            "description": "fetchThemeGroups 는 IVS11430 에 테마코드를 비워 보내고 테마마다 옮긴다",
+            "method": "fetchThemeGroups",
+            "args": [],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivs11430",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"thm_cd\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "inq_cnt": "1",
+                                "Record1": [
+                                    {
+                                        "thm_cd": "0012",
+                                        "thm_nm": "2차전지",
+                                        "indx_p2": "1234.56",
+                                        "bdy_cmpr_ccd": "2",
+                                        "bdy_cmpr_p2": "12.5",
+                                        "bdy_cmpr_up_dwn_r_p2": "1.02",
+                                        "opn_prc_tl_amt": "98000000",
+                                        "opn_prc_tl_amt_bdy_cmpr": "-1500",
+                                        "vlm": "3000000",
+                                        "dl_tw_amt": "4500",
+                                        "thm_is_c": "27"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "code": "0012",
+                    "name": "2차전지",
+                    "index": 1234.56,
+                    "change": 12.5,
+                    "percentage": 1.02,
+                    "marketCap": 98000000,
+                    "marketCapChange": -1500,
+                    "volume": 3000000,
+                    "tradingValue": 4500,
+                    "stockCount": 27,
+                    "info": {
+                        "thm_cd": "0012",
+                        "thm_nm": "2차전지",
+                        "indx_p2": "1234.56",
+                        "bdy_cmpr_ccd": "2",
+                        "bdy_cmpr_p2": "12.5",
+                        "bdy_cmpr_up_dwn_r_p2": "1.02",
+                        "opn_prc_tl_amt": "98000000",
+                        "opn_prc_tl_amt_bdy_cmpr": "-1500",
+                        "vlm": "3000000",
+                        "dl_tw_amt": "4500",
+                        "thm_is_c": "27"
+                    }
+                }
+            ]
+        },
+        {
+            "description": "fetchThemeGroups 는 themeCode 를 주면 그 값을 보낸다",
+            "method": "fetchThemeGroups",
+            "args": [
+                "0012"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivs11430",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"thm_cd\":\"0012\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": []
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": []
+        },
+        {
+            "description": "fetchSectorRanking 은 IVM30010 에 시장을 설명된 코드로 보내고 머리 레코드는 market, 배열은 sectors 로 옮긴다",
+            "method": "fetchSectorRanking",
+            "args": [
+                "KOSDAQ"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivm30010",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"mkt_clsf\":\"2\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "lngth": "00100",
+                                "indx_id": "KGG01P",
+                                "indx_nm": "코스닥",
+                                "now_indx_p2": "850.12",
+                                "bdy_cmpr_ccd": "2",
+                                "bdy_cmpr_p2": "2.34",
+                                "up_dwn_r_p2": "0.28",
+                                "out2_RecordSize": "1",
+                                "out2": [
+                                    {
+                                        "indx_id": "KGS19P",
+                                        "indx_nm": "전기전자",
+                                        "now_indx_p2": "31000.5",
+                                        "bdy_cmpr_ccd": "5",
+                                        "bdy_cmpr_p2": "-10",
+                                        "up_dwn_r_p2": "-0.03"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "market": {
+                    "id": "KGG01P",
+                    "name": "코스닥",
+                    "value": 850.12,
+                    "change": 2.34,
+                    "percentage": 0.28,
+                    "info": {
+                        "lngth": "00100",
+                        "indx_id": "KGG01P",
+                        "indx_nm": "코스닥",
+                        "now_indx_p2": "850.12",
+                        "bdy_cmpr_ccd": "2",
+                        "bdy_cmpr_p2": "2.34",
+                        "up_dwn_r_p2": "0.28",
+                        "out2_RecordSize": "1"
+                    }
+                },
+                "sectors": [
+                    {
+                        "id": "KGS19P",
+                        "name": "전기전자",
+                        "value": 31000.5,
+                        "change": -10,
+                        "percentage": -0.03,
+                        "info": {
+                            "indx_id": "KGS19P",
+                            "indx_nm": "전기전자",
+                            "now_indx_p2": "31000.5",
+                            "bdy_cmpr_ccd": "5",
+                            "bdy_cmpr_p2": "-10",
+                            "up_dwn_r_p2": "-0.03"
+                        }
+                    }
+                ],
+                "info": {
+                    "lngth": "00100",
+                    "indx_id": "KGG01P",
+                    "indx_nm": "코스닥",
+                    "now_indx_p2": "850.12",
+                    "bdy_cmpr_ccd": "2",
+                    "bdy_cmpr_p2": "2.34",
+                    "up_dwn_r_p2": "0.28",
+                    "out2_RecordSize": "1",
+                    "out2": [
+                        {
+                            "indx_id": "KGS19P",
+                            "indx_nm": "전기전자",
+                            "now_indx_p2": "31000.5",
+                            "bdy_cmpr_ccd": "5",
+                            "bdy_cmpr_p2": "-10",
+                            "up_dwn_r_p2": "-0.03"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "description": "fetchSectorRanking 은 모르는 시장이면 요청 없이 NotSupported 다",
+            "method": "fetchSectorRanking",
+            "args": [
+                "KONEX"
+            ],
+            "http": [],
+            "error": {
+                "class": "NotSupported",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "fetchHolidays 는 SPAM2508 에 조회(4)와 US 를 보내고 종료일자는 params.until 의 한국 날짜다. until 은 본문에 싣지 않는다",
+            "method": "fetchHolidays",
+            "args": [
+                {
+                    "until": 1798686000000
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/spam2508",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"hndl_clsf\":\"4\",\"iso_cd\":\"US\",\"dr_dt\":\"\",\"end_dt\":\"20261231\",\"nxt_bsnss_dy\":\"\",\"nxt_stlmt_dt\":\"\",\"hldy_ccd\":\"\",\"frgn_stk_ordr_psbl_f\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "nxt_bsnss_dy": "20260925",
+                                "nxt_stlmt_dt": "20260926",
+                                "Record1": [
+                                    {
+                                        "mm": "11",
+                                        "bsnss_dy": "20",
+                                        "hldy": "1127",
+                                        "stmt_dy": "21",
+                                        "nxt_bsnss_dy": "20261130",
+                                        "nxt_stlmt_dt": "20261201",
+                                        "frgn_stk_ordr_psbl_f": "N"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "fields": {
+                    "nxt_bsnss_dy": "20260925",
+                    "nxt_stlmt_dt": "20260926"
+                },
+                "rows": [
+                    {
+                        "month": "11",
+                        "businessDay": "20",
+                        "holiday": "1127",
+                        "settlementDay": "21",
+                        "nextBusinessDay": "20261130",
+                        "nextSettlementDate": "20261201",
+                        "overseasOrderable": "N",
+                        "info": {
+                            "mm": "11",
+                            "bsnss_dy": "20",
+                            "hldy": "1127",
+                            "stmt_dy": "21",
+                            "nxt_bsnss_dy": "20261130",
+                            "nxt_stlmt_dt": "20261201",
+                            "frgn_stk_ordr_psbl_f": "N"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "description": "fetchHolidays 는 종료일자가 없으면 오늘(한국 날짜)을 보낸다",
+            "now": 1790006400000,
+            "method": "fetchHolidays",
+            "args": [],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/spam2508",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"hndl_clsf\":\"4\",\"iso_cd\":\"US\",\"dr_dt\":\"\",\"end_dt\":\"20260922\",\"nxt_bsnss_dy\":\"\",\"nxt_stlmt_dt\":\"\",\"hldy_ccd\":\"\",\"frgn_stk_ordr_psbl_f\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "fields": {},
+                "rows": []
+            }
+        },
+        {
+            "description": "fetchOverseasCandles 는 현재가 조회로 거래소코드를 찾고 GSC10060 에 일봉을 묻는다. 일봉은 거래일의 00:00 UTC 이고 날짜 없는 봉은 버린다",
+            "method": "fetchOverseasCandles",
+            "args": [
+                "AAPL/USD"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/gss10030",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"krx_cd\":\"NAS\",\"is_cd\":\"AAPL\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "now_prc_p4": "0"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/gss10030",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"krx_cd\":\"NYS\",\"is_cd\":\"AAPL\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "now_prc_p4": "180.5"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/gsc10060",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"krx_cd\":\"NYS\",\"is_cd\":\"AAPL\",\"chrt_clsf\":\"3\",\"bndl\":\"\",\"mdfy_stk_prc_use_f\":\"\",\"rcrd_c\":\"100\",\"srch_strt_dy\":\"\",\"clsf\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "hngl_is_nm": "애플",
+                                "mrkt_prc_clsf": "지연",
+                                "now_prc_p4": "180.5",
+                                "Record1": [
+                                    {
+                                        "dt": "20260922",
+                                        "tm": "160000",
+                                        "opn_prc_p4": "178",
+                                        "hgh_prc_p4": "181",
+                                        "lw_prc_p4": "177.5",
+                                        "cls_prc_p4": "180.5",
+                                        "vlm": "5000",
+                                        "dl_tw_amt": "900000"
+                                    },
+                                    {
+                                        "dt": "",
+                                        "tm": "",
+                                        "opn_prc_p4": "1",
+                                        "hgh_prc_p4": "1",
+                                        "lw_prc_p4": "1",
+                                        "cls_prc_p4": "1",
+                                        "vlm": "1",
+                                        "dl_tw_amt": "1"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "fields": {
+                    "hngl_is_nm": "애플",
+                    "mrkt_prc_clsf": "지연",
+                    "now_prc_p4": "180.5"
+                },
+                "candles": [
+                    {
+                        "timestamp": 1790035200000,
+                        "datetime": "2026-09-22T00:00:00.000Z",
+                        "date": "20260922",
+                        "time": "160000",
+                        "open": 178,
+                        "high": 181,
+                        "low": 177.5,
+                        "close": 180.5,
+                        "volume": 5000,
+                        "tradingValue": 900000,
+                        "info": {
+                            "dt": "20260922",
+                            "tm": "160000",
+                            "opn_prc_p4": "178",
+                            "hgh_prc_p4": "181",
+                            "lw_prc_p4": "177.5",
+                            "cls_prc_p4": "180.5",
+                            "vlm": "5000",
+                            "dl_tw_amt": "900000"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "description": "fetchOverseasCandles 는 분봉을 2 로 보내고 레코드수는 5000 을 넘기지 않는다. 겨울 시각은 EST 로 바꾸고 읽을 수 없는 시각의 봉은 버린다",
+            "method": "fetchOverseasCandles",
+            "args": [
+                "AAPL",
+                "minute",
+                9000
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/gss10030",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"krx_cd\":\"NAS\",\"is_cd\":\"AAPL\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "now_prc_p4": "180.5"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/gsc10060",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"krx_cd\":\"NAS\",\"is_cd\":\"AAPL\",\"chrt_clsf\":\"2\",\"bndl\":\"\",\"mdfy_stk_prc_use_f\":\"\",\"rcrd_c\":\"5000\",\"srch_strt_dy\":\"\",\"clsf\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "dt": "20260115",
+                                        "tm": "240000",
+                                        "opn_prc_p4": "178",
+                                        "hgh_prc_p4": "181",
+                                        "lw_prc_p4": "177.5",
+                                        "cls_prc_p4": "181",
+                                        "vlm": "10",
+                                        "dl_tw_amt": "1800"
+                                    },
+                                    {
+                                        "dt": "20260115",
+                                        "tm": "93015",
+                                        "opn_prc_p4": "178",
+                                        "hgh_prc_p4": "181",
+                                        "lw_prc_p4": "177.5",
+                                        "cls_prc_p4": "180.5",
+                                        "vlm": "10",
+                                        "dl_tw_amt": "1800"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "fields": {},
+                "candles": [
+                    {
+                        "timestamp": 1768487415000,
+                        "datetime": "2026-01-15T14:30:15.000Z",
+                        "date": "20260115",
+                        "time": "93015",
+                        "open": 178,
+                        "high": 181,
+                        "low": 177.5,
+                        "close": 180.5,
+                        "volume": 10,
+                        "tradingValue": 1800,
+                        "info": {
+                            "dt": "20260115",
+                            "tm": "93015",
+                            "opn_prc_p4": "178",
+                            "hgh_prc_p4": "181",
+                            "lw_prc_p4": "177.5",
+                            "cls_prc_p4": "180.5",
+                            "vlm": "10",
+                            "dl_tw_amt": "1800"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "description": "fetchOverseasCandles 는 국내 종목이면 요청 없이 NotSupported 다",
+            "method": "fetchOverseasCandles",
+            "args": [
+                "005930/KRW"
+            ],
+            "http": [],
+            "error": {
+                "class": "NotSupported",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "fetchOverseasCandles 는 모르는 차트구분이면 요청 없이 NotSupported 다",
+            "method": "fetchOverseasCandles",
+            "args": [
+                "AAPL/USD",
+                "second"
+            ],
+            "http": [],
+            "error": {
+                "class": "NotSupported",
+                "brokerCode": null
+            }
         }
     ]
 }

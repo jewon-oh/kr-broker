@@ -4,8 +4,12 @@
 (`fetch_trading_fee`), 휴장일(`fetch_market_calendar`, `refresh_market_calendar`), 투자자 매매동향(`fetch_investor_trading`), 주문·체결 조회
 (`fetch_order`, `fetch_orders`, `fetch_open_orders`, `fetch_closed_orders`, `fetch_canceled_orders`, `fetch_my_trades`, `fetch_overseas_order_status`),
 잔고(`fetch_balance`, `fetch_one_market_margin`), 주문(`create_order`, `create_trigger_order`, `create_market_buy_order_with_cost`, `edit_order`,
-`cancel_order`, `cancel_all_orders`, `fetch_marketable_buy_price`)을 옮겼다. 통합 메서드의 `has` 는 TypeScript 판과 같다.
-TypeScript 판의 확장 메서드(정산, 매수가능금액, 소수점 내역, 예약주문 등)는 아직 옮기지 않았다. 모든 TR 은 암묵 메서드로 부를 수 있다.
+`cancel_order`, `cancel_all_orders`, `fetch_marketable_buy_price`), 시세·정보 확장 메서드(`fetch_stocks`, `fetch_trading_restriction`,
+`fetch_stock_warnings`, `fetch_company_profile`, `fetch_foreign_brokers`, `fetch_program_trading_trend`, `fetch_market_overview`, `fetch_rankings`,
+`fetch_new_high_low`, `fetch_investor_ranking`, `fetch_theme_groups`, `fetch_sector_ranking`, `fetch_market_fund_flow`, `fetch_exchange_rates`,
+`fetch_world_indices`, `fetch_holidays`, `fetch_overseas_candles`)를 옮겼다. 통합 메서드의 `has` 는 TypeScript 판과 같다.
+TypeScript 판의 계좌 확장 메서드(정산, 매수가능금액, 소수점 내역, 예약주문, 계좌원장, 권리 발생 내역 등)는 아직 옮기지 않았다. 모든 TR 은 암묵 메서드로
+부를 수 있다.
 
 .. code-block:: python
 
@@ -68,7 +72,10 @@ from kr_broker.base.token_store import BrokerTokenStore, token_store_key
 from kr_broker.base.types import ApiName, Balances, Int, Market, MarketInterface, Num, Order, OrderBook, Str, Ticker, Trade, TradingFeeInterface
 from kr_broker.broker_time import candle_period_utc_ms, kst_ymd
 from kr_broker.edit_order_amount import assert_whole_remaining_edit
-from kr_broker.kbsec_chart import KBSEC_CHART_MAX, KBSEC_TIMEFRAMES, kbsec_bar_ms, kbsec_candle_timestamp, kbsec_chart_params
+from kr_broker.kbsec_chart import (
+    KBSEC_CHART_MAX, KBSEC_OVERSEAS_CHART_CODE, KBSEC_OVERSEAS_CHART_MAX, KBSEC_OVERSEAS_CHART_PERIOD, KBSEC_TIMEFRAMES, kbsec_bar_ms,
+    kbsec_candle_timestamp, kbsec_chart_params, kbsec_us_candle_timestamp,
+)
 from kr_broker.kbsec_envelope import is_kbsec_business_error, is_kbsec_token_failure, kbsec_host_addr
 from kr_broker.kbsec_error_codes import KBSEC_ERROR_DETAIL, kbsec_error_detail, kbsec_exact_exceptions
 from kr_broker.kbsec_fee import kbsec_estimated_fee_rate
@@ -77,17 +84,18 @@ from kr_broker.kbsec_fill_warnings import warn_fill_without_price, warn_if_fill_
 from kr_broker.kbsec_number import kbsec_number_of
 from kr_broker.kbsec_order_body import build_kr_order_body
 from kr_broker.kbsec_pick import (
-    OVERSEAS_QTY_CANDIDATES, is_empty_cash_row, is_usd_cash_row, kbsec_holding_quantity, pick_array, pick_cash_grid, pick_holding_grid, pick_num,
-    pick_optional_num, pick_positive_num, pick_str, unknown_grids,
+    OVERSEAS_QTY_CANDIDATES, is_empty_cash_row, is_usd_cash_row, kbsec_holding_quantity, kbsec_raw_fields, kbsec_sector_index, pick_array,
+    pick_cash_grid, pick_grid, pick_holding_grid, pick_num, pick_optional_num, pick_positive_num, pick_str, unknown_grids,
 )
 from kr_broker.kbsec_token_breaker import record_kbsec_call_ok, record_token_failure, throw_if_token_breaker_open
 from kr_broker.kbsec_tr_inputs import fill_tr_inputs
 from kr_broker.kbsec_types import (
     KBSEC_API_BASE, KBSEC_CCLS_ALL, KBSEC_CCLS_FILLED, KBSEC_CCLS_PENDING, KBSEC_CHART_KIND, KBSEC_CONT_FIRST, KBSEC_CONT_NEXT,
-    KBSEC_EXCH_RATE_MARKET, KBSEC_FEE_EXCLUDED, KBSEC_INQ_ALL, KBSEC_INQ_STOCK, KBSEC_ORDER_SIDE_KR, KBSEC_ORDER_SIDE_US, KBSEC_ORDER_TYPE_KR,
-    KBSEC_ORDER_TYPE_US, KBSEC_REVOKE_PATH, KBSEC_SESSION_REGULAR, KBSEC_SOR, KBSEC_STD_CURRENCY_FOREIGN, KBSEC_TOKEN_DEFAULT_TTL_MS, KBSEC_TOKEN_PATH, KBSEC_TOKEN_SAFETY_MARGIN_MS, KBSEC_TR, KBSEC_TR_PATH_PREFIX,
-    KBSEC_US_EXCHANGES, kbsec_base_symbol, kbsec_business_date_kst, kbsec_business_date_us_eastern, kbsec_market_of, kbsec_normalize_code,
-    kbsec_num,
+    KBSEC_EXCH_RATE_MARKET, KBSEC_FEE_EXCLUDED, KBSEC_HIGH_LOW_TYPE_CODE, KBSEC_INQ_ALL, KBSEC_INQ_STOCK, KBSEC_INVESTOR_CODE,
+    KBSEC_INVESTOR_RANKING_TYPE_CODE, KBSEC_ORDER_SIDE_KR, KBSEC_ORDER_SIDE_US, KBSEC_ORDER_TYPE_KR, KBSEC_ORDER_TYPE_US, KBSEC_REVOKE_PATH,
+    KBSEC_SECTOR_MARKET_CODE, KBSEC_SESSION_REGULAR, KBSEC_SOR, KBSEC_STD_CURRENCY_FOREIGN, KBSEC_TOKEN_DEFAULT_TTL_MS, KBSEC_TOKEN_PATH,
+    KBSEC_TOKEN_SAFETY_MARGIN_MS, KBSEC_TR, KBSEC_TR_PATH_PREFIX, KBSEC_US_EXCHANGES, KBSEC_WORLD_INDEX_SCOPE_CODE, kbsec_base_symbol,
+    kbsec_business_date_kst, kbsec_business_date_us_eastern, kbsec_market_of, kbsec_normalize_code, kbsec_num,
 )
 from kr_broker.kis_master_data import master_data_of
 from kr_broker.kis_stock_master import get_krx_stock_by_code
@@ -123,6 +131,18 @@ KBSEC_CHART_PERIOD = {KBSEC_CHART_KIND['DAY']: '1d', KBSEC_CHART_KIND['WEEK']: '
 KBSEC_OVERSEAS_ORDER_SIDE = {'01': 'sell', '02': 'buy'}
 # 접수 응답에 주문번호가 없을 때의 값(`pick_str` 가 빈 문자열을 돌려준다). 이때 주문의 `id` 를 비우고 체결 확정을 하지 않는다.
 NO_ORDER_ID = ''
+# 종목 순위(`fetch_rankings`)의 종류별 TR, 기본 입력, 거래량 필드, 순위를 배열 순서로 매기는지(응답에 순위 필드가 없는 TR).
+KBSEC_RANKINGS: Dict[str, Tuple[str, Dict[str, str], str, bool]] = {
+    'FLUCTUATION': ('RANK_FLUCTUATION', {'excg_clsf': '0', 'mkt_clsf': '1', 'inq_cnt': '', 'srt_clsf': '1'}, 'vlm', False),
+    'VOLUME': ('RANK_VOLUME', {'excg_clsf': '0', 'mkt_clsf': '1'}, 'acml_vlm', False),
+    'PROGRAM_TRADING': ('RANK_PROGRAM_TRADING', {'inq_cnt': ''}, 'vlm', False),
+    'TRADING_VALUE': ('RANK_TRADING_VALUE', {'excg_clsf': '1', 'mkt_clsf': '1', 'thdy_bdy_clsf': '1', 'inq_cnt': '10', 'srt_clsf': '1'}, 'vlm', False),
+    'OPEN_CHANGE_RATE': ('RANK_OPEN_CHANGE_RATE', {'mkt_clsf': '1', 'inq_cnt': '10', 'srt_clsf': '1'}, 'vlm', False),
+    'EXTENDED_HOURS_CHANGE_RATE': ('RANK_EXTENDED_HOURS_CHANGE_RATE', {'mkt_clsf': '1', 'srt_clsf': '1', 'thdy_bdy_clsf': '1', 'inq_cnt': '10'}, 'vlm',
+                                   True),
+    'SURGE_PLUNGE': ('RANK_SURGE_PLUNGE', {'excg_clsf': '1', 'mkt_clsf': '1', 'inq_cnt': '10', 'up_dwn_ccd': '1', 'minute_dy_ccd': '1',
+                                           'minute_dy_unt': ''}, 'vlm', True),
+}
 # `create_order` 가 받지 않는 ccxt 조건 주문 인자. 버리고 일반 주문으로 내면 조건 주문을 의도한 호출이 곧바로 체결된다.
 UNSUPPORTED_CONDITIONAL_PARAMS = ('triggerPrice', 'stopPrice', 'stopLossPrice', 'takeProfitPrice', 'stopLoss', 'takeProfit')
 
@@ -136,6 +156,11 @@ def _js_truthy(value: Any) -> bool:
     if value is None or value == 0 or value == '':
         return False
     return not (isinstance(value, float) and math.isnan(value))
+
+
+def _code_of(table: Dict[str, str], key: Any) -> Str:
+    """코드 표에서 이름의 코드. 표에 없는 이름이면 `None` 이다(TypeScript 판에서 표를 읽은 값이 `undefined` 인 것과 같다)."""
+    return table.get(key) if isinstance(key, str) else None
 
 
 def _get(value: Any, key: str) -> Any:
@@ -732,6 +757,386 @@ class kbsec(Exchange, ImplicitAPI):
             'info': row,
         }) for row in pick_array(body)], since, limit)
 
+    def _security_info_market(self, symbol: str) -> MarketInterface:
+        """종목기본정보(`SIQM4900`)를 물을 국내 종목. 해외 종목은 요청 없이 `NotSupported` 다."""
+        market = self.market(symbol)
+        if self._is_us(market):
+            raise NotSupported(f'{self.id} fetchStocks() 는 국내 종목만 지원한다: {symbol}')
+        return market
+
+    def _fetch_security_info(self, symbol: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        """종목기본정보(`SIQM4900`) 원문 한 행. `fetch_stocks`·`fetch_trading_restriction` 이 함께 쓴다. 국내만 지원한다."""
+        market = self._security_info_market(symbol)
+        return self._call_tr(KBSEC_TR['SECURITY_INFO'], self.extend({'stnd_is_cd': market['id']}, params))
+
+    def fetch_stocks(self, symbols: List[str], params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """종목 상세(이름·유형). 종목마다 요청을 하나씩 보낸다(KB API 에 여러 종목을 한 번에 묻는 방법이 없다). 국내만 지원한다.
+
+        TypeScript 판은 요청을 동시에 보내고(`Promise.all`) 이 판은 같은 순서로 차례로 보낸다. 실패의 모양은 TypeScript 판과 같다. 한 종목이
+        실패해도 나머지 종목의 요청은 보내고, 그 뒤 오류를 던진다. 요청 전에 막힌 종목(해외 종목 등)의 오류가 응답 오류보다 먼저다."""
+        params = {} if params is None else params
+        markets: List[Tuple[str, MarketInterface]] = []
+        rejected: Optional[Exception] = None
+        for symbol in symbols:
+            try:
+                markets.append((symbol, self._security_info_market(symbol)))
+            except Exception as err:
+                rejected = rejected or err
+        stocks: List[Dict[str, Any]] = []
+        failed: Optional[Exception] = None
+        for symbol, market in markets:
+            try:
+                row = self._call_tr(KBSEC_TR['SECURITY_INFO'], self.extend({'stnd_is_cd': market['id']}, params))
+            except Exception as err:
+                failed = failed or err
+                continue
+            stocks.append({
+                'symbol': symbol,
+                'standardCode': pick_str(row, 'stnd_is_cd') or None,
+                'shortCode': pick_str(row, 'shrt_is_cd') or None,
+                'name': pick_str(row, 'hngl_is_nm') or None,
+                'shortName': pick_str(row, 'hngl_shrt_nm') or None,
+                'englishName': pick_str(row, 'eng_is_nm') or None,
+                'typeName': pick_str(row, 'is_typ_nm') or None,
+                'detailTypeName': pick_str(row, 'is_dtl_typ_nm') or None,
+                'info': row,
+            })
+        error = rejected or failed
+        if error is not None:
+            raise error
+        return stocks
+
+    def fetch_trading_restriction(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """매매제한·위험등급. `fetch_stocks` 와 같은 TR(`SIQM4900`)을 다시 부른다. 국내만 지원한다."""
+        row = self._fetch_security_info(symbol, {} if params is None else params)
+        return {
+            'tradingRestriction': pick_str(row, 'trd_rstn_clsf_nm') or None,
+            'tradingRestrictionStart': pick_str(row, 'trd_rstn_strt_dt') or None,
+            'tradingRestrictionEnd': pick_str(row, 'trd_rstn_end_dt') or None,
+            'depositWithdrawalRestriction': pick_str(row, 'io_rstn_clsf_nm') or None,
+            'riskGradeCode': pick_str(row, 'rsk_grd_clsf_cd') or None,
+            'riskGradeName': pick_str(row, 'rsk_grd_nm') or None,
+            'info': row,
+        }
+
+    def fetch_stock_warnings(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """`fetch_trading_restriction` 의 옛 이름이다(다음 판에서 지운다). `fetch_stock_warnings` 는 토스증권의 유의사항 조회 이름으로 남는다."""
+        self._warn_deprecated('kbsec.fetchStockWarnings()', 'fetchTradingRestriction()')
+        return self.fetch_trading_restriction(symbol, params)
+
+    def fetch_foreign_brokers(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """당일 주요 외국계 거래원(`IVU10420`). 종목 하나의 매도 상위와 매수 상위 외국계 거래원을 줄마다 짝지어 준다. 국내만 지원한다.
+        거래소 구분(`excg_clsf`)은 다른 국내 조회처럼 KRX(`1`)로 보내고 `params` 로 바꿀 수 있다(`0` 통합, `2` NXT).
+        응답에 순위 필드가 없어 줄 순서를 그대로 둔다. 매도와 매수 거래원이 모두 빈 줄은 거른다."""
+        market = self.market(symbol)
+        if self._is_us(market):
+            raise NotSupported(f'{self.id} fetchForeignBrokers() 는 국내 종목만 지원한다: {symbol}')
+        body = self._call_tr(KBSEC_TR['FOREIGN_BROKERS'], self.extend({'excg_clsf': '1', 'is_cd': market['id']}, params or {}))
+
+        def flow(row: Dict[str, Any], side: str) -> Dict[str, Any]:
+            return {
+                'code': pick_str(row, f'{side}_scrts_cmpny1'),
+                'name': pick_str(row, f'{side}_scrts_cmpny_nm1'),
+                'quantity': pick_num(row, f'{side}_q1'),
+                'change': pick_num(row, f'{side}_incrs_dcrs1'),
+                'ratio': pick_num(row, f'{side}_rt1_p2'),
+            }
+
+        rows = [{'sell': flow(row, 's'), 'buy': flow(row, 'b'), 'info': row} for row in pick_array(body)]
+        return [r for r in rows if r['sell']['code'] != '' or r['sell']['name'] != '' or r['buy']['code'] != '' or r['buy']['name'] != '']
+
+    def fetch_program_trading_trend(self, symbol: str, limit: Int = None, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """종목별 프로그램매매 추이(`IVU10450`). 국내만 지원한다.
+        기간구분(`prd_clsf`)은 공식 예제대로 시간별(`1`)이고 `params` 로 일별(`2`)로 바꿀 수 있다. 금액수량구분(`amt_q_clsf`)도 예제대로 금액(`1`)이다.
+        응답은 두 구분과 관계없이 금액과 수량 필드를 모두 준다. 조회건수(`inq_cnt`)는 설명이 없어 `limit` 을 줄 때만 채운다."""
+        market = self.market(symbol)
+        if self._is_us(market):
+            raise NotSupported(f'{self.id} fetchProgramTradingTrend() 는 국내 종목만 지원한다: {symbol}')
+        body = self._call_tr(KBSEC_TR['PROGRAM_TRADING_TREND'], self.extend({
+            'excg_clsf': '1', 'is_cd': market['id'], 'amt_q_clsf': '1', 'prd_clsf': '1', 'inq_cnt': '' if limit is None else fn.js_string(limit),
+        }, params or {}))
+        return [self.extend(self.kst_stamp(pick_str(row, 'dt'), pick_str(row, 'tm')), {
+            'date': pick_str(row, 'dt'),
+            'time': pick_str(row, 'tm'),
+            'exchange': pick_str(row, 'excg_cd'),
+            'price': pick_num(row, 'now_prc'),
+            'change': pick_num(row, 'bdy_cmpr'),
+            'percentage': pick_num(row, 'up_dwn_r_p2'),
+            'volume': pick_num(row, 'acml_vlm'),
+            'netBuyAmount': pick_num(row, 'nt_b_amt'),
+            'netBuyAmountChange': pick_num(row, 'nt_b_amt_incrs_dcrs'),
+            'sellAmount': pick_num(row, 's_amt'),
+            'buyAmount': pick_num(row, 'b_amt'),
+            'netBuyQuantity': pick_num(row, 'nt_b_q'),
+            'netBuyQuantityChange': pick_num(row, 'nt_b_q_incrs_dcrs'),
+            'sellQuantity': pick_num(row, 's_q'),
+            'buyQuantity': pick_num(row, 'b_q'),
+            'info': row,
+        }) for row in pick_array(body)]
+
+    def fetch_market_overview(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """시장종합(`IVSA0070`). 입력이 없다. 코스피와 코스닥의 등락 종목 수, 차익과 비차익 순매수, 그리고 그리드 네 개(지수, 파생상품,
+        해외 지표, 투자자별 순매수)를 한 번에 준다.
+
+        그리드끼리 전일대비 같은 필드 이름을 같이 쓰므로, 순서가 아니라 저마다 있는 필드(`indx_id`, `nstmt_agr_q`, `symbl_cd`, `invstr_cd`)로 고른다.
+        전일대비는 다른 KB 조회처럼 원문 값이고, 전일대비구분코드(`bdy_cmpr_ccd`)는 `info` 에 남는다.
+        증시 주변 자금 부분(`cs_dpst_5` 등)은 `fetch_market_fund_flow` 가 따로 있어 옮기지 않고 `info` 에 둔다."""
+        body = self._call_tr(KBSEC_TR['MARKET_OVERVIEW'], dict(params or {}))
+
+        def breadth(prefix: str) -> Dict[str, Any]:
+            return {
+                'upperLimit': pick_num(body, f'{prefix}_ulmt_is_c'),
+                'advancing': pick_num(body, f'{prefix}_up_is_c'),
+                'unchanged': pick_num(body, f'{prefix}_unchng_is_c'),
+                'declining': pick_num(body, f'{prefix}_dwn_is_c'),
+                'lowerLimit': pick_num(body, f'{prefix}_llmt_is_c'),
+            }
+
+        def grid(field: str) -> List[Dict[str, Any]]:
+            return pick_grid(body, lambda first: field in first)['rows']
+
+        return {
+            'queriedAt': pick_str(body, 'inq_dy_tm'),
+            'kospi': breadth('kspi'),
+            'kosdaq': breadth('ksdq'),
+            'arbitrageNetBuy': pick_num(body, 'mprft_nt_b'),
+            'nonArbitrageNetBuy': pick_num(body, 'nmp_nt_b'),
+            'indices': [{
+                'id': pick_str(row, 'indx_id'),
+                'name': pick_str(row, 'indx_nm'),
+                'value': pick_num(row, 'now_indx_p2'),
+                'change': pick_num(row, 'bdy_cmpr_p2'),
+                'percentage': pick_num(row, 'up_dwn_r_p2'),
+                'volume': pick_num(row, 'vlm'),
+                'tradingValue': pick_num(row, 'dl_tw_amt'),
+                'info': row,
+            } for row in grid('indx_id')],
+            'derivatives': [{
+                'code': pick_str(row, 'is_cd'),
+                'name': pick_str(row, 'is_nm'),
+                'price': pick_num(row, 'now_prc_p2'),
+                'change': pick_num(row, 'bdy_cmpr_p2'),
+                'percentage': pick_num(row, 'up_dwn_r_p2'),
+                'volume': pick_num(row, 'vlm'),
+                'openInterest': pick_num(row, 'nstmt_agr_q'),
+                'info': row,
+            } for row in grid('nstmt_agr_q')],
+            'globals': [{
+                'code': pick_str(row, 'symbl_cd'),
+                'name': pick_str(row, 'symbl_nm'),
+                'price': pick_num(row, 'now_prc'),
+                'change': pick_num(row, 'bdy_cmpr_p2'),
+                'percentage': pick_num(row, 'up_dwn_r_p2'),
+                'dateTime': pick_str(row, 'dt_tm'),
+                'info': row,
+            } for row in grid('symbl_cd')],
+            'investors': [{
+                'code': pick_str(row, 'invstr_cd'),
+                'name': pick_str(row, 'invstr_clsf_nm'),
+                'kospi': pick_num(row, 'kspi_nt_b'),
+                'kosdaq': pick_num(row, 'ksdq_nt_b'),
+                'futures': pick_num(row, 'fts_nt_b'),
+                'callOptions': pick_num(row, 'call_opt_nt_b'),
+                'putOptions': pick_num(row, 'put_opt_nt_b'),
+                'starFutures': pick_num(row, 'star_fts_nt_b'),
+                'stockFutures': pick_num(row, 'stk_fts_nt_b'),
+                'info': row,
+            } for row in grid('invstr_cd')],
+            'info': body,
+        }
+
+    def fetch_rankings(self, type: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """종목 순위. 국내만 지원한다. `FLUCTUATION`(등락률상위), `VOLUME`(거래량상위), `PROGRAM_TRADING`(프로그램매매상위),
+        `TRADING_VALUE`(거래대금상위), `OPEN_CHANGE_RATE`(시가대비등락률상위), `EXTENDED_HOURS_CHANGE_RATE`(기간외등락률순위),
+        `SURGE_PLUNGE`(급등/급락 상위) 일곱 가지를 받고, 나머지는 `NotSupported` 다.
+
+        - 등락률상위(`IVU10240`)의 정렬구분(`srt_clsf`) 기본값은 상승율(`1`)이다.
+        - 프로그램매매상위(`IVS10920`)는 조회건수(`inq_cnt`) 하나만 입력받는다. 거래소·시장 구분 없이 KRX 전체를 준다.
+        - 거래대금상위(`IVU10210`)는 거래소·시장·당일전일·조회건수·정렬구분을 공식 예제 기본값(KRX, 전체, 당일, 10건, `1`)대로 쓴다.
+          `srt_clsf`(정렬구분) 명세의 설명 칸에 "1:당일, 2:전일"이 붙어 있는데, 필드 이름 자체는 "정렬구분(1:상위, 2:하위)"이라
+          다른 필드(`thdy_bdy_clsf`)의 설명이 잘못 붙은 것으로 보인다(사유 미상). 예제 실행값(`1`)만 그대로 썼다.
+        - 시가대비등락률상위(`IVS10910`)의 정렬구분(`srt_clsf`) 기본값은 상승(`1`)이다. 거래소 구분 없이 KRX 통합으로 준다.
+        - 기간외등락률순위(`IVS11190`)는 시장·정렬구분(상승율)·당일전일·조회건수를 공식 예제 기본값대로 쓴다. 응답에 순위 필드가
+          없어(명세에 없음) 배열 순서(1부터)를 순위로 쓴다. `srt_clsf` 대로 이미 정렬된 응답이라는 전제다.
+        - 급등/급락 상위(`IVU10270`)의 등락구분(`up_dwn_ccd`) 기본값은 급등(`1`)이고, `params['up_dwn_ccd']` 를 `'2'` 로 주면 급락이다.
+          기준시간구분(`minute_dy_ccd`)은 공식 예제대로 "분전"(`1`)을 쓴다. 기준시간단위(`minute_dy_unt`)는 공식 예제도 빈 값이라
+          그대로 둔다. 서버가 몇 분전을 기본으로 잡는지는 명세에 없다. 응답에 순위 필드가 없어(명세에 없음) 배열 순서(1부터)를 순위로 쓴다."""
+        params = {} if params is None else params
+        ranking = KBSEC_RANKINGS.get(type) if isinstance(type, str) else None
+        if ranking is None:
+            raise NotSupported(f'{self.id} fetchRankings() 는 {fn.js_string(type)} 랭킹을 지원하지 않는다')
+        tr_key, defaults, volume_key, rank_by_order = ranking
+        body = self._call_tr(KBSEC_TR[tr_key], self.extend(defaults, params))
+        return [{
+            'rank': index + 1 if rank_by_order else pick_num(row, 'rnk'),
+            'symbol': f"{pick_str(row, 'is_cd')}/KRW",
+            'name': pick_str(row, 'is_nm'),
+            'last': pick_num(row, 'now_prc'),
+            'change': pick_num(row, 'bdy_cmpr'),
+            'percentage': pick_num(row, 'up_dwn_r_p2'),
+            'volume': pick_num(row, volume_key),
+            'info': row,
+        } for index, row in enumerate(pick_array(body))]
+
+    def fetch_exchange_rates(self, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """환율 종가 전체(`IVA60190`). 입력 없이 전 통화를 준다. `close` 는 종가 기준이지 실시간이 아니다(필드명 `cls_prc_p4`)."""
+        body = self._call_tr(KBSEC_TR['EXCHANGE_RATES'], {} if params is None else params)
+        return [{
+            'currency': pick_str(row, 'crncy_cd'),
+            'countryName': pick_str(row, 'ntn_nm'),
+            'currencyName': pick_str(row, 'crncy_cd_nm'),
+            'close': pick_num(row, 'cls_prc_p4'),
+            'change': pick_num(row, 'bdy_cmpr_p4'),
+            'percentage': pick_num(row, 'bdy_cmpr_r_p2'),
+            'info': row,
+        } for row in pick_array(body)]
+
+    def fetch_world_indices(self, scope: str = 'MAJOR', params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """세계지수(`IVA60140`). 대륙 범위(`lnd_clsf`)는 공식 예제와 같은 기본값(주요지수, `MAJOR`)을 쓴다. `AMERICA`, `EUROPE`, `ASIA` 도 받는다."""
+        scope = 'MAJOR' if scope is None else scope
+        body = self._call_tr(KBSEC_TR['WORLD_INDICES'], self.extend({'lnd_clsf': _code_of(KBSEC_WORLD_INDEX_SCOPE_CODE, scope)}, params or {}))
+        return [{
+            'countryName': pick_str(row, 'ntn_nm'),
+            'code': pick_str(row, 'is_cd'),
+            'name': pick_str(row, 'is_cd_nm'),
+            'close': pick_num(row, 'cls_prc_p2'),
+            'change': pick_num(row, 'bdy_cmpr_p2'),
+            'percentage': pick_num(row, 'bdy_cmpr_r_p2'),
+            'info': row,
+        } for row in pick_array(body)]
+
+    def fetch_company_profile(self, symbol: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """종목 기업개요(`IVM10050`). 국내 종목만 지원한다. 응답이 종목 하나짜리 단일 객체라 목록으로 감싸지 않는다.
+        PER(`per`)는 명세상 다른 지표와 달리 문자 타입이다(사유 미상). 숫자로 못 읽으면 0 이고, 원본은 `info['per']` 에 있다."""
+        market = self.market(symbol)
+        body = self._call_tr(KBSEC_TR['COMPANY_PROFILE'], self.extend({'is_cd': market['id']}, params or {}))
+        return {
+            'capital': pick_num(body, 'cptl_amt'),
+            'sharesOutstanding': pick_num(body, 'lstng_stk_c'),
+            'marketCap': pick_num(body, 'opn_prc_tl_amt'),
+            'dividendYield': pick_num(body, 'dvdnd_yld_p2'),
+            'per': pick_num(body, 'per'),
+            'pbr': pick_num(body, 'pbr_p2'),
+            'eps': pick_num(body, 'eps_p2'),
+            'bps': pick_num(body, 'bps_p2'),
+            'foreignHoldingRate': pick_num(body, 'fgnr_hld_sgrvt_p2'),
+            'info': body,
+        }
+
+    def fetch_market_fund_flow(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """증시주변자금동향(`IVA10370`). 입력 없이 최신 하루치를 준다. 응답이 목록이 아니라 단일 객체다(`fetch_company_profile` 과 같다).
+        응답 48개 필드 가운데 고객예탁금, 미수금, 신용잔고, 선물예수금만 정리했다. 나머지(채권 수익율 10종과 각 전일대비)는 `info` 에만 남긴다."""
+        body = self._call_tr(KBSEC_TR['MARKET_FUND_FLOW'], {} if params is None else params)
+        return self.extend(self.kst_stamp(pick_str(body, 'dt')), {
+            'date': pick_str(body, 'dt'),
+            'customerDeposit': pick_num(body, 'cs_dpst'),
+            'customerDepositChange': pick_num(body, 'cs_dpst_cmpr_amt'),
+            'receivables': pick_num(body, 'rcvamt'),
+            'receivablesChange': pick_num(body, 'rcvamt_cmpr_amt'),
+            'creditBalance': pick_num(body, 'crdt_blnc'),
+            'creditBalanceChange': pick_num(body, 'crdt_blnc_cmpr_amt'),
+            'futuresDeposit': pick_num(body, 'fts_tfnd'),
+            'futuresDepositChange': pick_num(body, 'fts_tfnd_cmpr_amt'),
+            'info': body,
+        })
+
+    def fetch_new_high_low(self, type: str, count: Any = 10, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """신고가/신저가(`IVU10550`, 국내만). `type` 은 `HIGH` 나 `LOW` 다. 기준(`std_clsf`)·기간(`prd_clsf`)·돌파(`excd_clsf`)는 공식 예제 기본값
+        (고저 기준·전일·일시돌파)을 쓴다. 거래소·시장 범위를 바꾸려면 `params` 로 넘긴다."""
+        count = 10 if count is None else count
+        body = self._call_tr(KBSEC_TR['NEW_HIGH_LOW'], self.extend({
+            'excg_clsf': '1', 'mkt_clsf': '1', 'inq_cnt': fn.js_string(count), 'nw_stk_lw_ccd': _code_of(KBSEC_HIGH_LOW_TYPE_CODE, type),
+            'std_clsf': '1', 'prd_clsf': '1', 'excd_clsf': '1',
+        }, params or {}))
+        return [{
+            'symbol': f"{pick_str(row, 'is_cd')}/KRW",
+            'name': pick_str(row, 'is_nm'),
+            'last': pick_num(row, 'now_prc'),
+            'change': pick_num(row, 'bdy_cmpr'),
+            'percentage': pick_num(row, 'up_dwn_r_p2'),
+            'volume': pick_num(row, 'vlm'),
+            'high': pick_num(row, 'hgh_prc'),
+            'low': pick_num(row, 'lw_prc'),
+            'info': row,
+        } for row in pick_array(body)]
+
+    def fetch_investor_ranking(self, investor: str, type: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """외국인·기관매매상위(`IVU10020`, 국내만). 거래소·시장·기간은 공식 예제 기본값(KRX, 코스닥, 전일)을 쓴다.
+        `investor` 는 투자자구분(`FOREIGNER`, `INSTITUTION`, `INDIVIDUAL` 등 14가지), `type` 은 순위구분(`BUY`, `SELL`, `HOLDING_UP`, `HOLDING_DOWN`,
+        `CONSECUTIVE_BUY`, `CONSECUTIVE_SELL`)이다. `netQuantity`(`nt_b_s_q`)의 방향은 `type` 을 따른다. 27개 응답 필드 가운데 뜻이 명확한 것만
+        정리했다(나머지는 `info`)."""
+        body = self._call_tr(KBSEC_TR['INVESTOR_RANKING'], self.extend({
+            'excg_clsf': '1', 'mkt_clsf': '1', 'invstr_ccd': _code_of(KBSEC_INVESTOR_CODE, investor), 'prd_clsf': '1',
+            'rnk_clsf': _code_of(KBSEC_INVESTOR_RANKING_TYPE_CODE, type),
+        }, params or {}))
+        return [{
+            'symbol': f"{pick_str(row, 'shrt_is_cd')}/KRW",
+            'name': pick_str(row, 'is_nm'),
+            'last': pick_num(row, 'now_prc'),
+            'change': pick_num(row, 'bdy_cmpr'),
+            'percentage': pick_num(row, 'bdy_cmpr_r_p2'),
+            'volume': pick_num(row, 'vlm'),
+            'netQuantity': pick_num(row, 'nt_b_s_q'),
+            'holdingRate': pick_num(row, 'hld_rt_p2'),
+            'info': row,
+        } for row in pick_array(body)]
+
+    def fetch_theme_groups(self, theme_code: Str = None, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """테마그룹(`IVS11430`). 테마마다 지수, 전일대비, 시가총액, 거래량, 테마종목수를 준다. 국내만 지원한다.
+        테마코드(`thm_cd`)는 설명이 없는 선택 입력이라 비워 보내고, `theme_code` 를 주면 그 값을 보낸다. 비웠을 때 어느 테마를 주는지는 명세에 없다.
+        전일대비(`bdy_cmpr_p2`)는 원문 값이고 전일대비구분코드(`bdy_cmpr_ccd`)는 `info` 에 있다. 거래대금(`dl_tw_amt`)은 백만원 단위다."""
+        body = self._call_tr(KBSEC_TR['THEME_GROUPS'], self.extend({'thm_cd': '' if theme_code is None else theme_code}, params or {}))
+        return [{
+            'code': pick_str(row, 'thm_cd'),
+            'name': pick_str(row, 'thm_nm'),
+            'index': pick_num(row, 'indx_p2'),
+            'change': pick_num(row, 'bdy_cmpr_p2'),
+            'percentage': pick_num(row, 'bdy_cmpr_up_dwn_r_p2'),
+            'marketCap': pick_num(row, 'opn_prc_tl_amt'),
+            'marketCapChange': pick_num(row, 'opn_prc_tl_amt_bdy_cmpr'),
+            'volume': pick_num(row, 'vlm'),
+            'tradingValue': pick_num(row, 'dl_tw_amt'),
+            'stockCount': pick_num(row, 'thm_is_c'),
+            'info': row,
+        } for row in pick_array(body)]
+
+    def fetch_sector_ranking(self, market: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """업종랭킹(`IVM30010`). 시장구분(`mkt_clsf`)은 설명대로 코스피(`KOSPI`) `1`, 코스닥(`KOSDAQ`) `2` 를 보내고, 다른 시장은 요청 없이
+        `NotSupported` 다. 명세는 필드가 같은 그리드 둘을 적지만, 실계좌 응답은 머리 레코드 하나(시장 지수)와 업종 지수 배열이었다.
+        머리 레코드는 `market`, 배열은 `sectors` 로 옮긴다."""
+        code = _code_of(KBSEC_SECTOR_MARKET_CODE, market)
+        if code is None:
+            raise NotSupported(f'{self.id} fetchSectorRanking() 는 {fn.js_string(market)} 시장을 지원하지 않는다')
+        body = self._call_tr(KBSEC_TR['RANK_SECTOR'], self.extend({'mkt_clsf': code}, params or {}))
+        return {
+            'market': kbsec_sector_index(kbsec_raw_fields(body)),
+            'sectors': [kbsec_sector_index(row) for row in pick_array(body)],
+            'info': body,
+        }
+
+    def fetch_holidays(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """미국 공휴일관리(`SPAM2508`). 처리구분은 설명대로 조회(`4`)를 보낸다(공식 예제는 `1`). ISO코드는 설명에 있는 미국(`US`)만 보낸다.
+        종료일자(`end_dt`)는 필수 입력이라 `params['until']`(ms)의 한국 날짜를 보내고, 없으면 오늘이다. 등록일자와 공휴일구분코드처럼 설명이 없는
+        선택 입력은 비워 보낸다. 행의 월, 영업일, 공휴일, 결제일 필드는 형식이 명세에 없어 원문으로 준다. 결과는 `{'fields', 'rows'}` 다."""
+        until, query = self.handle_until_param('fetchHolidays', None, {} if params is None else params)
+        body = self._call_tr(KBSEC_TR['HOLIDAYS_US'], self.extend({
+            'hndl_clsf': '4', 'iso_cd': 'US', 'dr_dt': '', 'end_dt': kst_ymd(self.milliseconds() if until is None else until), 'nxt_bsnss_dy': '',
+            'nxt_stlmt_dt': '', 'hldy_ccd': '', 'frgn_stk_ordr_psbl_f': '',
+        }, query))
+        return {
+            'fields': kbsec_raw_fields(body),
+            'rows': [{
+                'month': pick_str(row, 'mm'),
+                'businessDay': pick_str(row, 'bsnss_dy'),
+                'holiday': pick_str(row, 'hldy'),
+                'settlementDay': pick_str(row, 'stmt_dy'),
+                'nextBusinessDay': pick_str(row, 'nxt_bsnss_dy'),
+                'nextSettlementDate': pick_str(row, 'nxt_stlmt_dt'),
+                'overseasOrderable': pick_str(row, 'frgn_stk_ordr_psbl_f'),
+                'info': row,
+            } for row in pick_array(body)],
+        }
+
     # ============ 시세 ============
 
     def _call_us_quote(self, base: str, params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -892,6 +1297,57 @@ class kbsec(Exchange, ImplicitAPI):
             pick_num(ohlcv, 'cls_prc_p2'),
             pick_num(ohlcv, 'vlm'),
         ]
+
+    def fetch_overseas_candles(self, symbol: str, chart_type: str = 'day', limit: Int = None,
+                                     params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """해외 차트(`GSC10060`). 봉의 일자와 시간은 미국 동부 현지 시각이라(실계좌 확인) `timestamp` 를 UTC 로 채우고 원문도 함께 준다.
+        실계좌의 시세구분(`mrkt_prc_clsf`)은 `15분지연` 이었다. 차트구분(`chart_type`)은 `tick`, `minute`, `day`, `week`, `month`, `year` 이고
+        설명대로 틱 `1`, 분 `2`, 일 `3`, 주 `4`, 월 `5`, 년 `6` 을 보낸다. 레코드수는 `limit`(기본 100, 최대 5000)이다.
+        거래소코드(`krx_cd`)는 `fetch_trades` 처럼 현재가 조회로 찾은 값을 쓴다. 묶음과 수정주가사용여부는 공식 예제처럼 비워 보내고,
+        검색시작일은 설명대로 기본값인 빈값을, 설명이 없는 구분(`clsf`)도 빈값을 보낸다. 바꾸려면 `params` 로 준다.
+        일·주·월·연봉은 KB 가 현지 자정(00:00 ET)으로 주므로 기간 첫날의 00:00 UTC 로 옮긴다(`candle_period_utc_ms`). 일자나 시각을 읽을 수
+        없는 봉은 지어낸 시각으로 채우지 않고 버린다. 결과는 `{'fields', 'candles'}` 다."""
+        chart_type = 'day' if chart_type is None else chart_type
+        market = self.market(symbol)
+        if not self._is_us(market):
+            raise NotSupported(f'{self.id} fetchOverseasCandles() 는 해외 종목만 지원한다(국내는 fetchOHLCV): {symbol}')
+        chrt_clsf = _code_of(KBSEC_OVERSEAS_CHART_CODE, chart_type)
+        if chrt_clsf is None:
+            raise NotSupported(f'{self.id} fetchOverseasCandles() 는 {fn.js_string(chart_type)} 차트를 지원하지 않는다')
+        base = market['id'] or ''
+        if self._us_exchange_cache.get(base) is None:
+            self._call_us_quote(base, {})
+        body = self._call_tr(KBSEC_TR['CHART_US'], self.extend({
+            'krx_cd': self._us_exchange_cache.get(base, KBSEC_US_EXCHANGES[0]),
+            'is_cd': base,
+            'chrt_clsf': chrt_clsf,
+            'bndl': '',
+            'mdfy_stk_prc_use_f': '',
+            'rcrd_c': kbsec_num(min(100 if limit is None else limit, KBSEC_OVERSEAS_CHART_MAX)),
+            'srch_strt_dy': '',
+            'clsf': '',
+        }, params or {}))
+        period = _code_of(KBSEC_OVERSEAS_CHART_PERIOD, chart_type)
+
+        def stamp(row: Dict[str, Any]) -> Optional[int]:
+            ms = kbsec_us_candle_timestamp(pick_str(row, 'dt'), pick_str(row, 'tm'))
+            return candle_period_utc_ms(ms, period, 'US') if ms is not None and period is not None else ms
+
+        rows = [row for row in pick_array(body) if stamp(row) is not None]
+        return {
+            'fields': kbsec_raw_fields(body),
+            'candles': [self.extend(self.ms_stamp(stamp(row)), {
+                'date': pick_str(row, 'dt'),
+                'time': pick_str(row, 'tm'),
+                'open': pick_num(row, 'opn_prc_p4'),
+                'high': pick_num(row, 'hgh_prc_p4'),
+                'low': pick_num(row, 'lw_prc_p4'),
+                'close': pick_num(row, 'cls_prc_p4'),
+                'volume': pick_num(row, 'vlm'),
+                'tradingValue': pick_num(row, 'dl_tw_amt'),
+                'info': row,
+            }) for row in rows],
+        }
 
     def fetch_trades(self, symbol: str, since: Int = None, limit: Int = None,
                      params: Optional[Dict[str, Any]] = None) -> List[Trade]:
@@ -2468,11 +2924,28 @@ class kbsec(Exchange, ImplicitAPI):
         handleErrors = handle_errors
         priceToPrecision = price_to_precision
         fetchInvestorTrading = fetch_investor_trading
+        fetchStocks = fetch_stocks
+        fetchTradingRestriction = fetch_trading_restriction
+        fetchStockWarnings = fetch_stock_warnings
+        fetchForeignBrokers = fetch_foreign_brokers
+        fetchProgramTradingTrend = fetch_program_trading_trend
+        fetchMarketOverview = fetch_market_overview
+        fetchRankings = fetch_rankings
+        fetchExchangeRates = fetch_exchange_rates
+        fetchWorldIndices = fetch_world_indices
+        fetchCompanyProfile = fetch_company_profile
+        fetchMarketFundFlow = fetch_market_fund_flow
+        fetchNewHighLow = fetch_new_high_low
+        fetchInvestorRanking = fetch_investor_ranking
+        fetchThemeGroups = fetch_theme_groups
+        fetchSectorRanking = fetch_sector_ranking
+        fetchHolidays = fetch_holidays
         fetchTicker = fetch_ticker
         parseTicker = parse_ticker
         fetchOrderBook = fetch_order_book
         fetchOHLCV = fetch_ohlcv
         parseOHLCV = parse_ohlcv
+        fetchOverseasCandles = fetch_overseas_candles
         fetchTrades = fetch_trades
         fetchTradingFee = fetch_trading_fee
         fetchMarketCalendar = fetch_market_calendar

@@ -6,6 +6,7 @@ from typing import Dict, Optional, Tuple
 from kr_broker.base.errors import NotSupported
 from kr_broker.base.exchange import strict_kst_timestamp_of
 from kr_broker.kbsec_types import KBSEC_CHART_KIND
+from kr_broker.us_market_hours import et_wall_clock_to_utc_ms
 
 # `describe()['timeframes']` 의 표. 값은 통합차트의 `chrt_clsf`(일·주·월) 또는 분 단위 숫자 문자열이다.
 KBSEC_TIMEFRAMES: Dict[str, str] = {
@@ -24,6 +25,13 @@ KBSEC_TIMEFRAMES: Dict[str, str] = {
 
 # 통합차트 조회건수(`inq_cnt`, 4자리)의 상한.
 KBSEC_CHART_MAX = 9999
+
+# 해외 차트(`GSC10060`)의 차트구분(`chrt_clsf`).
+KBSEC_OVERSEAS_CHART_CODE: Dict[str, str] = {'tick': '1', 'minute': '2', 'day': '3', 'week': '4', 'month': '5', 'year': '6'}
+# 해외 차트 종류 가운데 기간 봉의 타임프레임. 틱과 분봉은 없다.
+KBSEC_OVERSEAS_CHART_PERIOD: Dict[str, str] = {'day': '1d', 'week': '1w', 'month': '1M', 'year': '1y'}
+# 해외 차트 레코드수 상한(명세의 최대요청개수).
+KBSEC_OVERSEAS_CHART_MAX = 5000
 
 _DAY_MS = 24 * 60 * 60 * 1000
 
@@ -64,3 +72,18 @@ def kbsec_candle_timestamp(dt: str, tm: str) -> Optional[int]:
     일자나 시각을 읽을 수 없거나 달력에 없는 날짜면 `None` 이다. 일봉은 시각이 없거나 0 이라 자정(KST)이 된다."""
     # 시각을 읽을 수 없는 봉(`240000` 등)은 0시로 두지 않고 버린다.
     return strict_kst_timestamp_of(dt.strip(), tm.strip())
+
+
+def kbsec_us_candle_timestamp(dt: str, tm: str) -> Optional[int]:
+    """해외 차트(`GSC10060`) 봉의 `dt` 와 `tm` → UTC 밀리초. 두 값은 미국 동부 현지 시각이다(조회시간 `inq_tm` 만 한국 시각이다).
+    서머타임은 `et_wall_clock_to_utc_ms` 가 반영한다. 일봉은 시각이 비어 현지 자정이 된다.
+    일자나 시각을 읽을 수 없거나 달력에 없는 날짜면 `None` 이다."""
+    # 달력에 없는 날짜와 범위를 넘는 시각(`240000`)은 `et_wall_clock_to_utc_ms` 가 다른 날이나 시각으로 넘기므로 버린다(검증만 `strict_kst_timestamp_of` 에 맡긴다).
+    if strict_kst_timestamp_of(dt.strip(), tm.strip()) is None:
+        return None
+    date = re.fullmatch(r'([0-9]{4})([0-9]{2})([0-9]{2})', dt.strip())
+    time = re.fullmatch(r'([0-9]{2})([0-9]{2})([0-9]{2})', '000000' if tm.strip() == '' else tm.strip().rjust(6, '0'))
+    if date is None or time is None:
+        return None
+    return et_wall_clock_to_utc_ms(int(date.group(1)), int(date.group(2)), int(date.group(3)), int(time.group(1)),
+                                   int(time.group(2))) + int(time.group(3)) * 1000

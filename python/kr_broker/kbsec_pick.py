@@ -135,3 +135,22 @@ def pick_array(body: Optional[Mapping[str, Any]]) -> List[Dict[str, Any]]:
         if isinstance(value, list):
             return value
     return []
+
+
+def kbsec_raw_fields(body: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
+    """응답 본문에서 배열이 아닌 필드만 모은다. TypeScript 판 `kbsecRawResponse(body).fields` 와 같다."""
+    if not body:
+        return {}
+    return {key: value for key, value in body.items() if not isinstance(value, list)}
+
+
+def kbsec_sector_index(row: Mapping[str, Any]) -> Dict[str, Any]:
+    """업종랭킹(`IVM30010`)의 지수 하나. 전일대비는 원문 값이고, 전일대비구분코드(`bdy_cmpr_ccd`)는 `info` 에 있다."""
+    return {
+        'id': pick_str(row, 'indx_id'),
+        'name': pick_str(row, 'indx_nm'),
+        'value': pick_num(row, 'now_indx_p2'),
+        'change': pick_num(row, 'bdy_cmpr_p2'),
+        'percentage': pick_num(row, 'up_dwn_r_p2'),
+        'info': row,
+    }

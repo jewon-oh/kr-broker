@@ -43,10 +43,52 @@ KBSEC_TR = {
     'MARKET_STATUS': 'SZQM0771',
     # 종목별투자자
     'INVESTOR_TRADING': 'IVU10430',
+    # 공휴일관리(미국). 처리구분은 설명의 조회(`4`)를 보낸다.
+    'HOLIDAYS_US': 'SPAM2508',
+    # 종목기본정보. 종목명, 종목유형, 매매제한, 위험등급이다.
+    'SECURITY_INFO': 'SIQM4900',
+    # 등락률상위
+    'RANK_FLUCTUATION': 'IVU10240',
+    # 거래량상위
+    'RANK_VOLUME': 'IVU10280',
+    # 프로그램매매상위
+    'RANK_PROGRAM_TRADING': 'IVS10920',
+    # 거래대금상위
+    'RANK_TRADING_VALUE': 'IVU10210',
+    # 시가대비등락률상위
+    'RANK_OPEN_CHANGE_RATE': 'IVS10910',
+    # 환율종합
+    'EXCHANGE_RATES': 'IVA60190',
+    # 세계지수
+    'WORLD_INDICES': 'IVA60140',
+    # 종목기업개요
+    'COMPANY_PROFILE': 'IVM10050',
+    # 신고/신저
+    'NEW_HIGH_LOW': 'IVU10550',
+    # 외국인기관매매상위
+    'INVESTOR_RANKING': 'IVU10020',
+    # 증시주변자금동향
+    'MARKET_FUND_FLOW': 'IVA10370',
+    # 기간외등락률순위
+    'RANK_EXTENDED_HOURS_CHANGE_RATE': 'IVS11190',
+    # 급등/급락 상위
+    'RANK_SURGE_PLUNGE': 'IVU10270',
+    # 당일주요외국계거래원
+    'FOREIGN_BROKERS': 'IVU10420',
+    # 종목별프로그램매매추이
+    'PROGRAM_TRADING_TREND': 'IVU10450',
+    # 시장종합
+    'MARKET_OVERVIEW': 'IVSA0070',
+    # 테마그룹조회
+    'THEME_GROUPS': 'IVS11430',
+    # 업종랭킹. 필드가 같은 그리드 둘을 준다.
+    'RANK_SECTOR': 'IVM30010',
     # 해외 현재가
     'QUOTE_US': 'GSS10030',
     # 해외 호가
     'ORDERBOOK_US': 'GSS10040',
+    # 해외 차트. 15분 지연 시세다. 봉 시각은 미국 동부 현지 시각이다.
+    'CHART_US': 'GSC10060',
     # 해외 시간대별체결
     'TRADES_TIMELINE_US': 'GSA10020',
     # 계좌별주문체결조회
@@ -155,6 +197,21 @@ KBSEC_CONT_NEXT = '1'
 KBSEC_STD_CURRENCY_FOREIGN = '1'
 KBSEC_EXCH_RATE_MARKET = '2'
 KBSEC_FEE_EXCLUDED = '1'
+
+# 세계지수(`IVA60140`) 조회 범위(`lnd_clsf`). 공식 예제는 `MAJOR`(주요지수)를 기본값으로 쓴다.
+KBSEC_WORLD_INDEX_SCOPE_CODE = {'MAJOR': '1', 'AMERICA': 'C', 'EUROPE': 'E', 'ASIA': 'S'}
+# 신고가/신저가 구분(`nw_stk_lw_ccd`).
+KBSEC_HIGH_LOW_TYPE_CODE = {'HIGH': '1', 'LOW': '2'}
+# 투자자구분코드(`invstr_ccd`, `IVU10020`).
+KBSEC_INVESTOR_CODE = {
+    'FOREIGNER': '0', 'INSTITUTION': '1', 'FOREIGNER_INSTITUTION': '2', 'SECURITIES': '3', 'INSURANCE': '4',
+    'INVESTMENT_TRUST': '5', 'PRIVATE_EQUITY': '6', 'BANK': '7', 'MERCHANT_BANK': '8', 'FUND': '9',
+    'OTHER': 'A', 'GOVERNMENT': 'B', 'INDIVIDUAL': 'C', 'OTHER_FOREIGNER': 'D',
+}
+# 외국인·기관매매상위의 순위구분(`rnk_clsf`).
+KBSEC_INVESTOR_RANKING_TYPE_CODE = {'BUY': '0', 'SELL': '1', 'HOLDING_UP': '2', 'HOLDING_DOWN': '3', 'CONSECUTIVE_BUY': '4', 'CONSECUTIVE_SELL': '5'}
+# 업종랭킹(`IVM30010`)의 시장구분(`mkt_clsf`).
+KBSEC_SECTOR_MARKET_CODE = {'KOSPI': '1', 'KOSDAQ': '2'}
 
 _A_PREFIXED_CODE = re.compile(r'A([0-9A-Za-z]{6})')
 _KR_ISIN = re.compile(r'KR7([0-9A-Za-z]{6})[0-9A-Za-z]{3}')
