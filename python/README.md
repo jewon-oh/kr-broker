@@ -20,13 +20,13 @@ Python 3.11 이상이 필요하고, 의존성은 `requests`(동기 판), `aiohtt
 - 한국투자증권(`kr_broker.kis`), 토스증권(`kr_broker.toss`), KB증권(`kr_broker.kbsec`)의 인증, 서명, 오류 처리, 호출 간격 조절입니다.
 - 세 증권사의 모든 엔드포인트를 암묵 메서드로 부를 수 있습니다. 한국투자증권 272개, 토스증권 42개, KB증권 83개입니다.
 - 아래 표의 통합 메서드를 부를 수 있습니다. 실시간(`watch_ticker`, `watch_trades`, `watch_order_book`, `watch_orders`)은 `kr_broker.pro`에 있습니다.
-- KB증권은 TypeScript 판에서 옮기는 중입니다. 지금은 아래 표의 메서드만 옮겼고, 나머지 통합 메서드는 `has`가 `False`라서 부르면 `NotSupported`입니다. KB증권은 웹소켓을 제공하지 않아서 `kr_broker.pro`에 없습니다.
+- KB증권은 TypeScript 판에서 옮기는 중입니다. 통합 메서드는 모두 옮겨서 `has`가 TypeScript 판과 같습니다. 고유 조회는 아래 표의 메서드만 옮겼고, TypeScript 판의 나머지 확장 메서드(정산, 매수가능금액, 소수점 주문 내역, 예약주문, 계좌원장, 순위 등)는 아직 없습니다. KB증권은 웹소켓을 제공하지 않아서 `kr_broker.pro`에 없습니다.
 
 | 분류 | 한국투자증권 통합 메서드 | 토스증권 통합 메서드 | KB증권 통합 메서드 |
 |---|---|---|---|
 | 종목과 시세 | `fetch_markets`, `fetch_ticker`, `fetch_tickers`, `fetch_order_book`, `fetch_ohlcv`, `fetch_trades` | `fetch_markets`, `fetch_ticker`, `fetch_tickers`, `fetch_order_book`, `fetch_ohlcv`, `fetch_trades` | `fetch_ticker`, `fetch_order_book`, `fetch_ohlcv`, `fetch_trades` |
 | 잔고와 수수료 | `fetch_balance`, `fetch_trading_fee` | `fetch_balance`, `fetch_trading_fee` | `fetch_balance`, `fetch_trading_fee` |
-| 주문 | `create_order`, `create_limit_order`, `create_market_order`, `create_trigger_order`, `edit_order`, `cancel_order`, `cancel_all_orders` | `create_order`, `create_limit_order`, `create_market_order`, `create_market_buy_order_with_cost`, `create_trigger_order`, `edit_order`, `cancel_order`, `cancel_all_orders` | 아직 없음 |
+| 주문 | `create_order`, `create_limit_order`, `create_market_order`, `create_trigger_order`, `edit_order`, `cancel_order`, `cancel_all_orders` | `create_order`, `create_limit_order`, `create_market_order`, `create_market_buy_order_with_cost`, `create_trigger_order`, `edit_order`, `cancel_order`, `cancel_all_orders` | `create_order`, `create_limit_order`, `create_market_order`, `create_market_buy_order_with_cost`, `create_trigger_order`, `edit_order`, `cancel_order`, `cancel_all_orders` |
 | 주문 조회 | `fetch_order`, `fetch_orders`, `fetch_open_orders`, `fetch_closed_orders`, `fetch_canceled_orders`, `fetch_my_trades` | `fetch_order`, `fetch_open_orders`, `fetch_closed_orders`, `fetch_canceled_orders`, `fetch_my_trades` | `fetch_order`, `fetch_orders`, `fetch_open_orders`, `fetch_closed_orders`, `fetch_canceled_orders`, `fetch_my_trades` |
 | 고유 조회 | `fetch_market_calendar`, `fetch_volatility_interruptions`, `fetch_investor_trading`, `fetch_rankings` | `fetch_market_calendar`, `fetch_stock_warnings`, `fetch_market_investor_trading`, `fetch_rankings` | `fetch_market_calendar`, `fetch_investor_trading`, `fetch_overseas_order_status`, `fetch_one_market_margin` |
 
@@ -105,6 +105,8 @@ kb = kr_broker.kbsec({
 ticker = kb.fetch_ticker('005930/KRW')
 book = kb.fetch_order_book('AAPL/USD')
 candles = kb.fetch_ohlcv('005930/KRW', '1d', limit=30)                      # 국내만 받는다
+order = kb.create_order('005930/KRW', 'limit', 'buy', 1, 70000)             # 장 밖이면 요청 없이 MarketClosed
+kb.edit_order(order['id'], '005930/KRW', 'limit', 'buy', None, 70100)       # 정정하면 주문번호가 바뀐다
 orders = kb.fetch_open_orders('005930/KRW')                                 # 국내만 받는다
 trades = kb.fetch_my_trades('005930/KRW', since)                            # 종목이 필요하다. since 부터 영업일마다 조회한다
 holdings = kb.private_post_ssqm1801({'inq_clsf': '1', 'mkt_tm_ccd': '1'})   # 빠진 입력 필드는 빈 문자열로 채워 보낸다
@@ -126,6 +128,11 @@ TypeScript 판은 네트워크 인터페이스 목록에서 첫 외부 IPv4 주�
 주문 목록(`fetch_orders`, `fetch_open_orders`, `fetch_closed_orders`)은 국내 종목만 받고 `since`를 쓰지 않습니다. 목록의 행에 주문 시각이 없기 때문입니다.
 `fetch_my_trades`와 `fetch_order`는 미국 종목도 받습니다. 분할체결은 주문번호를 지운 연속 행으로 오는데, 라이브러리가 이 행을 앞 주문에 붙입니다.
 조회일은 KB증권 영업일로 맞춥니다. 휴장일이라 거절되면(`2854`) 영업일을 하나씩 더 되돌려 다시 조회합니다. `fetch_my_trades`의 `since`는 31일 전까지만 받습니다.
+
+주문 TR은 다시 보내지 않습니다. 시간 초과나 연결 끊김으로 끝나면 `OrderOutcomeUnknown`을 던집니다. `create_order`, `create_trigger_order`, `create_market_buy_order_with_cost`, `edit_order`는
+장 시간 밖이면 요청 없이 `MarketClosed`를 던지고, 국내는 판정 전에 휴장일 캘린더(`SZQM0771`)를 받습니다. 미국 종목은 `options['masterData']`로 상장 거래소를 알아야 주문합니다.
+접수 뒤에는 체결내역으로 체결을 확정하고, 확정하지 못하면 `filled`를 비우고 `info['fillConfirmed']`가 `False`입니다. 미국 시장가 매수는 매도호가에 버퍼를 더한 지정가로 바꿔 냅니다.
+`edit_order`의 `amount`는 정정 뒤 총수량이고, 미국 정정에 `amount`를 주면 `NotSupported`입니다. `cancel_all_orders`는 국내 미체결만 취소하고, 실패한 주문은 던지지 않고 `info['cancelError']`에 싣습니다.
 
 ### 오류
 

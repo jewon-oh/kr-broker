@@ -65,6 +65,24 @@ KBSEC_TR = {
     'ONEMARKET_MARGIN': 'SPQM3390',
     # 해외 잔고평가. 그리드가 둘이다(통화별 예수금과 종목별 보유). 첫 배열을 집으면 예수금 쪽을 집는다.
     'HOLDINGS_US': 'SPQM2226',
+    # 현금매수주문(국내)
+    'BUY_KR': 'SSAM1802',
+    # 현금매도주문(국내)
+    'SELL_KR': 'SSAM1801',
+    # 정정주문(국내)
+    'AMEND_KR': 'SSAM1805',
+    # 취소주문(국내)
+    'CANCEL_KR': 'SSAM1806',
+    # 소수점 매수, 매도(국내)
+    'FRAC_BUY_KR': 'SSAM5763',
+    'FRAC_SELL_KR': 'SSAM5762',
+    # 해외 매도/매수주문
+    'ORDER_US': 'SKAM2101',
+    # 해외 정정/취소주문
+    'AMEND_CANCEL_US': 'SKAM2102',
+    # 소수점매도/매수주문(해외). 금액(`amt_q_clsf='0'`)이나 수량 기준으로 낸다. 미국만 지원한다.
+    # 주문유형코드(`frgn_ordr_typ_cd`)가 `ORDER_US` 와 다른 코드표를 쓴다. `2`(지정가)와 `E`(유사시장가)뿐이다.
+    'FRAC_ORDER_US': 'SKAM2201',
 }
 
 # 통합차트 차트구분(`chrt_clsf`).
@@ -80,6 +98,37 @@ KBSEC_ORDER_TYPE_KR = {
     'LIMIT': '00',
     'MARKET': '03',
     'STOP_LIMIT': 'S0',
+}
+
+# 국내 주문업무구분(`ordr_jb_clsf`).
+KBSEC_ORDER_SIDE_KR = {
+    'SELL': '1',
+    'BUY': '2',
+    'AMEND': '3',
+    'CANCEL': '4',
+}
+
+# 신용유형코드(`crdt_typ_cd`). 현금만 쓴다.
+KBSEC_CREDIT_CASH = '00'
+
+# SOR 주문구분코드(`sor_ordr_ccd`). 대체거래소 라우팅이다. KB 는 이것을 주문 필드로 직접 받는다.
+KBSEC_SOR = {
+    'KRX': 'K',
+    'NXT': 'N',
+    'SOR': 'S',
+}
+
+# 해외 매매거래구분코드(`trd_dl_ccd`).
+KBSEC_ORDER_SIDE_US = {
+    'SELL': '01',
+    'BUY': '02',
+}
+
+# 해외 주문유형코드(`frgn_ordr_typ_cd`). 시장가, 지정가, 스톱지정가(조건가격 `frgn_stp_prc_p4` 에 닿으면 `frgn_ordr_prc_p4` 지정가 주문이 된다)만 쓴다.
+KBSEC_ORDER_TYPE_US = {
+    'MARKET': '1',
+    'LIMIT': '2',
+    'STOP_LIMIT': 'C',
 }
 
 # 해외 거래소코드(`krx_cd`) 후보. 심볼의 상장 거래소를 늘 아는 것이 아니라 이 순서로 시도한다(찾은 값은 증권사 인스턴스가 캐시한다).

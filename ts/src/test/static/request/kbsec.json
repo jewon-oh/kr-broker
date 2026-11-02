@@ -7204,6 +7204,2203 @@
             }
         },
         {
+            "description": "createOrder 국내 지정가 매수는 휴장일 캘린더(SZQM0771)를 받고 장 시간을 판정한 뒤 SSAM1802 에 지정가(00)·KRX(K)로 내고, 체결내역(SSQM2341)으로 체결을 확정한다. 전량 체결이면 closed 이고 평균가는 체결가다",
+            "config": {
+                "options": {
+                    "masterData": {
+                        "kospi": [
+                            {
+                                "code": "005930",
+                                "name": "삼성전자",
+                                "market": "KOSPI",
+                                "securityType": "STOCK"
+                            }
+                        ],
+                        "kosdaq": [],
+                        "nasdaq": [
+                            {
+                                "code": "AAPL",
+                                "name": "APPLE INC",
+                                "nameKr": "애플",
+                                "market": "NAS",
+                                "currency": "USD"
+                            }
+                        ],
+                        "nyse": [],
+                        "amex": []
+                    }
+                }
+            },
+            "now": 1790038800000,
+            "method": "createOrder",
+            "args": [
+                "005930/KRW",
+                "limit",
+                "buy",
+                2,
+                70000,
+                null
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/szqm0771",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "bfr_bsns_dt": "20260921",
+                                "std_bsnss_dt": "20260922",
+                                "next_biz_dt": "20260923"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssam1802",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"mkt_tm_clsf\":\"1\",\"ordr_jb_clsf\":\"2\",\"s_clsf\":\"\",\"is_cd\":\"005930\",\"ordr_q\":\"2\",\"ordr_uprc\":\"70000\",\"ordr_ccd\":\"00\",\"crdt_typ_cd\":\"00\",\"ln_dt\":\"\",\"crct_clsf\":\"\",\"orgn_ordr_no\":\"\",\"gtc_ccd\":\"\",\"ordr_mng_no\":\"\",\"spclz_ordr_ccd\":\"\",\"acct_cd\":\"\",\"sor_ordr_ccd\":\"K\",\"stpd_prc\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0000",
+                                "processMessage": "정상처리되었습니다."
+                            },
+                            "dataBody": {
+                                "ordr_no": "0000000041"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm2341",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"ccls_clsf\":\"1\",\"ordr_dt\":\"20260922\",\"is_cd\":\"005930\",\"ordr_no\":\"\",\"mthr_ordr_no\":\"\",\"orgn_ordr_no\":\"\",\"s_ccls_amt\":\"\",\"b_ccls_amt\":\"\",\"s_ccls_q\":\"\",\"b_ccls_q\":\"\",\"ac_nm\":\"\",\"is_nm\":\"\",\"cn_clsf\":\"0\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "nxt_key": "",
+                                "Record1": [
+                                    {
+                                        "ordr_no": "0000000041",
+                                        "stnd_is_no": "A005930",
+                                        "trd_dl_ccd_nm": "현금매수",
+                                        "ordr_q": "2",
+                                        "tl_ccls_q": "2",
+                                        "nccls_q": "0",
+                                        "ccls_uprc": "69900",
+                                        "ordr_uprc": "70000",
+                                        "ordr_ccd": "00"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "id": "0000000041",
+                "timestamp": 1790038800000,
+                "symbol": "005930/KRW",
+                "type": "limit",
+                "side": "buy",
+                "price": 70000,
+                "amount": 2,
+                "status": "closed",
+                "trades": [],
+                "filled": 2,
+                "remaining": 0,
+                "average": 69900,
+                "cost": 139800,
+                "info": {
+                    "ordr_no": "0000000041",
+                    "fillConfirmed": true
+                },
+                "fees": [],
+                "datetime": "2026-09-22T01:00:00.000Z"
+            }
+        },
+        {
+            "description": "createOrder 국내 시장가 매도는 SSAM1801 에 단가를 빈 값, 구분을 03 으로 보내고 수량은 내림한다. 체결을 확정하지 못하면 filled 를 비우고 info.fillConfirmed 가 false 다",
+            "config": {
+                "options": {
+                    "confirmBudget": {
+                        "attempts": 1,
+                        "intervalMs": 0
+                    }
+                }
+            },
+            "now": 1790038800000,
+            "method": "createOrder",
+            "args": [
+                "005930/KRW",
+                "market",
+                "sell",
+                3.7,
+                null
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/szqm0771",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "bfr_bsns_dt": "20260921",
+                                "std_bsnss_dt": "20260922",
+                                "next_biz_dt": "20260923"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssam1801",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"mkt_tm_clsf\":\"1\",\"ordr_jb_clsf\":\"1\",\"s_clsf\":\"\",\"is_cd\":\"005930\",\"ordr_q\":\"3\",\"ordr_uprc\":\"\",\"ordr_ccd\":\"03\",\"crdt_typ_cd\":\"00\",\"ln_dt\":\"\",\"crct_clsf\":\"\",\"orgn_ordr_no\":\"\",\"gtc_ccd\":\"\",\"ordr_mng_no\":\"\",\"spclz_ordr_ccd\":\"\",\"acct_cd\":\"\",\"sor_ordr_ccd\":\"K\",\"stpd_prc\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0000",
+                                "processMessage": "정상처리되었습니다."
+                            },
+                            "dataBody": {
+                                "ordr_no": "0000000042"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm2341",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"ccls_clsf\":\"1\",\"ordr_dt\":\"20260922\",\"is_cd\":\"005930\",\"ordr_no\":\"\",\"mthr_ordr_no\":\"\",\"orgn_ordr_no\":\"\",\"s_ccls_amt\":\"\",\"b_ccls_amt\":\"\",\"s_ccls_q\":\"\",\"b_ccls_q\":\"\",\"ac_nm\":\"\",\"is_nm\":\"\",\"cn_clsf\":\"0\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "B",
+                                "processCode": "1861",
+                                "processMessage": "조회할 자료가 없습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "id": "0000000042",
+                "timestamp": 1790038800000,
+                "symbol": "005930/KRW",
+                "type": "market",
+                "side": "sell",
+                "amount": 3,
+                "status": "open",
+                "trades": [],
+                "info": {
+                    "ordr_no": "0000000042",
+                    "fillConfirmed": false
+                },
+                "fees": [],
+                "datetime": "2026-09-22T01:00:00.000Z",
+                "timeInForce": "IOC"
+            }
+        },
+        {
+            "description": "createOrder 미국 지정가 매수는 SKAM2101 에 지정가(2)와 소수 4자리 가격으로 내고, 해외 체결내역(SPQM2103)으로 체결을 확정한다",
+            "config": {
+                "options": {
+                    "masterData": {
+                        "kospi": [
+                            {
+                                "code": "005930",
+                                "name": "삼성전자",
+                                "market": "KOSPI",
+                                "securityType": "STOCK"
+                            }
+                        ],
+                        "kosdaq": [],
+                        "nasdaq": [
+                            {
+                                "code": "AAPL",
+                                "name": "APPLE INC",
+                                "nameKr": "애플",
+                                "market": "NAS",
+                                "currency": "USD"
+                            }
+                        ],
+                        "nyse": [],
+                        "amex": []
+                    }
+                }
+            },
+            "now": 1790085600000,
+            "method": "createOrder",
+            "args": [
+                "AAPL/USD",
+                "limit",
+                "buy",
+                3,
+                150.5,
+                null
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/skam2101",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"frgn_krx_ccd\":\"\",\"trd_dl_ccd\":\"02\",\"is_cd\":\"AAPL\",\"frgn_ordr_typ_cd\":\"2\",\"frgn_ordr_q\":\"3\",\"frgn_ordr_prc_p4\":\"150.5000\",\"spclz_ordr_ccd\":\"\",\"set_ordr_no\":\"\",\"bskt_ordr_no\":\"\",\"cutn_mtr_cnfr_f\":\"\",\"aplc_exch_r\":\"\",\"start_tm\":\"\",\"end_tm\":\"\",\"frgn_stp_prc_p4\":\"\",\"frgn_brkr_ccd\":\"\",\"ordr_mntnc_tm_ccd\":\"\",\"cpn_cd\":\"\",\"crdt_typ_cd\":\"\",\"ln_dt\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0000",
+                                "processMessage": "정상처리되었습니다."
+                            },
+                            "dataBody": {
+                                "ordr_no": "0000000043"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/spqm2103",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"ccls_clsf\":\"1\",\"clsf\":\"\",\"ordr_dt\":\"20260922\",\"is_cd\":\"AAPL\",\"krw_unty_mgn_rqst_f\":\"\",\"dl_clsf\":\"\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "nxt_key": "",
+                                "Record1": [
+                                    {
+                                        "ordr_no": "0000000043",
+                                        "is_cd": "AAPL",
+                                        "dl_clsf_nm": "매수",
+                                        "frgn_ordr_q_p6": "3.000000",
+                                        "ccls_q_p6": "3.000000",
+                                        "frgn_ccls_prc_p6": "150.250000"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "id": "0000000043",
+                "timestamp": 1790085600000,
+                "symbol": "AAPL/USD",
+                "type": "limit",
+                "side": "buy",
+                "price": 150.5,
+                "amount": 3,
+                "status": "closed",
+                "trades": [],
+                "filled": 3,
+                "remaining": 0,
+                "average": 150.25,
+                "cost": 450.75,
+                "info": {
+                    "ordr_no": "0000000043",
+                    "fillConfirmed": true
+                },
+                "fees": [],
+                "datetime": "2026-09-22T14:00:00.000Z"
+            }
+        },
+        {
+            "description": "createOrder 미국 시장가 매수는 현재가(GSS10030)의 매도호가에 버퍼 0.5% 를 더해 센트로 올린 지정가로 SKAM2101 에 낸다",
+            "config": {
+                "options": {
+                    "masterData": {
+                        "kospi": [
+                            {
+                                "code": "005930",
+                                "name": "삼성전자",
+                                "market": "KOSPI",
+                                "securityType": "STOCK"
+                            }
+                        ],
+                        "kosdaq": [],
+                        "nasdaq": [
+                            {
+                                "code": "AAPL",
+                                "name": "APPLE INC",
+                                "nameKr": "애플",
+                                "market": "NAS",
+                                "currency": "USD"
+                            }
+                        ],
+                        "nyse": [],
+                        "amex": []
+                    }
+                }
+            },
+            "now": 1790085600000,
+            "method": "createOrder",
+            "args": [
+                "AAPL/USD",
+                "market",
+                "buy",
+                2,
+                null
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/gss10030",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"krx_cd\":\"NAS\",\"is_cd\":\"AAPL\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "now_prc_p4": "227.2300",
+                                "b_askprc_p4": "227.2200",
+                                "s_askprc_p4": "227.2400"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/skam2101",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"frgn_krx_ccd\":\"\",\"trd_dl_ccd\":\"02\",\"is_cd\":\"AAPL\",\"frgn_ordr_typ_cd\":\"2\",\"frgn_ordr_q\":\"2\",\"frgn_ordr_prc_p4\":\"228.3800\",\"spclz_ordr_ccd\":\"\",\"set_ordr_no\":\"\",\"bskt_ordr_no\":\"\",\"cutn_mtr_cnfr_f\":\"\",\"aplc_exch_r\":\"\",\"start_tm\":\"\",\"end_tm\":\"\",\"frgn_stp_prc_p4\":\"\",\"frgn_brkr_ccd\":\"\",\"ordr_mntnc_tm_ccd\":\"\",\"cpn_cd\":\"\",\"crdt_typ_cd\":\"\",\"ln_dt\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0000",
+                                "processMessage": "정상처리되었습니다."
+                            },
+                            "dataBody": {
+                                "ordr_no": "0000000052"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/spqm2103",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"ccls_clsf\":\"1\",\"clsf\":\"\",\"ordr_dt\":\"20260922\",\"is_cd\":\"AAPL\",\"krw_unty_mgn_rqst_f\":\"\",\"dl_clsf\":\"\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "nxt_key": "",
+                                "Record1": [
+                                    {
+                                        "ordr_no": "0000000052",
+                                        "is_cd": "AAPL",
+                                        "dl_clsf_nm": "매수",
+                                        "frgn_ordr_q_p6": "2.000000",
+                                        "ccls_q_p6": "2.000000",
+                                        "frgn_ccls_prc_p6": "227.240000"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "id": "0000000052",
+                "timestamp": 1790085600000,
+                "symbol": "AAPL/USD",
+                "type": "limit",
+                "side": "buy",
+                "price": 228.38,
+                "amount": 2,
+                "status": "closed",
+                "trades": [],
+                "filled": 2,
+                "remaining": 0,
+                "average": 227.24,
+                "cost": 454.48,
+                "info": {
+                    "ordr_no": "0000000052",
+                    "fillConfirmed": true
+                },
+                "fees": [],
+                "datetime": "2026-09-22T14:00:00.000Z"
+            }
+        },
+        {
+            "description": "createOrder 국내는 nxtRouting 이 켜져 있으면 SOR(S)로 내고, NXT 미상장(L545)으로 거부되면 KRX(K)로 한 번 다시 낸다",
+            "config": {
+                "options": {
+                    "nxtRouting": true
+                }
+            },
+            "now": 1790038800000,
+            "method": "createOrder",
+            "args": [
+                "005935/KRW",
+                "limit",
+                "buy",
+                1,
+                60000,
+                null
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/szqm0771",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "bfr_bsns_dt": "20260921",
+                                "std_bsnss_dt": "20260922",
+                                "next_biz_dt": "20260923"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssam1802",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"mkt_tm_clsf\":\"1\",\"ordr_jb_clsf\":\"2\",\"s_clsf\":\"\",\"is_cd\":\"005935\",\"ordr_q\":\"1\",\"ordr_uprc\":\"60000\",\"ordr_ccd\":\"00\",\"crdt_typ_cd\":\"00\",\"ln_dt\":\"\",\"crct_clsf\":\"\",\"orgn_ordr_no\":\"\",\"gtc_ccd\":\"\",\"ordr_mng_no\":\"\",\"spclz_ordr_ccd\":\"\",\"acct_cd\":\"\",\"sor_ordr_ccd\":\"S\",\"stpd_prc\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "resultCode": "200",
+                                "resultMessage": "성공",
+                                "processFlag": "B",
+                                "processCode": "L545",
+                                "processMessage": "NXT에서 거래할 수 없는 종목입니다. KRX로 주문해주세요."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssam1802",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"mkt_tm_clsf\":\"1\",\"ordr_jb_clsf\":\"2\",\"s_clsf\":\"\",\"is_cd\":\"005935\",\"ordr_q\":\"1\",\"ordr_uprc\":\"60000\",\"ordr_ccd\":\"00\",\"crdt_typ_cd\":\"00\",\"ln_dt\":\"\",\"crct_clsf\":\"\",\"orgn_ordr_no\":\"\",\"gtc_ccd\":\"\",\"ordr_mng_no\":\"\",\"spclz_ordr_ccd\":\"\",\"acct_cd\":\"\",\"sor_ordr_ccd\":\"K\",\"stpd_prc\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0000",
+                                "processMessage": "정상처리되었습니다."
+                            },
+                            "dataBody": {
+                                "ordr_no": "0000000060"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm2341",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"ccls_clsf\":\"1\",\"ordr_dt\":\"20260922\",\"is_cd\":\"005935\",\"ordr_no\":\"\",\"mthr_ordr_no\":\"\",\"orgn_ordr_no\":\"\",\"s_ccls_amt\":\"\",\"b_ccls_amt\":\"\",\"s_ccls_q\":\"\",\"b_ccls_q\":\"\",\"ac_nm\":\"\",\"is_nm\":\"\",\"cn_clsf\":\"0\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "nxt_key": "",
+                                "Record1": [
+                                    {
+                                        "ordr_no": "0000000060",
+                                        "stnd_is_no": "A005935",
+                                        "trd_dl_ccd_nm": "현금매수",
+                                        "ordr_q": "1",
+                                        "tl_ccls_q": "1",
+                                        "nccls_q": "0",
+                                        "ccls_uprc": "60000",
+                                        "ordr_uprc": "60000",
+                                        "ordr_ccd": "00"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "id": "0000000060",
+                "timestamp": 1790038800000,
+                "symbol": "005935/KRW",
+                "type": "limit",
+                "side": "buy",
+                "price": 60000,
+                "amount": 1,
+                "status": "closed",
+                "trades": [],
+                "filled": 1,
+                "remaining": 0,
+                "average": 60000,
+                "cost": 60000,
+                "info": {
+                    "ordr_no": "0000000060",
+                    "fillConfirmed": true
+                },
+                "fees": [],
+                "datetime": "2026-09-22T01:00:00.000Z"
+            }
+        },
+        {
+            "description": "createOrder 국내 종가 동시호가(15:25 KST)의 신규 매수는 blockAuctionBuys 를 켜면 캘린더만 받고 MarketClosed 다",
+            "config": {
+                "options": {
+                    "blockAuctionBuys": true
+                }
+            },
+            "now": 1790058300000,
+            "method": "createOrder",
+            "args": [
+                "005930/KRW",
+                "limit",
+                "buy",
+                1,
+                70000,
+                null
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/szqm0771",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "bfr_bsns_dt": "20260921",
+                                "std_bsnss_dt": "20260922",
+                                "next_biz_dt": "20260923"
+                            }
+                        }
+                    }
+                }
+            ],
+            "error": {
+                "class": "MarketClosed",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "createTriggerOrder 미국은 스톱지정가(C)로 SKAM2101 에 내고 조건가격을 frgn_stp_prc_p4 에 싣는다",
+            "config": {
+                "options": {
+                    "masterData": {
+                        "kospi": [
+                            {
+                                "code": "005930",
+                                "name": "삼성전자",
+                                "market": "KOSPI",
+                                "securityType": "STOCK"
+                            }
+                        ],
+                        "kosdaq": [],
+                        "nasdaq": [
+                            {
+                                "code": "AAPL",
+                                "name": "APPLE INC",
+                                "nameKr": "애플",
+                                "market": "NAS",
+                                "currency": "USD"
+                            }
+                        ],
+                        "nyse": [],
+                        "amex": []
+                    },
+                    "confirmBudget": {
+                        "attempts": 1,
+                        "intervalMs": 0
+                    }
+                }
+            },
+            "now": 1790085600000,
+            "method": "createTriggerOrder",
+            "args": [
+                "AAPL/USD",
+                "limit",
+                "buy",
+                1,
+                152,
+                151.5
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/skam2101",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"frgn_krx_ccd\":\"\",\"trd_dl_ccd\":\"02\",\"is_cd\":\"AAPL\",\"frgn_ordr_typ_cd\":\"C\",\"frgn_ordr_q\":\"1\",\"frgn_ordr_prc_p4\":\"152.0000\",\"spclz_ordr_ccd\":\"\",\"set_ordr_no\":\"\",\"bskt_ordr_no\":\"\",\"cutn_mtr_cnfr_f\":\"\",\"aplc_exch_r\":\"\",\"start_tm\":\"\",\"end_tm\":\"\",\"frgn_stp_prc_p4\":\"151.5000\",\"frgn_brkr_ccd\":\"\",\"ordr_mntnc_tm_ccd\":\"\",\"cpn_cd\":\"\",\"crdt_typ_cd\":\"\",\"ln_dt\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0000",
+                                "processMessage": "정상처리되었습니다."
+                            },
+                            "dataBody": {
+                                "ordr_no": "0000000061"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/spqm2103",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"ccls_clsf\":\"1\",\"clsf\":\"\",\"ordr_dt\":\"20260922\",\"is_cd\":\"AAPL\",\"krw_unty_mgn_rqst_f\":\"\",\"dl_clsf\":\"\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "B",
+                                "processCode": "1861",
+                                "processMessage": "조회할 자료가 없습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "id": "0000000061",
+                "timestamp": 1790085600000,
+                "symbol": "AAPL/USD",
+                "type": "limit",
+                "side": "buy",
+                "price": 152,
+                "amount": 1,
+                "status": "open",
+                "trades": [],
+                "info": {
+                    "ordr_no": "0000000061",
+                    "fillConfirmed": false
+                },
+                "fees": [],
+                "datetime": "2026-09-22T14:00:00.000Z"
+            }
+        },
+        {
+            "description": "createTriggerOrder 는 triggerPrice 가 없으면 요청 없이 ArgumentsRequired 다",
+            "now": 1790038800000,
+            "method": "createTriggerOrder",
+            "args": [
+                "005930/KRW",
+                "limit",
+                "sell",
+                1,
+                68000,
+                null
+            ],
+            "http": [],
+            "error": {
+                "class": "ArgumentsRequired",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "createMarketBuyOrderWithCost 는 소수점 주문(SKAM2201)을 금액 기준(0), 유사시장가(E), 외화로 내고 금액은 내림한다. 체결 확정을 하지 않는다",
+            "config": {
+                "options": {
+                    "masterData": {
+                        "kospi": [
+                            {
+                                "code": "005930",
+                                "name": "삼성전자",
+                                "market": "KOSPI",
+                                "securityType": "STOCK"
+                            }
+                        ],
+                        "kosdaq": [],
+                        "nasdaq": [
+                            {
+                                "code": "AAPL",
+                                "name": "APPLE INC",
+                                "nameKr": "애플",
+                                "market": "NAS",
+                                "currency": "USD"
+                            }
+                        ],
+                        "nyse": [],
+                        "amex": []
+                    }
+                }
+            },
+            "now": 1790085600000,
+            "method": "createMarketBuyOrderWithCost",
+            "args": [
+                "AAPL/USD",
+                100.75
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/skam2201",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"frgn_krx_ccd\":\"US\",\"trd_dl_ccd\":\"02\",\"is_cd\":\"AAPL\",\"amt_q_clsf\":\"0\",\"tv_s_est_f\":\"\",\"frgn_ordr_typ_cd\":\"E\",\"crncy_ccd\":\"1\",\"ordr_amt\":\"100\",\"dcml_ordr_q_p6\":\"\",\"frgn_ordr_prc_p4\":\"\",\"spclz_ordr_ccd\":\"33\",\"cpn_cd\":\"\",\"cutn_mtr_cnfr_f\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0000",
+                                "processMessage": "정상처리되었습니다."
+                            },
+                            "dataBody": {
+                                "ordr_no": "0000000053"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "id": "0000000053",
+                "timestamp": 1790085600000,
+                "symbol": "AAPL/USD",
+                "type": "market",
+                "side": "buy",
+                "cost": 100,
+                "status": "open",
+                "trades": [],
+                "info": {
+                    "ordr_no": "0000000053",
+                    "fillConfirmed": false,
+                    "fractional": true
+                },
+                "fees": [],
+                "datetime": "2026-09-22T14:00:00.000Z",
+                "timeInForce": "IOC"
+            }
+        },
+        {
+            "description": "createTriggerOrder 국내는 스톱지정가(S0)로 SSAM1801 에 내고 조건가격을 stpd_prc 에 싣는다",
+            "config": {
+                "options": {
+                    "confirmBudget": {
+                        "attempts": 1,
+                        "intervalMs": 0
+                    }
+                }
+            },
+            "now": 1790038800000,
+            "method": "createTriggerOrder",
+            "args": [
+                "005930/KRW",
+                "limit",
+                "sell",
+                3,
+                68000,
+                68500
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/szqm0771",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "bfr_bsns_dt": "20260921",
+                                "std_bsnss_dt": "20260922",
+                                "next_biz_dt": "20260923"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssam1801",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"mkt_tm_clsf\":\"1\",\"ordr_jb_clsf\":\"1\",\"s_clsf\":\"\",\"is_cd\":\"005930\",\"ordr_q\":\"3\",\"ordr_uprc\":\"68000\",\"ordr_ccd\":\"S0\",\"crdt_typ_cd\":\"00\",\"ln_dt\":\"\",\"crct_clsf\":\"\",\"orgn_ordr_no\":\"\",\"gtc_ccd\":\"\",\"ordr_mng_no\":\"\",\"spclz_ordr_ccd\":\"\",\"acct_cd\":\"\",\"sor_ordr_ccd\":\"K\",\"stpd_prc\":\"68500\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0000",
+                                "processMessage": "정상처리되었습니다."
+                            },
+                            "dataBody": {
+                                "ordr_no": "0000000054"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm2341",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"ccls_clsf\":\"1\",\"ordr_dt\":\"20260922\",\"is_cd\":\"005930\",\"ordr_no\":\"\",\"mthr_ordr_no\":\"\",\"orgn_ordr_no\":\"\",\"s_ccls_amt\":\"\",\"b_ccls_amt\":\"\",\"s_ccls_q\":\"\",\"b_ccls_q\":\"\",\"ac_nm\":\"\",\"is_nm\":\"\",\"cn_clsf\":\"0\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "B",
+                                "processCode": "1861",
+                                "processMessage": "조회할 자료가 없습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "id": "0000000054",
+                "timestamp": 1790038800000,
+                "symbol": "005930/KRW",
+                "type": "limit",
+                "side": "sell",
+                "price": 68000,
+                "amount": 3,
+                "status": "open",
+                "trades": [],
+                "info": {
+                    "ordr_no": "0000000054",
+                    "fillConfirmed": false
+                },
+                "fees": [],
+                "datetime": "2026-09-22T01:00:00.000Z"
+            }
+        },
+        {
+            "description": "editOrder 국내 가격 정정은 미체결 목록(SSQM2341)에서 원주문의 라우팅을 읽어 SSAM1805 에 전부정정(2)·수량 0 으로 낸다. 새 주문번호를 돌려주고 amount 를 싣지 않는다",
+            "now": 1790038800000,
+            "method": "editOrder",
+            "args": [
+                "0000000044",
+                "005930/KRW",
+                "limit",
+                "buy",
+                null,
+                70100
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/szqm0771",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "bfr_bsns_dt": "20260921",
+                                "std_bsnss_dt": "20260922",
+                                "next_biz_dt": "20260923"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm2341",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"ccls_clsf\":\"2\",\"ordr_dt\":\"20260922\",\"is_cd\":\"005930\",\"ordr_no\":\"\",\"mthr_ordr_no\":\"\",\"orgn_ordr_no\":\"\",\"s_ccls_amt\":\"\",\"b_ccls_amt\":\"\",\"s_ccls_q\":\"\",\"b_ccls_q\":\"\",\"ac_nm\":\"\",\"is_nm\":\"\",\"cn_clsf\":\"0\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "nxt_key": "",
+                                "Record1": [
+                                    {
+                                        "ordr_no": "0000000044",
+                                        "stnd_is_no": "A005930",
+                                        "trd_dl_ccd_nm": "현금매수",
+                                        "ordr_q": "4",
+                                        "tl_ccls_q": "0",
+                                        "nccls_q": "4",
+                                        "ccls_uprc": "0",
+                                        "ordr_uprc": "70000",
+                                        "ordr_ccd": "00",
+                                        "sor_ordr_ccd": "S"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssam1805",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"mkt_tm_clsf\":\"1\",\"ordr_jb_clsf\":\"3\",\"s_clsf\":\"\",\"is_cd\":\"005930\",\"ordr_q\":\"0\",\"ordr_uprc\":\"70100\",\"ordr_ccd\":\"00\",\"crdt_typ_cd\":\"00\",\"ln_dt\":\"\",\"crct_clsf\":\"2\",\"orgn_ordr_no\":\"0000000044\",\"gtc_ccd\":\"\",\"ordr_mng_no\":\"\",\"spclz_ordr_ccd\":\"\",\"acct_cd\":\"\",\"sor_ordr_ccd\":\"S\",\"stpd_prc\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0000",
+                                "processMessage": "정상처리되었습니다."
+                            },
+                            "dataBody": {
+                                "ordr_no": "0000000045"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "id": "0000000045",
+                "timestamp": 1790038800000,
+                "symbol": "005930/KRW",
+                "type": "limit",
+                "price": 70100,
+                "status": "open",
+                "trades": [],
+                "info": {
+                    "ordr_no": "0000000045"
+                },
+                "fees": [],
+                "datetime": "2026-09-22T01:00:00.000Z"
+            }
+        },
+        {
+            "description": "editOrder 국내 amount 가 미체결 목록의 체결 수량과 잔량의 합과 같으면 전부정정하고 그 총수량을 돌려준다",
+            "now": 1790038800000,
+            "method": "editOrder",
+            "args": [
+                "0000000046",
+                "005930/KRW",
+                "limit",
+                "buy",
+                5,
+                69900
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/szqm0771",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "bfr_bsns_dt": "20260921",
+                                "std_bsnss_dt": "20260922",
+                                "next_biz_dt": "20260923"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm2341",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"ccls_clsf\":\"2\",\"ordr_dt\":\"20260922\",\"is_cd\":\"005930\",\"ordr_no\":\"\",\"mthr_ordr_no\":\"\",\"orgn_ordr_no\":\"\",\"s_ccls_amt\":\"\",\"b_ccls_amt\":\"\",\"s_ccls_q\":\"\",\"b_ccls_q\":\"\",\"ac_nm\":\"\",\"is_nm\":\"\",\"cn_clsf\":\"0\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "nxt_key": "",
+                                "Record1": [
+                                    {
+                                        "ordr_no": "0000000046",
+                                        "stnd_is_no": "A005930",
+                                        "trd_dl_ccd_nm": "현금매수",
+                                        "ordr_q": "5",
+                                        "tl_ccls_q": "2",
+                                        "nccls_q": "3",
+                                        "ccls_uprc": "70000",
+                                        "ordr_uprc": "70000",
+                                        "ordr_ccd": "00",
+                                        "sor_ordr_ccd": "K"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssam1805",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"mkt_tm_clsf\":\"1\",\"ordr_jb_clsf\":\"3\",\"s_clsf\":\"\",\"is_cd\":\"005930\",\"ordr_q\":\"0\",\"ordr_uprc\":\"69900\",\"ordr_ccd\":\"00\",\"crdt_typ_cd\":\"00\",\"ln_dt\":\"\",\"crct_clsf\":\"2\",\"orgn_ordr_no\":\"0000000046\",\"gtc_ccd\":\"\",\"ordr_mng_no\":\"\",\"spclz_ordr_ccd\":\"\",\"acct_cd\":\"\",\"sor_ordr_ccd\":\"K\",\"stpd_prc\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0000",
+                                "processMessage": "정상처리되었습니다."
+                            },
+                            "dataBody": {
+                                "ordr_no": "0000000055"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "id": "0000000055",
+                "timestamp": 1790038800000,
+                "symbol": "005930/KRW",
+                "type": "limit",
+                "price": 69900,
+                "amount": 5,
+                "status": "open",
+                "trades": [],
+                "info": {
+                    "ordr_no": "0000000055"
+                },
+                "fees": [],
+                "datetime": "2026-09-22T01:00:00.000Z"
+            }
+        },
+        {
+            "description": "editOrder 국내 amount 가 총수량과 다르면 정정 요청 없이 NotSupported 다",
+            "now": 1790038800000,
+            "method": "editOrder",
+            "args": [
+                "0000000046",
+                "005930/KRW",
+                "limit",
+                "buy",
+                4,
+                69900
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/szqm0771",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "bfr_bsns_dt": "20260921",
+                                "std_bsnss_dt": "20260922",
+                                "next_biz_dt": "20260923"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm2341",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"ccls_clsf\":\"2\",\"ordr_dt\":\"20260922\",\"is_cd\":\"005930\",\"ordr_no\":\"\",\"mthr_ordr_no\":\"\",\"orgn_ordr_no\":\"\",\"s_ccls_amt\":\"\",\"b_ccls_amt\":\"\",\"s_ccls_q\":\"\",\"b_ccls_q\":\"\",\"ac_nm\":\"\",\"is_nm\":\"\",\"cn_clsf\":\"0\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "nxt_key": "",
+                                "Record1": [
+                                    {
+                                        "ordr_no": "0000000046",
+                                        "stnd_is_no": "A005930",
+                                        "trd_dl_ccd_nm": "현금매수",
+                                        "ordr_q": "5",
+                                        "tl_ccls_q": "2",
+                                        "nccls_q": "3",
+                                        "ccls_uprc": "70000",
+                                        "ordr_uprc": "70000",
+                                        "ordr_ccd": "00",
+                                        "sor_ordr_ccd": "K"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "error": {
+                "class": "NotSupported",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "editOrder 미국 가격 정정은 SKAM2102 에 정정(crct_cncl_clsf 1)과 소수 4자리 가격만 보낸다",
+            "config": {
+                "options": {
+                    "masterData": {
+                        "kospi": [
+                            {
+                                "code": "005930",
+                                "name": "삼성전자",
+                                "market": "KOSPI",
+                                "securityType": "STOCK"
+                            }
+                        ],
+                        "kosdaq": [],
+                        "nasdaq": [
+                            {
+                                "code": "AAPL",
+                                "name": "APPLE INC",
+                                "nameKr": "애플",
+                                "market": "NAS",
+                                "currency": "USD"
+                            }
+                        ],
+                        "nyse": [],
+                        "amex": []
+                    }
+                }
+            },
+            "now": 1790085600000,
+            "method": "editOrder",
+            "args": [
+                "0000000047",
+                "AAPL/USD",
+                "limit",
+                "buy",
+                null,
+                151.25
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/skam2102",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"frgn_krx_ccd\":\"\",\"crct_cncl_clsf\":\"1\",\"is_cd\":\"AAPL\",\"orgn_ordr_no\":\"0000000047\",\"frgn_ordr_prc_p4\":\"151.2500\",\"set_ordr_no\":\"\",\"bskt_ordr_no\":\"\",\"cutn_mtr_cnfr_f\":\"\",\"aplc_exch_r\":\"\",\"start_tm\":\"\",\"end_tm\":\"\",\"frgn_ordr_typ_cd\":\"\",\"spclz_ordr_ccd\":\"\",\"frgn_stp_prc_p4\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0000",
+                                "processMessage": "정상처리되었습니다."
+                            },
+                            "dataBody": {
+                                "ordr_no": "0000000056"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "id": "0000000056",
+                "timestamp": 1790085600000,
+                "symbol": "AAPL/USD",
+                "type": "limit",
+                "price": 151.25,
+                "status": "open",
+                "trades": [],
+                "info": {
+                    "ordr_no": "0000000056"
+                },
+                "fees": [],
+                "datetime": "2026-09-22T14:00:00.000Z"
+            }
+        },
+        {
+            "description": "editOrder 미국에 amount 를 주면 원주문의 체결 수량을 확인할 수 없어 요청 없이 NotSupported 다",
+            "config": {
+                "options": {
+                    "masterData": {
+                        "kospi": [
+                            {
+                                "code": "005930",
+                                "name": "삼성전자",
+                                "market": "KOSPI",
+                                "securityType": "STOCK"
+                            }
+                        ],
+                        "kosdaq": [],
+                        "nasdaq": [
+                            {
+                                "code": "AAPL",
+                                "name": "APPLE INC",
+                                "nameKr": "애플",
+                                "market": "NAS",
+                                "currency": "USD"
+                            }
+                        ],
+                        "nyse": [],
+                        "amex": []
+                    }
+                }
+            },
+            "now": 1790085600000,
+            "method": "editOrder",
+            "args": [
+                "0000000047",
+                "AAPL/USD",
+                "limit",
+                "buy",
+                2,
+                151.25
+            ],
+            "http": [],
+            "error": {
+                "class": "NotSupported",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "editOrder 국내는 장 시간 밖(16:00 KST)이면 캘린더만 받고 원주문 조회와 정정 요청 없이 MarketClosed 다",
+            "now": 1790060400000,
+            "method": "editOrder",
+            "args": [
+                "0000000044",
+                "005930/KRW",
+                "limit",
+                "buy",
+                null,
+                70100
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/szqm0771",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "bfr_bsns_dt": "20260921",
+                                "std_bsnss_dt": "20260922",
+                                "next_biz_dt": "20260923"
+                            }
+                        }
+                    }
+                }
+            ],
+            "error": {
+                "class": "MarketClosed",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "editOrder 에 price 가 없으면 요청 없이 ArgumentsRequired 다",
+            "now": 1790038800000,
+            "method": "editOrder",
+            "args": [
+                "0000000044",
+                "005930/KRW",
+                "limit",
+                "buy",
+                null,
+                null
+            ],
+            "http": [],
+            "error": {
+                "class": "ArgumentsRequired",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "cancelOrder 국내는 미체결 목록에서 원주문의 라우팅을 읽어 SSAM1806 에 전부취소(2)로 낸다",
+            "now": 1790038800000,
+            "method": "cancelOrder",
+            "args": [
+                "0000000048",
+                "005930/KRW"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm2341",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"ccls_clsf\":\"2\",\"ordr_dt\":\"20260922\",\"is_cd\":\"005930\",\"ordr_no\":\"\",\"mthr_ordr_no\":\"\",\"orgn_ordr_no\":\"\",\"s_ccls_amt\":\"\",\"b_ccls_amt\":\"\",\"s_ccls_q\":\"\",\"b_ccls_q\":\"\",\"ac_nm\":\"\",\"is_nm\":\"\",\"cn_clsf\":\"0\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "nxt_key": "",
+                                "Record1": [
+                                    {
+                                        "ordr_no": "0000000048",
+                                        "stnd_is_no": "A005930",
+                                        "trd_dl_ccd_nm": "현금매수",
+                                        "ordr_q": "1",
+                                        "tl_ccls_q": "0",
+                                        "nccls_q": "1",
+                                        "ccls_uprc": "0",
+                                        "ordr_uprc": "69000",
+                                        "ordr_ccd": "00",
+                                        "sor_ordr_ccd": "S"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssam1806",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"mkt_tm_clsf\":\"1\",\"ordr_jb_clsf\":\"4\",\"s_clsf\":\"\",\"is_cd\":\"005930\",\"ordr_q\":\"0\",\"ordr_uprc\":\"0\",\"ordr_ccd\":\"00\",\"crdt_typ_cd\":\"00\",\"ln_dt\":\"\",\"crct_clsf\":\"2\",\"orgn_ordr_no\":\"0000000048\",\"gtc_ccd\":\"\",\"ordr_mng_no\":\"\",\"spclz_ordr_ccd\":\"\",\"acct_cd\":\"\",\"sor_ordr_ccd\":\"S\",\"stpd_prc\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0000",
+                                "processMessage": "정상처리되었습니다."
+                            },
+                            "dataBody": {
+                                "ordr_no": "0000000057"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "id": "0000000048",
+                "symbol": "005930/KRW",
+                "status": "canceled",
+                "trades": [],
+                "info": {
+                    "ordr_no": "0000000057"
+                },
+                "fees": []
+            }
+        },
+        {
+            "description": "cancelOrder 미국은 SKAM2102 에 취소(crct_cncl_clsf 2)로 낸다. 장 시간 게이트를 거치지 않는다",
+            "now": 1790038800000,
+            "method": "cancelOrder",
+            "args": [
+                "0000000049",
+                "AAPL/USD"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/skam2102",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"frgn_krx_ccd\":\"\",\"crct_cncl_clsf\":\"2\",\"is_cd\":\"AAPL\",\"orgn_ordr_no\":\"0000000049\",\"frgn_ordr_prc_p4\":\"\",\"set_ordr_no\":\"\",\"bskt_ordr_no\":\"\",\"cutn_mtr_cnfr_f\":\"\",\"aplc_exch_r\":\"\",\"start_tm\":\"\",\"end_tm\":\"\",\"frgn_ordr_typ_cd\":\"\",\"spclz_ordr_ccd\":\"\",\"frgn_stp_prc_p4\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0000",
+                                "processMessage": "정상처리되었습니다."
+                            },
+                            "dataBody": {
+                                "ordr_no": "0000000058"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "id": "0000000049",
+                "symbol": "AAPL/USD",
+                "status": "canceled",
+                "trades": [],
+                "info": {
+                    "ordr_no": "0000000058"
+                },
+                "fees": []
+            }
+        },
+        {
+            "description": "cancelOrder 미국 취소 요청의 연결이 끊기면 다시 보내지 않고 OrderOutcomeUnknown 이다",
+            "config": {
+                "options": {
+                    "maxRetriesOnFailure": 2,
+                    "maxRetriesOnFailureDelay": 0
+                }
+            },
+            "now": 1790038800000,
+            "method": "cancelOrder",
+            "args": [
+                "0000000049",
+                "AAPL/USD"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/skam2102",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"frgn_krx_ccd\":\"\",\"crct_cncl_clsf\":\"2\",\"is_cd\":\"AAPL\",\"orgn_ordr_no\":\"0000000049\",\"frgn_ordr_prc_p4\":\"\",\"set_ordr_no\":\"\",\"bskt_ordr_no\":\"\",\"cutn_mtr_cnfr_f\":\"\",\"aplc_exch_r\":\"\",\"start_tm\":\"\",\"end_tm\":\"\",\"frgn_ordr_typ_cd\":\"\",\"spclz_ordr_ccd\":\"\",\"frgn_stp_prc_p4\":\"\"}}"
+                    },
+                    "network": "reset"
+                }
+            ],
+            "error": {
+                "class": "OrderOutcomeUnknown",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "cancelAllOrders 는 미체결 주문마다 목록 행의 라우팅으로 취소하고, 취소하지 못한 주문은 던지지 않고 open 과 cancelError 로 돌려준다",
+            "now": 1790038800000,
+            "method": "cancelAllOrders",
+            "args": [],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm2341",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"ccls_clsf\":\"2\",\"ordr_dt\":\"20260922\",\"is_cd\":\"\",\"ordr_no\":\"\",\"mthr_ordr_no\":\"\",\"orgn_ordr_no\":\"\",\"s_ccls_amt\":\"\",\"b_ccls_amt\":\"\",\"s_ccls_q\":\"\",\"b_ccls_q\":\"\",\"ac_nm\":\"\",\"is_nm\":\"\",\"cn_clsf\":\"0\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "nxt_key": "",
+                                "Record1": [
+                                    {
+                                        "ordr_no": "0000000050",
+                                        "stnd_is_no": "A005930",
+                                        "trd_dl_ccd_nm": "현금매수",
+                                        "ordr_q": "1",
+                                        "tl_ccls_q": "0",
+                                        "nccls_q": "1",
+                                        "ccls_uprc": "0",
+                                        "ordr_uprc": "69000",
+                                        "ordr_ccd": "00",
+                                        "sor_ordr_ccd": "K"
+                                    },
+                                    {
+                                        "ordr_no": "0000000051",
+                                        "stnd_is_no": "A000660",
+                                        "trd_dl_ccd_nm": "현금매도",
+                                        "ordr_q": "2",
+                                        "tl_ccls_q": "0",
+                                        "nccls_q": "2",
+                                        "ccls_uprc": "0",
+                                        "ordr_uprc": "130000",
+                                        "ordr_ccd": "00",
+                                        "sor_ordr_ccd": "S"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssam1806",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"mkt_tm_clsf\":\"1\",\"ordr_jb_clsf\":\"4\",\"s_clsf\":\"\",\"is_cd\":\"005930\",\"ordr_q\":\"0\",\"ordr_uprc\":\"0\",\"ordr_ccd\":\"00\",\"crdt_typ_cd\":\"00\",\"ln_dt\":\"\",\"crct_clsf\":\"2\",\"orgn_ordr_no\":\"0000000050\",\"gtc_ccd\":\"\",\"ordr_mng_no\":\"\",\"spclz_ordr_ccd\":\"\",\"acct_cd\":\"\",\"sor_ordr_ccd\":\"K\",\"stpd_prc\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0000",
+                                "processMessage": "정상처리되었습니다."
+                            },
+                            "dataBody": {
+                                "ordr_no": "0000000059"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssam1806",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"mkt_tm_clsf\":\"1\",\"ordr_jb_clsf\":\"4\",\"s_clsf\":\"\",\"is_cd\":\"000660\",\"ordr_q\":\"0\",\"ordr_uprc\":\"0\",\"ordr_ccd\":\"00\",\"crdt_typ_cd\":\"00\",\"ln_dt\":\"\",\"crct_clsf\":\"2\",\"orgn_ordr_no\":\"0000000051\",\"gtc_ccd\":\"\",\"ordr_mng_no\":\"\",\"spclz_ordr_ccd\":\"\",\"acct_cd\":\"\",\"sor_ordr_ccd\":\"S\",\"stpd_prc\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "resultCode": "200",
+                                "resultMessage": "성공",
+                                "processFlag": "B",
+                                "processCode": "9999",
+                                "processMessage": "취소할 수 없는 주문입니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "info": {
+                        "ordr_no": "0000000050",
+                        "stnd_is_no": "A005930",
+                        "trd_dl_ccd_nm": "현금매수",
+                        "ordr_q": "1",
+                        "tl_ccls_q": "0",
+                        "nccls_q": "1",
+                        "ccls_uprc": "0",
+                        "ordr_uprc": "69000",
+                        "ordr_ccd": "00",
+                        "sor_ordr_ccd": "K",
+                        "cancelResponse": {
+                            "ordr_no": "0000000059"
+                        }
+                    },
+                    "id": "0000000050",
+                    "symbol": "005930/KRW",
+                    "type": "limit",
+                    "side": "buy",
+                    "status": "canceled",
+                    "price": 69000,
+                    "amount": 1,
+                    "filled": 0,
+                    "remaining": 1,
+                    "cost": 0,
+                    "trades": [],
+                    "fees": []
+                },
+                {
+                    "info": {
+                        "ordr_no": "0000000051",
+                        "stnd_is_no": "A000660",
+                        "trd_dl_ccd_nm": "현금매도",
+                        "ordr_q": "2",
+                        "tl_ccls_q": "0",
+                        "nccls_q": "2",
+                        "ccls_uprc": "0",
+                        "ordr_uprc": "130000",
+                        "ordr_ccd": "00",
+                        "sor_ordr_ccd": "S",
+                        "cancelError": "KB증권 업무 오류 (SSAM1806): 취소할 수 없는 주문입니다. [processCode=9999]"
+                    },
+                    "id": "0000000051",
+                    "symbol": "000660/KRW",
+                    "type": "limit",
+                    "side": "sell",
+                    "status": "open",
+                    "price": 130000,
+                    "amount": 2,
+                    "filled": 0,
+                    "remaining": 2,
+                    "cost": 0,
+                    "trades": [],
+                    "fees": []
+                }
+            ]
+        },
+        {
+            "description": "createOrder 주문 TR 이 시간 초과로 끝나면 maxRetriesOnFailure 가 있어도 다시 보내지 않고 OrderOutcomeUnknown 이다",
+            "config": {
+                "options": {
+                    "maxRetriesOnFailure": 2,
+                    "maxRetriesOnFailureDelay": 0
+                }
+            },
+            "now": 1790038800000,
+            "method": "createOrder",
+            "args": [
+                "005930/KRW",
+                "limit",
+                "buy",
+                1,
+                70000,
+                null
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/szqm0771",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "bfr_bsns_dt": "20260921",
+                                "std_bsnss_dt": "20260922",
+                                "next_biz_dt": "20260923"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssam1802",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"mkt_tm_clsf\":\"1\",\"ordr_jb_clsf\":\"2\",\"s_clsf\":\"\",\"is_cd\":\"005930\",\"ordr_q\":\"1\",\"ordr_uprc\":\"70000\",\"ordr_ccd\":\"00\",\"crdt_typ_cd\":\"00\",\"ln_dt\":\"\",\"crct_clsf\":\"\",\"orgn_ordr_no\":\"\",\"gtc_ccd\":\"\",\"ordr_mng_no\":\"\",\"spclz_ordr_ccd\":\"\",\"acct_cd\":\"\",\"sor_ordr_ccd\":\"K\",\"stpd_prc\":\"\"}}"
+                    },
+                    "network": "timeout"
+                }
+            ],
+            "error": {
+                "class": "OrderOutcomeUnknown",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "createOrder 국내는 장 시간 밖(16:00 KST)이면 휴장일 캘린더만 받고 주문 요청 없이 MarketClosed 다",
+            "now": 1790060400000,
+            "method": "createOrder",
+            "args": [
+                "005930/KRW",
+                "limit",
+                "buy",
+                1,
+                70000,
+                null
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/szqm0771",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "bfr_bsns_dt": "20260921",
+                                "std_bsnss_dt": "20260922",
+                                "next_biz_dt": "20260923"
+                            }
+                        }
+                    }
+                }
+            ],
+            "error": {
+                "class": "MarketClosed",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "createOrder 미국은 정규장 밖이면 요청을 하나도 보내지 않고 MarketClosed 다",
+            "config": {
+                "options": {
+                    "masterData": {
+                        "kospi": [
+                            {
+                                "code": "005930",
+                                "name": "삼성전자",
+                                "market": "KOSPI",
+                                "securityType": "STOCK"
+                            }
+                        ],
+                        "kosdaq": [],
+                        "nasdaq": [
+                            {
+                                "code": "AAPL",
+                                "name": "APPLE INC",
+                                "nameKr": "애플",
+                                "market": "NAS",
+                                "currency": "USD"
+                            }
+                        ],
+                        "nyse": [],
+                        "amex": []
+                    }
+                }
+            },
+            "now": 1790038800000,
+            "method": "createOrder",
+            "args": [
+                "AAPL/USD",
+                "limit",
+                "buy",
+                1,
+                150,
+                null
+            ],
+            "http": [],
+            "error": {
+                "class": "MarketClosed",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "createOrder 미국은 마스터 데이터로 상장 거래소를 모르면 정규장에도 요청 없이 MarketClosed 다",
+            "now": 1790085600000,
+            "method": "createOrder",
+            "args": [
+                "AAPL/USD",
+                "limit",
+                "buy",
+                1,
+                150,
+                null
+            ],
+            "http": [],
+            "error": {
+                "class": "MarketClosed",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "createOrder 국내는 마스터 데이터가 주식이라고 알려 주면 호가 단위에 맞지 않는 지정가를 요청 없이 InvalidOrder 로 막는다",
+            "config": {
+                "options": {
+                    "masterData": {
+                        "kospi": [
+                            {
+                                "code": "005930",
+                                "name": "삼성전자",
+                                "market": "KOSPI",
+                                "securityType": "STOCK"
+                            }
+                        ],
+                        "kosdaq": [],
+                        "nasdaq": [
+                            {
+                                "code": "AAPL",
+                                "name": "APPLE INC",
+                                "nameKr": "애플",
+                                "market": "NAS",
+                                "currency": "USD"
+                            }
+                        ],
+                        "nyse": [],
+                        "amex": []
+                    }
+                }
+            },
+            "now": 1790038800000,
+            "method": "createOrder",
+            "args": [
+                "005930/KRW",
+                "limit",
+                "buy",
+                1,
+                70050,
+                null
+            ],
+            "http": [],
+            "error": {
+                "class": "InvalidOrder",
+                "detail": "price-tick-invalid",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "createOrder 국내 1주 미만은 캘린더만 받고 주문 요청 없이 InvalidOrder(QUANTITY_INVALID)다",
+            "now": 1790038800000,
+            "method": "createOrder",
+            "args": [
+                "005930/KRW",
+                "limit",
+                "buy",
+                0.5,
+                70000,
+                null
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/szqm0771",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "bfr_bsns_dt": "20260921",
+                                "std_bsnss_dt": "20260922",
+                                "next_biz_dt": "20260923"
+                            }
+                        }
+                    }
+                }
+            ],
+            "error": {
+                "class": "InvalidOrder",
+                "detail": "QUANTITY_INVALID",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "createOrder 는 조건 인자(stopPrice 등)가 있으면 요청 없이 NotSupported 다",
+            "now": 1790038800000,
+            "method": "createOrder",
+            "args": [
+                "005930/KRW",
+                "limit",
+                "sell",
+                1,
+                70000,
+                {
+                    "stopPrice": 69000
+                }
+            ],
+            "http": [],
+            "error": {
+                "class": "NotSupported",
+                "brokerCode": null
+            }
+        },
+        {
             "description": "fetchBalance 는 예수금(SSQM0004)의 주문가능현금을 KRW free 로, 계좌자산평가(SSQM2952)의 실보유수량(ec_q)을 국내 보유로, 해외 잔고평가(SPQM2226)의 종목 그리드를 해외 보유로 싣는다. USD 는 예수금 그리드의 USD 행이고 주문가능금액이 free, 예수금이 total 이다. 합계 행(코드와 수량 없음)은 버린 보유로 세지 않는다",
             "method": "fetchBalance",
             "args": [],
