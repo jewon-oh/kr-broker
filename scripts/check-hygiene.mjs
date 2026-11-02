@@ -206,11 +206,17 @@ export function scanHistory({ cwd = ROOT, revs = ['HEAD'] } = {}) {
 }
 
 /**
- * 다시 쓸 수 없는 main 이력에 들어간 오탐의 탈출구. 지금은 비어 있다.
+ * 다시 쓸 수 없는 main 이력에 들어간 오탐의 탈출구.
  * 항목은 `scanHistory` 가 출력하는 문자열 그대로(커밋 SHA 앞 12자로 시작) 적고, 항목마다 커밋 SHA 전체와 까닭을 주석으로 남긴다.
  * 오탐이 아니라 비밀이면 여기에 넣기 전에 그 비밀을 폐기한다.
  */
-const HISTORY_ACCEPTED = [];
+const HISTORY_ACCEPTED = [
+    // 0d12a16368d2561d0a4e10f7e41902cf29070bcc (#91), ae5ddb7daebda5121961614b531f80978a4e7bd4 (#90): 2026-10-16 main 에 들어간 두 커밋의
+    // 작성자 칸이 noreply 주소가 아닌 저장소 소유자의 개인 주소다. 이미 공개된 main 이력이라 다시 쓰면 모든 클론이 깨지므로 작성자 칸만 받는다.
+    // 두 커밋의 메시지와 추가된 줄은 예전처럼 검사한다.
+    '0d12a16368d2 작성자 허용하지 않는 커밋 이메일',
+    'ae5ddb7daebd 작성자 허용하지 않는 커밋 이메일',
+];
 
 function mainHistory(args) {
     const revs = args.filter((arg) => !arg.startsWith('--'));
