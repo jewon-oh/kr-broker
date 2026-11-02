@@ -128,7 +128,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:41"
+        "ts/src/kis/kis-realtime-columns.ts:43"
       ],
       "suggested": "watchOrderBook",
       "proposal": "watch*",
@@ -148,7 +148,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:47"
+        "ts/src/kis/kis-realtime-columns.ts:49"
       ],
       "suggested": "watchTrades",
       "proposal": "watch*",
@@ -168,7 +168,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:35"
+        "ts/src/kis/kis-realtime-columns.ts:37"
       ],
       "suggested": "watchIndexTicker",
       "proposal": "확장",
@@ -469,7 +469,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:59"
+        "ts/src/kis/kis-realtime-columns.ts:61"
       ],
       "suggested": "watchTrades",
       "proposal": "watch*",
@@ -489,7 +489,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:52"
+        "ts/src/kis/kis-realtime-columns.ts:54"
       ],
       "suggested": "watchOrderBook",
       "proposal": "watch*",
@@ -609,7 +609,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:132"
+        "ts/src/kis/kis-realtime-columns.ts:134"
       ],
       "suggested": "watchMyTrades",
       "proposal": "watch*",
@@ -629,7 +629,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:380"
+        "ts/src/kis/kis-realtime-columns.ts:385"
       ],
       "suggested": "watchExpectedExecutions",
       "proposal": "확장",
@@ -649,7 +649,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:137"
+        "ts/src/kis/kis-realtime-columns.ts:139"
       ],
       "suggested": "watchTrades",
       "proposal": "watch*",
@@ -669,7 +669,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:125"
+        "ts/src/kis/kis-realtime-columns.ts:127"
       ],
       "suggested": "watchOrderBook",
       "proposal": "watch*",
@@ -689,7 +689,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:153"
+        "ts/src/kis/kis-realtime-columns.ts:155"
       ],
       "suggested": "watchTrades",
       "proposal": "watch*",
@@ -709,7 +709,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:146"
+        "ts/src/kis/kis-realtime-columns.ts:148"
       ],
       "suggested": "watchOrderBook",
       "proposal": "watch*",
@@ -1029,7 +1029,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:162"
+        "ts/src/kis/kis-realtime-columns.ts:164"
       ],
       "suggested": "watchOrderBook",
       "proposal": "watch*",
@@ -1049,7 +1049,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:174"
+        "ts/src/kis/kis-realtime-columns.ts:176"
       ],
       "suggested": "watchTrades",
       "proposal": "watch*",
@@ -1069,7 +1069,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:169"
+        "ts/src/kis/kis-realtime-columns.ts:171"
       ],
       "suggested": "watchMyTrades",
       "proposal": "watch*",
@@ -1089,7 +1089,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:70"
+        "ts/src/kis/kis-realtime-columns.ts:72"
       ],
       "suggested": "watchOrderBook",
       "proposal": "watch*",
@@ -1109,7 +1109,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:82"
+        "ts/src/kis/kis-realtime-columns.ts:84"
       ],
       "suggested": "watchTrades",
       "proposal": "watch*",
@@ -1129,7 +1129,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:68"
+        "ts/src/kis/kis-realtime-columns.ts:70"
       ],
       "suggested": "watchExpectedExecutions",
       "proposal": "확장",
@@ -1149,7 +1149,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:77"
+        "ts/src/kis/kis-realtime-columns.ts:79"
       ],
       "suggested": "watchMyTrades",
       "proposal": "watch*",
@@ -1189,7 +1189,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:400"
+        "ts/src/kis/kis-realtime-columns.ts:405"
       ],
       "suggested": "watchExpectedExecutions",
       "proposal": "확장",
@@ -1250,7 +1250,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:391"
+        "ts/src/kis/kis-realtime-columns.ts:396"
       ],
       "suggested": "watchTrades",
       "proposal": "watch*",
@@ -1270,7 +1270,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:382"
+        "ts/src/kis/kis-realtime-columns.ts:387"
       ],
       "suggested": "watchOrderBook",
       "proposal": "watch*",
@@ -1290,7 +1290,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:402"
+        "ts/src/kis/kis-realtime-columns.ts:407"
       ],
       "suggested": "watchOrderBook",
       "proposal": "watch*",
@@ -1310,7 +1310,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:412"
+        "ts/src/kis/kis-realtime-columns.ts:417"
       ],
       "suggested": "watchTrades",
       "proposal": "watch*",
@@ -1366,7 +1366,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:192"
+        "ts/src/kis/kis-realtime-columns.ts:194"
       ],
       "suggested": "watchOrderBook({market:'NXT'})",
       "proposal": "watch*",
@@ -1386,7 +1386,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:307"
+        "ts/src/kis/kis-realtime-columns.ts:310"
       ],
       "suggested": "watchOrderBook({market:'UN'})",
       "proposal": "watch*",
@@ -1465,7 +1465,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:242"
+        "ts/src/kis/kis-realtime-columns.ts:245"
       ],
       "suggested": "watchMyTrades",
       "proposal": "watch*",
@@ -1485,7 +1485,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:201"
+        "ts/src/kis/kis-realtime-columns.ts:203"
       ],
       "suggested": "watchTrades({market:'NXT'})",
       "proposal": "watch*",
@@ -1505,7 +1505,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:316"
+        "ts/src/kis/kis-realtime-columns.ts:320"
       ],
       "suggested": "watchTrades({market:'UN'})",
       "proposal": "watch*",
@@ -1755,7 +1755,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:234"
+        "ts/src/kis/kis-realtime-columns.ts:237"
       ],
       "suggested": "watchExpectedExecutions",
       "proposal": "확장",
@@ -1775,7 +1775,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:183"
+        "ts/src/kis/kis-realtime-columns.ts:185"
       ],
       "suggested": "watchExpectedExecutions",
       "proposal": "확장",
@@ -1795,7 +1795,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:298"
+        "ts/src/kis/kis-realtime-columns.ts:301"
       ],
       "suggested": "watchExpectedExecutions",
       "proposal": "확장",
@@ -2202,7 +2202,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:356"
+        "ts/src/kis/kis-realtime-columns.ts:361"
       ],
       "suggested": "watchIndexTicker",
       "proposal": "확장",
@@ -2222,7 +2222,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:349"
+        "ts/src/kis/kis-realtime-columns.ts:354"
       ],
       "suggested": "watchIndexTicker",
       "proposal": "확장",
@@ -2242,7 +2242,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:363"
+        "ts/src/kis/kis-realtime-columns.ts:368"
       ],
       "suggested": "watchProgramTrades",
       "proposal": "확장",
@@ -3494,7 +3494,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:262"
+        "ts/src/kis/kis-realtime-columns.ts:265"
       ],
       "suggested": "watchMarketStatus",
       "proposal": "확장",
@@ -3514,7 +3514,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:224"
+        "ts/src/kis/kis-realtime-columns.ts:227"
       ],
       "suggested": "watchMarketStatus",
       "proposal": "확장",
@@ -3534,7 +3534,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:339"
+        "ts/src/kis/kis-realtime-columns.ts:344"
       ],
       "suggested": "watchMarketStatus",
       "proposal": "확장",
@@ -3591,7 +3591,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:248"
+        "ts/src/kis/kis-realtime-columns.ts:251"
       ],
       "suggested": "watchMemberTrades",
       "proposal": "확장",
@@ -3611,7 +3611,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:210"
+        "ts/src/kis/kis-realtime-columns.ts:213"
       ],
       "suggested": "watchMemberTrades",
       "proposal": "확장",
@@ -3631,7 +3631,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:325"
+        "ts/src/kis/kis-realtime-columns.ts:330"
       ],
       "suggested": "watchMemberTrades",
       "proposal": "확장",
@@ -3829,7 +3829,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:269"
+        "ts/src/kis/kis-realtime-columns.ts:272"
       ],
       "suggested": "watchOrderBook",
       "proposal": "watch*",
@@ -3849,7 +3849,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:285"
+        "ts/src/kis/kis-realtime-columns.ts:288"
       ],
       "suggested": "watchTrades",
       "proposal": "watch*",
@@ -3869,7 +3869,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:277"
+        "ts/src/kis/kis-realtime-columns.ts:280"
       ],
       "suggested": "watchExpectedExecutions",
       "proposal": "확장",
@@ -4156,7 +4156,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:293"
+        "ts/src/kis/kis-realtime-columns.ts:296"
       ],
       "suggested": "watchProgramTrades",
       "proposal": "확장",
@@ -4176,7 +4176,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:229"
+        "ts/src/kis/kis-realtime-columns.ts:232"
       ],
       "suggested": "watchProgramTrades",
       "proposal": "확장",
@@ -4196,7 +4196,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:344"
+        "ts/src/kis/kis-realtime-columns.ts:349"
       ],
       "suggested": "watchProgramTrades",
       "proposal": "확장",
@@ -4464,7 +4464,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:100"
+        "ts/src/kis/kis-realtime-columns.ts:102"
       ],
       "suggested": "watchOrderBook",
       "proposal": "watch*",
@@ -4484,7 +4484,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:110"
+        "ts/src/kis/kis-realtime-columns.ts:112"
       ],
       "suggested": "watchTrades",
       "proposal": "watch*",
@@ -4504,7 +4504,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:91"
+        "ts/src/kis/kis-realtime-columns.ts:93"
       ],
       "suggested": "watchExpectedExecutions",
       "proposal": "확장",
@@ -4919,7 +4919,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:267"
+        "ts/src/kis/kis-realtime-columns.ts:270"
       ],
       "suggested": "watchEtfNav",
       "proposal": "확장",
@@ -5039,7 +5039,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:421"
+        "ts/src/kis/kis-realtime-columns.ts:426"
       ],
       "suggested": "watchOrderBook",
       "proposal": "watch*",
@@ -5059,7 +5059,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:428"
+        "ts/src/kis/kis-realtime-columns.ts:433"
       ],
       "suggested": "watchTrades",
       "proposal": "watch*",
@@ -5079,7 +5079,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:441"
+        "ts/src/kis/kis-realtime-columns.ts:446"
       ],
       "suggested": "watchMyTrades",
       "proposal": "watch*",
@@ -5596,7 +5596,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:434"
+        "ts/src/kis/kis-realtime-columns.ts:439"
       ],
       "suggested": "watchOrders",
       "proposal": "watch*",
@@ -5757,7 +5757,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:447"
+        "ts/src/kis/kis-realtime-columns.ts:452"
       ],
       "suggested": "watchOrderBook",
       "proposal": "watch*",
@@ -5797,7 +5797,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:120"
+        "ts/src/kis/kis-realtime-columns.ts:122"
       ],
       "suggested": "watchMyTrades",
       "proposal": "watch*",
@@ -5919,7 +5919,7 @@
       "method": "createRealtimeStream",
       "evidence": [
         "ts/src/kis.ts:3927",
-        "ts/src/kis/kis-realtime-columns.ts:449"
+        "ts/src/kis/kis-realtime-columns.ts:454"
       ],
       "suggested": "watchOrderBook",
       "proposal": "watch*",

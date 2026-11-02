@@ -1,5 +1,5 @@
 /**
- * @fileoverview `kbsec.fetchOrders`·`fetchClosedOrders` — 계좌별주문체결조회(`SSQM2341`)를 체결구분만 바꿔 재사용한다.
+ * @fileoverview `kbsec.fetchOrders`·`fetchClosedOrders`·`fetchCanceledOrders` — 계좌별주문체결조회(`SSQM2341`)를 체결구분만 바꿔 재사용한다.
  * `fetchOpenOrders`(미체결)와 같은 TR, 같은 파싱(`parseOrder`)이다.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -82,5 +82,35 @@ describe('fetchClosedOrders', () => {
 
     it('해외는 NotSupported', async () => {
         await expect(newExchange().fetchClosedOrders('AAPL/USD')).rejects.toThrow(NotSupported);
+    });
+});
+
+describe('fetchCanceledOrders', () => {
+    const MIXED = { Record1: [
+        { ordr_no: 'O5', stnd_is_no: 'A005930', trd_dl_ccd_nm: '현금매수', ordr_q: '10', nccls_q: '0', tl_ccls_q: '10', ccls_uprc: '70000', ordr_uprc: '70000', ordr_ccd: '00' },
+        { ordr_no: 'O6', stnd_is_no: 'A005930', trd_dl_ccd_nm: '현금매수', ordr_q: '5', nccls_q: '0', tl_ccls_q: '2', ccls_uprc: '70000', ordr_uprc: '70000', ordr_ccd: '00' },
+        { ordr_no: 'O7', stnd_is_no: 'KR7000660001', trd_dl_ccd_nm: '현금매도', ordr_q: '4', nccls_q: '3', tl_ccls_q: '1', ccls_uprc: '120000', ordr_uprc: '121000', ordr_ccd: '00' },
+        { ordr_no: 'O8', stnd_is_no: 'KR7000660001', trd_dl_ccd_nm: '현금매도', ordr_q: '3', nccls_q: '0', tl_ccls_q: '0', ccls_uprc: '0', ordr_uprc: '121000', ordr_ccd: '00' },
+    ] };
+
+    it('★체결구분 전체(0)로 SSQM2341을 부르고, 일부 체결 뒤 취소(O6)와 전량 취소(O8)만 돌려준다', async () => {
+        routeTr(mockFetch, { [KBSEC_TR.TRADES_KR]: MIXED });
+
+        const orders = await newExchange().fetchCanceledOrders();
+
+        expect(trBody(mockFetch, KBSEC_TR.TRADES_KR).dataBody).toMatchObject({ ccls_clsf: '0', inq_clsf: '1' });
+        expect(orders.map(o => [o.id, o.status, o.filled, o.remaining])).toEqual([['O6', 'canceled', 2, 0], ['O8', 'canceled', 0, 0]]);
+    });
+
+    it('limit 은 거른 뒤에 적용한다', async () => {
+        routeTr(mockFetch, { [KBSEC_TR.TRADES_KR]: MIXED });
+
+        const orders = await newExchange().fetchCanceledOrders(undefined, undefined, 1);
+
+        expect(orders.map(o => o.id)).toEqual(['O6']);
+    });
+
+    it('해외는 NotSupported', async () => {
+        await expect(newExchange().fetchCanceledOrders('AAPL/USD')).rejects.toThrow(NotSupported);
     });
 });

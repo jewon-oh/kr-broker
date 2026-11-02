@@ -5519,6 +5519,102 @@
             ]
         },
         {
+            "description": "fetchCanceledOrders 는 전체 주문에서 canceled 인 주문(일부 체결 뒤 취소 포함)만 돌려준다",
+            "now": 1790038800000,
+            "method": "fetchCanceledOrders",
+            "args": [],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm2341",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"ccls_clsf\":\"0\",\"ordr_dt\":\"20260922\",\"is_cd\":\"\",\"ordr_no\":\"\",\"mthr_ordr_no\":\"\",\"orgn_ordr_no\":\"\",\"s_ccls_amt\":\"\",\"b_ccls_amt\":\"\",\"s_ccls_q\":\"\",\"b_ccls_q\":\"\",\"ac_nm\":\"\",\"is_nm\":\"\",\"cn_clsf\":\"0\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "nxt_key": "",
+                                "Record1": [
+                                    {
+                                        "ordr_no": "0000000014",
+                                        "stnd_is_no": "A005930",
+                                        "trd_dl_ccd_nm": "현금매수",
+                                        "ordr_q": "10",
+                                        "tl_ccls_q": "3",
+                                        "nccls_q": "7",
+                                        "ccls_uprc": "70000",
+                                        "ordr_uprc": "70000",
+                                        "ordr_ccd": "00"
+                                    },
+                                    {
+                                        "ordr_no": "0000000015",
+                                        "stnd_is_no": "A005930",
+                                        "trd_dl_ccd_nm": "현금매도",
+                                        "ordr_q": "2",
+                                        "tl_ccls_q": "2",
+                                        "nccls_q": "0",
+                                        "ccls_uprc": "71000",
+                                        "ordr_uprc": "71000",
+                                        "ordr_ccd": "00"
+                                    },
+                                    {
+                                        "ordr_no": "0000000016",
+                                        "stnd_is_no": "A005930",
+                                        "trd_dl_ccd_nm": "현금매수",
+                                        "ordr_q": "5",
+                                        "tl_ccls_q": "2",
+                                        "nccls_q": "0",
+                                        "ccls_uprc": "70000",
+                                        "ordr_uprc": "70000",
+                                        "ordr_ccd": "00"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                {
+                    "info": {
+                        "ordr_no": "0000000016",
+                        "stnd_is_no": "A005930",
+                        "trd_dl_ccd_nm": "현금매수",
+                        "ordr_q": "5",
+                        "tl_ccls_q": "2",
+                        "nccls_q": "0",
+                        "ccls_uprc": "70000",
+                        "ordr_uprc": "70000",
+                        "ordr_ccd": "00"
+                    },
+                    "id": "0000000016",
+                    "symbol": "005930/KRW",
+                    "type": "limit",
+                    "side": "buy",
+                    "status": "canceled",
+                    "price": 70000,
+                    "amount": 5,
+                    "filled": 2,
+                    "remaining": 0,
+                    "cost": 140000,
+                    "average": 70000,
+                    "trades": [],
+                    "fees": []
+                }
+            ]
+        },
+        {
             "description": "fetchMyTrades 국내는 SSQM2341 을 체결구분 1 로 조회하고 분할체결 연속 행을 헤더 주문에 귀속한다. 다른 종목 행과 단가 0 인 체결은 버린다",
             "now": 1790038800000,
             "method": "fetchMyTrades",

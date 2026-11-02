@@ -16,6 +16,7 @@ export const KIS_REALTIME_COLUMNS: Readonly<Record<string, readonly string[]>> =
         'hgpr_vrss_prpr_sign', 'hgpr_vrss_prpr', 'lwpr_hour', 'lwpr_vrss_prpr_sign', 'lwpr_vrss_prpr', 'bsop_date', 'new_mkop_cls_code', 'trht_yn',
         'askp_rsqn1', 'bidp_rsqn1', 'total_askp_rsqn', 'total_bidp_rsqn', 'vol_tnrt', 'prdy_smns_hour_acml_vol', 'prdy_smns_hour_acml_vol_rate',
         'hour_cls_code', 'mrkt_trtm_cls_code', 'vi_stnd_prc',
+        'market_cls_code',
     ],
     /** 국내주식 실시간호가 (KRX) */
     H0STASP0: [
@@ -25,6 +26,7 @@ export const KIS_REALTIME_COLUMNS: Readonly<Record<string, readonly string[]>> =
         'bidp_rsqn5', 'bidp_rsqn6', 'bidp_rsqn7', 'bidp_rsqn8', 'bidp_rsqn9', 'bidp_rsqn10', 'total_askp_rsqn', 'total_bidp_rsqn', 'ovtm_total_askp_rsqn',
         'ovtm_total_bidp_rsqn', 'antc_cnpr', 'antc_cnqn', 'antc_vol', 'antc_cntg_vrss', 'antc_cntg_vrss_sign', 'antc_cntg_prdy_ctrt', 'acml_vol',
         'total_askp_rsqn_icdc', 'total_bidp_rsqn_icdc', 'ovtm_total_askp_icdc', 'ovtm_total_bidp_icdc', 'stck_deal_cls_code',
+        'mid_prc', 'midp_total_rsqn', 'midp_cls_code', 'market_cls_code',
     ],
     /** 해외주식 실시간지연체결가 */
     HDFSCNT0: [
@@ -205,6 +207,7 @@ export const KIS_REALTIME_COLUMNS: Readonly<Record<string, readonly string[]>> =
         'hgpr_vrss_prpr', 'lwpr_hour', 'lwpr_vrss_prpr_sign', 'lwpr_vrss_prpr', 'bsop_date', 'new_mkop_cls_code', 'trht_yn', 'askp_rsqn1', 'bidp_rsqn1',
         'total_askp_rsqn', 'total_bidp_rsqn', 'vol_tnrt', 'prdy_smns_hour_acml_vol', 'prdy_smns_hour_acml_vol_rate', 'hour_cls_code', 'mrkt_trtm_cls_code',
         'vi_stnd_prc',
+        'market_cls_code',
     ],
     /** 국내주식 실시간회원사 (NXT) */
     H0NXMBC0: [
@@ -311,6 +314,7 @@ export const KIS_REALTIME_COLUMNS: Readonly<Record<string, readonly string[]>> =
         'bidp_rsqn8', 'bidp_rsqn9', 'bidp_rsqn10', 'total_askp_rsqn', 'total_bidp_rsqn', 'ovtm_total_askp_rsqn', 'ovtm_total_bidp_rsqn', 'antc_cnpr', 'antc_cnqn',
         'antc_vol', 'antc_cntg_vrss', 'antc_cntg_vrss_sign', 'antc_cntg_prdy_ctrt', 'acml_vol', 'total_askp_rsqn_icdc', 'total_bidp_rsqn_icdc', 'ovtm_total_askp_icdc',
         'ovtm_total_bidp_icdc', 'stck_deal_cls_code', 'kmid_prc', 'kmid_total_rsqn', 'kmid_cls_code', 'nmid_prc', 'nmid_total_rsqn', 'nmid_cls_code',
+        'antc_exch_cls_code',
     ],
     /** 국내주식 실시간체결가 (통합) */
     H0UNCNT0: [
@@ -320,6 +324,7 @@ export const KIS_REALTIME_COLUMNS: Readonly<Record<string, readonly string[]>> =
         'hgpr_vrss_prpr', 'lwpr_hour', 'lwpr_vrss_prpr_sign', 'lwpr_vrss_prpr', 'bsop_date', 'new_mkop_cls_code', 'trht_yn', 'askp_rsqn1', 'bidp_rsqn1',
         'total_askp_rsqn', 'total_bidp_rsqn', 'vol_tnrt', 'prdy_smns_hour_acml_vol', 'prdy_smns_hour_acml_vol_rate', 'hour_cls_code', 'mrkt_trtm_cls_code',
         'vi_stnd_prc',
+        'market_cls_code',
     ],
     /** 국내주식 실시간회원사 (통합) */
     H0UNMBC0: [

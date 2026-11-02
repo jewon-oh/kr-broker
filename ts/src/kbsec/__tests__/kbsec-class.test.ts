@@ -62,7 +62,7 @@ describe('describe() — 선언', () => {
             spot: true, margin: false, swap: false, future: false, option: false,
             fetchTicker: true, fetchOrderBook: true, fetchOHLCV: true, fetchBalance: true,
             createOrder: true, editOrder: true, cancelOrder: true, cancelAllOrders: 'emulated',
-            fetchOrder: true, fetchOpenOrders: true, fetchOrders: true, fetchClosedOrders: true, fetchMyTrades: true, fetchTradingFee: 'emulated',
+            fetchOrder: true, fetchOpenOrders: true, fetchOrders: true, fetchClosedOrders: true, fetchCanceledOrders: true, fetchMyTrades: true, fetchTradingFee: 'emulated',
             fetchMarketCalendar: true,
             fetchMarkets: false, fetchTickers: false, createConditionalOrder: false,
         });

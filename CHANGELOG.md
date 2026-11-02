@@ -53,6 +53,8 @@
 
 ### 추가
 
+- KB증권 `fetchCanceledOrders`를 추가합니다. 국내 전체 주문(`SSQM2341`)에서 취소 주문만 고르며, 일부 체결 뒤 취소한 주문도 듭니다. 해외는 `NotSupported`이고 `since`는 적용하지 않습니다(`fetchOrders`와 같습니다). Python 판도 같습니다.
+- 한국투자증권 실시간 필드 표에 공식 예제가 2026-09-28에 덧붙인 필드를 더합니다. 체결(`H0STCNT0`, `H0NXCNT0`, `H0UNCNT0`)에 `market_cls_code`, KRX 호가(`H0STASP0`)에 `mid_prc`, `midp_total_rsqn`, `midp_cls_code`, `market_cls_code`, 통합 호가(`H0UNASP0`)에 `antc_exch_cls_code`입니다. 예전에도 레코드는 바르게 나눴지만 새 값이 `fields`에 이름 없이 빠졌습니다. Python 판도 같습니다.
 - 종목 통합 코드 표를 둡니다. 기본값은 `kr-broker/broker-market-group`의 `COMMON_STOCK_CODES`입니다. 인스턴스의 `commonStockCodes`는 생성자 인자로 덮습니다. 표에 없는 티커가 현금 키와 겹쳐 `NotSupported`가 나면 이 표에 그 티커를 더합니다. 기반 클래스의 `commonStockCode(ticker)`와 `stockTicker(code)`가 표로 코드를 바꿉니다. 같은 모듈의 `commonStockCode`, `stockTicker`는 표를 인자로 받습니다. `toStreamSymbol`과 `KisPriceWs` 옵션의 `commonStockCodes`도 표를 받습니다. Python 판 이름은 `common_stock_code`, `stock_ticker`입니다.
 - `options.blockAuctionBuys`(세 증권사, 기본 꺼짐)를 켜면 종가 동시호가(국내 15:20~15:30, 미국 15:50~16:00 ET)의 신규 매수를 요청 전에 `MarketClosed`로 막습니다.
 - 세 증권사가 함께 쓰는 주문 게이트를 공개합니다. `kr-broker/krx-trading-hours`의 `krxOrderBlockReason`과 `krxAuctionBuyBlockReason`, `kr-broker/us-market-hours`의 `usOrderBlockReason`과 `usAuctionBuyBlockReason`입니다. Python 판 이름은 `krx_order_block_reason` 등입니다. `marketSessionBlockReason`은 다섯째 인자로 `{ side, blockAuctionBuys }`를 받습니다.

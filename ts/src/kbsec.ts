@@ -1742,7 +1742,7 @@ export class kbsec extends Exchange {
                 fetchOrders: true,
                 fetchOpenOrders: true,
                 fetchClosedOrders: true,
-                fetchCanceledOrders: false,
+                fetchCanceledOrders: true,
                 fetchMyTrades: true,
                 fetchTrades: true,
                 // KB 에 수수료 조회 TR 이 없어 공시 요율로 추정한다.
@@ -5074,6 +5074,15 @@ export class kbsec extends Exchange {
     override async fetchClosedOrders(symbol: Str = undefined, _since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<Order[]> {
         const closed = (await this.fetchOrders(symbol, undefined, undefined, params)).filter((order) => order.status !== 'open');
         return limit === undefined ? closed : closed.slice(0, limit);
+    }
+
+    /**
+     * 국내 취소 주문. 전체 주문(`fetchOrders`)에서 `canceled` 인 주문만 돌려준다. 남은 수량 없이 덜 체결된 주문이 `canceled` 라
+     * 일부 체결 뒤 취소한 주문도 여기에 든다. `limit` 은 거른 뒤에 적용한다. 해외는 지원하지 않는다. `since`를 적용하지 않는 이유는 `fetchOrders`와 같다.
+     */
+    override async fetchCanceledOrders(symbol: Str = undefined, _since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<Order[]> {
+        const canceled = (await this.fetchOrders(symbol, undefined, undefined, params)).filter((order) => order.status === 'canceled');
+        return limit === undefined ? canceled : canceled.slice(0, limit);
     }
 
     override parseOrder(order: Dict, market: MarketInterface | undefined = undefined): Order {
