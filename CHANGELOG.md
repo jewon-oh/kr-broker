@@ -7,6 +7,7 @@
 ### 추가
 
 - Python 판 KB증권에 `fetch_balance`를 옮겼습니다. TypeScript 판과 같게 예수금(`SSQM0004`), 계좌자산평가(`SSQM2952`, 실패하면 보유주식 `SSQM1801`), 해외 잔고평가(`SPQM2226`)를 읽고, 보유를 일부만 읽었으면 `info['readStatus']`가 `PARTIAL`이며 읽지 못한 시장이 `info['unreadMarkets']`에 있습니다. `options['krwIntegratedMargin']`과 `options['usdKrwRate']`, 원마켓 계좌증거금(`fetch_one_market_margin`)도 함께 옮겼습니다. 두 판은 요청 픽스처의 잔고 케이스를 함께 돌립니다.
+- Python 판 KB증권에 주문(`create_order`, `create_limit_order`, `create_market_order`, `create_trigger_order`, `create_market_buy_order_with_cost`, `edit_order`, `cancel_order`, `cancel_all_orders`)을 옮겼습니다. 이제 통합 메서드의 `has`가 TypeScript 판과 같습니다. TypeScript 판과 같게 주문 TR은 다시 보내지 않고 시간 초과나 연결 끊김을 `OrderOutcomeUnknown`으로 던지며, 장 시간 밖이면 요청 없이 `MarketClosed`, 호가 단위에 맞지 않는 국내 지정가는 요청 없이 `InvalidOrder`(`detail: 'price-tick-invalid'`)입니다. 접수 뒤에는 체결내역으로 체결을 확정합니다. `options['nxtRouting']`, `options['blockAuctionBuys']`, `options['confirmBudget']`, `options['marketableLimitBuffer']`도 함께 옮겼습니다. 두 판은 요청 픽스처의 주문 케이스 28건을 함께 돌립니다.
 
 ## [0.6.0] - 2026-11-02
 

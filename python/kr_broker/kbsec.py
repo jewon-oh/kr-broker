@@ -3,8 +3,9 @@
 지금은 인증과 요청 봉투, 오류 처리, 토큰 복구, 시세(`fetch_ticker`, `fetch_order_book`, `fetch_ohlcv`, `fetch_trades`), 수수료 추정
 (`fetch_trading_fee`), 휴장일(`fetch_market_calendar`, `refresh_market_calendar`), 투자자 매매동향(`fetch_investor_trading`), 주문·체결 조회
 (`fetch_order`, `fetch_orders`, `fetch_open_orders`, `fetch_closed_orders`, `fetch_canceled_orders`, `fetch_my_trades`, `fetch_overseas_order_status`),
-잔고(`fetch_balance`, `fetch_one_market_margin`)만 옮겼다.
-`has` 가 `False` 인 통합 메서드는 부모 클래스가 `NotSupported` 를 던진다. 모든 TR 은 암묵 메서드로 부를 수 있다.
+잔고(`fetch_balance`, `fetch_one_market_margin`), 주문(`create_order`, `create_trigger_order`, `create_market_buy_order_with_cost`, `edit_order`,
+`cancel_order`, `cancel_all_orders`, `fetch_marketable_buy_price`)을 옮겼다. 통합 메서드의 `has` 는 TypeScript 판과 같다.
+TypeScript 판의 확장 메서드(정산, 매수가능금액, 소수점 내역, 예약주문 등)는 아직 옮기지 않았다. 모든 TR 은 암묵 메서드로 부를 수 있다.
 
 .. code-block:: python
 
@@ -21,13 +22,22 @@
     국내는 `005930/KRW`, 미국은 `AAPL/USD` 다. 종목 목록을 받지 않고 심볼 모양으로 종목을 만든다(`market['info']['country']` 가 `KR` 이나 `US`).
     현금 코드와 같은 티커(`USD`)는 `commonStockCodes` 의 통합 코드로 심볼을 만든다(`ProShares Ultra Semiconductors/USD`). 입력은 `USD/USD` 도 받는다.
 
+주문
+    주문 TR 은 다시 보내지 않는다. 시간 초과나 연결 끊김, 증권사 오류 코드 없는 5xx 는 `OrderOutcomeUnknown` 이다(토큰 무효 `I445` 는 접수 전
+    거절이라 재발급 뒤 한 번 다시 보낸다). 주문과 정정은 장 시간 밖이면 요청 없이 `MarketClosed` 다. 판정은 세 증권사 공용 게이트(`trading_hours`)이고,
+    국내는 판정 전에 휴장일 캘린더를 받는다. 미국 종목은 `options['masterData']` 로 상장 거래소를 알아야 낸다. 국내 지정가는 `masterData` 가
+    주식이라고 알려 주면 호가 단위를 요청 전에 확인한다(`InvalidOrder`, `detail` `price-tick-invalid`). 접수 뒤에는 체결내역(`fetch_my_trades`)으로
+    체결을 확정하고, 확정하지 못하면 `info['fillConfirmed']` 가 `False` 다. 메서드마다 규칙은 메서드 설명에 있다.
+
 요청
     모든 호출이 `POST /api/v1/{trcode}` 이고 본문은 `{dataHeader, dataBody}` 봉투다. `dataBody` 는 TR 입력 레이아웃(`kbsec_tr_inputs`)의 빠진 필드를
     빈 문자열로 채워 보낸다. 업무 오류는 HTTP 200 으로도 500 으로도 온다. 봉투의 `processFlag` 가 정본이고, `processCode` 는 오류의 `broker_code` 에 싣는다.
     토큰이 무효(HTTP 401, `I445`)면 토큰을 회전하고 한 번만 다시 보낸다. 그 뒤에도 토큰 실패가 이어지면 차단기(`kbsec_token_breaker`)가 호출을 멈춘다.
 
 옵션
-    `tokenStore`(토큰 저장소), `masterData`(국내 종목 유형과 시장. `price_to_precision` 과 통합차트의 시장구분이 쓴다), `hostAddr`(TR 본문에 싣는 `{'ipAddr', 'macAddr'}`.
+    `tokenStore`(토큰 저장소), `masterData`(국내 종목 유형과 시장, 해외 종목의 상장 거래소. `price_to_precision`, 통합차트의 시장구분, 주문 게이트가 쓴다),
+    `nxtRouting`(정규장 국내 주문을 SOR 로 보낸다), `blockAuctionBuys`(종가 동시호가의 신규 매수를 막는다), `confirmBudget`(체결 확정 조회 예산),
+    `marketableLimitBuffer`(해외 시장가 매수를 대체하는 지정가의 버퍼), `hostAddr`(TR 본문에 싣는 `{'ipAddr', 'macAddr'}`.
     주지 않으면 이 호스트의 주소를 찾아 쓴다. KB 는 빈 값을 받지 않는다), `krwIntegratedMargin`(원마켓 계좌의 미국 주식 매수여력을 원화 환산분으로
     보강, 환율은 `usdKrwRate`)다.
 """
@@ -38,24 +48,26 @@ import json
 import logging
 import math
 import re
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, cast
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple, cast
 
 from kr_broker.abstract.kbsec import ImplicitAPI
 from kr_broker.base.exchange import Exchange
 from kr_broker.base.runtime import maybe_await, new_lock
 from kr_broker.base.token_store import refresh_token_with_lock
+from kr_broker.execution_confirm import confirm_execution, fill_deviation_bps, trade_list_probe
 from kr_broker.market_calendar import refresh_market_calendar as refresh_shared_market_calendar
 from kr_broker.base import functions as fn
 from kr_broker.base.decimal_to_precision import NO_PADDING, ROUND, TICK_SIZE, decimal_to_precision
 from kr_broker.base.errors import (
-    ArgumentsRequired, AuthenticationError, BadRequest, BadResponse, BadSymbol, BaseError, ExchangeError, ExchangeNotAvailable, NetworkError,
-    NotSupported, NullResponse, OrderNotFound, RateLimitExceeded,
+    ArgumentsRequired, AuthenticationError, BadRequest, BadResponse, BadSymbol, BaseError, ExchangeError, ExchangeNotAvailable, InvalidOrder,
+    MarketClosed, NetworkError, NotSupported, NullResponse, OrderNotFound, RateLimitExceeded,
 )
 from kr_broker.base.exchange import assert_secure_url, kst_trade_timestamps
 from kr_broker.base.precise import Precise
 from kr_broker.base.token_store import BrokerTokenStore, token_store_key
 from kr_broker.base.types import ApiName, Balances, Int, Market, MarketInterface, Num, Order, OrderBook, Str, Ticker, Trade, TradingFeeInterface
 from kr_broker.broker_time import candle_period_utc_ms, kst_ymd
+from kr_broker.edit_order_amount import assert_whole_remaining_edit
 from kr_broker.kbsec_chart import KBSEC_CHART_MAX, KBSEC_TIMEFRAMES, kbsec_bar_ms, kbsec_candle_timestamp, kbsec_chart_params
 from kr_broker.kbsec_envelope import is_kbsec_business_error, is_kbsec_token_failure, kbsec_host_addr
 from kr_broker.kbsec_error_codes import KBSEC_ERROR_DETAIL, kbsec_error_detail, kbsec_exact_exceptions
@@ -63,6 +75,7 @@ from kr_broker.kbsec_fee import kbsec_estimated_fee_rate
 from kr_broker.kbsec_fill_row import kbsec_resolve_fills, parse_kbsec_domestic_fill_row, parse_kbsec_overseas_fill_row
 from kr_broker.kbsec_fill_warnings import warn_fill_without_price, warn_if_fill_side_unreadable, warn_if_fill_totals_inconsistent
 from kr_broker.kbsec_number import kbsec_number_of
+from kr_broker.kbsec_order_body import build_kr_order_body
 from kr_broker.kbsec_pick import (
     OVERSEAS_QTY_CANDIDATES, is_empty_cash_row, is_usd_cash_row, kbsec_holding_quantity, pick_array, pick_cash_grid, pick_holding_grid, pick_num,
     pick_optional_num, pick_positive_num, pick_str, unknown_grids,
@@ -71,15 +84,16 @@ from kr_broker.kbsec_token_breaker import record_kbsec_call_ok, record_token_fai
 from kr_broker.kbsec_tr_inputs import fill_tr_inputs
 from kr_broker.kbsec_types import (
     KBSEC_API_BASE, KBSEC_CCLS_ALL, KBSEC_CCLS_FILLED, KBSEC_CCLS_PENDING, KBSEC_CHART_KIND, KBSEC_CONT_FIRST, KBSEC_CONT_NEXT,
-    KBSEC_EXCH_RATE_MARKET, KBSEC_FEE_EXCLUDED, KBSEC_INQ_ALL, KBSEC_INQ_STOCK, KBSEC_ORDER_TYPE_KR, KBSEC_REVOKE_PATH, KBSEC_SESSION_REGULAR,
-    KBSEC_STD_CURRENCY_FOREIGN, KBSEC_TOKEN_DEFAULT_TTL_MS, KBSEC_TOKEN_PATH, KBSEC_TOKEN_SAFETY_MARGIN_MS, KBSEC_TR, KBSEC_TR_PATH_PREFIX,
+    KBSEC_EXCH_RATE_MARKET, KBSEC_FEE_EXCLUDED, KBSEC_INQ_ALL, KBSEC_INQ_STOCK, KBSEC_ORDER_SIDE_KR, KBSEC_ORDER_SIDE_US, KBSEC_ORDER_TYPE_KR,
+    KBSEC_ORDER_TYPE_US, KBSEC_REVOKE_PATH, KBSEC_SESSION_REGULAR, KBSEC_SOR, KBSEC_STD_CURRENCY_FOREIGN, KBSEC_TOKEN_DEFAULT_TTL_MS, KBSEC_TOKEN_PATH, KBSEC_TOKEN_SAFETY_MARGIN_MS, KBSEC_TR, KBSEC_TR_PATH_PREFIX,
     KBSEC_US_EXCHANGES, kbsec_base_symbol, kbsec_business_date_kst, kbsec_business_date_us_eastern, kbsec_market_of, kbsec_normalize_code,
     kbsec_num,
 )
 from kr_broker.kis_master_data import master_data_of
 from kr_broker.kis_stock_master import get_krx_stock_by_code
-from kr_broker.krx_tick_size import get_krx_tick_size
+from kr_broker.krx_tick_size import KRX_TICK_INVALID_DETAIL, get_krx_tick_size, krx_tick_violation
 from kr_broker.market_calendar import expand_business_days
+from kr_broker.trading_hours import market_session_block_reason
 from kr_broker.us_market_hours import et_ymd
 
 logger = logging.getLogger('kr_broker')
@@ -107,10 +121,21 @@ KBSEC_CHART_PERIOD = {KBSEC_CHART_KIND['DAY']: '1d', KBSEC_CHART_KIND['WEEK']: '
 # 해외 체결현황(`SPQM2204`) 기타매매구분코드(`etc_trd_ccd`)의 방향. 명세에 값 설명이 없다.
 # 실계좌(2026-09-28)에서 입력 매매구분(`trd_clsf`)을 `01` 로 거르면 `01` 행만, `02` 로 거르면 `02` 행만 왔다.
 KBSEC_OVERSEAS_ORDER_SIDE = {'01': 'sell', '02': 'buy'}
+# 접수 응답에 주문번호가 없을 때의 값(`pick_str` 가 빈 문자열을 돌려준다). 이때 주문의 `id` 를 비우고 체결 확정을 하지 않는다.
+NO_ORDER_ID = ''
+# `create_order` 가 받지 않는 ccxt 조건 주문 인자. 버리고 일반 주문으로 내면 조건 주문을 의도한 호출이 곧바로 체결된다.
+UNSUPPORTED_CONDITIONAL_PARAMS = ('triggerPrice', 'stopPrice', 'stopLossPrice', 'takeProfitPrice', 'stopLoss', 'takeProfit')
 
 
 def _now_ms() -> int:
     return fn.milliseconds()
+
+
+def _js_truthy(value: Any) -> bool:
+    """JavaScript 의 참 거짓 판정. `None`, 0, NaN, 빈 문자열이 거짓이다."""
+    if value is None or value == 0 or value == '':
+        return False
+    return not (isinstance(value, float) and math.isnan(value))
 
 
 def _get(value: Any, key: str) -> Any:
@@ -354,6 +379,8 @@ class kbsec(Exchange, ImplicitAPI):
         self._auth_identity = ''
         # 해외 종목의 KB 거래소코드(`krx_cd`). 심볼마다 한 번 찾아 둔다. NYSE 종목이 섞여 있어 `NAS` 로 고정하면 안 된다.
         self._us_exchange_cache: Dict[str, str] = {}
+        # NXT 에 상장돼 있지 않다고 확인한 국내 종목. SOR 주문이 L545 로 거부되면 넣고, 다음 주문부터 KRX 로 바로 보낸다.
+        self._nxt_ineligible: Set[str] = set()
         # 조회일자 되감기 캐시(시장별, 그 시장 날짜별). 연휴에 호출마다 같은 실패를 되풀이하지 않게 한다. 국내와 해외는 날짜 축이 달라 따로 둔다.
         self._business_date_backoff: Dict[str, Dict[str, Any]] = {'KR': {'day': '', 'steps': 0}, 'US': {'day': '', 'steps': 0}}
         # 해외 체결조회(SPQM2103) 영구 실패.
@@ -405,13 +432,14 @@ class kbsec(Exchange, ImplicitAPI):
                 # 국내만 지원한다. 해외 차트는 15분 지연 시세라 `NotSupported` 다.
                 'fetchOHLCV': True,
                 'fetchBalance': True,
-                'createOrder': False,
-                'createLimitOrder': False,
-                'createMarketOrder': False,
-                'createTriggerOrder': False,
-                'editOrder': False,
-                'cancelOrder': False,
-                'cancelAllOrders': False,
+                'createOrder': True,
+                'createLimitOrder': True,
+                'createMarketOrder': True,
+                'createTriggerOrder': True,
+                'editOrder': True,
+                'cancelOrder': True,
+                # 미체결 조회로 받은 주문을 하나씩 취소한다. 국내만 지원한다.
+                'cancelAllOrders': 'emulated',
                 'fetchOrder': True,
                 'fetchOrders': True,
                 'fetchOpenOrders': True,
@@ -426,7 +454,7 @@ class kbsec(Exchange, ImplicitAPI):
                 # 주식 고유. 장운영상태 TR 로 전·기준·익영업일을 받아 휴장일 캘린더를 채운다.
                 'fetchMarketCalendar': True,
                 'fetchInvestorTrading': True,
-                'createMarketBuyOrderWithCost': False,
+                'createMarketBuyOrderWithCost': True,
                 'createConditionalOrder': False,
             },
             'urls': {
@@ -443,9 +471,22 @@ class kbsec(Exchange, ImplicitAPI):
             'precisionMode': TICK_SIZE,
             'exceptions': {'exact': kbsec_exact_exceptions()},
             'options': {
+                # 해외 시장가 매수를 대체하는 지정가에 더하는 버퍼. 상한일 뿐 비용이 아니다(체결은 호가에서 일어난다).
+                'marketableLimitBuffer': 0.005,
+                # 국내 체결 확정 조회 예산. 5회 × 1초다. KRX 는 현재가 지정가라도 체결이 몇 초 뒤에 잡히는 일이 흔하고, KB 는 반복 조회를 계정
+                # 제한 사유로 들므로 짧은 간격으로 자주 부르는 것보다 1초 간격이 안전하다. 해외는 공용 기본값을 쓴다.
+                'domesticConfirmBudget': {'attempts': 5, 'intervalMs': 1000},
+                # 접수 뒤 체결 확정 조회의 예산 `{'attempts', 'intervalMs'}`. 사전이거나 사전을 돌려주는 함수다. 국내와 해외 기본값을 모두 이긴다.
+                'confirmBudget': None,
+                # 켜고 끄는 옵션은 불리언이거나 불리언을 돌려주는 함수(코루틴 함수도 받는다)다. 기본은 꺼짐이다.
+                # 정규장 안의 국내 주문을 SOR(KRX·NXT 가운데 유리한 쪽)로 보낸다. 정규장 밖 주문은 세션 게이트가 `MarketClosed` 로 막는다.
+                'nxtRouting': None,
+                # 종가 동시호가(국내 15:20~15:30, 미국 15:50~16:00 ET)의 신규 매수를 막는다. 시장이 받는 주문이라 기본은 꺼짐이다.
+                'blockAuctionBuys': None,
                 # 토큰을 여러 프로세스가 나눠 쓰는 저장소(BrokerTokenStore). 없으면 프로세스 메모리 캐시만 쓴다.
                 'tokenStore': None,
-                # 국내 종목 유형을 알려 주는 KIS 마스터 데이터(`kis_master_data` 참고). 없으면 빈 데이터다.
+                # 국내 종목 유형과 해외 종목의 상장 거래소를 알려 주는 KIS 마스터 데이터(`kis_master_data` 참고). 없으면 빈 데이터라
+                # 해외 주문은 거래소 미상으로 막힌다.
                 'masterData': None,
                 # 연속조회 페이지 상한. 호출 급증을 막는 값이지 정상 한도가 아니다.
                 'holdingsMaxPages': 20,
@@ -650,6 +691,15 @@ class kbsec(Exchange, ImplicitAPI):
         if security_type is not None and security_type != 'STOCK':
             return self.number_to_string(price)
         return decimal_to_precision(price, ROUND, get_krx_tick_size(fn.js_number(price)), TICK_SIZE, NO_PADDING)
+
+    def _assert_krx_tick_aligned(self, market: MarketInterface, price: Num, method: str) -> None:
+        """국내 지정가가 호가 단위 표에 맞지 않으면 요청 전에 `InvalidOrder` 다. KB 는 종목 유형을 알려 주는 경로가 없어 `options['masterData']` 가
+        주식(`STOCK`)이라고 알려 줄 때만 검사한다. 모르면 서버(`1896` 주문단가 오류)에 맡긴다. 가격을 바꿔 내지 않는다."""
+        if price is None or self._is_us(market) or self._domestic_security_type(market) != 'STOCK':
+            return
+        violation = krx_tick_violation(price)
+        if violation is not None:
+            raise InvalidOrder(f"{self.id} {method}() {violation} ({market['symbol']})", detail=KRX_TICK_INVALID_DETAIL)
 
     def fetch_investor_trading(self, symbol: str, since: Int = None, limit: Int = None,
                                params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
@@ -956,6 +1006,467 @@ class kbsec(Exchange, ImplicitAPI):
         if self.apiKey is None or self.secret is None:
             return False
         return refresh_shared_market_calendar('KR', self.fetch_market_calendar, CALENDAR_TTL_MS)
+
+    # ============ 주문 ============
+
+    def fetch_marketable_buy_price(self, symbol: str) -> float:
+        """해외 시장가 매수를 대체하는 체결 가능 지정가. 매도호가(없으면 현재가)에 `options['marketableLimitBuffer']` 를 더해 센트 단위로 올린다.
+        미국 주식 호가단위는 $1 이상 구간에서 $0.01 이라 4자리로 보내면 단위 위반이고, 올림이라 늘 호가 이상이다(내림하면 크로스가 안 돼 미체결로 남는다).
+        호가를 못 구하면 던진다. 가격 없는 주문은 거부되고 KB 는 잘못된 호출 반복을 계정 제한 사유로 들므로 보내지 않는다."""
+        try:
+            ticker: Optional[Ticker] = self.fetch_ticker(symbol)
+        except Exception as err:
+            logger.warning('[kbsec] 해외 시장가 매수 대체용 호가 조회 실패: symbol=%s err=%s', symbol, err)
+            ticker = None
+        ask = None if ticker is None else ticker.get('ask')
+        last = None if ticker is None else ticker.get('last')
+        # JavaScript 의 `ask || last` 와 같다. 매도호가가 없거나 0(또는 NaN)이면 현재가다.
+        reference = ask if _js_truthy(ask) else last
+        if reference is None or not math.isfinite(reference) or reference <= 0:
+            raise ExchangeError('KB 해외 시장가 매수는 지정가 대체가 필요한데 호가를 조회하지 못했다')
+        price = math.ceil(reference * (1 + self.options['marketableLimitBuffer']) * 100) / 100
+        logger.info('[kbsec] 해외 시장가 매수 → 체결 가능 지정가 대체: symbol=%s ask=%s last=%s limitPrice=%s', symbol, ask, last, price)
+        return price
+
+    def _session_block_reason(self, base: str, side: Optional[str]) -> Optional[str]:
+        """주문 게이트. 판정은 공용 술어(`market_session_block_reason`)에 맡긴다. `side` 를 주면 `blockAuctionBuys` 의 동시호가 매수 차단도 건다."""
+        block_auction_buys = self.is_option_enabled('blockAuctionBuys') if side is not None else False
+        return market_session_block_reason('kbsec', base, self.milliseconds(), master_data_of(self.options), side, block_auction_buys)
+
+    def create_order(self, symbol: str, type: str, side: str, amount: float, price: Num = None,
+                           params: Optional[Dict[str, Any]] = None) -> Order:
+        """주문을 낸다. `type` 은 `limit`·`market`, `side` 는 `buy`·`sell` 이다.
+
+        - 장 시간 밖이면 요청을 보내지 않고 `MarketClosed` 를 던진다. 국내는 판정 전에 휴장일 캘린더를 받는다(`refresh_market_calendar`).
+        - 국내는 주 단위다. 수량은 내림하고(`8.87` 은 `8`), 1주 미만이면 `InvalidOrder` 다.
+        - KB 해외는 시장가 매수를 받지 않는다. 매도호가에 버퍼를 더한 지정가(체결 가능 지정가, `fetch_marketable_buy_price`)로 바꿔 보낸다.
+          지정가가 호가보다 높으면 체결은 호가에서 일어나므로 버퍼는 상한일 뿐 비용이 아니다. 호가를 못 구하면 보내지 않는다.
+        - 접수 뒤에는 체결 조회로 체결가와 수량을 확정한다. 확정하지 못하면 `order['info']['fillConfirmed']` 가 `False` 이고 `filled` 는 비어 있다.
+        - `params['fractional']` 이 참이면 국내 소수점 주문이다(수량을 소수 6자리로 보내고 체결 확정을 하지 않는다).
+        - `params['sor']` 는 국내 라우팅(`K` KRX, `N` NXT, `S` SOR)이다. 생략하면 `options['nxtRouting']` 을 따른다.
+        - 조건 인자는 받지 않는다. `params` 에 `triggerPrice`·`stopPrice`·`stopLossPrice`·`takeProfitPrice`·`stopLoss`·`takeProfit` 가 있으면
+          요청 없이 `NotSupported` 다. 스탑지정가는 `create_trigger_order` 로 낸다.
+
+        시간 초과나 연결 끊김은 `OrderOutcomeUnknown` 이다. 다시 보내지 말고 `fetch_my_trades` 로 접수 여부를 확인한다.
+        """
+        params = {} if params is None else params
+        amount, price = cast(float, fn.decimal_to_float(amount)), cast(Optional[float], fn.decimal_to_float(price))
+        market = self.market(symbol)
+        # 조건 주문 인자는 어떤 요청보다 먼저 거른다(세션 게이트의 휴장일 조회도 요청이다).
+        for key in UNSUPPORTED_CONDITIONAL_PARAMS:
+            if self.safe_value(params, key) is not None:
+                raise NotSupported(f'{self.id} createOrder() does not support {key} (conditional orders): 조건 인자는 받지 않는다. '
+                                   '스탑지정가는 createTriggerOrder() 로 낸다')
+        self.check_order_arguments(market, type, side, amount, price, params)
+        if type == 'limit':
+            self._assert_krx_tick_aligned(market, price, 'createOrder')
+        is_kr = not self._is_us(market)
+        base = market['id'] or ''
+        fractional = params.get('fractional') is True
+        sor_override = self.safe_string(params, 'sor')
+        extra = self.omit(params, ['fractional', 'sor', 'timeInForce', 'postOnly', 'reduceOnly', 'clientOrderId', 'cost'])
+
+        # 세션 게이트. 거래시간 밖 주문은 KB 로 보내지 않고 `MarketClosed` 로 막는다.
+        if is_kr:
+            self.refresh_market_calendar()
+        closed = self._session_block_reason(base, side)
+        if closed is not None:
+            logger.info('[kbsec] 거래시간 외 주문 차단: symbol=%s side=%s reason=%s', symbol, side, closed)
+            raise MarketClosed(closed)
+
+        if fractional:
+            return self._create_fractional_order(market, side, amount)
+
+        effective_price = price
+        is_market = type == 'market'
+        # 해외 시장가 매수는 KB 가 받지 않는다(`시장가주문은 매도만 가능합니다`, G474). 매도는 시장가로 나가므로 청산 경로는 그대로다.
+        # 패시브 지정가(최우선 매수호가)로 걸지 않는다. 미체결로 남으면 매수 시점이 지나가 "주문은 나갔는데 안 산" 상태가 된다.
+        if not is_kr and side == 'buy' and is_market:
+            effective_price = self.fetch_marketable_buy_price(symbol)
+            is_market = False
+        is_limit = not is_market
+
+        # 증권사에 실제로 나가는 수량은 내림값이다. 이 값이 본문, 체결 조회, 반환값의 정본이다.
+        submitted_qty = math.floor(amount)
+        # 주 단위 주문은 1주 미만이면 수량이 0 으로 나가 거부된다(`주문수량을 확인하십시오`, 2329). 거부될 주문은 보내지 않는다.
+        if submitted_qty < 1:
+            raise InvalidOrder(f'{self.id} 1주 미만 주문 불가 (수량 {fn.js_string(amount)}). 미국 소수점 주문은 params.fractional 을 준다',
+                               detail=KBSEC_ERROR_DETAIL['QUANTITY_INVALID'])
+
+        if is_kr:
+            tr_code = KBSEC_TR['BUY_KR'] if side == 'buy' else KBSEC_TR['SELL_KR']
+            jb_clsf = KBSEC_ORDER_SIDE_KR['BUY'] if side == 'buy' else KBSEC_ORDER_SIDE_KR['SELL']
+
+            def send(sor: str) -> Dict[str, Any]:
+                return self._call_tr(tr_code, build_kr_order_body(base, jb_clsf, amount=submitted_qty, price=effective_price, is_limit=is_limit,
+                                                                        sor=sor, override=extra))
+
+            # `nxtRouting` 옵션이 켜져 있으면 SOR 에 맡긴다(KRX·NXT 가운데 유리한 쪽). 꺼져 있으면 KRX 고정이다.
+            # NXT 미상장 종목이라고 이미 확인했으면 왕복을 건너뛴다.
+            want_sor = sor_override is None and self.is_option_enabled('nxtRouting') and base not in self._nxt_ineligible
+            first_sor = sor_override if sor_override is not None else KBSEC_SOR['SOR'] if want_sor else KBSEC_SOR['KRX']
+            try:
+                response = send(first_sor)
+                resend = False
+            except ExchangeError as err:
+                # NXT 미상장 종목(우선주 등)은 SOR 로 나가면 통째로 거부된다. 증권사가 사유와 조치를 그대로 알려 준다(`KRX로 주문해주세요`).
+                # 업무 거부라 주문은 접수되지 않았고, 다시 보내도 중복 주문이 되지 않는다.
+                if not want_sor or err.detail != KBSEC_ERROR_DETAIL['NXT_INELIGIBLE']:
+                    raise
+                resend = True
+            if resend:
+                # 한 번 확인한 종목은 인스턴스 수명 동안 기억해 다음 주문부터 KRX 로 바로 보낸다.
+                self._nxt_ineligible.add(base)
+                logger.warning('[kbsec] NXT 미상장 — KRX 로 재주문 (이후 이 종목은 KRX 직행): symbol=%s side=%s qty=%s', symbol, side, submitted_qty)
+                response = send(KBSEC_SOR['KRX'])
+        else:
+            response = self._call_tr(KBSEC_TR['ORDER_US'], self.extend({
+                'trd_dl_ccd': KBSEC_ORDER_SIDE_US['BUY'] if side == 'buy' else KBSEC_ORDER_SIDE_US['SELL'],
+                'is_cd': base,
+                'frgn_ordr_typ_cd': KBSEC_ORDER_TYPE_US['LIMIT'] if is_limit else KBSEC_ORDER_TYPE_US['MARKET'],
+                # 국내와 같은 이유로 내림이다. `kbsec_num` 은 반올림이라 요청 수량보다 많이 살 수 있다.
+                'frgn_ordr_q': kbsec_num(submitted_qty),
+                'frgn_ordr_prc_p4': kbsec_num(0 if effective_price is None else effective_price, 4) if is_limit else '0',
+            }, extra))
+        order_id = pick_str(response, 'ordr_no', 'odno')
+        logger.info('[kbsec] %s 주문 접수: symbol=%s side=%s amount=%s submittedQty=%s orderId=%s', '국내' if is_kr else '해외', symbol, side, amount,
+                    submitted_qty, order_id)
+        return self._confirmed_order(order_id, market, side, 'limit' if is_limit else 'market', submitted_qty, effective_price, response)
+
+    def create_trigger_order(self, symbol: str, type: str, side: str, amount: float, price: Num = None, trigger_price: Num = None,
+                                   params: Optional[Dict[str, Any]] = None) -> Order:
+        """스탑지정가 주문을 낸다. 조건가격(`trigger_price`)에 닿으면 `price` 지정가 주문이 된다. 국내(`ordr_ccd='S0'`)와 해외
+        (`frgn_ordr_typ_cd='C'`) 모두 지정가만 지원한다. 시장가 트리거(해외 명세의 `B`)는 실계좌로 확인하지 않아 쓰지 않는다.
+        `price` 와 `trigger_price` 둘 다 필요하다. 장 시간 밖이면 `create_order` 와 같이 요청 없이 `MarketClosed` 다.
+        국내는 `params` 를 본문에 싣지 않고, 해외는 본문에 합친다."""
+        params = {} if params is None else params
+        amount = cast(float, fn.decimal_to_float(amount))
+        price, trigger_price = cast(Optional[float], fn.decimal_to_float(price)), cast(Optional[float], fn.decimal_to_float(trigger_price))
+        if trigger_price is None:
+            raise ArgumentsRequired(f'{self.id} createTriggerOrder() 는 triggerPrice 인자가 필요하다')
+        if price is None:
+            raise ArgumentsRequired(f'{self.id} createTriggerOrder() 는 price 인자가 필요하다(스탑지정가는 지정가만 지원한다)')
+        market = self.market(symbol)
+        base = market['id'] or ''
+        is_kr = not self._is_us(market)
+        self.check_order_arguments(market, 'limit', side, amount, price, params)
+
+        if is_kr:
+            self.refresh_market_calendar()
+        closed = self._session_block_reason(base, side)
+        if closed is not None:
+            logger.info('[kbsec] 거래시간 외 주문 차단: symbol=%s side=%s reason=%s', symbol, side, closed)
+            raise MarketClosed(closed)
+
+        submitted_qty = math.floor(amount)
+        if submitted_qty < 1:
+            raise InvalidOrder(f'{self.id} 1주 미만 주문 불가 (수량 {fn.js_string(amount)})', detail=KBSEC_ERROR_DETAIL['QUANTITY_INVALID'])
+
+        if is_kr:
+            tr_code = KBSEC_TR['BUY_KR'] if side == 'buy' else KBSEC_TR['SELL_KR']
+            response = self._call_tr(tr_code, build_kr_order_body(
+                base, KBSEC_ORDER_SIDE_KR['BUY'] if side == 'buy' else KBSEC_ORDER_SIDE_KR['SELL'], amount=submitted_qty, price=price, is_limit=True,
+                override={'ordr_ccd': KBSEC_ORDER_TYPE_KR['STOP_LIMIT'], 'stpd_prc': kbsec_num(trigger_price)}))
+        else:
+            response = self._call_tr(KBSEC_TR['ORDER_US'], self.extend({
+                'trd_dl_ccd': KBSEC_ORDER_SIDE_US['BUY'] if side == 'buy' else KBSEC_ORDER_SIDE_US['SELL'],
+                'is_cd': base,
+                'frgn_ordr_typ_cd': KBSEC_ORDER_TYPE_US['STOP_LIMIT'],
+                'frgn_ordr_q': kbsec_num(submitted_qty),
+                'frgn_ordr_prc_p4': kbsec_num(price, 4),
+                'frgn_stp_prc_p4': kbsec_num(trigger_price, 4),
+            }, params))
+        order_id = pick_str(response, 'ordr_no', 'odno')
+        logger.info('[kbsec] %s 스탑지정가 주문 접수: symbol=%s side=%s amount=%s submittedQty=%s price=%s triggerPrice=%s orderId=%s',
+                    '국내' if is_kr else '해외', symbol, side, amount, submitted_qty, price, trigger_price, order_id)
+        return self._confirmed_order(order_id, market, side, 'limit', submitted_qty, price, response)
+
+    def _confirmed_order(self, order_id: str, market: MarketInterface, side: str, type: str, quantity: float, price: Optional[float],
+                               response: Dict[str, Any]) -> Order:
+        """접수된 주문의 실체결을 확정해 주문으로 만든다. 접수 응답에는 체결 정보가 없어 계좌 체결내역에서 주문번호로 찾는다.
+        확정하지 못하면 `filled`·`average` 를 비워 둔다(주문 자체는 접수됐다). 값을 지어내지 않고 `info['fillConfirmed']` 를 `False` 로 둔다."""
+        is_kr = not self._is_us(market)
+        fee_currency = 'KRW' if is_kr else 'USD'
+        draft: Dict[str, Any] = {
+            'id': None if order_id == NO_ORDER_ID else order_id,
+            'timestamp': self.milliseconds(),
+            'symbol': market['symbol'],
+            'type': type,
+            'side': side,
+            'price': price,
+            'amount': quantity,
+            'status': 'open',
+            'trades': [],
+        }
+
+        def unconfirmed() -> Order:
+            return self.safe_order(self.extend(draft, {'info': self.extend(response, {'fillConfirmed': False})}), market)
+
+        if order_id == NO_ORDER_ID:
+            return unconfirmed()
+
+        def fetch_trades() -> List[Dict[str, Any]]:
+            return cast(List[Dict[str, Any]], self.fetch_my_trades(market['symbol']))
+
+        # 국내만 드물고 긴 예산을 쓴다. 해외는 공용 기본값이다. `options['confirmBudget']` 이 있으면 둘 다 이긴다.
+        budget = self.get_confirm_budget(self.options.get('domesticConfirmBudget') if is_kr else None)
+        matched = confirm_execution('[kbsec]', order_id, 'kbsec', trade_list_probe(fetch_trades, order_id, quantity, fee_currency), budget=budget)
+        if matched is None:
+            return unconfirmed()
+
+        # 체결수량은 주문수량을 넘을 수 없다. 넘는다면 체결 행 해석이 틀린 것이다(같은 체결을 두 번 셌거나 연속 행을 엉뚱한 주문에 귀속시킨 경우).
+        # 상한이 없으면 실제보다 많은 수량으로 포지션이 열린다.
+        filled = min(matched['filled'], quantity)
+        clamped = filled != matched['filled']
+        if clamped:
+            logger.warning('[kbsec] 체결수량이 주문수량을 초과해 상한으로 자름 — 체결 행 해석 대조 필요: orderId=%s symbol=%s reported=%s requested=%s',
+                           order_id, market['symbol'], matched['filled'], quantity)
+
+        # 자른 경우 체결금액도 같이 자른다. 수량과 금액이 어긋나면 평단이 틀어진다.
+        def product(a: float, b: Num) -> float:
+            return fn.js_number(Precise.string_mul(fn.number_to_string(a), fn.number_to_string(0 if b is None else b)) or 0)
+
+        if clamped:
+            cost = product(filled, matched['average'])
+        else:
+            cost = matched['amount'] if matched['amount'] is not None else product(matched['filled'], matched['average'])
+        logger.info('[kbsec] 실체결 확정: orderId=%s symbol=%s side=%s requestedPrice=%s actualPrice=%s actualQty=%s deviationBps=%s',
+                    order_id, market['symbol'], side, price, matched['average'], filled, fill_deviation_bps(price, matched['average']))
+        return self.safe_order(self.extend(draft, {
+            'status': 'closed' if filled >= quantity else 'open',
+            'filled': filled,
+            'remaining': max(0, quantity - filled),
+            'average': matched['average'] if matched['average'] is not None else price,
+            'cost': cost,
+            'fee': {'cost': matched['fee'], 'currency': fee_currency if matched.get('feeCurrency') is None else matched['feeCurrency']}
+            if matched['fee'] is not None else None,
+            'info': self.extend(response, {'fillConfirmed': True}),
+        }), market)
+
+    def create_market_buy_order_with_cost(self, symbol: str, cost: float, params: Optional[Dict[str, Any]] = None) -> Order:
+        """미국 주식 시장가 매수를 금액으로 낸다. 소수점매도/매수주문(`SKAM2201`)을 금액 기준(`amt_q_clsf='0'`)으로 부른다.
+        이 TR 은 `SKAM2101` 과 주문유형코드 값이 달라 시장가(`1`)가 없고 유사시장가(`E`)를 쓴다. 금액은 내림해 보낸다.
+        체결 확정은 하지 않는다(다른 소수점 주문과 같다). `order['info']['fillConfirmed']` 는 늘 `False` 다.
+        국내 종목은 요청 없이 `NotSupported`, 장 시간 밖이면 요청 없이 `MarketClosed` 다."""
+        params = {} if params is None else params
+        cost = cast(float, fn.decimal_to_float(cost))
+        market = self.market(symbol)
+        if not self._is_us(market):
+            raise NotSupported(f'{self.id} createMarketBuyOrderWithCost() 는 미국 종목만 지원한다: {symbol}')
+        if cost is None or not cost > 0:
+            raise ArgumentsRequired(f'{self.id} createMarketBuyOrderWithCost() requires a cost argument above 0')
+
+        closed = self._session_block_reason(market['id'] or '', 'buy')
+        if closed is not None:
+            logger.info('[kbsec] 거래시간 외 주문 차단: symbol=%s cost=%s reason=%s', symbol, cost, closed)
+            raise MarketClosed(closed)
+
+        # 실제로 나가는 금액은 내림값이다(소수점 아래는 버린다). `ordr_amt` 가 소수 0자리 필드라 반올림하면 초과 주문이 나간다.
+        submitted_cost = math.floor(cost)
+        response = self._call_tr(KBSEC_TR['FRAC_ORDER_US'], self.extend({
+            'frgn_krx_ccd': 'US',
+            'trd_dl_ccd': KBSEC_ORDER_SIDE_US['BUY'],
+            'is_cd': market['id'],
+            'amt_q_clsf': '0',  # 0 금액, 1 수량
+            'tv_s_est_f': '',
+            'frgn_ordr_typ_cd': 'E',  # 2 지정가, E 유사시장가
+            'crncy_ccd': '1',  # 0 원화, 1 외화(USD)
+            'ordr_amt': kbsec_num(submitted_cost),
+            'dcml_ordr_q_p6': '',
+            'frgn_ordr_prc_p4': '',
+            'spclz_ordr_ccd': '33',  # 소수점매매주문(소수점매매-금액기준)
+            'cpn_cd': '',
+            'cutn_mtr_cnfr_f': '',
+        }, params))
+        order_id = pick_str(response, 'ordr_no', 'odno')
+        logger.info('[kbsec] 금액 기준 시장가 매수: symbol=%s cost=%s submittedCost=%s orderId=%s', symbol, cost, submitted_cost, order_id)
+        return self.safe_order({
+            'id': None if order_id == NO_ORDER_ID else order_id,
+            'timestamp': self.milliseconds(),
+            'symbol': market['symbol'],
+            'type': 'market',
+            'side': 'buy',
+            'cost': submitted_cost,
+            'status': 'open',
+            'trades': [],
+            'info': self.extend(response, {'fillConfirmed': False, 'fractional': True}),
+        }, market)
+
+    def _create_fractional_order(self, market: MarketInterface, side: str, amount: float) -> Order:
+        """국내 소수점 주문. 수량이 정수가 아니어도 된다. 체결 확정은 하지 않는다. 해외는 지원하지 않는다.
+        필드 이름은 `ordr_q_p6` 다(`_p6` 접미사가 소수 6자리를 뜻한다). 정수 주문의 `ordr_q` 로 보내면 수량 없는 주문이 나간다."""
+        if self._is_us(market):
+            raise NotSupported(f'{self.id} 해외 소수점은 미배선이다')
+        response = self._call_tr(KBSEC_TR['FRAC_BUY_KR'] if side == 'buy' else KBSEC_TR['FRAC_SELL_KR'], {
+            'is_cd': market['id'],
+            'ordr_q_p6': kbsec_num(amount, 6),
+        })
+        order_id = pick_str(response, 'ordr_no', 'odno')
+        logger.info('[kbsec] 소수점 주문: symbol=%s side=%s amount=%s orderId=%s', market['symbol'], side, amount, order_id)
+        return self.safe_order({
+            'id': None if order_id == NO_ORDER_ID else order_id,
+            'timestamp': self.milliseconds(),
+            'symbol': market['symbol'],
+            'type': 'market',
+            'side': side,
+            'amount': amount,
+            'status': 'open',
+            'trades': [],
+            'info': self.extend(response, {'fillConfirmed': False, 'fractional': True}),
+        }, market)
+
+    def edit_order(self, id: str, symbol: str, type: str, side: str, amount: Num = None, price: Num = None,
+                         params: Optional[Dict[str, Any]] = None) -> Order:
+        """정정주문. 취소 후 재접수보다 체결 순위를 덜 잃는다(원주문 시각 일부 승계).
+
+        - 정정하면 주문번호가 바뀐다. 이후 취소는 새 번호(`order['id']`)로 한다. 옛 번호로 취소하면 주문이 살아남는다.
+        - 국내는 원주문과 같은 라우팅으로 보낸다(SOR 주문을 KRX 로 정정하면 거부된다). 미체결 목록 행의 `sor_ordr_ccd` 가 정본이다.
+        - `amount` 는 ccxt 와 같이 정정 뒤 주문의 총수량(체결분 포함)이다. 국내는 주면 미체결 목록으로 체결 수량과 잔량의 합과 대조하고, 같을 때만
+          잔량 전부를 정정한다. 다르면 정정 요청 없이 `NotSupported` 다. 조회가 실패하면 던진다. 해외는 원주문의 체결 수량을 믿을 만한 조회로
+          확인할 수 없어 `amount` 를 주면 요청 없이 `NotSupported` 다.
+        - 국내 전부정정은 수량을 0 으로 보낸다. 잔량 일부만 새 가격으로 옮기는 일부정정은 `params['partial']` 이 `True` 일 때만 보내고
+          (`crct_clsf: '1'`), 이때 `amount` 는 옮길 수량이다.
+        - 해외 정정은 잔량 전부의 가격만 바꾼다(`SKAM2102` 에 수량 필드가 없다). 일부정정은 `NotSupported` 다.
+        - `price` 가 필요하다. 빼면 요청 없이 `ArgumentsRequired` 다(빼고 보내면 단가 `0` 이 나간다).
+        - 장 시간 밖이면 원주문 조회와 정정 요청을 보내지 않고 `MarketClosed` 다. `create_order` 와 같은 시간표이고, 정정은 신규 진입이 아니라서
+          `blockAuctionBuys` 의 동시호가 매수 차단은 걸지 않는다.
+        """
+        params = {} if params is None else params
+        amount, price = cast(Optional[float], fn.decimal_to_float(amount)), cast(Optional[float], fn.decimal_to_float(price))
+        market = self.market(symbol)
+        base = market['id'] or ''
+        # 정정은 단가를 바꾸는 주문이다. 가격을 빼면 단가 '0' 이 나가므로 원주문 라우팅 조회를 포함해 어떤 요청보다 먼저 막는다.
+        if price is None:
+            raise ArgumentsRequired(f'{self.id} editOrder() requires a price argument')
+        is_partial = params.get('partial') is True
+        if is_partial and amount is None:
+            raise ArgumentsRequired(f'{self.id} editOrder() 의 일부정정(params.partial)에는 옮길 수량 amount 가 필요하다')
+        if self._is_us(market):
+            if is_partial:
+                raise NotSupported(f'{self.id} editOrder() 의 일부정정(params.partial)은 해외 주문에서 지원하지 않는다(해외 정정은 가격만 바꾼다)')
+            # 해외 원주문의 체결 수량은 체결내역과 체결현황을 맞춰 추정해야 한다. 체결 반영이 늦으면 잔량을 크게 잡으므로 amount 를 대조하지 않고 막는다.
+            if amount is not None:
+                raise NotSupported(f'{self.id} editOrder() 는 해외 주문의 amount 를 받지 않는다. 원주문의 체결 수량을 믿을 만한 조회로 확인할 수 없다. '
+                                   'amount 를 빼면 잔량 전부의 가격만 정정하고, 수량을 바꾸려면 취소한 뒤 다시 주문한다')
+            self._assert_edit_session_open(symbol, base, False)
+            response = self._call_tr(KBSEC_TR['AMEND_CANCEL_US'], {
+                'is_cd': base,
+                'orgn_ordr_no': id,
+                # 해외 TR(SKAM2102)의 구분 필드는 `crct_cncl_clsf` 다(국내의 `crct_clsf` 가 아니다). 스펙 밖 키는 구분이 빈 값으로 나간다.
+                'crct_cncl_clsf': '1',
+                'frgn_ordr_prc_p4': kbsec_num(price, 4),
+            })
+            return self._edited_order(response, market, price, None)
+        self._assert_krx_tick_aligned(market, price, 'editOrder')
+        self._assert_edit_session_open(symbol, base, True)
+        if not is_partial and amount is not None:
+            # 수량을 대조하므로 원주문 조회 실패를 발주 정책으로 덮지 않고 던진다.
+            original = self._find_open_order(id, symbol)
+            assert_whole_remaining_edit(self.id, id, amount, original)
+            sor = pick_str(original.get('info') or {}, 'sor_ordr_ccd') or self._default_order_sor(symbol)
+        else:
+            sor = self._resolve_order_sor(id, symbol)
+        response = self._call_tr(KBSEC_TR['AMEND_KR'], build_kr_order_body(
+            base, KBSEC_ORDER_SIDE_KR['AMEND'], amount=amount if is_partial else 0, price=price, sor=sor,
+            override={'crct_clsf': '1' if is_partial else '2', 'orgn_ordr_no': id}))
+        new_id = pick_str(response, 'ordr_no', 'odno')
+        logger.info('[kbsec] 정정주문 — 주문번호가 바뀌었다: orderId=%s newOrderId=%s symbol=%s price=%s sor=%s partial=%s', id, new_id, symbol, price, sor,
+                    is_partial)
+        # 일부정정은 옮긴 수량, 전부정정은 대조한 총수량을 싣는다. `amount` 없이 부른 전부정정의 수량은 이 응답으로 알 수 없어 싣지 않는다.
+        return self._edited_order(response, market, price, amount)
+
+    def _assert_edit_session_open(self, symbol: str, ticker: str, is_kr: bool) -> None:
+        """정정 게이트. `create_order` 와 같은 판정이고, 방향을 넘기지 않아 동시호가 매수 차단은 걸지 않는다. 국내는 휴장일 캘린더를 먼저 받는다."""
+        if is_kr:
+            self.refresh_market_calendar()
+        closed = self._session_block_reason(ticker, None)
+        if closed is not None:
+            logger.info('[kbsec] 거래시간 외 정정 차단: symbol=%s reason=%s', symbol, closed)
+            raise MarketClosed(closed)
+
+    def _edited_order(self, response: Dict[str, Any], market: MarketInterface, price: Num, amount: Num) -> Order:
+        id = pick_str(response, 'ordr_no', 'odno')
+        return self.safe_order({
+            'id': None if id == NO_ORDER_ID else id,
+            'timestamp': self.milliseconds(),
+            'symbol': market['symbol'],
+            'type': 'limit',
+            'price': price,
+            'amount': amount,
+            'status': 'open',
+            'trades': [],
+            'info': response,
+        }, market)
+
+    def _resolve_order_sor(self, order_id: str, symbol: str) -> str:
+        """원주문이 어느 라우팅으로 나갔는지. 정정과 취소에 그대로 싣는다. 미체결 목록 행의 `sor_ordr_ccd` 를 정본으로 본다.
+        못 찾으면(이미 체결, 조회 실패) 발주 때와 같은 정책으로 되짚는다. 같은 인스턴스 안에서는 `nxtRouting` 옵션과 NXT 캐시가 그대로라 같은 값이 나온다."""
+        try:
+            found = next((order for order in self.fetch_open_orders(symbol) if order.get('id') == order_id), None)
+            sor = pick_str((found or {}).get('info') or {}, 'sor_ordr_ccd')
+            if sor != '':
+                return sor
+        except Exception as err:
+            logger.warning('[kbsec] 원주문 라우팅 조회 실패 — 발주 정책으로 폴백: orderId=%s symbol=%s err=%s', order_id, symbol, err)
+        return self._default_order_sor(symbol)
+
+    def _default_order_sor(self, symbol: str) -> str:
+        """발주 때와 같은 라우팅 정책(`nxtRouting` 옵션과 NXT 미상장 캐시)."""
+        if self.is_option_enabled('nxtRouting') and kbsec_base_symbol(symbol) not in self._nxt_ineligible:
+            return KBSEC_SOR['SOR']
+        return KBSEC_SOR['KRX']
+
+    def _find_open_order(self, order_id: str, symbol: str) -> Order:
+        """정정할 국내 원주문을 미체결 목록에서 찾는다. 조회가 실패하면 던지고, 목록에 없으면 `OrderNotFound` 다."""
+        found = next((order for order in self.fetch_open_orders(symbol) if order.get('id') == order_id), None)
+        if found is None:
+            raise OrderNotFound(f'{self.id} editOrder() 미체결 주문을 찾지 못했다: {order_id} ({symbol})')
+        return found
+
+    def cancel_order(self, id: str, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> Order:
+        """주문 취소(전부 취소). `symbol` 이 필요하다. 이미 체결되거나 취소된 주문은 KB 가 거부하므로 그 오류를 그대로 던진다. 호출하는 쪽이
+        그것을 "이미 사라진 주문"으로 볼지 실패로 볼지 정한다. 국내는 원주문의 라우팅(`params['sor_ordr_ccd']`, 없으면 미체결 목록)을 싣는다.
+        장 시간 게이트는 거치지 않는다. `params` 는 본문에 합친다."""
+        params = {} if params is None else params
+        if symbol is None:
+            raise ArgumentsRequired(f'{self.id} cancelOrder() requires a symbol argument')
+        market = self.market(symbol)
+        if not self._is_us(market):
+            # 원주문의 라우팅(SOR)을 싣는다. 정정과 같이 SOR 주문을 KRX 로 취소하면 거부될 수 있다.
+            given_sor = self.safe_string(params, 'sor_ordr_ccd')
+            sor = given_sor if given_sor is not None else self._resolve_order_sor(id, symbol)
+            response = self._call_tr(KBSEC_TR['CANCEL_KR'], build_kr_order_body(
+                market['id'] or '', KBSEC_ORDER_SIDE_KR['CANCEL'], sor=sor,
+                override=self.extend({'crct_clsf': '2', 'orgn_ordr_no': id}, params)))  # 2 전부취소
+        else:
+            response = self._call_tr(KBSEC_TR['AMEND_CANCEL_US'], self.extend({
+                'is_cd': market['id'],
+                'orgn_ordr_no': id,
+                'crct_cncl_clsf': '2',
+            }, params))
+        logger.info('[kbsec] 주문 취소: orderId=%s symbol=%s', id, symbol)
+        return self.safe_order({'id': id, 'symbol': market['symbol'], 'status': 'canceled', 'trades': [], 'info': response}, market)
+
+    def cancel_all_orders(self, symbol: Str = None, params: Optional[Dict[str, Any]] = None) -> List[Order]:
+        """미체결 주문을 모두 취소한다(종목을 주면 그 종목만). 국내만 지원한다(`fetch_open_orders` 가 국내만 본다). 취소를 시도한 주문마다
+        미체결 조회로 받은 주문을 항목으로 돌려준다. 취소된 항목은 `status: 'canceled'` 이고 취소 응답 원문이 `info['cancelResponse']` 에 있다.
+        실패한 항목은 원래 상태(`open`)이고 `info['cancelError']`(메시지)와 `info['cancelErrorDetail']`(오류의 `detail`)이 있다.
+        일부가 실패해도 던지지 않는다. 미체결 조회가 실패하면 하나도 취소하지 않고 던진다."""
+        params = {} if params is None else params
+        open_orders = self.fetch_open_orders(symbol, None, None, params)
+        results: List[Order] = []
+        for order in open_orders:
+            try:
+                # 목록 행의 라우팅을 넘겨 주문마다 미체결 목록을 다시 조회하지 않는다.
+                sor = pick_str(order.get('info') or {}, 'sor_ordr_ccd')
+                canceled = self.cancel_order(cast(str, order['id']), order.get('symbol'), {'sor_ordr_ccd': sor} if sor != '' else {})
+                results.append(cast(Order, self.extend(order, {'status': 'canceled',
+                                                               'info': self.extend(order.get('info'), {'cancelResponse': canceled.get('info')})})))
+            except Exception as err:
+                logger.warning('[kbsec] 주문 취소 실패: orderId=%s err=%s', order.get('id'), err)
+                info = self.extend(order.get('info'), {'cancelError': str(err), 'cancelErrorDetail': getattr(err, 'detail', None)})
+                results.append(cast(Order, self.extend(order, {'info': info})))
+        return results
 
     # ============ 주문·체결 조회 ============
 
@@ -1978,3 +2489,10 @@ class kbsec(Exchange, ImplicitAPI):
         fetchBalance = fetch_balance
         parseBalance = parse_balance
         fetchOneMarketMargin = fetch_one_market_margin
+        fetchMarketableBuyPrice = fetch_marketable_buy_price
+        createOrder = create_order
+        createTriggerOrder = create_trigger_order
+        createMarketBuyOrderWithCost = create_market_buy_order_with_cost
+        editOrder = edit_order
+        cancelOrder = cancel_order
+        cancelAllOrders = cancel_all_orders
