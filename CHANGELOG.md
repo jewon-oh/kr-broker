@@ -53,6 +53,7 @@
 
 ### 추가
 
+- 토스증권 REST 명세 v1.2.28에 새로 생긴 API 6개를 암묵 메서드로 부를 수 있습니다. 섹터 목록(`privateMarketGetSectors`), 섹터 상세(`privateMarketGetSectorsSectorId`), 섹터 구성 주식(`privateMarketGetSectorsSectorIdStocks`), 섹터 관련 ETF(`privateMarketGetSectorsSectorIdEtfs`), 섹터 랭킹(`privateMarketGetSectorsRankings`), 투자자별 순매수·순매도 랭킹(`privateMarketGetRankingsInvestorTrading`)입니다. 호출 한도 그룹 `sector`와 `sector_ranking`(각각 초당 5회 공식 한도)을 더했습니다. 오류 코드 `ip-not-allowed`는 `PermissionDenied`, `sector-not-found`는 `BadRequest`로 던집니다. 예전에도 상태 코드로 `PermissionDenied`와 `ExchangeError`를 던졌으며, 이제 오류의 `detail`에 코드가 실립니다. Python 판(Python 이름 `private_market_get_sectors` 등)도 같습니다.
 - KB증권 `fetchCanceledOrders`를 추가합니다. 국내 전체 주문(`SSQM2341`)에서 취소 주문만 고르며, 일부 체결 뒤 취소한 주문도 듭니다. 해외는 `NotSupported`이고 `since`는 적용하지 않습니다(`fetchOrders`와 같습니다). Python 판도 같습니다.
 - 한국투자증권 실시간 필드 표에 공식 예제가 2026-09-28에 덧붙인 필드를 더합니다. 체결(`H0STCNT0`, `H0NXCNT0`, `H0UNCNT0`)에 `market_cls_code`, KRX 호가(`H0STASP0`)에 `mid_prc`, `midp_total_rsqn`, `midp_cls_code`, `market_cls_code`, 통합 호가(`H0UNASP0`)에 `antc_exch_cls_code`입니다. 예전에도 레코드는 바르게 나눴지만 새 값이 `fields`에 이름 없이 빠졌습니다. Python 판도 같습니다.
 - 종목 통합 코드 표를 둡니다. 기본값은 `kr-broker/broker-market-group`의 `COMMON_STOCK_CODES`입니다. 인스턴스의 `commonStockCodes`는 생성자 인자로 덮습니다. 표에 없는 티커가 현금 키와 겹쳐 `NotSupported`가 나면 이 표에 그 티커를 더합니다. 기반 클래스의 `commonStockCode(ticker)`와 `stockTicker(code)`가 표로 코드를 바꿉니다. 같은 모듈의 `commonStockCode`, `stockTicker`는 표를 인자로 받습니다. `toStreamSymbol`과 `KisPriceWs` 옵션의 `commonStockCodes`도 표를 받습니다. Python 판 이름은 `common_stock_code`, `stock_ticker`입니다.
