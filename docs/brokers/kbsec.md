@@ -4,7 +4,7 @@
 
 > 이 문서는 생성물입니다. 손으로 고치지 않습니다. `docs/coverage/`의 자료를 고친 뒤 `pnpm docs:gen`을 실행합니다.
 
-조사일은 2026-09-21입니다. 증권사 API를 호출하지 않고 공식 명세와 저장소의 소스를 대조했습니다.
+조사일은 2026-11-02입니다. 증권사 API를 호출하지 않고 공식 명세와 저장소의 소스를 대조했습니다.
 
 전체 기능 표는 [기능별 지원](README.md#기능별-지원)에 있습니다.
 
@@ -50,7 +50,7 @@
 
 | 출처 | 주소 |
 |---|---|
-| KB증권 공식 TR 명세 93종(kb-openapi 저장소 커밋 159480c, 2026-07-29) | https://github.com/kbsecurities/kb-openapi/blob/159480c/frontend/src/app/openapi-test/samples.generated.json |
+| KB증권 공식 TR 명세 93종(kb-openapi 저장소 커밋 159480c, 2026-07-29). 2026-09-15 커밋 5120174에서 계좌·주문 TR 64종이 공개 파일에서 빠져 이 커밋에 고정합니다 | https://github.com/kbsecurities/kb-openapi/blob/159480c/frontend/src/app/openapi-test/samples.generated.json |
 | KB증권 공식 예제(투자정보 29종 호출 함수) | https://github.com/kbsecurities/kb-openapi |
 | KB증권 Open API 포털(공지가 렌더링되지 않아 확인하지 못했습니다) | https://openapi.kbsec.com |
 
@@ -200,6 +200,7 @@ ccxt의 통합 메서드로 표현하기 어려운 증권사 고유 기능입니
 - 영구 실패한 조회는 같은 인스턴스에서 다시 호출하지 않습니다.
 - `SSQM0832`(주문체결현황)는 실계좌에서 `I446`(API 사용 권한 없음)이 나와 연결하지 않았습니다.
 - 국내 호가단위는 가격대별이라 ccxt의 단일 `precision.price`로 표현하지 못합니다.
+- 공개 명세 파일은 2026-09-15(커밋 `5120174`)부터 시세·투자정보 29종만 싣습니다. 계좌·주문 TR 64종의 명세는 그 전 커밋 `159480c`에서만 대조할 수 있습니다. 이 TR들이 API에서 없어졌다는 공지는 찾지 못했습니다.
 
 ## 미구현 API
 
