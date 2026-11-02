@@ -482,6 +482,8 @@ export class toss extends Exchange {
                 order_info: { rateLimit: 250 },
                 conditional_order: { rateLimit: 250 },
                 conditional_order_history: { rateLimit: 125 },
+                sector: { rateLimit: 250 },
+                sector_ranking: { rateLimit: 250 },
             },
             requiredCredentials: {
                 apiKey: true,
@@ -527,8 +529,11 @@ export class toss extends Exchange {
                     'token-revoked': AuthenticationError,
                     'login-user-not-found': AuthenticationError,
                     'forbidden': PermissionDenied,
+                    // 허용 IP 목록에 없는 곳에서 불렀다. 토큰 발급은 OAuth2 형식의 `access_denied` 로 따로 온다.
+                    'ip-not-allowed': PermissionDenied,
                     // 404
                     'stock-not-found': BadSymbol,
+                    'sector-not-found': BadRequest,
                     'exchange-rate-not-found': ExchangeError,
                     'account-not-found': AuthenticationError,
                     'order-not-found': OrderNotFound,

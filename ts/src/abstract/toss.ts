@@ -35,6 +35,12 @@ export const TOSS_API_TREE: Dict = {
                 'stocks/{symbol}/short-selling': { cost: 1, bucket: 'stock_trading_trend' },
                 'stocks/{symbol}/credit-trades': { cost: 1, bucket: 'stock_trading_trend' },
                 'stocks/{symbol}/securities-lending': { cost: 1, bucket: 'stock_trading_trend' },
+                'rankings/investor-trading': { cost: 1, bucket: 'ranking' },
+                'sectors': { cost: 1, bucket: 'sector' },
+                'sectors/rankings': { cost: 1, bucket: 'sector_ranking' },
+                'sectors/{sectorId}': { cost: 1, bucket: 'sector' },
+                'sectors/{sectorId}/stocks': { cost: 1, bucket: 'sector' },
+                'sectors/{sectorId}/etfs': { cost: 1, bucket: 'sector' },
             },
         },
         account: {
@@ -86,6 +92,12 @@ export interface TossImplicitApi {
     privateMarketGetStocksSymbolShortSelling: ImplicitApiMethod;
     privateMarketGetStocksSymbolCreditTrades: ImplicitApiMethod;
     privateMarketGetStocksSymbolSecuritiesLending: ImplicitApiMethod;
+    privateMarketGetRankingsInvestorTrading: ImplicitApiMethod;
+    privateMarketGetSectors: ImplicitApiMethod;
+    privateMarketGetSectorsRankings: ImplicitApiMethod;
+    privateMarketGetSectorsSectorId: ImplicitApiMethod;
+    privateMarketGetSectorsSectorIdStocks: ImplicitApiMethod;
+    privateMarketGetSectorsSectorIdEtfs: ImplicitApiMethod;
     privateAccountGetHoldings: ImplicitApiMethod;
     privateAccountGetBuyingPower: ImplicitApiMethod;
     privateAccountGetCommissions: ImplicitApiMethod;
