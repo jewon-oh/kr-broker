@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-02
+
 ### 바뀜(호환되지 않음)
 
 - `editOrder`의 `amount`를 ccxt와 같이 정정 뒤 주문의 총수량(체결분 포함)으로 받습니다. 원주문을 조회해 체결 수량과 잔량의 합과 같을 때만 잔량 전부를 새 가격으로 정정하고, 다르면 정정 요청 없이 `NotSupported`를 던집니다. 한국투자증권 국내에서 `amount`로 일부정정하던 코드는 `params.partial: true`를 더합니다. 토스증권 국내는 `amount` 없이도 부를 수 있고, 일부 체결된 주문은 정정하지 않고 `NotSupported`를 던집니다. 한국투자증권 모의투자의 미국 정정은 `amount` 대신 `params.amount`를 씁니다. KB증권 미국 정정은 원주문의 체결 수량을 확인할 믿을 만한 조회가 없어, `amount`를 주면 요청 없이 `NotSupported`를 던집니다. `amount`를 빼면 잔량 전부의 가격만 정정합니다.
@@ -272,5 +274,6 @@
 - ccxt식 통합 자료 구조(`Market`, `Ticker`, `Order`, `Trade`, `Balances`)와 오류 계층(`ExchangeError` 계열)을 따랐고, 주문 접수 여부를 모를 때 던지는 `OrderOutcomeUnknown`을 추가했습니다.
 - 증권사 캘린더 API로 받는 휴장일, 토큰 발급 잠금, 증권사별 호출 한도를 넣었습니다.
 
-[Unreleased]: https://github.com/jewon-oh/kr-broker/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/jewon-oh/kr-broker/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/jewon-oh/kr-broker/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/jewon-oh/kr-broker/releases/tag/v0.5.0
