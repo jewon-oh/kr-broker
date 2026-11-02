@@ -8222,6 +8222,210 @@
                 { "rank": 1, "symbol": "AAPL", "currency": "USD", "price": { "lastPrice": "228.5", "basePrice": "220", "changeRate": "0.0386" } },
                 { "rank": 2, "symbol": "XOM", "currency": "USD", "price": { "lastPrice": "80.4", "basePrice": "78", "changeRate": "0.0307" } }
             ]
+        },
+        {
+            "description": "fetchInvestorTradingRankings 는 count 를 쿼리로 보내고 투자자별 순매수·순매도 랭킹 원본을 돌려준다",
+            "method": "fetchInvestorTradingRankings",
+            "args": [2],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/rankings/investor-trading?count=2",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "foreigner": {
+                                    "rankedAt": "2026-03-25T15:41:00+09:00",
+                                    "netBuyRankings": [{ "rank": 1, "symbol": "005930", "currency": "KRW", "netBuyAmount": "1200000000" }],
+                                    "netSellRankings": [{ "rank": 1, "symbol": "000660", "currency": "KRW", "netSellAmount": "900000000" }]
+                                },
+                                "institution": { "rankedAt": null, "netBuyRankings": [], "netSellRankings": [] },
+                                "individual": {
+                                    "rankedAt": "2026-03-25T15:40:00+09:00",
+                                    "netBuyRankings": [{ "rank": 1, "symbol": "000660", "currency": "KRW", "netBuyAmount": "850000000" }],
+                                    "netSellRankings": [{ "rank": 1, "symbol": "005930", "currency": "KRW", "netSellAmount": "1100000000" }]
+                                }
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "foreigner": {
+                    "rankedAt": "2026-03-25T15:41:00+09:00",
+                    "netBuyRankings": [{ "rank": 1, "symbol": "005930", "currency": "KRW", "netBuyAmount": "1200000000" }],
+                    "netSellRankings": [{ "rank": 1, "symbol": "000660", "currency": "KRW", "netSellAmount": "900000000" }]
+                },
+                "institution": { "netBuyRankings": [], "netSellRankings": [] },
+                "individual": {
+                    "rankedAt": "2026-03-25T15:40:00+09:00",
+                    "netBuyRankings": [{ "rank": 1, "symbol": "000660", "currency": "KRW", "netBuyAmount": "850000000" }],
+                    "netSellRankings": [{ "rank": 1, "symbol": "005930", "currency": "KRW", "netSellAmount": "1100000000" }]
+                }
+            }
+        },
+        {
+            "description": "fetchSectors 는 섹터 목록을 계층 필드와 함께 돌려준다",
+            "method": "fetchSectors",
+            "args": [],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/sectors",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "sectors": [
+                                    { "sectorId": "10", "name": "IT 하드웨어", "depth": 0, "parentSectorId": null },
+                                    { "sectorId": "100", "name": "반도체", "depth": 1, "parentSectorId": "10" }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                { "sectorId": "10", "name": "IT 하드웨어", "depth": 0 },
+                { "sectorId": "100", "name": "반도체", "depth": 1, "parentSectorId": "10" }
+            ]
+        },
+        {
+            "description": "fetchSector 는 sectorId 를 경로에, marketCountry 를 쿼리에 싣고 섹터 상세를 돌려준다",
+            "method": "fetchSector",
+            "args": ["100", "US"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/sectors/100?marketCountry=US",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": { "result": { "sectorId": "100", "name": "반도체", "depth": 1, "parentSectorId": "10", "summary": null, "performance": { "changeRates": [{ "duration": "1d", "changeRate": "-0.0123" }, { "duration": "1y", "changeRate": null }] } } }
+                    }
+                }
+            ],
+            "output": { "sectorId": "100", "name": "반도체", "depth": 1, "parentSectorId": "10", "performance": { "changeRates": [{ "duration": "1d", "changeRate": "-0.0123" }, { "duration": "1y" }] } }
+        },
+        {
+            "description": "fetchSector 는 sectorId 가 없으면 요청 없이 ArgumentsRequired 로 막는다",
+            "method": "fetchSector",
+            "args": [null, "KR"],
+            "http": [],
+            "error": { "class": "ArgumentsRequired", "brokerCode": null }
+        },
+        {
+            "description": "fetchSectorStocks 는 marketCountry 기본값 KR 로 구성 주식을 돌려준다",
+            "method": "fetchSectorStocks",
+            "args": ["100"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/sectors/100/stocks?marketCountry=KR",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "stocks": [
+                                    { "symbol": "005930", "name": "삼성전자", "volume": "1000", "tradingAmount": "70000000", "marketCapitalization": "400000000000000", "currency": "KRW" },
+                                    { "symbol": "0101N0", "name": "가짜종목", "volume": null, "tradingAmount": null, "marketCapitalization": null, "currency": "KRW" }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                { "symbol": "005930", "name": "삼성전자", "volume": "1000", "tradingAmount": "70000000", "marketCapitalization": "400000000000000", "currency": "KRW" },
+                { "symbol": "0101N0", "name": "가짜종목", "currency": "KRW" }
+            ]
+        },
+        {
+            "description": "fetchSectorStocks 는 목록에 없는 sectorId 의 404 sector-not-found 를 BadRequest 로 던진다",
+            "method": "fetchSectorStocks",
+            "args": ["999999", "US"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/sectors/999999/stocks?marketCountry=US",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": { "status": 404, "body": { "error": { "code": "sector-not-found", "message": "섹터를 찾을 수 없습니다." } } }
+                }
+            ],
+            "error": { "class": "BadRequest", "detail": "sector-not-found", "brokerCode": "sector-not-found" }
+        },
+        {
+            "description": "fetchSectorEtfs 는 관련 ETF 의 심볼과 이름을 돌려준다",
+            "method": "fetchSectorEtfs",
+            "args": ["100", "US"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/sectors/100/etfs?marketCountry=US",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": { "status": 200, "body": { "result": { "etfs": [{ "symbol": "SOXX", "name": "iShares Semiconductor ETF" }] } } }
+                }
+            ],
+            "output": [{ "symbol": "SOXX", "name": "iShares Semiconductor ETF" }]
+        },
+        {
+            "description": "fetchSectorEtfs 는 sectorId 가 빈 문자열이면 요청 없이 ArgumentsRequired 로 막는다",
+            "method": "fetchSectorEtfs",
+            "args": ["", "KR"],
+            "http": [],
+            "error": { "class": "ArgumentsRequired", "brokerCode": null }
+        },
+        {
+            "description": "fetchSectorRankings 는 type·marketCountry·duration 을 쿼리로 보내고 섹터 랭킹 행을 돌려준다",
+            "method": "fetchSectorRankings",
+            "args": ["MARKET_TRADING_AMOUNT", "KR", "1w"],
+            "http": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://openapi.tossinvest.com/api/v1/sectors/rankings?type=MARKET_TRADING_AMOUNT&marketCountry=KR&duration=1w",
+                        "headers": { "Authorization": "Bearer tok-stored" },
+                        "body": null
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "result": {
+                                "rankings": [
+                                    { "rank": 1, "sectorId": "100", "name": "반도체", "changeRate": "0.0179", "tradingAmount": "2400000000000", "marketCapitalization": "600000000000000", "currency": "KRW" },
+                                    { "rank": 2, "sectorId": "42", "name": "스마트폰 부품", "changeRate": "0", "tradingAmount": null, "marketCapitalization": null, "currency": "KRW" }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": [
+                { "rank": 1, "sectorId": "100", "name": "반도체", "changeRate": "0.0179", "tradingAmount": "2400000000000", "marketCapitalization": "600000000000000", "currency": "KRW" },
+                { "rank": 2, "sectorId": "42", "name": "스마트폰 부품", "changeRate": "0", "currency": "KRW" }
+            ]
         }
     ]
 }

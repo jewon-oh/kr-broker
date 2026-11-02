@@ -44,8 +44,8 @@
 | 모의투자 | 지원하지 않습니다. `setSandboxMode(true)`는 `NotSupported`를 던집니다. |
 | 지원 시장 | 국내(KR), 미국(US) |
 | 호출 한도 | 계정 전체 호출 간격이 100ms(초당 10건)입니다. 여기에 그룹별 한도(`rateLimitBuckets`)를 더합니다. 개장 직후 09:00부터 09:10까지는 일부 그룹의 한도가 절반입니다. |
-| 공식 API | 45개 중 통합 18개, 확장 18개, 암묵과 내부 9개, 미구현 0개 |
-| 커버리지 | 통합과 확장 기준 80.0%, 암묵과 내부 포함 기준 100.0% |
+| 공식 API | 45개 중 통합 18개, 확장 24개, 암묵과 내부 3개, 미구현 0개 |
+| 커버리지 | 통합과 확장 기준 93.3%, 암묵과 내부 포함 기준 100.0% |
 
 ## 커버리지 요약
 
@@ -57,8 +57,8 @@
 | Market Data | 5 | 4 | 1 | 0 | 0 | 100.0% (5/5) | 100.0% (5/5) |
 | Stock Info | 8 | 1 | 7 | 0 | 0 | 100.0% (8/8) | 100.0% (8/8) |
 | Market Info | 3 | 0 | 2 | 1 | 0 | 66.7% (2/3) | 100.0% (3/3) |
-| Ranking | 2 | 0 | 1 | 1 | 0 | 50.0% (1/2) | 100.0% (2/2) |
-| Sector | 5 | 0 | 0 | 5 | 0 | 0.0% (0/5) | 100.0% (5/5) |
+| Ranking | 2 | 0 | 2 | 0 | 0 | 100.0% (2/2) | 100.0% (2/2) |
+| Sector | 5 | 0 | 5 | 0 | 0 | 100.0% (5/5) | 100.0% (5/5) |
 | Market Indicators | 3 | 0 | 3 | 0 | 0 | 100.0% (3/3) | 100.0% (3/3) |
 | Account | 1 | 0 | 0 | 1 | 0 | 0.0% (0/1) | 100.0% (1/1) |
 | Asset | 1 | 1 | 0 | 0 | 0 | 100.0% (1/1) | 100.0% (1/1) |
@@ -68,7 +68,7 @@
 | Order History | 2 | 2 | 0 | 0 | 0 | 100.0% (2/2) | 100.0% (2/2) |
 | Order Info | 3 | 2 | 1 | 0 | 0 | 100.0% (3/3) | 100.0% (3/3) |
 | Realtime | 3 | 0 | 3 | 0 | 0 | 100.0% (3/3) | 100.0% (3/3) |
-| **합계** | 45 | 18 | 18 | 9 | 0 | 80.0% (36/45) | 100.0% (45/45) |
+| **합계** | 45 | 18 | 24 | 3 | 0 | 93.3% (42/45) | 100.0% (45/45) |
 
 ## 출처
 
@@ -122,17 +122,17 @@
 | API 이름 | 엔드포인트 | 시장 | 상태 | 메서드 | 검증 | 제안 | 명세 | 비고 |
 |---|---|---|---|---|---|---|---|---|
 | 주식 랭킹(상위 100) | `GET /api/v1/rankings` | 국내, 미국 | 확장 | `fetchRankings` | `real` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1rankings/get) | `excludeInvestmentCaution`은 `params`로 전달됩니다. |
-| 투자자별 순매수·순매도 랭킹(국내) | `GET /api/v1/rankings/investor-trading` | 국내 | 암묵 | `privateMarketGetRankingsInvestorTrading` | `spec-only` | `fetchInvestorTradingRankings` (확장) | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1rankings~1investor-trading/get) | 외국인·기관·개인의 순매수와 순매도 상위를 한 번에 줍니다(목록마다 최대 100위, 거래액은 KRX·NXT 통합 원화). 시세는 없습니다. 2026-11-02 명세(v1.2.28)에서 처음 확인했고, 공개 래퍼는 없습니다. |
+| 투자자별 순매수·순매도 랭킹(국내) | `GET /api/v1/rankings/investor-trading` | 국내 | 확장 | `fetchInvestorTradingRankings` | `spec-only` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1rankings~1investor-trading/get) | 외국인·기관·개인의 순매수와 순매도 상위를 한 번에 줍니다(목록마다 최대 100위, 거래액은 KRX·NXT 통합 원화). 시세는 없습니다. 2026-11-02 명세(v1.2.28)에서 처음 확인했습니다. `count` 기본값은 100입니다. |
 
 ### Sector
 
 | API 이름 | 엔드포인트 | 시장 | 상태 | 메서드 | 검증 | 제안 | 명세 | 비고 |
 |---|---|---|---|---|---|---|---|---|
-| 섹터 목록 | `GET /api/v1/sectors` | 국내, 미국 | 암묵 | `privateMarketGetSectors` | `spec-only` | `fetchSectors` (확장) | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1sectors/get) | 토스증권 자체 산업 분류 전체를 계층(`depth` 0~2, `parentSectorId`)과 함께 줍니다. 공식 문서는 하루 한 번 받아 두고 쓰라고 권합니다. 공개 래퍼는 없습니다. |
-| 섹터 랭킹(상위 100) | `GET /api/v1/sectors/rankings` | 국내, 미국 | 암묵 | `privateMarketGetSectorsRankings` | `spec-only` | `fetchSectorRankings` (확장) | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1sectors~1rankings/get) | `type`(`TOP_GAINERS`, `MARKET_TRADING_AMOUNT`), `marketCountry`, `duration`이 필수입니다. 대분류와 중분류만 나옵니다. 호출 한도 그룹은 `SECTOR_RANKING`입니다. 공개 래퍼는 없습니다. |
-| 섹터 상세 | `GET /api/v1/sectors/{sectorId}` | 국내, 미국 | 암묵 | `privateMarketGetSectorsSectorId` | `spec-only` | `fetchSector` (확장) | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1sectors~1{sectorId}/get) | 기본 정보와 `marketCountry` 기준 기간별 등락률(소수 비율, 6개 기간)을 줍니다. 목록에 없는 `sectorId`는 404 `sector-not-found`(`BadRequest`)입니다. 공개 래퍼는 없습니다. |
-| 섹터 구성 주식 | `GET /api/v1/sectors/{sectorId}/stocks` | 국내, 미국 | 암묵 | `privateMarketGetSectorsSectorIdStocks` | `spec-only` | `fetchSectorStocks` (확장) | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1sectors~1{sectorId}~1stocks/get) | 하위 섹터를 포함한 보통주를 시가총액 내림차순으로 줍니다. 미국 종목도 금액은 원화 환산값입니다. 공개 래퍼는 없습니다. |
-| 섹터 관련 ETF | `GET /api/v1/sectors/{sectorId}/etfs` | 국내, 미국 | 암묵 | `privateMarketGetSectorsSectorIdEtfs` | `spec-only` | `fetchSectorEtfs` (확장) | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1sectors~1{sectorId}~1etfs/get) | 이 섹터로 분류된 ETF의 심볼과 이름만 줍니다(하위 섹터 미포함). 공개 래퍼는 없습니다. |
+| 섹터 목록 | `GET /api/v1/sectors` | 국내, 미국 | 확장 | `fetchSectors` | `spec-only` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1sectors/get) | 토스증권 자체 산업 분류 전체를 계층(`depth` 0~2, `parentSectorId`)과 함께 줍니다. 공식 문서는 하루 한 번 받아 두고 쓰라고 권합니다. |
+| 섹터 랭킹(상위 100) | `GET /api/v1/sectors/rankings` | 국내, 미국 | 확장 | `fetchSectorRankings` | `spec-only` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1sectors~1rankings/get) | `type`(`TOP_GAINERS`, `MARKET_TRADING_AMOUNT`), `marketCountry`, `duration`이 필수입니다. 메서드는 `marketCountry`를 `KR`, `duration`을 `1d`로 기본값을 채웁니다. 대분류와 중분류만 나옵니다. 호출 한도 그룹은 `SECTOR_RANKING`입니다. |
+| 섹터 상세 | `GET /api/v1/sectors/{sectorId}` | 국내, 미국 | 확장 | `fetchSector` | `spec-only` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1sectors~1{sectorId}/get) | 기본 정보와 `marketCountry` 기준 기간별 등락률(소수 비율, 6개 기간)을 줍니다. 목록에 없는 `sectorId`는 404 `sector-not-found`(`BadRequest`)입니다. `sectorId`가 없으면 요청 없이 `ArgumentsRequired`입니다. `marketCountry` 기본값은 `KR`입니다. |
+| 섹터 구성 주식 | `GET /api/v1/sectors/{sectorId}/stocks` | 국내, 미국 | 확장 | `fetchSectorStocks` | `spec-only` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1sectors~1{sectorId}~1stocks/get) | 하위 섹터를 포함한 보통주를 시가총액 내림차순으로 줍니다. 미국 종목도 금액은 원화 환산값입니다. `marketCountry` 기본값은 `KR`입니다. |
+| 섹터 관련 ETF | `GET /api/v1/sectors/{sectorId}/etfs` | 국내, 미국 | 확장 | `fetchSectorEtfs` | `spec-only` | - | [명세](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json#/paths/~1api~1v1~1sectors~1{sectorId}~1etfs/get) | 이 섹터로 분류된 ETF의 심볼과 이름만 줍니다(하위 섹터 미포함). `marketCountry` 기본값은 `KR`입니다. |
 
 ### Market Indicators
 
@@ -217,7 +217,8 @@ ccxt의 통합 메서드로 표현하기 어려운 증권사 고유 기능입니
 | 거래정지, NXT 지원, 정리매매 여부 | 부분 | 1개 | `fetchStocks`가 원본을 반환합니다. 200종목을 초과해도 나누어 호출하지 않습니다. |
 | 투자자별 매매대금(시장 단위) | 지원 | 1개 | `fetchMarketInvestorTrading`으로 코스피와 코스닥 단위를 조회합니다. |
 | 종목 단위 수급 5종(국내 전용) | 지원 | 5개 | 투자자별 매매동향(`fetchStockInvestorTrading`), 프로그램매매 동향(`fetchProgramTrades`), 공매도 동향(`fetchShortSelling`), 신용거래 동향(`fetchCreditTrades`), 대차거래 동향(`fetchSecuritiesLending`)을 모두 지원합니다. |
-| 랭킹 | 지원 | 1개 | `fetchRankings`로 시장 전체 랭킹을 조회합니다. 토스증권 체결 기준이며 기간은 실시간부터 1년까지입니다. |
+| 랭킹 | 지원 | 2개 | `fetchRankings`로 시장 전체 랭킹을 조회합니다. 토스증권 체결 기준이며 기간은 실시간부터 1년까지입니다. 국내 투자자별(외국인, 기관, 개인) 순매수와 순매도 상위는 `fetchInvestorTradingRankings`로 조회합니다. |
+| 섹터(토스증권 산업 분류) | 지원 | 5개 | 목록(`fetchSectors`), 상세와 기간별 등락률(`fetchSector`), 구성 주식(`fetchSectorStocks`), 관련 ETF(`fetchSectorEtfs`), 섹터 랭킹(`fetchSectorRankings`)을 원본으로 반환합니다. |
 | 시장 지표(코스피, 코스닥, 국채 시세와 캔들) | 지원 | 2개 | 현재가(`fetchMarketIndicators`)와 캔들(`fetchMarketIndicatorOHLCV`)을 모두 지원합니다. |
 | 상한가와 하한가 | 지원 | 1개 | `fetchPriceLimit`로 조회합니다. 서버는 가격 범위를 벗어난 주문을 별도로 `price-out-of-range`로 거절합니다. |
 | 매도 가능 수량 | 지원 | 1개 | `fetchSellableQuantity`로 조회합니다. 오류 `insufficient-sellable-quantity`는 별도로 `InsufficientFunds`로 옮깁니다. |

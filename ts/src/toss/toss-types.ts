@@ -552,3 +552,81 @@ export interface TossRankingsResponse {
     rankedAt?: string | null;
     rankings?: TossRankingItem[];
 }
+
+/** 투자자별 순매수·순매도 랭킹 행. `netBuyAmount`·`netSellAmount` 는 KRX·NXT 통합 원화 정수 문자열이고 항상 양수다. */
+export interface TossInvestorTradingRankingItem {
+    rank: number;
+    symbol: string;
+    currency: TossCurrency;
+    netBuyAmount?: string;
+    netSellAmount?: string;
+}
+
+/** 투자자 한 유형의 순매수·순매도 상위 목록. `rankedAt` 은 투자자마다 다를 수 있고 데이터가 없으면 `null`이다. */
+export interface TossInvestorNetTradingRanking {
+    rankedAt: string | null;
+    netBuyRankings: TossInvestorTradingRankingItem[];
+    netSellRankings: TossInvestorTradingRankingItem[];
+}
+
+/** `GET /rankings/investor-trading` 응답(국내 전용). 외국인·기관·개인 각각의 순매수·순매도 상위다. */
+export interface TossInvestorTradingRankings {
+    foreigner: TossInvestorNetTradingRanking;
+    institution: TossInvestorNetTradingRanking;
+    individual: TossInvestorNetTradingRanking;
+}
+
+// ============ 섹터 ============
+
+/** 섹터 목록(`GET /sectors`)의 항목. `depth` 는 0(대분류)·1(중분류)·2(소분류)이고, 대분류의 `parentSectorId` 는 `null`이다. */
+export interface TossSector {
+    sectorId: string;
+    name: string;
+    depth: number;
+    parentSectorId: string | null;
+}
+
+/** 섹터 기간 등락률. `changeRate` 는 퍼센트가 아니라 소수 비율이고(`0.0179` 는 1.79%), 그 기간 데이터가 없으면 `null`이다. */
+export interface TossSectorChangeRate {
+    duration: '1d' | '1w' | '1mo' | '3mo' | '6mo' | '1y' | string;
+    changeRate: string | null;
+}
+
+/** 섹터 상세(`GET /sectors/{sectorId}`). `performance.changeRates` 는 요청한 `marketCountry` 기준이고 `1d`부터 `1y`까지 6건이다. */
+export interface TossSectorDetail extends TossSector {
+    summary: string | null;
+    performance: { changeRates: TossSectorChangeRate[] };
+}
+
+/** 섹터 구성 주식. 금액은 `currency` 를 따르고 미국 종목도 원화 환산값이다. 시세가 없으면 숫자 필드가 `null`이다. */
+export interface TossSectorStock {
+    symbol: string;
+    name: string;
+    volume: string | null;
+    tradingAmount: string | null;
+    marketCapitalization: string | null;
+    currency: TossCurrency;
+}
+
+/** 섹터 관련 ETF. 심볼과 이름만 온다. */
+export interface TossSectorEtf {
+    symbol: string;
+    name: string;
+}
+
+/** 섹터 랭킹 종류. `TOP_GAINERS` 는 기간 등락률, `MARKET_TRADING_AMOUNT` 는 기간 누적 거래대금 기준이다. */
+export type TossSectorRankingType = 'TOP_GAINERS' | 'MARKET_TRADING_AMOUNT';
+
+/**
+ * 섹터 랭킹 행. `changeRate` 는 소수 비율이다. `tradingAmount`·`marketCapitalization` 은 `currency` 를 따르고 미국도 원화 환산값이며,
+ * 데이터가 없으면 `null`이다. `marketCapitalization` 은 하위 섹터를 포함하지 않는다.
+ */
+export interface TossSectorRankingItem {
+    rank: number;
+    sectorId: string;
+    name: string;
+    changeRate: string | null;
+    tradingAmount: string | null;
+    marketCapitalization: string | null;
+    currency: TossCurrency;
+}
