@@ -176,6 +176,13 @@ import {
     type TossPaginatedOrders,
     type TossRankingItem,
     type TossRankingType,
+    type TossInvestorTradingRankings,
+    type TossSector,
+    type TossSectorDetail,
+    type TossSectorEtf,
+    type TossSectorRankingItem,
+    type TossSectorRankingType,
+    type TossSectorStock,
     type TossStockInfo,
     type TossStockWarning,
     type TossUsMarketCalendar,
@@ -1094,6 +1101,67 @@ export class toss extends Exchange {
     ): Promise<TossRankingItem[]> {
         const response = await this.privateMarketGetRankings(this.extend({ type, marketCountry, duration, count }, params));
         return this.safeList(this.unwrap(response), 'rankings', []) as TossRankingItem[];
+    }
+
+    /**
+     * 투자자별 순매수·순매도 랭킹(`GET /rankings/investor-trading`, 국내 전용). 외국인·기관·개인 각각의 순매수와 순매도 상위를 한 번에 준다.
+     * `count` 는 목록마다 적용되고 최대 100이다. 거래액은 KRX·NXT 통합 원화이고 시세는 없다.
+     */
+    async fetchInvestorTradingRankings(count = 100, params: Dict = {}): Promise<TossInvestorTradingRankings> {
+        const response = await this.privateMarketGetRankingsInvestorTrading(this.extend({ count }, params));
+        return this.unwrap<TossInvestorTradingRankings>(response);
+    }
+
+    // ============ 섹터 ============
+
+    /** 섹터 목록(`GET /sectors`). 토스증권 자체 산업 분류 전체를 계층과 함께 준다. 공식 문서는 하루 한 번 받아 두고 쓰라고 권한다. */
+    async fetchSectors(params: Dict = {}): Promise<TossSector[]> {
+        const response = await this.privateMarketGetSectors(params);
+        return this.safeList(this.unwrap(response), 'sectors', []) as TossSector[];
+    }
+
+    /**
+     * 섹터 상세(`GET /sectors/{sectorId}`). 기본 정보와 `marketCountry` 시장 기준 기간별 등락률(소수 비율, 6개 기간)을 준다.
+     * `sectorId` 가 없으면 요청 없이 `ArgumentsRequired` 다. 목록에 없는 `sectorId` 는 서버가 404 `sector-not-found`(`BadRequest`)로 거절한다.
+     */
+    async fetchSector(sectorId: string, marketCountry: StockMarketGroup = 'KR', params: Dict = {}): Promise<TossSectorDetail> {
+        if (sectorId === undefined || sectorId === '') throw new ArgumentsRequired(`${this.id} fetchSector() requires a sectorId argument`);
+        const response = await this.privateMarketGetSectorsSectorId(this.extend({ sectorId, marketCountry }, params));
+        return this.unwrap<TossSectorDetail>(response);
+    }
+
+    /**
+     * 섹터 구성 주식(`GET /sectors/{sectorId}/stocks`). 하위 섹터를 포함한 `marketCountry` 시장의 보통주를 시가총액 내림차순으로 준다.
+     * `symbol` 은 접미사 없는 종목코드다. 금액은 미국 종목도 원화 환산값이다. `sectorId` 가 없으면 요청 없이 `ArgumentsRequired` 다.
+     */
+    async fetchSectorStocks(sectorId: string, marketCountry: StockMarketGroup = 'KR', params: Dict = {}): Promise<TossSectorStock[]> {
+        if (sectorId === undefined || sectorId === '') throw new ArgumentsRequired(`${this.id} fetchSectorStocks() requires a sectorId argument`);
+        const response = await this.privateMarketGetSectorsSectorIdStocks(this.extend({ sectorId, marketCountry }, params));
+        return this.safeList(this.unwrap(response), 'stocks', []) as TossSectorStock[];
+    }
+
+    /**
+     * 섹터 관련 ETF(`GET /sectors/{sectorId}/etfs`). 이 섹터로 분류된 `marketCountry` 시장 ETF 의 심볼과 이름만 준다(하위 섹터 미포함).
+     * `sectorId` 가 없으면 요청 없이 `ArgumentsRequired` 다.
+     */
+    async fetchSectorEtfs(sectorId: string, marketCountry: StockMarketGroup = 'KR', params: Dict = {}): Promise<TossSectorEtf[]> {
+        if (sectorId === undefined || sectorId === '') throw new ArgumentsRequired(`${this.id} fetchSectorEtfs() requires a sectorId argument`);
+        const response = await this.privateMarketGetSectorsSectorIdEtfs(this.extend({ sectorId, marketCountry }, params));
+        return this.safeList(this.unwrap(response), 'etfs', []) as TossSectorEtf[];
+    }
+
+    /**
+     * 섹터 랭킹 상위 100(`GET /sectors/rankings`). 대분류와 중분류만 나온다. `duration` 은 `1d`·`1w`·`1mo`·`3mo`·`6mo`·`1y` 이고 거래일 기준이다.
+     * `changeRate` 는 퍼센트가 아니라 소수 비율이다.
+     */
+    async fetchSectorRankings(
+        type: TossSectorRankingType,
+        marketCountry: StockMarketGroup = 'KR',
+        duration = '1d',
+        params: Dict = {},
+    ): Promise<TossSectorRankingItem[]> {
+        const response = await this.privateMarketGetSectorsRankings(this.extend({ type, marketCountry, duration }, params));
+        return this.safeList(this.unwrap(response), 'rankings', []) as TossSectorRankingItem[];
     }
 
     // ============ 장 운영 캘린더와 세션 ============

@@ -43,10 +43,52 @@ KBSEC_TR = {
     'MARKET_STATUS': 'SZQM0771',
     # 종목별투자자
     'INVESTOR_TRADING': 'IVU10430',
+    # 공휴일관리(미국). 처리구분은 설명의 조회(`4`)를 보낸다.
+    'HOLIDAYS_US': 'SPAM2508',
+    # 종목기본정보. 종목명, 종목유형, 매매제한, 위험등급이다.
+    'SECURITY_INFO': 'SIQM4900',
+    # 등락률상위
+    'RANK_FLUCTUATION': 'IVU10240',
+    # 거래량상위
+    'RANK_VOLUME': 'IVU10280',
+    # 프로그램매매상위
+    'RANK_PROGRAM_TRADING': 'IVS10920',
+    # 거래대금상위
+    'RANK_TRADING_VALUE': 'IVU10210',
+    # 시가대비등락률상위
+    'RANK_OPEN_CHANGE_RATE': 'IVS10910',
+    # 환율종합
+    'EXCHANGE_RATES': 'IVA60190',
+    # 세계지수
+    'WORLD_INDICES': 'IVA60140',
+    # 종목기업개요
+    'COMPANY_PROFILE': 'IVM10050',
+    # 신고/신저
+    'NEW_HIGH_LOW': 'IVU10550',
+    # 외국인기관매매상위
+    'INVESTOR_RANKING': 'IVU10020',
+    # 증시주변자금동향
+    'MARKET_FUND_FLOW': 'IVA10370',
+    # 기간외등락률순위
+    'RANK_EXTENDED_HOURS_CHANGE_RATE': 'IVS11190',
+    # 급등/급락 상위
+    'RANK_SURGE_PLUNGE': 'IVU10270',
+    # 당일주요외국계거래원
+    'FOREIGN_BROKERS': 'IVU10420',
+    # 종목별프로그램매매추이
+    'PROGRAM_TRADING_TREND': 'IVU10450',
+    # 시장종합
+    'MARKET_OVERVIEW': 'IVSA0070',
+    # 테마그룹조회
+    'THEME_GROUPS': 'IVS11430',
+    # 업종랭킹. 필드가 같은 그리드 둘을 준다.
+    'RANK_SECTOR': 'IVM30010',
     # 해외 현재가
     'QUOTE_US': 'GSS10030',
     # 해외 호가
     'ORDERBOOK_US': 'GSS10040',
+    # 해외 차트. 15분 지연 시세다. 봉 시각은 미국 동부 현지 시각이다.
+    'CHART_US': 'GSC10060',
     # 해외 시간대별체결
     'TRADES_TIMELINE_US': 'GSA10020',
     # 계좌별주문체결조회
@@ -65,6 +107,79 @@ KBSEC_TR = {
     'ONEMARKET_MARGIN': 'SPQM3390',
     # 해외 잔고평가. 그리드가 둘이다(통화별 예수금과 종목별 보유). 첫 배열을 집으면 예수금 쪽을 집는다.
     'HOLDINGS_US': 'SPQM2226',
+    # 주식자산평가조회(실시간)
+    'ASSET_EVAL_REALTIME': 'SSQN2952',
+    # 총 잔고 조회. 계좌별 평가액, 예수금, 출금가능금액이다.
+    'ACCOUNT_SUMMARY': 'SSQM0005',
+    # 종합계좌 잔고현황 조회(종합위탁계좌, 신연금저축계좌)
+    'INTEGRATED_BALANCE': 'SSQM2932',
+    # 평가손익 조회
+    'UNREALIZED_PNL': 'SSQM0006',
+    # 국내주식 소수점 매매 보유잔고내역 조회
+    'FRAC_HOLDINGS_KR': 'SSQM5472',
+    # 계좌원장 거래내역 조회(위탁·금융상품·저축)
+    'LEDGER': 'SWQA2301',
+    # 계좌원장 거래내역 조회(CMA)
+    'LEDGER_CMA': 'SWQB2301',
+    # 익일·익익일 출금가능금액 조회
+    'WITHDRAWABLE': 'SWQN2302',
+    # 개인별쿠폰 조회
+    'COUPONS': 'SZQM6019',
+    # 거래내역상세 조회. 거래 한 건(일자와 거래일련번호)의 상세다.
+    'LEDGER_DETAIL': 'SWQM2412',
+    # 예수금조회. 대용총액(`sbt_tl_amt`)이 한 레코드에 두 번 있다.
+    'DEPOSIT_DETAIL': 'SWQM2302',
+    # 글로벌원마켓 증거금사용현황
+    'ONEMARKET_MARGIN_USAGE': 'SPQN3390',
+    # 매매정산현황상세(원마켓플러스)
+    'ONEMARKET_SETTLEMENT_DETAIL': 'SKQO3390',
+    # 매수주문가능금액 조회(국내)
+    'BUYABLE_KR': 'SSQM1802',
+    # 계좌별매매가정산현황(국내). KB 가 실제로 청구한 국내 매매비용의 정본이다. 행 파서는 `kbsec_settlement_row` 다.
+    'SETTLEMENT_KR': 'SSQM2121',
+    # 일자별실현손익상세. 매체구분(`md_clsf`)은 호출하는 쪽이 고른다.
+    'PNL_DAILY': 'SSQM2442',
+    # 종목별기간실현손익. 종목 단위 기간 합계라 개별 매매로 나눌 수 없다.
+    'PNL_BY_SYMBOL': 'SSQM2443',
+    # 기간매매손익현황
+    'PNL_PERIOD': 'SSQM2392',
+    # 소수점 주문가능금액(국내)
+    'FRAC_BUYABLE_KR': 'SSQN5472',
+    # 소수점 매매 내역 조회(국내)
+    'FRAC_TRADES_KR': 'SSQM5765',
+    # 온주/소수점 주문체결내역 조회(국내)
+    'FRAC_ORDERS_KR': 'SSQM5475',
+    # 예약주문접수(현금신용통합, 국내)
+    'RESERVED_ORDER_KR': 'SSAM0831',
+    # 예약주문처리 조회(국내)
+    'RESERVED_RESULTS_KR': 'SSQM0831',
+    # 예약주문접수 조회(국내)
+    'RESERVED_ORDERS_KR': 'SSQM0834',
+    # 계좌권리발생내역
+    'CORPORATE_ACTIONS': 'SRQM3051',
+    # 해외 소수점 주문가능금액 조회
+    'FRAC_BUYABLE_US': 'SPQN5472',
+    # 해외 소수점 보유잔고내역 조회
+    'FRAC_HOLDINGS_US': 'SPQM5472',
+    # 해외 소수점 주문접수내역 조회(주문용)
+    'FRAC_ORDERS_US': 'SPQN5473',
+    # 해외 소수점 주문접수내역조회. 기간, 체결 결과와 요약 그리드를 준다.
+    'FRAC_ORDER_HISTORY_US': 'SPQM5473',
+    # 주식예약주문(미국)
+    'RESERVED_ORDER_US': 'SPAO2104',
+    # 예약주문취소(미국)
+    'RESERVED_CANCEL_US': 'SPAO2106',
+    # 해외 주문번호별주문내역
+    'ORDER_HISTORY_US': 'SPQM1818',
+    # 원마켓플러스 주문가능금액(종목·가격 지정). 원화환산 주문가능액을 준다.
+    'ONEMARKET_BUYABLE': 'SKQM2106',
+    # 원마켓플러스 주문가능금액 현황(통화별 총괄)
+    'ONEMARKET_BUYABLE_ALL': 'SKQM3350',
+    # 해외 주문가능금액. 원마켓이 아닌 계좌용이다.
+    'BUYABLE_US': 'SPQM2106',
+    # 매매가정산현황(해외). KB 가 실제로 청구한 해외 매매비용의 정본이다. 국내 `SETTLEMENT_KR` 과 매매구분 도메인이 다르다(`99`/`01`/`02`).
+    # 행 파서는 `kbsec_overseas_settlement_row` 다.
+    'SETTLEMENT_US': 'SPQM2205',
     # 현금매수주문(국내)
     'BUY_KR': 'SSAM1802',
     # 현금매도주문(국내)
@@ -155,6 +270,23 @@ KBSEC_CONT_NEXT = '1'
 KBSEC_STD_CURRENCY_FOREIGN = '1'
 KBSEC_EXCH_RATE_MARKET = '2'
 KBSEC_FEE_EXCLUDED = '1'
+
+# 세계지수(`IVA60140`) 조회 범위(`lnd_clsf`). 공식 예제는 `MAJOR`(주요지수)를 기본값으로 쓴다.
+KBSEC_WORLD_INDEX_SCOPE_CODE = {'MAJOR': '1', 'AMERICA': 'C', 'EUROPE': 'E', 'ASIA': 'S'}
+# 신고가/신저가 구분(`nw_stk_lw_ccd`).
+KBSEC_HIGH_LOW_TYPE_CODE = {'HIGH': '1', 'LOW': '2'}
+# 투자자구분코드(`invstr_ccd`, `IVU10020`).
+KBSEC_INVESTOR_CODE = {
+    'FOREIGNER': '0', 'INSTITUTION': '1', 'FOREIGNER_INSTITUTION': '2', 'SECURITIES': '3', 'INSURANCE': '4',
+    'INVESTMENT_TRUST': '5', 'PRIVATE_EQUITY': '6', 'BANK': '7', 'MERCHANT_BANK': '8', 'FUND': '9',
+    'OTHER': 'A', 'GOVERNMENT': 'B', 'INDIVIDUAL': 'C', 'OTHER_FOREIGNER': 'D',
+}
+# 외국인·기관매매상위의 순위구분(`rnk_clsf`).
+KBSEC_INVESTOR_RANKING_TYPE_CODE = {'BUY': '0', 'SELL': '1', 'HOLDING_UP': '2', 'HOLDING_DOWN': '3', 'CONSECUTIVE_BUY': '4', 'CONSECUTIVE_SELL': '5'}
+# 업종랭킹(`IVM30010`)의 시장구분(`mkt_clsf`).
+KBSEC_SECTOR_MARKET_CODE = {'KOSPI': '1', 'KOSDAQ': '2'}
+# 종목별기간실현손익(`SSQM2443`)의 매체구분(`md_clsf`). 설명대로 오프라인 `1`, 온라인 `2`, 지점 `3` 이다.
+KBSEC_MEDIA_CLASS_CODE = {'OFFLINE': '1', 'ONLINE': '2', 'BRANCH': '3'}
 
 _A_PREFIXED_CODE = re.compile(r'A([0-9A-Za-z]{6})')
 _KR_ISIN = re.compile(r'KR7([0-9A-Za-z]{6})[0-9A-Za-z]{3}')

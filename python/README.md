@@ -20,7 +20,7 @@ Python 3.11 이상이 필요하고, 의존성은 `requests`(동기 판), `aiohtt
 - 한국투자증권(`kr_broker.kis`), 토스증권(`kr_broker.toss`), KB증권(`kr_broker.kbsec`)의 인증, 서명, 오류 처리, 호출 간격 조절입니다.
 - 세 증권사의 모든 엔드포인트를 암묵 메서드로 부를 수 있습니다. 한국투자증권 272개, 토스증권 42개, KB증권 83개입니다.
 - 아래 표의 통합 메서드를 부를 수 있습니다. 실시간(`watch_ticker`, `watch_trades`, `watch_order_book`, `watch_orders`)은 `kr_broker.pro`에 있습니다.
-- KB증권은 TypeScript 판에서 옮기는 중입니다. 통합 메서드는 모두 옮겨서 `has`가 TypeScript 판과 같습니다. 고유 조회는 아래 표의 메서드만 옮겼고, TypeScript 판의 나머지 확장 메서드(정산, 매수가능금액, 소수점 주문 내역, 예약주문, 계좌원장, 순위 등)는 아직 없습니다. KB증권은 웹소켓을 제공하지 않아서 `kr_broker.pro`에 없습니다.
+- KB증권은 TypeScript 판의 공개 메서드를 모두 옮겼습니다. 통합 메서드의 `has`가 TypeScript 판과 같고, 고유 조회와 계좌 확장 메서드(매수가능금액, 잔고·손익, 소수점 내역, 예약주문, 계좌원장, 정산, 권리 발생 내역 등)도 같은 이름으로 부를 수 있습니다. KB증권은 웹소켓을 제공하지 않아서 `kr_broker.pro`에 없습니다.
 
 | 분류 | 한국투자증권 통합 메서드 | 토스증권 통합 메서드 | KB증권 통합 메서드 |
 |---|---|---|---|
@@ -28,9 +28,9 @@ Python 3.11 이상이 필요하고, 의존성은 `requests`(동기 판), `aiohtt
 | 잔고와 수수료 | `fetch_balance`, `fetch_trading_fee` | `fetch_balance`, `fetch_trading_fee` | `fetch_balance`, `fetch_trading_fee` |
 | 주문 | `create_order`, `create_limit_order`, `create_market_order`, `create_trigger_order`, `edit_order`, `cancel_order`, `cancel_all_orders` | `create_order`, `create_limit_order`, `create_market_order`, `create_market_buy_order_with_cost`, `create_trigger_order`, `edit_order`, `cancel_order`, `cancel_all_orders` | `create_order`, `create_limit_order`, `create_market_order`, `create_market_buy_order_with_cost`, `create_trigger_order`, `edit_order`, `cancel_order`, `cancel_all_orders` |
 | 주문 조회 | `fetch_order`, `fetch_orders`, `fetch_open_orders`, `fetch_closed_orders`, `fetch_canceled_orders`, `fetch_my_trades` | `fetch_order`, `fetch_open_orders`, `fetch_closed_orders`, `fetch_canceled_orders`, `fetch_my_trades` | `fetch_order`, `fetch_orders`, `fetch_open_orders`, `fetch_closed_orders`, `fetch_canceled_orders`, `fetch_my_trades` |
-| 고유 조회 | `fetch_market_calendar`, `fetch_volatility_interruptions`, `fetch_investor_trading`, `fetch_rankings` | `fetch_market_calendar`, `fetch_stock_warnings`, `fetch_market_investor_trading`, `fetch_rankings` | `fetch_market_calendar`, `fetch_investor_trading`, `fetch_overseas_order_status`, `fetch_one_market_margin` |
+| 고유 조회 | `fetch_market_calendar`, `fetch_volatility_interruptions`, `fetch_investor_trading`, `fetch_rankings` | `fetch_market_calendar`, `fetch_stock_warnings`, `fetch_market_investor_trading`, `fetch_rankings`, `fetch_investor_trading_rankings`, `fetch_sectors`, `fetch_sector`, `fetch_sector_stocks`, `fetch_sector_etfs`, `fetch_sector_rankings` | `fetch_market_calendar`, `fetch_investor_trading`, `fetch_overseas_order_status`, `fetch_one_market_margin`, `fetch_stocks`, `fetch_trading_restriction`, `fetch_company_profile`, `fetch_foreign_brokers`, `fetch_program_trading_trend`, `fetch_market_overview`, `fetch_rankings`, `fetch_new_high_low`, `fetch_investor_ranking`, `fetch_theme_groups`, `fetch_sector_ranking`, `fetch_market_fund_flow`, `fetch_exchange_rates`, `fetch_world_indices`, `fetch_holidays`, `fetch_overseas_candles`, `fetch_buyable_amount`, `fetch_overseas_buyable_amount`, `fetch_one_market_buying_power`, `fetch_overseas_orderable_amount`, `fetch_fractional_buyable_amount`, `fetch_unrealized_pnl`, `fetch_account_summary`, `fetch_realtime_asset_valuation`, `fetch_integrated_balance`, `fetch_realized_pnl`, `fetch_realized_pnl_daily`, `fetch_realized_pnl_by_symbol`, `fetch_fractional_holdings`, `fetch_overseas_fractional_holdings`, `fetch_fractional_trades`, `fetch_fractional_orders`, `fetch_overseas_fractional_orders`, `fetch_overseas_fractional_order_history`, `fetch_reserved_order_results`, `fetch_reserved_orders`, `fetch_account_ledger`, `fetch_cma_ledger`, `fetch_ledger_entry_detail`, `fetch_withdrawable_amount`, `fetch_deposit_details`, `fetch_one_market_margin_usage`, `fetch_one_market_settlement_detail`, `fetch_corporate_actions`, `fetch_coupons`, `fetch_overseas_orders`, `fetch_domestic_settlements`, `fetch_overseas_settlements`, `create_reserved_order`, `cancel_reserved_order` |
 
-고유 조회는 이름이 같아도 증권사마다 인자와 결과가 다를 수 있습니다. 예를 들어 `fetch_rankings`는 순위 종류(`type`)의 값과 뒤따르는 인자가 한국투자증권과 토스증권에서 다릅니다. 토스증권의 시장 단위 투자자 매매동향은 `fetch_market_investor_trading`입니다. 옛 이름 `fetch_investor_trading`은 한 판 동안 경고 로그를 남기고 동작합니다.
+고유 조회는 이름이 같아도 증권사마다 인자와 결과가 다를 수 있습니다. 예를 들어 `fetch_rankings`는 순위 종류(`type`)의 값과 뒤따르는 인자가 세 증권사에서 다릅니다. 토스증권의 시장 단위 투자자 매매동향은 `fetch_market_investor_trading`입니다. 옛 이름 `fetch_investor_trading`은 한 판 동안 경고 로그를 남기고 동작합니다. KB증권의 매매제한·위험등급 조회는 `fetch_trading_restriction`이고, 옛 이름 `fetch_stock_warnings`도 한 판 동안 경고 로그를 남기고 동작합니다.
 
 ## 쓰는 법
 
@@ -133,6 +133,12 @@ TypeScript 판은 네트워크 인터페이스 목록에서 첫 외부 IPv4 주�
 장 시간 밖이면 요청 없이 `MarketClosed`를 던지고, 국내는 판정 전에 휴장일 캘린더(`SZQM0771`)를 받습니다. 미국 종목은 `options['masterData']`로 상장 거래소를 알아야 주문합니다.
 접수 뒤에는 체결내역으로 체결을 확정하고, 확정하지 못하면 `filled`를 비우고 `info['fillConfirmed']`가 `False`입니다. 미국 시장가 매수는 매도호가에 버퍼를 더한 지정가로 바꿔 냅니다.
 `edit_order`의 `amount`는 정정 뒤 총수량이고, 미국 정정에 `amount`를 주면 `NotSupported`입니다. `cancel_all_orders`는 국내 미체결만 취소하고, 실패한 주문은 던지지 않고 `info['cancelError']`에 싣습니다.
+
+예약주문(`create_reserved_order`, `cancel_reserved_order`)도 주문 TR이라 다시 보내지 않고, 시간 초과나 연결 끊김은 `OrderOutcomeUnknown`입니다. 장 밖에 걸어 두는 주문이라 장 시간 게이트는 거치지 않습니다.
+국내는 지정가와 시장가, 미국은 지정가만 받습니다. 수량은 내림하고 1주 미만이면 요청 없이 `InvalidOrder`입니다. 국내 예약주문을 취소하는 TR은 명세에 없어서 `cancel_reserved_order`는 미국 종목만 받습니다.
+
+계좌 확장 조회 가운데 연속조회를 하는 메서드(`fetch_account_ledger`, `fetch_unrealized_pnl` 등)는 `{'rows', 'truncated'}`를 돌려줍니다. 다음 쪽을 끝까지 따라가고, 페이지 상한(`options['holdingsMaxPages']`, 계좌원장은 `ledgerMaxPages`, 정산은 `settlementMaxPages`)에 걸리면 `truncated`가 `True`입니다.
+정산(`fetch_domestic_settlements`, `fetch_overseas_settlements`)은 조회가 실패해도 던지지 않고 `{'ok': False, 'error'}`를 돌려줍니다. 정산 0건(`ok`가 `True`이고 `rows`가 빈 목록)과 조회 실패를 가르기 위해서입니다.
 
 ### 오류
 
