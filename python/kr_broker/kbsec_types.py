@@ -55,6 +55,16 @@ KBSEC_TR = {
     'ORDERS_US': 'SPQM2103',
     # 해외 체결현황. 해외 주문번호별주문내역(`SPQM1818`)과 달리 단축종목코드를 준다.
     'ORDER_STATUS_US': 'SPQM2204',
+    # 예수금내역
+    'DEPOSIT': 'SSQM0004',
+    # 보유주식 조회
+    'HOLDINGS': 'SSQM1801',
+    # 계좌자산평가. 국내 보유의 1순위 조달처다. 실패하면 보유주식(`SSQM1801`) 경로로 내려간다.
+    'ASSET_EVAL': 'SSQM2952',
+    # 원마켓 계좌증거금. 원화·원화환산 외화 예수금이다.
+    'ONEMARKET_MARGIN': 'SPQM3390',
+    # 해외 잔고평가. 그리드가 둘이다(통화별 예수금과 종목별 보유). 첫 배열을 집으면 예수금 쪽을 집는다.
+    'HOLDINGS_US': 'SPQM2226',
 }
 
 # 통합차트 차트구분(`chrt_clsf`).
@@ -75,8 +85,13 @@ KBSEC_ORDER_TYPE_KR = {
 # 해외 거래소코드(`krx_cd`) 후보. 심볼의 상장 거래소를 늘 아는 것이 아니라 이 순서로 시도한다(찾은 값은 증권사 인스턴스가 캐시한다).
 KBSEC_US_EXCHANGES = ('NAS', 'NYS', 'AMX')
 
+# 시장시간구분(`mkt_tm_ccd`). 정규장만 쓴다.
+KBSEC_SESSION_REGULAR = '1'
 # 조회구분(`inq_clsf`, SSQM2341). `1` 주식, `2` 장내채권, `5` ELW, `6` 일반상품, `9` 전체다.
 KBSEC_INQ_STOCK = '1'
+# 조회구분 '전체'. 위 값 표는 SSQM2341 기준이고 보유주식(SSQM1801)에서 같은 뜻인지는 명세에 없다. 잔고 조회는 `1` 을 먼저 쓰고
+# 0건일 때만 이 값으로 다시 부른다(`_fetch_holding_rows`).
+KBSEC_INQ_ALL = '9'
 # 체결구분(`ccls_clsf`, SSQM2341). `0` 전체, `1` 체결, `2` 미체결이다. 빈 값으로 보내면 거부된다(`체결구분을 확인하십시오`, 8654).
 KBSEC_CCLS_ALL = '0'
 KBSEC_CCLS_FILLED = '1'
@@ -86,6 +101,11 @@ KBSEC_TRD_SELL = '1'
 # 연속구분(`cn_clsf`). `0` 은 첫 페이지, `1` 은 연속이다.
 KBSEC_CONT_FIRST = '0'
 KBSEC_CONT_NEXT = '1'
+# 해외 잔고평가(SPQM2226) 입력. 기준통화여부 `1` 외화기준(보유 평가를 USD 로 받는다), 환율적용여부 `2` 매매기준환율(원화 환산 필드에만 쓰인다),
+# 수수료구분 `1` 미포함(평가금액에 수수료를 섞지 않는다)이다.
+KBSEC_STD_CURRENCY_FOREIGN = '1'
+KBSEC_EXCH_RATE_MARKET = '2'
+KBSEC_FEE_EXCLUDED = '1'
 
 _A_PREFIXED_CODE = re.compile(r'A([0-9A-Za-z]{6})')
 _KR_ISIN = re.compile(r'KR7([0-9A-Za-z]{6})[0-9A-Za-z]{3}')

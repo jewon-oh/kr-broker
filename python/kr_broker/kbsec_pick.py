@@ -1,7 +1,7 @@
 """KB 응답 행에서 값을 뽑는 함수. TypeScript 판 `ts/src/kbsec/kbsec-pick.ts` 에서 Python 판이 쓰는 것만 옮겼다."""
 
 import logging
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from kr_broker.kbsec_number import kbsec_number_of, kbsec_string
 
@@ -49,6 +49,82 @@ def pick_positive_num(row: Optional[Mapping[str, Any]], *keys: str) -> float:
 def pick_str(row: Optional[Mapping[str, Any]], *keys: str) -> str:
     """공백이 아닌 첫 후보 문자열. 없으면 `''` 이다."""
     return kbsec_string(row, *keys)
+
+
+def kbsec_holding_quantity(row: Mapping[str, Any]) -> float:
+    """국내 보유주식(`SSQM1801`) 한 행의 보유수량. 수량 축 `gnrl_q`(결제완료)와 `ordr_psbl_q`(주문가능) 가운데 큰 쪽이다.
+
+    어느 쪽도 상대를 포함하지 않으므로 합이 아니라 max 다. `pick_num(row, 'gnrl_q', 'ordr_psbl_q')` 처럼 후보 목록에 맡기면 앞 필드가 0 이어도
+    채택해 미결제 매수분(`gnrl_q = 0`)이 보유 0 으로 읽힌다. 결제대기 매도 차감은 체결내역을 기준으로 하는 `_adjust_for_pending_sale` 이 맡는다.
+    """
+    return max(pick_num(row, 'gnrl_q'), pick_num(row, 'ordr_psbl_q'))
+
+
+# 해외 보유 그리드에서 수량일 수 있는 필드 후보. 진단 전용이다. 행이 전부 버려졌을 때 어느 필드가 0 이 아니었는지 이름만 남긴다.
+OVERSEAS_QTY_CANDIDATES = (
+    'frgn_hld_q_p6', 'frgn_ordr_psbl_q_p6', 'frgn_ordr_psbl_q1_p6',
+    'b_ccls_q_p6', 's_ccls_q_p6', 'b_ordr_q', 's_ordr_q',
+)
+
+
+def pick_grid(body: Optional[Mapping[str, Any]], is_grid: Callable[[Mapping[str, Any]], bool]) -> Dict[str, Any]:
+    """응답 본문의 배열 가운데 `is_grid` 를 만족하는 첫 배열을 고른다. 길이가 아니라 필드 이름으로 고른다. 결과는 `{'rows', 'seen'}` 이고
+    `seen` 은 본 배열들의 (길이, 첫 행 키)다. 배열이 둘인 TR 에서 첫 배열을 집으면 엉뚱한 그리드를 읽는다(해외 잔고평가 `SPQM2226`)."""
+    seen: List[Dict[str, Any]] = []
+    if not body:
+        return {'rows': [], 'seen': seen}
+    for value in body.values():
+        if not isinstance(value, list) or len(value) == 0:
+            continue
+        first = value[0]
+        seen.append({'len': len(value), 'keys': list(first)[:30] if isinstance(first, dict) else []})
+        if isinstance(first, dict) and is_grid(first):
+            return {'rows': value, 'seen': seen}
+    return {'rows': [], 'seen': seen}
+
+
+def unknown_grids(body: Optional[Mapping[str, Any]], known: List[Any]) -> List[Dict[str, Any]]:
+    """응답 본문에서 `known` 에 없는(같은 객체가 아닌) 비어 있지 않은 배열을 모두 찾는다. 객체 안에 든 배열도 본다. (길이, 첫 행 키)를 돌려준다."""
+    out: List[Dict[str, Any]] = []
+
+    def walk(value: Any) -> None:
+        if isinstance(value, list):
+            if len(value) > 0 and not any(value is grid for grid in known):
+                first = value[0]
+                out.append({'len': len(value), 'keys': list(first)[:30] if isinstance(first, dict) else []})
+            return
+        if isinstance(value, dict):
+            for item in value.values():
+                walk(item)
+
+    walk(body)
+    return out
+
+
+def pick_holding_grid(body: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
+    """해외 잔고평가(`SPQM2226`)의 종목 그리드. 종목코드나 보유수량 필드가 있는 배열이다."""
+    return pick_grid(body, lambda first: 'is_cd' in first or 'frgn_hld_q_p6' in first)
+
+
+def pick_cash_grid(body: Optional[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    """해외 잔고평가(`SPQM2226`)의 통화별 예수금 그리드. 통화 이름(`crncy_clsf_nm`)과 예수금(`tfnd`)이 있고 종목코드(`is_cd`)는 없다.
+    종목 그리드에도 통화 이름이 있으므로 예수금 필드까지 본다. 못 찾으면 빈 목록이다."""
+    return pick_grid(body, lambda first: 'crncy_clsf_nm' in first and 'tfnd' in first and 'is_cd' not in first)['rows']
+
+
+def is_usd_cash_row(row: Mapping[str, Any]) -> bool:
+    """통화별 예수금 그리드의 행이 달러 행인가. 명세에 통화 코드 필드가 없어 통화구분명이 `USD` 와 같은지(대소문자 무시)만 본다."""
+    return pick_str(row, 'crncy_clsf_nm').upper() == 'USD'
+
+
+# 빈 행이 되려면 숫자 0 이어야 하는 필드. 기준환율이 0 인 통화는 없으므로 이 행은 어느 통화의 행도 아니다.
+_EMPTY_CASH_ROW_ZERO_KEYS = ('std_exch_r', 'cnvr_exch_r_p4', 'tfnd', 'ordr_psbl_amt_p2')
+
+
+def is_empty_cash_row(row: Mapping[str, Any]) -> bool:
+    """통화별 예수금 그리드의 빈 행인가. 통화구분명이 비고 기준환율, 전환환율, 예수금, 주문가능금액이 모두 숫자 0 인 행이다.
+    외화 예수금이 없는 계좌에서 KB 는 이 그리드를 빈 행으로 채운다. 필드가 없거나 비어 있으면 0 으로 보지 않는다."""
+    return pick_str(row, 'crncy_clsf_nm') == '' and all(kbsec_number_of(row.get(key)) == 0 for key in _EMPTY_CASH_ROW_ZERO_KEYS)
 
 
 def pick_array(body: Optional[Mapping[str, Any]]) -> List[Dict[str, Any]]:
