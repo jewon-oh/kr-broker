@@ -14,9 +14,9 @@
 `fetch_fractional_trades`, `fetch_fractional_orders`, `fetch_overseas_fractional_orders`, `fetch_overseas_fractional_order_history`, 예약주문 조회
 `fetch_reserved_order_results`, `fetch_reserved_orders`, 계좌원장 `fetch_account_ledger`, `fetch_cma_ledger`, `fetch_ledger_entry_detail`,
 예수금 `fetch_withdrawable_amount`, `fetch_deposit_details`, `fetch_one_market_margin_usage`, `fetch_one_market_settlement_detail`, 그 밖에
-`fetch_corporate_actions`, `fetch_coupons`, `fetch_overseas_orders`, 정산 `fetch_domestic_settlements`, `fetch_overseas_settlements`)를 옮겼다.
-통합 메서드의 `has` 는 TypeScript 판과 같다. TypeScript 판의 예약주문(`createReservedOrder`, `cancelReservedOrder`)은 아직 옮기지 않았다. 모든 TR 은
-암묵 메서드로 부를 수 있다.
+`fetch_corporate_actions`, `fetch_coupons`, `fetch_overseas_orders`, 정산 `fetch_domestic_settlements`, `fetch_overseas_settlements`), 예약주문
+(`create_reserved_order`, `cancel_reserved_order`)을 옮겼다. 공개 메서드와 통합 메서드의 `has` 는 TypeScript 판과 같다. 모든 TR 은 암묵 메서드로
+부를 수 있다.
 
 .. code-block:: python
 
@@ -38,7 +38,8 @@
     거절이라 재발급 뒤 한 번 다시 보낸다). 주문과 정정은 장 시간 밖이면 요청 없이 `MarketClosed` 다. 판정은 세 증권사 공용 게이트(`trading_hours`)이고,
     국내는 판정 전에 휴장일 캘린더를 받는다. 미국 종목은 `options['masterData']` 로 상장 거래소를 알아야 낸다. 국내 지정가는 `masterData` 가
     주식이라고 알려 주면 호가 단위를 요청 전에 확인한다(`InvalidOrder`, `detail` `price-tick-invalid`). 접수 뒤에는 체결내역(`fetch_my_trades`)으로
-    체결을 확정하고, 확정하지 못하면 `info['fillConfirmed']` 가 `False` 다. 메서드마다 규칙은 메서드 설명에 있다.
+    체결을 확정하고, 확정하지 못하면 `info['fillConfirmed']` 가 `False` 다. 예약주문(`create_reserved_order`, `cancel_reserved_order`)은 장 밖에
+    걸어 두는 주문이라 장 시간 게이트를 거치지 않지만, 주문 TR 이라 다시 보내지 않는 것은 같다. 메서드마다 규칙은 메서드 설명에 있다.
 
 요청
     모든 호출이 `POST /api/v1/{trcode}` 이고 본문은 `{dataHeader, dataBody}` 봉투다. `dataBody` 는 TR 입력 레이아웃(`kbsec_tr_inputs`)의 빠진 필드를
@@ -103,7 +104,7 @@ from kr_broker.kbsec_settlement_row import KBSEC_SETTLE_CLSF, KBSEC_SETTLE_TRD_C
 from kr_broker.kbsec_token_breaker import record_kbsec_call_ok, record_token_failure, throw_if_token_breaker_open
 from kr_broker.kbsec_tr_inputs import fill_tr_inputs
 from kr_broker.kbsec_types import (
-    KBSEC_API_BASE, KBSEC_CCLS_ALL, KBSEC_CCLS_FILLED, KBSEC_CCLS_PENDING, KBSEC_CHART_KIND, KBSEC_CONT_FIRST, KBSEC_CONT_NEXT,
+    KBSEC_API_BASE, KBSEC_CCLS_ALL, KBSEC_CCLS_FILLED, KBSEC_CCLS_PENDING, KBSEC_CHART_KIND, KBSEC_CONT_FIRST, KBSEC_CONT_NEXT, KBSEC_CREDIT_CASH,
     KBSEC_EXCH_RATE_MARKET, KBSEC_FEE_EXCLUDED, KBSEC_HIGH_LOW_TYPE_CODE, KBSEC_INQ_ALL, KBSEC_INQ_STOCK, KBSEC_INVESTOR_CODE,
     KBSEC_INVESTOR_RANKING_TYPE_CODE, KBSEC_MEDIA_CLASS_CODE, KBSEC_ORDER_SIDE_KR, KBSEC_ORDER_SIDE_US, KBSEC_ORDER_TYPE_KR, KBSEC_ORDER_TYPE_US,
     KBSEC_REVOKE_PATH, KBSEC_SECTOR_MARKET_CODE, KBSEC_SESSION_REGULAR, KBSEC_SOR, KBSEC_STD_CURRENCY_FOREIGN, KBSEC_TOKEN_DEFAULT_TTL_MS, KBSEC_TOKEN_PATH,
@@ -3283,7 +3284,79 @@ class kbsec(Exchange, ImplicitAPI):
                            date_from, date_to)
         return result
 
-    # ============ 예약주문 조회 ============
+    # ============ 예약주문 ============
+
+    def create_reserved_order(self, symbol: str, type: str, side: str, amount: float, price: Num = None,
+                                    params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """예약주문을 접수한다. 국내는 `SSAM0831`, 미국은 `SPAO2104` 다. 라이브 미검증이라 실계좌에서 최소 수량으로 먼저 확인할 것.
+        결과는 `{'id', 'symbol', 'side', 'type', 'amount', 'price', 'info'}` 다. 접수 응답에 예약주문번호가 없으면 `id` 를 비운다.
+
+        예약주문은 장 밖에서 걸어 두는 주문이라 거래시간 차단(`MarketClosed`)을 적용하지 않는다. 수량은 내림하고 1주 미만이면 요청 없이
+        `InvalidOrder` 다. 국내는 지정가(`00`)와 시장가(`03`)만, 미국은 지정가(`2`)만 받는다. 미국 시장가는 주문가격이 필수 입력인데 시장가일 때
+        보낼 값이 명세에 없어 요청 없이 `NotSupported` 다. 신용유형은 현금(`00`)이다. 기간예약(`strt_dt`·`end_dt`), 시간 지정 같은 설명 없는
+        선택 입력은 비워 보내고 `params` 로 채울 수 있다. 두 TR 모두 엔드포인트 표에 주문(`order`)으로 적혀 있어 실패해도 다시 보내지 않고,
+        시간 초과·연결 끊김은 `OrderOutcomeUnknown` 이다.
+        """
+        amount, price = cast(float, fn.decimal_to_float(amount)), cast(Optional[float], fn.decimal_to_float(price))
+        market = self.market(symbol)
+        base = market['id'] or ''
+        is_kr = not self._is_us(market)
+        if type != 'limit' and type != 'market':
+            raise NotSupported(f'{self.id} createReservedOrder() 는 지정가와 시장가만 지원한다: {type}')
+        if not is_kr and type == 'market':
+            raise NotSupported(f'{self.id} 미국 예약주문은 지정가만 지원한다(시장가의 주문가격 값이 명세에 없다)')
+        self.check_order_arguments(market, type, side, amount, price, params)
+        # JavaScript `Math.floor` 는 무한대를 그대로 둔다. Python `math.floor` 는 무한대에 던지므로 거른다(`check_order_arguments` 가 NaN 은 막는다).
+        submitted_qty = math.floor(amount) if math.isfinite(amount) else amount
+        if submitted_qty < 1:
+            raise InvalidOrder(f'{self.id} 예약주문은 1주 미만을 낼 수 없다 (수량 {amount})', detail=KBSEC_ERROR_DETAIL['QUANTITY_INVALID'])
+        is_limit = type == 'limit'
+        order_price = 0 if price is None else price
+        if is_kr:
+            response = self._call_tr(KBSEC_TR['RESERVED_ORDER_KR'], self.extend({
+                'ordr_jb_clsf': KBSEC_ORDER_SIDE_KR['BUY'] if side == 'buy' else KBSEC_ORDER_SIDE_KR['SELL'],
+                'is_cd': base,
+                'ordr_uprc': kbsec_num(order_price) if is_limit else '',
+                'ordr_q': kbsec_num(submitted_qty),
+                'ordr_ccd': KBSEC_ORDER_TYPE_KR['LIMIT'] if is_limit else KBSEC_ORDER_TYPE_KR['MARKET'],
+                'crdt_typ_cd': KBSEC_CREDIT_CASH,
+                'ln_dt': '', 'cncl_ordr_no': '', 'tv_rv_ccd': '', 'strt_dt': '', 'end_dt': '', 'mkt_tm_ccd': '',
+            }, params))
+        else:
+            response = self._call_tr(KBSEC_TR['RESERVED_ORDER_US'], self.extend({
+                'is_cd': base,
+                'trd_dl_ccd': KBSEC_ORDER_SIDE_US['BUY'] if side == 'buy' else KBSEC_ORDER_SIDE_US['SELL'],
+                'ordr_typ_cd': KBSEC_ORDER_TYPE_US['LIMIT'],
+                'ordr_q': kbsec_num(submitted_qty),
+                'frgn_ordr_prc_p4': kbsec_num(order_price, 4),
+                'strt_tm': '', 'end_tm': '', 'ovtm_ordr_ccd': '', 'bskt_ordr_no': '', 'frgn_stp_prc_p4': '',
+            }, params))
+        order_id = pick_str(response, 'ordr_no' if is_kr else 'rsrv_ordr_no')
+        logger.info('[kbsec] %s 예약주문 접수: symbol=%s side=%s type=%s submittedQty=%s price=%s id=%s', '국내' if is_kr else '해외', symbol, side, type,
+                    submitted_qty, price, order_id)
+        return {
+            'id': None if order_id == '' else order_id,
+            'symbol': market['symbol'],
+            'side': 'buy' if side == 'buy' else 'sell',
+            'type': type,
+            'amount': submitted_qty,
+            'price': price if is_limit else None,
+            'info': response,
+        }
+
+    def cancel_reserved_order(self, id: str, symbol: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """미국 예약주문을 취소한다(`SPAO2106`). 라이브 미검증이다. 국내 예약주문을 취소하는 TR 은 명세에 없어 요청 없이 `NotSupported` 다.
+        결과는 `{'id', 'reservedOrderId', 'info'}` 이고 `id` 는 취소 접수의 주문번호다(없으면 비운다). 종목코드(필수)와 취소주문번호
+        (`cncl_ordr_no`)에 예약주문번호를 넣고, 설명이 없는 나머지 입력은 비워 보낸다. 주문 TR 이라 다시 보내지 않는다."""
+        market = self.market(symbol)
+        if not self._is_us(market):
+            raise NotSupported(f'{self.id} 국내 예약주문 취소 TR 이 명세에 없다')
+        response = self._call_tr(KBSEC_TR['RESERVED_CANCEL_US'], self.extend({
+            'is_cd': market['id'], 'trd_clsf': '', 'ordr_typ': '', 'ordr_q': '', 'frgn_ordr_prc_p4': '', 'cncl_ordr_no': id,
+        }, params))
+        order_no = pick_str(response, 'ordr_no')
+        logger.info('[kbsec] 해외 예약주문 취소 접수: symbol=%s reservedOrderId=%s orderNo=%s', symbol, id, order_no)
+        return {'id': None if order_no == '' else order_no, 'reservedOrderId': id, 'info': response}
 
     def fetch_reserved_order_results(self, since: Int = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """국내 예약주문 처리 결과(`SSQM0831`). 결과는 `{'rows', 'truncated'}` 다. 매매구분, 처리구분, 전량잔량구분은 설명된 전체(`0`)를 보낸다.
@@ -3881,6 +3954,8 @@ class kbsec(Exchange, ImplicitAPI):
         fetchFractionalOrders = fetch_fractional_orders
         fetchOverseasFractionalOrders = fetch_overseas_fractional_orders
         fetchOverseasFractionalOrderHistory = fetch_overseas_fractional_order_history
+        createReservedOrder = create_reserved_order
+        cancelReservedOrder = cancel_reserved_order
         fetchReservedOrderResults = fetch_reserved_order_results
         fetchReservedOrders = fetch_reserved_orders
         fetchLedgerEntryDetail = fetch_ledger_entry_detail

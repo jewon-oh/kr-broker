@@ -16787,6 +16787,375 @@
                 "ok": false,
                 "error": "KB증권 업무 오류 (SPQM2205): 처리 중 오류가 발생했습니다. [processCode=9999]"
             }
+        },
+        {
+            "description": "createReservedOrder 는 국내 지정가를 SSAM0831 에 현금 지정가로 보낸다. 예약주문이라 장 시간 밖(16:00 KST)에도 게이트 없이 접수한다",
+            "now": 1790060400000,
+            "method": "createReservedOrder",
+            "args": [
+                "005930/KRW",
+                "limit",
+                "buy",
+                1,
+                70000
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssam0831",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"ordr_jb_clsf\":\"2\",\"is_cd\":\"005930\",\"ordr_uprc\":\"70000\",\"ordr_q\":\"1\",\"ordr_ccd\":\"00\",\"crdt_typ_cd\":\"00\",\"ln_dt\":\"\",\"cncl_ordr_no\":\"\",\"tv_rv_ccd\":\"\",\"strt_dt\":\"\",\"end_dt\":\"\",\"mkt_tm_ccd\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0000",
+                                "processMessage": "정상적으로 처리되었습니다."
+                            },
+                            "dataBody": {
+                                "ordr_no": "0000000701"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "id": "0000000701",
+                "symbol": "005930/KRW",
+                "side": "buy",
+                "type": "limit",
+                "amount": 1,
+                "price": 70000,
+                "info": {
+                    "ordr_no": "0000000701"
+                }
+            }
+        },
+        {
+            "description": "createReservedOrder 는 국내 시장가 수량을 내림해 보내고 단가를 비운다. params 가 기간예약 입력을 채운다. 접수번호가 없으면 id 를 비운다",
+            "method": "createReservedOrder",
+            "args": [
+                "005930/KRW",
+                "market",
+                "sell",
+                2.7,
+                null,
+                {
+                    "strt_dt": "20260923",
+                    "end_dt": "20260925"
+                }
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssam0831",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"ordr_jb_clsf\":\"1\",\"is_cd\":\"005930\",\"ordr_uprc\":\"\",\"ordr_q\":\"2\",\"ordr_ccd\":\"03\",\"crdt_typ_cd\":\"00\",\"ln_dt\":\"\",\"cncl_ordr_no\":\"\",\"tv_rv_ccd\":\"\",\"strt_dt\":\"20260923\",\"end_dt\":\"20260925\",\"mkt_tm_ccd\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0000",
+                                "processMessage": "정상적으로 처리되었습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "symbol": "005930/KRW",
+                "side": "sell",
+                "type": "market",
+                "amount": 2,
+                "info": {}
+            }
+        },
+        {
+            "description": "createReservedOrder 는 미국 지정가를 SPAO2104 에 가격 소수 4자리로 보내고 예약주문번호를 id 로 준다",
+            "method": "createReservedOrder",
+            "args": [
+                "AAPL/USD",
+                "limit",
+                "sell",
+                3,
+                180.5
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/spao2104",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"is_cd\":\"AAPL\",\"trd_dl_ccd\":\"01\",\"ordr_typ_cd\":\"2\",\"ordr_q\":\"3\",\"frgn_ordr_prc_p4\":\"180.5000\",\"strt_tm\":\"\",\"end_tm\":\"\",\"ovtm_ordr_ccd\":\"\",\"bskt_ordr_no\":\"\",\"frgn_stp_prc_p4\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0000",
+                                "processMessage": "정상적으로 처리되었습니다."
+                            },
+                            "dataBody": {
+                                "rsrv_ordr_no": "0000000801",
+                                "ordr_no": "0000000999"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "id": "0000000801",
+                "symbol": "AAPL/USD",
+                "side": "sell",
+                "type": "limit",
+                "amount": 3,
+                "price": 180.5,
+                "info": {
+                    "rsrv_ordr_no": "0000000801",
+                    "ordr_no": "0000000999"
+                }
+            }
+        },
+        {
+            "description": "createReservedOrder 는 미국 시장가면 요청 없이 NotSupported 다",
+            "method": "createReservedOrder",
+            "args": [
+                "AAPL/USD",
+                "market",
+                "buy",
+                1
+            ],
+            "http": [],
+            "error": {
+                "class": "NotSupported",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "createReservedOrder 는 지정가와 시장가가 아니면 요청 없이 NotSupported 다",
+            "method": "createReservedOrder",
+            "args": [
+                "005930/KRW",
+                "stop",
+                "buy",
+                1,
+                70000
+            ],
+            "http": [],
+            "error": {
+                "class": "NotSupported",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "createReservedOrder 는 내림한 수량이 1주 미만이면 요청 없이 InvalidOrder 다",
+            "method": "createReservedOrder",
+            "args": [
+                "005930/KRW",
+                "limit",
+                "buy",
+                0.5,
+                70000
+            ],
+            "http": [],
+            "error": {
+                "class": "InvalidOrder",
+                "detail": "QUANTITY_INVALID",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "createReservedOrder 는 지정가에 가격이 없으면 요청 없이 ArgumentsRequired 다",
+            "method": "createReservedOrder",
+            "args": [
+                "005930/KRW",
+                "limit",
+                "buy",
+                1
+            ],
+            "http": [],
+            "error": {
+                "class": "ArgumentsRequired",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "createReservedOrder 는 방향이 buy·sell 이 아니면 요청 없이 InvalidOrder 다",
+            "method": "createReservedOrder",
+            "args": [
+                "005930/KRW",
+                "limit",
+                "hold",
+                1,
+                70000
+            ],
+            "http": [],
+            "error": {
+                "class": "InvalidOrder",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "createReservedOrder 국내 요청이 시간 초과면 다시 보내지 않고 OrderOutcomeUnknown 이다",
+            "method": "createReservedOrder",
+            "args": [
+                "005930/KRW",
+                "limit",
+                "buy",
+                1,
+                70000
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssam0831",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"ordr_jb_clsf\":\"2\",\"is_cd\":\"005930\",\"ordr_uprc\":\"70000\",\"ordr_q\":\"1\",\"ordr_ccd\":\"00\",\"crdt_typ_cd\":\"00\",\"ln_dt\":\"\",\"cncl_ordr_no\":\"\",\"tv_rv_ccd\":\"\",\"strt_dt\":\"\",\"end_dt\":\"\",\"mkt_tm_ccd\":\"\"}}"
+                    },
+                    "network": "timeout"
+                }
+            ],
+            "error": {
+                "class": "OrderOutcomeUnknown",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "createReservedOrder 미국 요청이 연결 끊김이면 다시 보내지 않고 OrderOutcomeUnknown 이다",
+            "method": "createReservedOrder",
+            "args": [
+                "AAPL/USD",
+                "limit",
+                "buy",
+                1,
+                180.5
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/spao2104",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"is_cd\":\"AAPL\",\"trd_dl_ccd\":\"02\",\"ordr_typ_cd\":\"2\",\"ordr_q\":\"1\",\"frgn_ordr_prc_p4\":\"180.5000\",\"strt_tm\":\"\",\"end_tm\":\"\",\"ovtm_ordr_ccd\":\"\",\"bskt_ordr_no\":\"\",\"frgn_stp_prc_p4\":\"\"}}"
+                    },
+                    "network": "reset"
+                }
+            ],
+            "error": {
+                "class": "OrderOutcomeUnknown",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "cancelReservedOrder 는 SPAO2106 에 종목코드와 예약주문번호를 취소주문번호로 보낸다",
+            "method": "cancelReservedOrder",
+            "args": [
+                "0000000801",
+                "AAPL/USD"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/spao2106",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"is_cd\":\"AAPL\",\"trd_clsf\":\"\",\"ordr_typ\":\"\",\"ordr_q\":\"\",\"frgn_ordr_prc_p4\":\"\",\"cncl_ordr_no\":\"0000000801\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0000",
+                                "processMessage": "정상적으로 처리되었습니다."
+                            },
+                            "dataBody": {
+                                "ordr_no": "0000000901"
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "id": "0000000901",
+                "reservedOrderId": "0000000801",
+                "info": {
+                    "ordr_no": "0000000901"
+                }
+            }
+        },
+        {
+            "description": "cancelReservedOrder 는 국내 종목이면 요청 없이 NotSupported 다",
+            "method": "cancelReservedOrder",
+            "args": [
+                "0000000701",
+                "005930/KRW"
+            ],
+            "http": [],
+            "error": {
+                "class": "NotSupported",
+                "brokerCode": null
+            }
+        },
+        {
+            "description": "cancelReservedOrder 요청이 시간 초과면 다시 보내지 않고 OrderOutcomeUnknown 이다",
+            "method": "cancelReservedOrder",
+            "args": [
+                "0000000801",
+                "AAPL/USD"
+            ],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/spao2106",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"is_cd\":\"AAPL\",\"trd_clsf\":\"\",\"ordr_typ\":\"\",\"ordr_q\":\"\",\"frgn_ordr_prc_p4\":\"\",\"cncl_ordr_no\":\"0000000801\"}}"
+                    },
+                    "network": "timeout"
+                }
+            ],
+            "error": {
+                "class": "OrderOutcomeUnknown",
+                "brokerCode": null
+            }
         }
     ]
 }

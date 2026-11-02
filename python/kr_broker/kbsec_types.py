@@ -149,6 +149,8 @@ KBSEC_TR = {
     'FRAC_TRADES_KR': 'SSQM5765',
     # 온주/소수점 주문체결내역 조회(국내)
     'FRAC_ORDERS_KR': 'SSQM5475',
+    # 예약주문접수(현금신용통합, 국내)
+    'RESERVED_ORDER_KR': 'SSAM0831',
     # 예약주문처리 조회(국내)
     'RESERVED_RESULTS_KR': 'SSQM0831',
     # 예약주문접수 조회(국내)
@@ -163,6 +165,10 @@ KBSEC_TR = {
     'FRAC_ORDERS_US': 'SPQN5473',
     # 해외 소수점 주문접수내역조회. 기간, 체결 결과와 요약 그리드를 준다.
     'FRAC_ORDER_HISTORY_US': 'SPQM5473',
+    # 주식예약주문(미국)
+    'RESERVED_ORDER_US': 'SPAO2104',
+    # 예약주문취소(미국)
+    'RESERVED_CANCEL_US': 'SPAO2106',
     # 해외 주문번호별주문내역
     'ORDER_HISTORY_US': 'SPQM1818',
     # 원마켓플러스 주문가능금액(종목·가격 지정). 원화환산 주문가능액을 준다.
