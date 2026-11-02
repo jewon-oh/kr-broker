@@ -244,9 +244,9 @@
     "ws": "^8.22.0"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
+    "@types/node": "^22.20.5",
     "@types/ws": "^8.18.2",
-    "tsc-alias": "1.9.7",
+    "tsc-alias": "1.9.9",
     "typescript": "^5.9.3",
     "vite": "^8.3.5",
     "vitest": "^5.0.1"
