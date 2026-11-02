@@ -879,8 +879,9 @@
           ]
         },
         "kbsec": {
-          "status": "미구현",
-          "constraint": "`fetchOrders` 결과에서 `status: 'canceled'`만 고르면 됩니다(국내만)",
+          "status": "부분",
+          "constraint": "국내만 지원합니다. `fetchOrders` 결과에서 취소 주문만 고릅니다. `since`는 적용하지 않습니다",
+          "note": "남은 수량 없이 덜 체결된 주문을 취소로 봅니다. 일부 체결 뒤 취소한 주문도 여기에 듭니다.",
           "apis": [
             "SSQM2341"
           ]

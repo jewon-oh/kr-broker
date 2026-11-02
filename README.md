@@ -88,7 +88,7 @@ TypeScript 판과 Python 판이 있습니다. Python 판은 ccxt처럼 동기(`k
 | 주문 목록 `fetchOrders` | ✅ | ➖ | ⚠️ | `toss` 주문 목록 API는 상태(OPEN, CLOSED)를 지정해야 합니다.<br>`kbsec` 국내만 지원합니다. `since`는 적용하지 않습니다. |
 | 미체결 `fetchOpenOrders` | ⚠️ | ✅ | ⚠️ | `kis` 미국은 실전만 지원합니다.<br>`toss` 미체결 조건 주문은 100건씩 최대 10쪽(1,000건)까지 받습니다.<br>`kbsec` 국내만 지원합니다. `since`는 적용하지 않습니다. |
 | 종료 주문 `fetchClosedOrders` | 🔁 | ✅ | ⚠️ | `kis` `fetchOrders` 결과에서 체결 완료만 고릅니다.<br>`toss` 전량 체결만 돌려줍니다. 100건씩 최대 10쪽을 받습니다.<br>`kbsec` 국내만 지원합니다. `since`는 적용하지 않습니다. 체결 내역 상세는 `fetchMyTrades`로 봅니다. |
-| 취소 주문 `fetchCanceledOrders` | 🔁 | ✅ | ❌ | `kis` `fetchOrders` 결과에서 취소 주문만 고릅니다. 미국 주문은 취소 표시가 없어 나오지 않습니다.<br>`toss` `fetchClosedOrders`와 같은 조회에서 취소 주문과 정정으로 대체된 주문을 고릅니다.<br>`kbsec` `fetchOrders` 결과에서 `status: 'canceled'`만 고르면 됩니다(국내만) |
+| 취소 주문 `fetchCanceledOrders` | 🔁 | ✅ | ⚠️ | `kis` `fetchOrders` 결과에서 취소 주문만 고릅니다. 미국 주문은 취소 표시가 없어 나오지 않습니다.<br>`toss` `fetchClosedOrders`와 같은 조회에서 취소 주문과 정정으로 대체된 주문을 고릅니다.<br>`kbsec` 국내만 지원합니다. `fetchOrders` 결과에서 취소 주문만 고릅니다. `since`는 적용하지 않습니다. |
 | 체결 내역 `fetchMyTrades` | ✅ | 🔁 | ✅ | `kis` `fee`가 비어 있습니다.<br>`toss` 주문 목록 API로 만듭니다. 주문 하나가 거래 하나이고 수량은 누적 체결 수량이라, 같은 id 는 덮어써야 합니다. |
 | 휴장일 `fetchMarketCalendar` | ⚠️ | ✅ | ⚠️ | `kis` 국내만, 실전만 지원합니다. `params.market`이 `US`면 `NotSupported`입니다.<br>`toss` 세션 시각 원본은 `fetchMarketSessions`로 받습니다.<br>`kbsec` 국내만 지원합니다. `params.market`이 `US`면 `NotSupported`입니다. |
 | 종목 정보 `fetchStocks` | ✅ | ✅ | ✅ | `kis` 해외 종목은 지원하지 않습니다. `BadSymbol`을 던집니다.<br>`toss` 200종목을 초과해도 나누어 호출하지 않습니다.<br>`kbsec` 국내만 지원합니다. 해외 종목코드로도 조회되는지는 명세에 없어 확인 불가입니다. |

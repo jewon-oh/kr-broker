@@ -2,7 +2,7 @@
 """KB증권 Open API(`class kbsec(Exchange, ImplicitAPI)`). TypeScript 판 `ts/src/kbsec.ts` 와 `ts/src/kbsec/kbsec-auth.ts` 를 옮기는 중이다.
 지금은 인증과 요청 봉투, 오류 처리, 토큰 복구, 시세(`fetch_ticker`, `fetch_order_book`, `fetch_ohlcv`, `fetch_trades`), 수수료 추정
 (`fetch_trading_fee`), 휴장일(`fetch_market_calendar`, `refresh_market_calendar`), 투자자 매매동향(`fetch_investor_trading`), 주문·체결 조회
-(`fetch_order`, `fetch_orders`, `fetch_open_orders`, `fetch_closed_orders`, `fetch_my_trades`, `fetch_overseas_order_status`)만 옮겼다.
+(`fetch_order`, `fetch_orders`, `fetch_open_orders`, `fetch_closed_orders`, `fetch_canceled_orders`, `fetch_my_trades`, `fetch_overseas_order_status`)만 옮겼다.
 `has` 가 `False` 인 통합 메서드는 부모 클래스가 `NotSupported` 를 던진다. 모든 TR 은 암묵 메서드로 부를 수 있다.
 
 .. code-block:: python
@@ -394,7 +394,7 @@ class kbsec(Exchange, ImplicitAPI):
                 'fetchOrders': True,
                 'fetchOpenOrders': True,
                 'fetchClosedOrders': True,
-                'fetchCanceledOrders': False,
+                'fetchCanceledOrders': True,
                 'fetchMyTrades': True,
                 'fetchTrades': True,
                 # KB 에 수수료 조회 TR 이 없어 공시 요율로 추정한다.
@@ -1067,6 +1067,14 @@ class kbsec(Exchange, ImplicitAPI):
         closed = [order for order in orders if order['status'] != 'open']
         return closed if limit is None else closed[:limit]
 
+    def fetch_canceled_orders(self, symbol: Str = None, since: Int = None, limit: Int = None,
+                                    params: Optional[Dict[str, Any]] = None) -> List[Order]:
+        """국내 취소 주문. 전체 주문(`fetch_orders`)에서 `canceled` 인 주문만 돌려준다. 남은 수량 없이 덜 체결된 주문이 `canceled` 라
+        일부 체결 뒤 취소한 주문도 여기에 든다. `limit` 은 거른 뒤에 적용한다. 해외는 지원하지 않는다. `since` 를 적용하지 않는 이유는 `fetch_orders` 와 같다."""
+        orders = self.fetch_orders(symbol, None, None, params)
+        canceled = [order for order in orders if order['status'] == 'canceled']
+        return canceled if limit is None else canceled[:limit]
+
     def parse_order(self, order: Dict[str, Any], market: Market = None) -> Order:
         """국내 주문·체결 목록(`SSQM2341`)의 행 하나를 주문으로 옮긴다. 분할체결 연속 행을 묶은 주문은 `fetch_orders` 가 만든다."""
         fill = parse_kbsec_domestic_fill_row(order)
@@ -1393,6 +1401,7 @@ class kbsec(Exchange, ImplicitAPI):
         fetchOpenOrders = fetch_open_orders
         fetchOrders = fetch_orders
         fetchClosedOrders = fetch_closed_orders
+        fetchCanceledOrders = fetch_canceled_orders
         parseOrder = parse_order
         fetchOrder = fetch_order
         fetchOverseasOrderStatus = fetch_overseas_order_status

@@ -103,7 +103,7 @@
 | 주문 목록 `fetchOrders` | ✅ | ➖ | ⚠️ | `toss` 주문 목록 API는 상태(OPEN, CLOSED)를 지정해야 합니다.<br>`kbsec` 국내만 지원합니다. `since`는 적용하지 않습니다. |
 | 미체결 `fetchOpenOrders` | ⚠️ | ✅ | ⚠️ | `kis` 미국은 실전만 지원합니다.<br>`toss` 미체결 조건 주문은 100건씩 최대 10쪽(1,000건)까지 받습니다.<br>`kbsec` 국내만 지원합니다. `since`는 적용하지 않습니다. |
 | 종료 주문 `fetchClosedOrders` | 🔁 | ✅ | ⚠️ | `kis` `fetchOrders` 결과에서 체결 완료만 고릅니다.<br>`toss` 전량 체결만 돌려줍니다. 100건씩 최대 10쪽을 받습니다.<br>`kbsec` 국내만 지원합니다. `since`는 적용하지 않습니다. 체결 내역 상세는 `fetchMyTrades`로 봅니다. |
-| 취소 주문 `fetchCanceledOrders` | 🔁 | ✅ | ❌ | `kis` `fetchOrders` 결과에서 취소 주문만 고릅니다. 미국 주문은 취소 표시가 없어 나오지 않습니다.<br>`toss` `fetchClosedOrders`와 같은 조회에서 취소 주문과 정정으로 대체된 주문을 고릅니다.<br>`kbsec` `fetchOrders` 결과에서 `status: 'canceled'`만 고르면 됩니다(국내만) |
+| 취소 주문 `fetchCanceledOrders` | 🔁 | ✅ | ⚠️ | `kis` `fetchOrders` 결과에서 취소 주문만 고릅니다. 미국 주문은 취소 표시가 없어 나오지 않습니다.<br>`toss` `fetchClosedOrders`와 같은 조회에서 취소 주문과 정정으로 대체된 주문을 고릅니다.<br>`kbsec` 국내만 지원합니다. `fetchOrders` 결과에서 취소 주문만 고릅니다. `since`는 적용하지 않습니다. |
 | 체결 내역 `fetchMyTrades` | ✅ | 🔁 | ✅ | `kis` `fee`가 비어 있습니다.<br>`toss` 주문 목록 API로 만듭니다. 주문 하나가 거래 하나이고 수량은 누적 체결 수량이라, 같은 id 는 덮어써야 합니다. |
 
 ### 시장 정보
@@ -130,6 +130,7 @@
 | 금액 기준 매수 | `kbsec` | 부분 | 소수점매도/매수주문(SKAM2201)을 금액 기준(amt_q_clsf='0')으로 부릅니다. 이 TR의 주문유형코드는 SKAM2101과 다른 코드표를 써서 유사시장가(E)만 씁니다. 수량 기준·매도는 아직 안 씁니다. |
 | 주문 목록 | `toss` | 증권사 없음 | 주문 목록 API `GET /orders`는 `status`가 필수입니다. 상태를 나누지 않는 전체 목록 API가 없다고 판단해 증권사 없음으로 적었습니다. 라이브러리는 `fetchOpenOrders`와 `fetchClosedOrders`로 나눠 제공합니다. |
 | 취소 주문 | `kis` | 대체 | 국내는 취소 여부(`cncl_yn`)가 `Y`인 주문만 취소로 봅니다. 일부 체결 뒤 취소한 주문도 여기에 듭니다. 미국 주문체결내역에는 취소 표시가 없어 상태가 비어 있습니다. 그래서 빈 결과가 미국 주문에 취소가 없다는 뜻은 아닙니다. |
+| 취소 주문 | `kbsec` | 부분 | 남은 수량 없이 덜 체결된 주문을 취소로 봅니다. 일부 체결 뒤 취소한 주문도 여기에 듭니다. |
 
 ## 공식 API 커버리지
 
