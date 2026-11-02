@@ -7202,6 +7202,860 @@
                 "class": "OrderNotFound",
                 "brokerCode": null
             }
+        },
+        {
+            "description": "fetchBalance 는 예수금(SSQM0004)의 주문가능현금을 KRW free 로, 계좌자산평가(SSQM2952)의 실보유수량(ec_q)을 국내 보유로, 해외 잔고평가(SPQM2226)의 종목 그리드를 해외 보유로 싣는다. USD 는 예수금 그리드의 USD 행이고 주문가능금액이 free, 예수금이 total 이다. 합계 행(코드와 수량 없음)은 버린 보유로 세지 않는다",
+            "method": "fetchBalance",
+            "args": [],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm0004",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"is_no\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "ordr_psbl_csh": "000003000000",
+                                "ordr_std_dpstn_csh": "000003500000"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm2952",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_mktpr_ccd\":\"A\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record2": [
+                                    {
+                                        "is_cd": "A005930",
+                                        "is_nm": "삼성전자",
+                                        "ec_q": "10",
+                                        "ordr_psbl_q": "8",
+                                        "val_amt": "700000",
+                                        "now_prc": "70000",
+                                        "byng_avr_prc": "68000"
+                                    },
+                                    {
+                                        "is_cd": "",
+                                        "is_nm": "합계",
+                                        "val_amt": "700000"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/spqm2226",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"std_crncy_f\":\"1\",\"exch_r_aplc_f\":\"2\",\"fee_clsf\":\"1\",\"srt_clsf\":\"1\",\"rsrv_ordr_f\":\"\",\"tl_asts_exch_val_amt\":\"\",\"tl_tfnd_exch_val_amt\":\"\",\"tl_scrts_exch_val_amt\":\"\",\"tl_krw_val_amt\":\"\",\"tl_krw_val_pl_amt\":\"\",\"cn_f\":\"\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "crncy_clsf_nm": "USD",
+                                        "std_exch_r": "1380.0000",
+                                        "cnvr_exch_r_p4": "1380.0000",
+                                        "tfnd": "1000.00",
+                                        "ordr_psbl_amt_p2": "850.50"
+                                    }
+                                ],
+                                "Record2": [
+                                    {
+                                        "is_cd": "JNJ",
+                                        "is_nm": "존슨앤드존슨",
+                                        "frgn_hld_q_p6": "2.000000",
+                                        "now_prc_p4": "150.0000",
+                                        "byng_avr_prc_p4": "145.5000"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "info": {
+                    "readStatus": "COMPLETE",
+                    "unreadMarkets": [],
+                    "unreadCurrencies": [],
+                    "deposit": {
+                        "ordr_psbl_csh": "000003000000",
+                        "ordr_std_dpstn_csh": "000003500000"
+                    }
+                },
+                "KRW": {
+                    "free": 3000000
+                },
+                "USD": {
+                    "free": 850.5,
+                    "used": 149.5,
+                    "total": 1000,
+                    "info": {
+                        "crncy_clsf_nm": "USD",
+                        "std_exch_r": "1380.0000",
+                        "cnvr_exch_r_p4": "1380.0000",
+                        "tfnd": "1000.00",
+                        "ordr_psbl_amt_p2": "850.50"
+                    }
+                },
+                "005930": {
+                    "free": 8,
+                    "used": 2,
+                    "total": 10,
+                    "info": {
+                        "quoteCurrency": "KRW",
+                        "averagePrice": 68000,
+                        "marketValue": 700000,
+                        "name": "삼성전자"
+                    }
+                },
+                "JNJ": {
+                    "total": 2,
+                    "info": {
+                        "quoteCurrency": "USD",
+                        "averagePrice": 145.5,
+                        "marketValue": 300,
+                        "name": "존슨앤드존슨"
+                    }
+                },
+                "free": {
+                    "KRW": 3000000,
+                    "USD": 850.5,
+                    "005930": 8
+                },
+                "used": {
+                    "USD": 149.5,
+                    "005930": 2
+                },
+                "total": {
+                    "USD": 1000,
+                    "005930": 10,
+                    "JNJ": 2
+                }
+            }
+        },
+        {
+            "description": "fetchBalance 는 계좌자산평가가 실패하면 보유주식(SSQM1801)으로 내려간다. gnrl_q 가 ordr_psbl_q 보다 크면 최근 3영업일 체결내역(SSQM2341)의 매도 체결을 빼되 ordr_psbl_q 아래로 내리지 않고, 평가금액은 수량 × 현재가(IVU10140)다. 예수금 그리드만 와도 해외를 읽은 것이다",
+            "now": 1790038800000,
+            "method": "fetchBalance",
+            "args": [],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm0004",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"is_no\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "ordr_psbl_csh": "000003000000",
+                                "ordr_std_dpstn_csh": "000003500000"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm2952",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_mktpr_ccd\":\"A\"}}"
+                    },
+                    "network": "timeout"
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm1801",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"is_no\":\"\",\"mkt_tm_ccd\":\"1\",\"spclz_ordr_ccd\":\"\",\"act_cd\":\"\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "shrt_cd": "A005930",
+                                        "is_nm": "삼성전자",
+                                        "gnrl_q": "10",
+                                        "ordr_psbl_q": "5",
+                                        "pchs_avg_prc": "68000"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm2341",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"ccls_clsf\":\"1\",\"ordr_dt\":\"20260922\",\"is_cd\":\"\",\"ordr_no\":\"\",\"mthr_ordr_no\":\"\",\"orgn_ordr_no\":\"\",\"s_ccls_amt\":\"\",\"b_ccls_amt\":\"\",\"s_ccls_q\":\"\",\"b_ccls_q\":\"\",\"ac_nm\":\"\",\"is_nm\":\"\",\"cn_clsf\":\"0\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "ordr_no": "0000000101",
+                                        "stnd_is_no": "A005930",
+                                        "trd_dl_ccd_nm": "현금매도",
+                                        "ordr_q": "3",
+                                        "tl_ccls_q": "3",
+                                        "nccls_q": "0",
+                                        "ccls_uprc": "70000"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm2341",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"ccls_clsf\":\"1\",\"ordr_dt\":\"20260921\",\"is_cd\":\"\",\"ordr_no\":\"\",\"mthr_ordr_no\":\"\",\"orgn_ordr_no\":\"\",\"s_ccls_amt\":\"\",\"b_ccls_amt\":\"\",\"s_ccls_q\":\"\",\"b_ccls_q\":\"\",\"ac_nm\":\"\",\"is_nm\":\"\",\"cn_clsf\":\"0\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "B",
+                                "processCode": "1861",
+                                "processMessage": "조회할 자료가 없습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm2341",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"inq_clsf\":\"1\",\"ccls_clsf\":\"1\",\"ordr_dt\":\"20260918\",\"is_cd\":\"\",\"ordr_no\":\"\",\"mthr_ordr_no\":\"\",\"orgn_ordr_no\":\"\",\"s_ccls_amt\":\"\",\"b_ccls_amt\":\"\",\"s_ccls_q\":\"\",\"b_ccls_q\":\"\",\"ac_nm\":\"\",\"is_nm\":\"\",\"cn_clsf\":\"0\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "B",
+                                "processCode": "1861",
+                                "processMessage": "조회할 자료가 없습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ivu10140",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_clsf\":\"1\",\"shrt_cd\":\"005930\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "now_prc": "000071000",
+                                "bdy_cls_prc": "000070000"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/spqm2226",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"std_crncy_f\":\"1\",\"exch_r_aplc_f\":\"2\",\"fee_clsf\":\"1\",\"srt_clsf\":\"1\",\"rsrv_ordr_f\":\"\",\"tl_asts_exch_val_amt\":\"\",\"tl_tfnd_exch_val_amt\":\"\",\"tl_scrts_exch_val_amt\":\"\",\"tl_krw_val_amt\":\"\",\"tl_krw_val_pl_amt\":\"\",\"cn_f\":\"\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "crncy_clsf_nm": "USD",
+                                        "std_exch_r": "1380.0000",
+                                        "cnvr_exch_r_p4": "1380.0000",
+                                        "tfnd": "500.00",
+                                        "ordr_psbl_amt_p2": "500.00"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "info": {
+                    "readStatus": "COMPLETE",
+                    "unreadMarkets": [],
+                    "unreadCurrencies": [],
+                    "deposit": {
+                        "ordr_psbl_csh": "000003000000",
+                        "ordr_std_dpstn_csh": "000003500000"
+                    }
+                },
+                "KRW": {
+                    "free": 3000000
+                },
+                "USD": {
+                    "free": 500,
+                    "used": 0,
+                    "total": 500,
+                    "info": {
+                        "crncy_clsf_nm": "USD",
+                        "std_exch_r": "1380.0000",
+                        "cnvr_exch_r_p4": "1380.0000",
+                        "tfnd": "500.00",
+                        "ordr_psbl_amt_p2": "500.00"
+                    }
+                },
+                "005930": {
+                    "free": 5,
+                    "used": 2,
+                    "total": 7,
+                    "info": {
+                        "quoteCurrency": "KRW",
+                        "averagePrice": 68000,
+                        "marketValue": 497000,
+                        "name": "삼성전자"
+                    }
+                },
+                "free": {
+                    "KRW": 3000000,
+                    "USD": 500,
+                    "005930": 5
+                },
+                "used": {
+                    "USD": 0,
+                    "005930": 2
+                },
+                "total": {
+                    "USD": 500,
+                    "005930": 7
+                }
+            }
+        },
+        {
+            "description": "fetchBalance 는 해외 예수금 그리드가 빈 행뿐이면 달러 예수금이 없다고 보고 USD 의 total 을 0 으로, free 를 비운 채 싣는다. 계좌자산평가 행에 주문가능수량이 없으면 국내 보유의 free 도 비운다",
+            "method": "fetchBalance",
+            "args": [],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm0004",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"is_no\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "ordr_psbl_csh": "000003000000",
+                                "ordr_std_dpstn_csh": "000003500000"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm2952",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_mktpr_ccd\":\"A\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record2": [
+                                    {
+                                        "is_cd": "A005930",
+                                        "is_nm": "삼성전자",
+                                        "ec_q": "10",
+                                        "val_amt": "700000",
+                                        "now_prc": "70000",
+                                        "byng_avr_prc": "68000"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/spqm2226",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"std_crncy_f\":\"1\",\"exch_r_aplc_f\":\"2\",\"fee_clsf\":\"1\",\"srt_clsf\":\"1\",\"rsrv_ordr_f\":\"\",\"tl_asts_exch_val_amt\":\"\",\"tl_tfnd_exch_val_amt\":\"\",\"tl_scrts_exch_val_amt\":\"\",\"tl_krw_val_amt\":\"\",\"tl_krw_val_pl_amt\":\"\",\"cn_f\":\"\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "crncy_clsf_nm": "          ",
+                                        "std_exch_r": "0000.0000",
+                                        "cnvr_exch_r_p4": "0000.0000",
+                                        "tfnd": "0",
+                                        "ordr_psbl_amt_p2": "0"
+                                    },
+                                    {
+                                        "crncy_clsf_nm": "          ",
+                                        "std_exch_r": "0000.0000",
+                                        "cnvr_exch_r_p4": "0000.0000",
+                                        "tfnd": "0",
+                                        "ordr_psbl_amt_p2": "0"
+                                    }
+                                ],
+                                "Record2": [
+                                    {
+                                        "is_cd": "JNJ",
+                                        "is_nm": "존슨앤드존슨",
+                                        "frgn_hld_q_p6": "2.000000",
+                                        "now_prc_p4": "150.0000",
+                                        "byng_avr_prc_p4": "145.5000"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "info": {
+                    "readStatus": "COMPLETE",
+                    "unreadMarkets": [],
+                    "unreadCurrencies": [],
+                    "deposit": {
+                        "ordr_psbl_csh": "000003000000",
+                        "ordr_std_dpstn_csh": "000003500000"
+                    }
+                },
+                "KRW": {
+                    "free": 3000000
+                },
+                "USD": {
+                    "total": 0
+                },
+                "005930": {
+                    "total": 10,
+                    "info": {
+                        "quoteCurrency": "KRW",
+                        "averagePrice": 68000,
+                        "marketValue": 700000,
+                        "name": "삼성전자"
+                    }
+                },
+                "JNJ": {
+                    "total": 2,
+                    "info": {
+                        "quoteCurrency": "USD",
+                        "averagePrice": 145.5,
+                        "marketValue": 300,
+                        "name": "존슨앤드존슨"
+                    }
+                },
+                "free": {
+                    "KRW": 3000000
+                },
+                "used": {},
+                "total": {
+                    "USD": 0,
+                    "005930": 10,
+                    "JNJ": 2
+                }
+            }
+        },
+        {
+            "description": "fetchBalance 는 보유를 일부만 읽으면 던지지 않고 readStatus PARTIAL 과 못 읽은 시장을 싣는다. 계좌자산평가에 종목코드 없이 수량이 있는 행이 있으면 KR, 해외 잔고평가가 업무 오류(I446)면 US 다. 해외를 못 읽었으면 USD 항목이 없고 unreadCurrencies 는 비어 있다",
+            "method": "fetchBalance",
+            "args": [],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm0004",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"is_no\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "ordr_psbl_csh": "000003000000",
+                                "ordr_std_dpstn_csh": "000003500000"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm2952",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_mktpr_ccd\":\"A\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record2": [
+                                    {
+                                        "is_cd": "A005930",
+                                        "is_nm": "삼성전자",
+                                        "ec_q": "10",
+                                        "ordr_psbl_q": "8",
+                                        "val_amt": "700000",
+                                        "now_prc": "70000",
+                                        "byng_avr_prc": "68000"
+                                    },
+                                    {
+                                        "is_cd": "",
+                                        "is_nm": "",
+                                        "ec_q": "5",
+                                        "val_amt": "50000"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/spqm2226",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"std_crncy_f\":\"1\",\"exch_r_aplc_f\":\"2\",\"fee_clsf\":\"1\",\"srt_clsf\":\"1\",\"rsrv_ordr_f\":\"\",\"tl_asts_exch_val_amt\":\"\",\"tl_tfnd_exch_val_amt\":\"\",\"tl_scrts_exch_val_amt\":\"\",\"tl_krw_val_amt\":\"\",\"tl_krw_val_pl_amt\":\"\",\"cn_f\":\"\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "B",
+                                "processCode": "I446",
+                                "processMessage": "API 사용 권한이 없습니다."
+                            },
+                            "dataBody": {}
+                        }
+                    }
+                }
+            ],
+            "output": {
+                "info": {
+                    "readStatus": "PARTIAL",
+                    "unreadMarkets": [
+                        "KR",
+                        "US"
+                    ],
+                    "unreadCurrencies": [],
+                    "deposit": {
+                        "ordr_psbl_csh": "000003000000",
+                        "ordr_std_dpstn_csh": "000003500000"
+                    }
+                },
+                "KRW": {
+                    "free": 3000000
+                },
+                "005930": {
+                    "free": 8,
+                    "used": 2,
+                    "total": 10,
+                    "info": {
+                        "quoteCurrency": "KRW",
+                        "averagePrice": 68000,
+                        "marketValue": 700000,
+                        "name": "삼성전자"
+                    }
+                },
+                "free": {
+                    "KRW": 3000000,
+                    "005930": 8
+                },
+                "used": {
+                    "005930": 2
+                },
+                "total": {
+                    "005930": 10
+                }
+            }
+        },
+        {
+            "description": "fetchBalance 는 표에 없는 해외 티커가 현금 키(KRW)와 같으면 한쪽을 덮어쓰지 않고 NotSupported 다",
+            "method": "fetchBalance",
+            "args": [],
+            "http": [
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm0004",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"is_no\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "ordr_psbl_csh": "000003000000",
+                                "ordr_std_dpstn_csh": "000003500000"
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/ssqm2952",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"excg_mktpr_ccd\":\"A\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record2": [
+                                    {
+                                        "is_cd": "A005930",
+                                        "is_nm": "삼성전자",
+                                        "ec_q": "10",
+                                        "ordr_psbl_q": "8",
+                                        "val_amt": "700000",
+                                        "now_prc": "70000",
+                                        "byng_avr_prc": "68000"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "request": {
+                        "method": "POST",
+                        "url": "https://developer.kbsec.com:32484/api/v1/spqm2226",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "appKey": "TEST-APPKEY-KBSEC-0001",
+                            "Authorization": "bearer kb-token-stored"
+                        },
+                        "body": "{\"dataHeader\":{\"ipAddr\":\"203.0.113.10\",\"macAddr\":\"00-00-5E-00-53-01\"},\"dataBody\":{\"std_crncy_f\":\"1\",\"exch_r_aplc_f\":\"2\",\"fee_clsf\":\"1\",\"srt_clsf\":\"1\",\"rsrv_ordr_f\":\"\",\"tl_asts_exch_val_amt\":\"\",\"tl_tfnd_exch_val_amt\":\"\",\"tl_scrts_exch_val_amt\":\"\",\"tl_krw_val_amt\":\"\",\"tl_krw_val_pl_amt\":\"\",\"cn_f\":\"\",\"nxt_key\":\"\"}}"
+                    },
+                    "response": {
+                        "status": 200,
+                        "body": {
+                            "dataHeader": {
+                                "processFlag": "A",
+                                "processCode": "0011",
+                                "processMessage": "정상적으로 조회되었습니다."
+                            },
+                            "dataBody": {
+                                "Record1": [
+                                    {
+                                        "crncy_clsf_nm": "USD",
+                                        "std_exch_r": "1380.0000",
+                                        "cnvr_exch_r_p4": "1380.0000",
+                                        "tfnd": "1000.00",
+                                        "ordr_psbl_amt_p2": "850.50"
+                                    }
+                                ],
+                                "Record2": [
+                                    {
+                                        "is_cd": "KRW",
+                                        "is_nm": "가짜 종목",
+                                        "frgn_hld_q_p6": "1.000000",
+                                        "now_prc_p4": "10.0000",
+                                        "byng_avr_prc_p4": "9.0000"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ],
+            "error": {
+                "class": "NotSupported",
+                "brokerCode": null
+            }
         }
     ]
 }

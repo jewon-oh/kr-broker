@@ -1,7 +1,8 @@
 """KB증권 Open API(`class kbsec(Exchange, ImplicitAPI)`). TypeScript 판 `ts/src/kbsec.ts` 와 `ts/src/kbsec/kbsec-auth.ts` 를 옮기는 중이다.
 지금은 인증과 요청 봉투, 오류 처리, 토큰 복구, 시세(`fetch_ticker`, `fetch_order_book`, `fetch_ohlcv`, `fetch_trades`), 수수료 추정
 (`fetch_trading_fee`), 휴장일(`fetch_market_calendar`, `refresh_market_calendar`), 투자자 매매동향(`fetch_investor_trading`), 주문·체결 조회
-(`fetch_order`, `fetch_orders`, `fetch_open_orders`, `fetch_closed_orders`, `fetch_canceled_orders`, `fetch_my_trades`, `fetch_overseas_order_status`)만 옮겼다.
+(`fetch_order`, `fetch_orders`, `fetch_open_orders`, `fetch_closed_orders`, `fetch_canceled_orders`, `fetch_my_trades`, `fetch_overseas_order_status`),
+잔고(`fetch_balance`, `fetch_one_market_margin`)만 옮겼다.
 `has` 가 `False` 인 통합 메서드는 부모 클래스가 `NotSupported` 를 던진다. 모든 TR 은 암묵 메서드로 부를 수 있다.
 
 .. code-block:: python
@@ -26,7 +27,8 @@
 
 옵션
     `tokenStore`(토큰 저장소), `masterData`(국내 종목 유형과 시장. `price_to_precision` 과 통합차트의 시장구분이 쓴다), `hostAddr`(TR 본문에 싣는 `{'ipAddr', 'macAddr'}`.
-    주지 않으면 이 호스트의 주소를 찾아 쓴다. KB 는 빈 값을 받지 않는다)다.
+    주지 않으면 이 호스트의 주소를 찾아 쓴다. KB 는 빈 값을 받지 않는다), `krwIntegratedMargin`(원마켓 계좌의 미국 주식 매수여력을 원화 환산분으로
+    보강, 환율은 `usdKrwRate`)다.
 """
 
 import base64
@@ -51,7 +53,7 @@ from kr_broker.base.errors import (
 from kr_broker.base.exchange import assert_secure_url, kst_trade_timestamps
 from kr_broker.base.precise import Precise
 from kr_broker.base.token_store import BrokerTokenStore, token_store_key
-from kr_broker.base.types import ApiName, Int, Market, MarketInterface, Num, Order, OrderBook, Str, Ticker, Trade, TradingFeeInterface
+from kr_broker.base.types import ApiName, Balances, Int, Market, MarketInterface, Num, Order, OrderBook, Str, Ticker, Trade, TradingFeeInterface
 from kr_broker.broker_time import candle_period_utc_ms, kst_ymd
 from kr_broker.kbsec_chart import KBSEC_CHART_MAX, KBSEC_TIMEFRAMES, kbsec_bar_ms, kbsec_candle_timestamp, kbsec_chart_params
 from kr_broker.kbsec_envelope import is_kbsec_business_error, is_kbsec_token_failure, kbsec_host_addr
@@ -59,13 +61,18 @@ from kr_broker.kbsec_error_codes import KBSEC_ERROR_DETAIL, kbsec_error_detail, 
 from kr_broker.kbsec_fee import kbsec_estimated_fee_rate
 from kr_broker.kbsec_fill_row import kbsec_resolve_fills, parse_kbsec_domestic_fill_row, parse_kbsec_overseas_fill_row
 from kr_broker.kbsec_fill_warnings import warn_fill_without_price, warn_if_fill_side_unreadable, warn_if_fill_totals_inconsistent
-from kr_broker.kbsec_pick import pick_array, pick_num, pick_optional_num, pick_positive_num, pick_str
+from kr_broker.kbsec_number import kbsec_number_of
+from kr_broker.kbsec_pick import (
+    OVERSEAS_QTY_CANDIDATES, is_empty_cash_row, is_usd_cash_row, kbsec_holding_quantity, pick_array, pick_cash_grid, pick_holding_grid, pick_num,
+    pick_optional_num, pick_positive_num, pick_str, unknown_grids,
+)
 from kr_broker.kbsec_token_breaker import record_kbsec_call_ok, record_token_failure, throw_if_token_breaker_open
 from kr_broker.kbsec_tr_inputs import fill_tr_inputs
 from kr_broker.kbsec_types import (
-    KBSEC_API_BASE, KBSEC_CCLS_ALL, KBSEC_CCLS_FILLED, KBSEC_CCLS_PENDING, KBSEC_CHART_KIND, KBSEC_CONT_FIRST, KBSEC_CONT_NEXT, KBSEC_INQ_STOCK,
-    KBSEC_ORDER_TYPE_KR, KBSEC_REVOKE_PATH, KBSEC_TOKEN_DEFAULT_TTL_MS, KBSEC_TOKEN_PATH, KBSEC_TOKEN_SAFETY_MARGIN_MS, KBSEC_TR,
-    KBSEC_TR_PATH_PREFIX, KBSEC_US_EXCHANGES, kbsec_base_symbol, kbsec_business_date_kst, kbsec_business_date_us_eastern, kbsec_market_of,
+    KBSEC_API_BASE, KBSEC_CCLS_ALL, KBSEC_CCLS_FILLED, KBSEC_CCLS_PENDING, KBSEC_CHART_KIND, KBSEC_CONT_FIRST, KBSEC_CONT_NEXT,
+    KBSEC_EXCH_RATE_MARKET, KBSEC_FEE_EXCLUDED, KBSEC_INQ_ALL, KBSEC_INQ_STOCK, KBSEC_ORDER_TYPE_KR, KBSEC_REVOKE_PATH, KBSEC_SESSION_REGULAR,
+    KBSEC_STD_CURRENCY_FOREIGN, KBSEC_TOKEN_DEFAULT_TTL_MS, KBSEC_TOKEN_PATH, KBSEC_TOKEN_SAFETY_MARGIN_MS, KBSEC_TR, KBSEC_TR_PATH_PREFIX,
+    KBSEC_US_EXCHANGES, kbsec_base_symbol, kbsec_business_date_kst, kbsec_business_date_us_eastern, kbsec_market_of, kbsec_normalize_code,
     kbsec_num,
 )
 from kr_broker.kis_master_data import master_data_of
@@ -350,6 +357,21 @@ class kbsec(Exchange, ImplicitAPI):
         self._business_date_backoff: Dict[str, Dict[str, Any]] = {'KR': {'day': '', 'steps': 0}, 'US': {'day': '', 'steps': 0}}
         # 해외 체결조회(SPQM2103) 영구 실패.
         self._overseas_fills_unavailable = False
+        # 평가금액 산출용 현재가 캐시(종목코드 → 가격·조회 시각).
+        self._holding_price_cache: Dict[str, Dict[str, Any]] = {}
+        self._holding_fields_logged = False
+        # 해외 잔고 TR 이 영구 실패했는가(권한 없음 등 업무 오류). 반복 호출은 계정 제한 사유라 다시 부르지 않는다.
+        self._overseas_holdings_unavailable = False
+        # 일시 오류 뒤 해외 잔고를 다시 부르기 전까지 기다리는 시각(epoch ms). 0 이면 대기 없음.
+        self._overseas_holdings_retry_at = 0
+        # 해외 보유 행을 실제로 읽은 적이 있는가. 한 번 참이 되면 내려가지 않는 이력이다. 이 값이 참이면 뒤의 응답이 종목 그리드 없이 와도
+        # 미보유로 읽는다. 빈 행이나 예수금 그리드만 온 응답으로는 켜지 않는다. 이력이 넓으면 뒤 응답의 필드 이름 불일치를 덮는다.
+        self._overseas_grid_seen = False
+        # 원마켓 증거금(SPQM3390) 영구 실패. 미신청 계좌는 다시 물어도 답이 같다.
+        self._one_market_unavailable = False
+        # 일시 오류 뒤 원마켓 증거금을 다시 부르기 전까지 기다리는 시각(epoch ms). 0 이면 대기 없음.
+        self._one_market_retry_at = 0
+        self._one_market_notice_logged = False
         super().__init__(config)
 
     def describe(self) -> Dict[str, Any]:
@@ -381,7 +403,7 @@ class kbsec(Exchange, ImplicitAPI):
                 'fetchOrderBook': True,
                 # 국내만 지원한다. 해외 차트는 15분 지연 시세라 `NotSupported` 다.
                 'fetchOHLCV': True,
-                'fetchBalance': False,
+                'fetchBalance': True,
                 'createOrder': False,
                 'createLimitOrder': False,
                 'createMarketOrder': False,
@@ -428,6 +450,17 @@ class kbsec(Exchange, ImplicitAPI):
                 'holdingsMaxPages': 20,
                 # 조회일자 되감기 상한. 연휴를 덮되 날짜와 무관한 실패를 끝없이 다시 부르지 않는다.
                 'businessDateMaxBackoff': 5,
+                # 잔고 평가에 쓰는 현재가 캐시 시간(ms).
+                'holdingPriceTtl': 60_000,
+                # 결제대기 매도 보정용 체결내역 조회 창(영업일 수). KRX 는 T+2 결제라 T·T+1·T+2 세 영업일이다.
+                'settlementLookbackDays': 3,
+                # 일시 오류 뒤 같은 TR 을 다시 부르기까지의 대기(ms). 영구 오류는 래치라 이 값과 무관하다.
+                'transientRetryCooldown': 5 * 60 * 1000,
+                # 원마켓(통합증거금) 계좌의 미국 주식 매수여력을 원화 환산분으로 보강한다. 불리언이거나 불리언을 돌려주는 함수다. 기본은 꺼짐이다.
+                # 켜면 `fetch_balance` 가 원화환산 외화예수금을 `usdKrwRate` 로 환산한 USD 를 싣는다.
+                'krwIntegratedMargin': None,
+                # 원마켓 환산에 쓰는 환율 조회 함수. 1달러당 원화를 돌려주는 함수(코루틴 함수도 받는다)다. 없으면 환산을 하지 못한다.
+                'usdKrwRate': None,
             },
         })
 
@@ -930,26 +963,28 @@ class kbsec(Exchange, ImplicitAPI):
         연결 끊김, 시간 초과, 5xx, 토큰 차단기, 토큰 무효(I445, 재발급으로 풀린다)는 영구 실패가 아니다."""
         return isinstance(err, ExchangeError) and not (isinstance(err, AuthenticationError) and err.detail == KBSEC_ERROR_DETAIL['TOKEN_INVALID'])
 
-    async def _collect_tr_pages(self, tr_code: str, request: Dict[str, Any], parse: Callable[[Dict[str, Any]], Any]) -> Dict[str, Any]:
+    async def _collect_tr_pages(self, tr_code: str, request: Dict[str, Any], parse: Callable[[Dict[str, Any]], Any], max_pages: Optional[int] = None,
+                                rows_of: Callable[[Dict[str, Any]], List[Dict[str, Any]]] = pick_array) -> Dict[str, Any]:
         """다음키(`nxt_key`)가 있는 목록 TR 을 끝까지 읽어 `{'rows', 'truncated'}` 로 돌려준다. 첫 페이지만 보면 2페이지 이후 행이 빠진다.
 
         - 다음키가 빈 값이면 멈춘다(KB 는 마지막 페이지에 공백을 주고, `pick_str` 가 잘라 낸다).
         - 같은 다음키가 되풀이되면 그 페이지는 버리고 `truncated` 로 표시한다. 담으면 같은 행이 두 번 들어간다.
-        - 페이지 상한은 `options['holdingsMaxPages']` 다. 상한에 걸리면 `truncated` 로 표시한다.
-        - 호출하는 쪽이 `request` 에 넣은 `nxt_key` 는 무시하고 처음부터 읽는다. 행은 첫 배열에서 읽는다.
+        - 페이지 상한은 `max_pages`(기본 `options['holdingsMaxPages']`)다. 상한에 걸리면 `truncated` 로 표시한다.
+        - 호출하는 쪽이 `request` 에 넣은 `nxt_key` 는 무시하고 처음부터 읽는다.
+        - 행은 첫 배열에서 읽는다. 그리드가 둘 이상인 TR 은 `rows_of` 로 행 그리드를 고른다.
 
         조회 실패는 그대로 던진다(빈 목록으로 삼키지 않는다).
         """
-        max_pages = self.options['holdingsMaxPages']
+        page_limit: int = self.options['holdingsMaxPages'] if max_pages is None else max_pages
         base = self.omit(request, 'nxt_key')
         rows: List[Any] = []
         next_key = ''
         truncated = False
-        for page in range(max_pages):
+        for page in range(page_limit):
             # 연속구분(`cn_clsf`)을 받는 TR 은 둘째 페이지부터 `1`(연속)을 보낸다.
             continued = {'cn_clsf': KBSEC_CONT_NEXT} if next_key != '' and 'cn_clsf' in base else {}
             body = await self._call_tr(tr_code, self.extend(base, continued, {'nxt_key': next_key}))
-            page_rows = [parse(row) for row in pick_array(body)]
+            page_rows = [parse(row) for row in rows_of(body)]
             prev_key = next_key
             next_key = pick_str(body, 'nxt_key')
             if next_key != '' and next_key == prev_key:
@@ -958,7 +993,7 @@ class kbsec(Exchange, ImplicitAPI):
             rows.extend(page_rows)
             if next_key == '':
                 break
-            if page == max_pages - 1:
+            if page == page_limit - 1:
                 truncated = True
         return {'rows': rows, 'truncated': truncated}
 
@@ -1383,6 +1418,539 @@ class kbsec(Exchange, ImplicitAPI):
             'fee': None,
         }, market)
 
+    # ============ 잔고 ============
+
+    async def fetch_balance(self, params: Optional[Dict[str, Any]] = None) -> Balances:
+        """통화와 보유 종목의 잔고. 현금은 통화 키(`KRW`, `USD`), 보유 종목은 `market['base']` 키(종목 코드)이며 `total` 이 수량이다. 평균 단가·평가금액·종목명은
+        각 항목의 `info` 에 있다(`averagePrice`, `marketValue`, `name`, `quoteCurrency`). 미국 티커 `USD` 처럼 현금 코드와 같은 티커는 `commonStockCodes` 의
+        통합 코드(`ProShares Ultra Semiconductors`)가 키다. 표에 없는 티커가 현금 키와 겹치면 한쪽을 덮어쓰지 않고 `NotSupported` 를 던진다. KB증권은
+        보유와 현금을 나눠 받는 인자가 없어서, 그런 계좌는 `commonStockCodes` 에 그 티커를 더해야 잔고를 조회할 수 있다.
+
+        예수금을 읽지 못하면 던진다. 보유를 일부만 읽었으면 던지지 않고 `info['readStatus']` 가 `PARTIAL`, 못 읽은 시장(`KR`, `US`)이
+        `info['unreadMarkets']` 다. 이때 그 시장에서 목록에 없는 종목은 미보유가 아니라 미확인이다.
+
+        - 국내(`KR`): 계좌자산평가(`SSQM2952`)가 국내 행을 주면 읽은 것이다. 실패해서 보유주식(`SSQM1801`) 경로로 내려갔는데 그 행이 전부
+          걸러졌거나, 종목코드를 못 읽어 버린 행이 있거나, 연속조회가 상한에서 잘렸거나, 계좌자산평가가 실패했는데 보유주식도 비었으면 못 읽은 것이다.
+          계좌자산평가가 성공했는데 국내 행이 없고 보유주식도 비었으면 두 조회가 모두 "보유 없음"이라 읽은 것으로 본다.
+        - 해외(`US`): 이번 조회가 성공했고 응답 모양을 알아봤으면 보유가 0 건이어도 읽은 것이다. 종목 그리드가 왔거나(빈 행만 와도),
+          예수금 그리드(`tfnd`)가 왔거나, 예전에 보유 행을 읽은 적이 있으면 알아본 것이다. 두 그리드 밖의 배열이 있거나, 종목코드나 수량을
+          읽지 못한 보유 행이 있으면 못 읽은 것이다. 이름이 어긋난 종목 그리드를 "보유 없음"으로 읽지 않으려는 것이다.
+
+        `USD` 항목은 해외 잔고평가(`SPQM2226`)의 통화별 예수금 그리드에서 온다(예수금·주문가능금액). 그 그리드를 못 읽었으면 `USD` 항목이 없다.
+        없다는 것은 0 이 아니라 모른다는 뜻이다. 미국 시장은 읽었는데 달러 행을 가리지 못해 `USD` 항목이 없으면 `info['unreadCurrencies']` 에 `USD` 가 있다.
+        예수금 그리드의 행이 모두 빈 행이면 외화 예수금이 없으므로 `USD` 의 `total` 은 0 이다. 원마켓 계좌는 달러 예수금 없이 원화로 미국 주식을 사므로
+        이때 `free` 는 0 이 아니라 모르는 값이라 비운다. 0 으로 두면 호출하는 쪽의 잔액 검사가 원화로 살 수 있는 미국 매수를 모두 막는다.
+        `readStatus` 는 보유의 완전성만 알리므로 이때도 `COMPLETE` 일 수 있다. `options['krwIntegratedMargin']` 이 켜져 있고 원화환산 외화예수금이 있으면
+        그것을 환율(`options['usdKrwRate']`)로 환산한 USD 가 우선한다.
+
+        `free` 는 지금 주문에 쓸 수 있는 양, `total` 은 정산 뒤 계좌에 남을 양, `used` 는 `total − free` 다(ccxt 정의). 모르는 값은 비운다.
+
+        - 국내 보유: `free` 는 주문가능수량(`ordr_psbl_q`)이다. 해외 보유는 매도 가능 수량을 읽지 않아 `free` 가 비어 있다.
+        - `KRW`: `free` 는 주문가능현금이다. 예수금 TR 의 어느 필드가 계좌 현금인지 확인하지 못해 `total` 과 `used` 는 비어 있다. 예수금 원문은 `balances['info']['deposit']` 에 있다.
+        - `USD`: `free` 는 주문가능금액(`ordr_psbl_amt_p2`), `total` 은 예수금(`tfnd`)이다. 주문가능금액이 예수금보다 크면 `total` 과 `used` 를 비운다.
+          원화를 환산한 USD(`krwIntegratedMargin`)는 달러 예수금이 아니라서 `free` 만 있다.
+        """
+        # 여러 TR 을 부르지만 `params` 는 기준이 되는 예수금 조회에만 합친다.
+        deposit = await self._call_tr(KBSEC_TR['DEPOSIT'], dict(params or {}))
+        # 실측 필드: ordr_psbl_csh(주문가능현금) · ordr_std_dpstn_csh(주문기준예수금)
+        krw_fields = ('ordr_psbl_csh', 'ordr_std_dpstn_csh', 'do_psbl_csh')
+        # 후보 필드가 모두 없으면 0 이 아니라 모르는 것이다. 0 으로 두면 "예수금 없음"과 섞인다.
+        if not any(key in deposit for key in krw_fields):
+            raise BadResponse(f"{self.id} fetchBalance() 예수금 응답에 주문가능현금 필드가 없다 ({KBSEC_TR['DEPOSIT']})")
+        krw = pick_num(deposit, *krw_fields)
+
+        # 원마켓(통합증거금) 계좌는 달러 예수금이 0 이어도 원화로 미국 주식을 산다. `krwIntegratedMargin` 옵션이 켜져 있으면 원화환산 외화 예수금을
+        # USD 로 환산해 라벨과 값의 축을 맞춘다. USD 라벨에 원화 값을 담지 않는다.
+        one_market_usd: Optional[Dict[str, Any]] = None
+        if await self.is_option_enabled('krwIntegratedMargin'):
+            margin = await self.fetch_one_market_margin()
+            if margin is not None and margin['krwEquivalentForeign'] > 0:
+                usd_krw = await self._usd_krw_rate()
+                usd_equivalent = margin['krwEquivalentForeign'] / usd_krw if usd_krw > 0 else 0
+                if usd_equivalent > 0:
+                    logger.info('[kbsec] 원마켓 — 원화환산 외화예수금을 USD 로 환산해 합산: krwEquivalentForeign=%s usdKrw=%s usdEquivalent=%.2f',
+                                margin['krwEquivalentForeign'], usd_krw, usd_equivalent)
+                    # 이 값은 별도 달러 자금이 아니라 원화 예수금의 증거금 환산치다. `sourceCurrency` 로 자금 풀을 밝혀서 호출하는 쪽이
+                    # KRW 항목과 이 항목을 같은 풀로 두 번 더하지 않게 한다.
+                    one_market_usd = {'amount': usd_equivalent, 'sourceCurrency': 'KRW', 'krwEquivalent': margin['krwEquivalentForeign']}
+            elif not self._one_market_notice_logged:
+                # 옵션을 켰는데 USD 항목이 안 생기는 경우가 있다. 안 남기면 "켰는데 왜 그대로냐"를 로그로 확인할 방법이 없다.
+                # `margin` 이 없으면 계좌가 원마켓 미신청(H049)이다. 코드로 만들 수 있는 매수여력이 아니라 사람이 할 일이다.
+                self._one_market_notice_logged = True
+                logger.warning('[kbsec] krwIntegratedMargin 옵션은 켜졌는데 USD 매수여력이 안 생겼다 — marginSeen=false 면 계좌가 원마켓 미신청(H049)이다. '
+                               '인스턴스당 1회만 남긴다: marginSeen=%s krwEquivalentForeign=%s',
+                               margin is not None, None if margin is None else margin['krwEquivalentForeign'])
+
+        # 1순위는 계좌자산평가(`SSQM2952`)다. 실보유수량·매입평균가·평가금액을 명시적으로 주므로 추정이 없다. 실패하면 보유주식 경로로 내려간다.
+        # 잔고가 조용히 0 이 되는 것이 이 클래스에서 가장 피해가 큰 실패 모드라, 검증 안 된 경로로 통째로 갈아타지 않는다.
+        asset_eval = await self._fetch_domestic_holdings_from_asset_eval()
+        if asset_eval['status'] == 'ok':
+            domestic = {'rows': asset_eval['rows'], 'read': asset_eval['complete']}
+        else:
+            domestic = await self._fetch_domestic_holdings_from_holding_rows(asset_eval['status'] == 'failed')
+        overseas = await self._fetch_overseas_holdings()
+
+        return self.parse_balance({'krw': krw, 'deposit': deposit, 'holdings': domestic['rows'] + overseas['rows'], 'domesticRead': domestic['read'],
+                                   'overseas': overseas, 'oneMarketUsd': one_market_usd})
+
+    def parse_balance(self, response: Dict[str, Any]) -> Balances:
+        """`fetch_balance` 가 모은 예수금, 보유 행, 해외 조회 결과를 잔고로 옮긴다. 보유 종목 키가 현금 키와 겹치면 `NotSupported` 다."""
+        overseas = response['overseas']
+        unread_markets: List[str] = []
+        if response.get('domesticRead') is False:
+            unread_markets.append('KR')
+        if not overseas['read']:
+            unread_markets.append('US')
+        unread_currencies: List[str] = []
+        result: Dict[str, Any] = {
+            'info': {
+                'readStatus': 'COMPLETE' if len(unread_markets) == 0 else 'PARTIAL',
+                'unreadMarkets': unread_markets,
+                'unreadCurrencies': unread_currencies,
+                'deposit': response['deposit'],
+            },
+            'timestamp': None,
+            'datetime': None,
+        }
+        result['KRW'] = {'free': response['krw'], 'used': None, 'total': None, 'info': None}
+        usd_cash = overseas['usdCash']
+        one_market_usd = response.get('oneMarketUsd')
+        if one_market_usd is not None:
+            result['USD'] = {'free': one_market_usd['amount'], 'used': None, 'total': None, 'info': one_market_usd}
+        elif usd_cash is not None:
+            # 첫 그리드: `tfnd`(예수금), `ordr_psbl_amt_p2`(주문가능금액). 예수금에서 주문가능금액을 뺀 만큼을 묶인 금액으로 본다.
+            deposit = self.number_to_string(pick_num(usd_cash, 'tfnd'))
+            free = self.number_to_string(pick_num(usd_cash, 'ordr_psbl_amt_p2'))
+            result['USD'] = {'free': free, 'used': None, 'total': None if Precise.string_gt(free, deposit) else deposit, 'info': usd_cash}
+        elif overseas['noForeignCash']:
+            # 예수금 그리드가 빈 행뿐이면 달러 예수금은 0 이다. 주문에 쓸 수 있는 양은 원마켓 여부에 달려 이 조회로는 모른다.
+            result['USD'] = {'free': None, 'used': None, 'total': 0, 'info': None}
+        # 미국 시장을 읽었는데 달러 예수금 행을 가리지 못하면 USD 항목이 없다. 0 이 아니라 모르는 것이라 따로 밝힌다.
+        # 미국 시장을 못 읽었으면 `unreadMarkets` 가 이미 알린다.
+        if overseas['read'] and 'USD' not in result:
+            unread_currencies.append('USD')
+        held: Dict[str, Any] = {}
+        for holding in response['holdings']:
+            held[self.common_stock_code(holding['code'])] = {
+                'free': holding.get('orderableQuantity'),
+                'used': None,
+                'total': holding['quantity'],
+                'info': {
+                    'quoteCurrency': holding['quoteCurrency'],
+                    'averagePrice': holding.get('averagePrice'),
+                    'marketValue': holding['marketValue'],
+                    'name': holding.get('name'),
+                },
+            }
+        for code, entry in held.items():
+            # 겹친 키에 대입하면 현금이 알림 없이 보유 수량으로 바뀐다.
+            if result.get(code) is not None:
+                raise NotSupported(f'{self.id} fetchBalance() 보유 종목 {code} 가 현금 {code} 와 키가 같아 한 잔고에 담을 수 없다. '
+                                   'KB증권은 보유 종목과 현금을 나눠 받는 인자가 없다. commonStockCodes 에 그 티커의 통합 코드를 더한다')
+            result[code] = entry
+        return self.safe_balance(result)
+
+    async def _fetch_domestic_holdings_from_asset_eval(self) -> Dict[str, Any]:
+        """국내 보유 — 계좌자산평가(`SSQM2952`). 실보유수량은 `ec_q` 다. `hld_q`(결제완료)는 판 주식을 T+2 동안 들고 있고 `ordr_psbl_q`(주문가능)는
+        미체결 매도주문에 물리면 줄어서, 둘 다 단독으로는 보유량이 아니다. 매도 후 결제대기 종목은 `ec_q=0` 으로 와서 추정 없이 걸러진다.
+
+        결과는 `{'status': 'ok', 'rows', 'complete'}` 이거나 `{'status': 'empty'}`(성공했지만 국내 행이 없음), `{'status': 'failed'}`(조회 실패)다.
+        `ok` 가 아니면 호출부가 보유주식(`SSQM1801`) 경로로 떨어진다.
+        """
+        try:
+            # A=통합시세. KRX 만 보면 NXT 체결분 현재가가 빈다.
+            rows = pick_array(await self._call_tr(KBSEC_TR['ASSET_EVAL'], {'excg_mktpr_ccd': 'A'}))
+        except Exception as err:
+            logger.warning('[kbsec] 계좌자산평가 조회 실패 — 보유주식 경로로 폴백: err=%s', err)
+            return {'status': 'failed'}
+        if len(rows) == 0:
+            return {'status': 'empty'}
+
+        out: List[Dict[str, Any]] = []
+        domestic_rows = 0
+        # 버린 보유: 종목코드 없이 수량이 있는 행, 수량 필드가 없는 국내 행. 합계 행처럼 코드와 수량이 모두 없는 행은 세지 않는다.
+        dropped_holdings = 0
+        for row in rows:
+            code = kbsec_normalize_code(pick_str(row, 'is_cd', 'shrt_cd', 'is_no', 'stnd_is_cd'))
+            if code == '':
+                if pick_num(row, 'ec_q') > 0:
+                    dropped_holdings += 1
+                continue
+            # 해외는 이 경로의 범위가 아니다. `SPQM2226` 이 담당하므로 여기서 읽으면 중복 계상된다.
+            if kbsec_market_of(code) != 'KR':
+                continue
+            domestic_rows += 1
+            if 'ec_q' not in row:
+                dropped_holdings += 1
+                continue
+            quantity = pick_num(row, 'ec_q')
+            if quantity <= 0:
+                continue  # 매도 후 결제대기 등 — 실보유 0
+            out.append({
+                'code': code,
+                'quantity': quantity,
+                'orderableQuantity': kbsec_number_of(row.get('ordr_psbl_q')),
+                'quoteCurrency': 'KRW',
+                'averagePrice': pick_positive_num(row, 'byng_avr_prc') or None,
+                # 평가금액은 KB 가 준 것을 그대로 쓴다. 종목마다 현재가를 다시 묻지 않는다.
+                'marketValue': pick_positive_num(row, 'val_amt') or quantity * pick_positive_num(row, 'now_prc'),
+                'name': pick_str(row, 'is_nm') or None,
+            })
+        if domestic_rows == 0:
+            logger.warning('[kbsec] 계좌자산평가에 국내 행이 없다 — 보유주식 경로로 폴백: rows=%s rowKeys=%s', len(rows), list(rows[0])[:40])
+            return {'status': 'empty'}
+        if dropped_holdings > 0:
+            logger.warning('[kbsec] 계좌자산평가에서 종목코드나 수량을 읽지 못한 보유 행이 있다 — 국내를 못 읽은 시장으로 표시: droppedHoldings=%s',
+                           dropped_holdings)
+        return {'status': 'ok', 'rows': out, 'complete': dropped_holdings == 0}
+
+    async def _fetch_domestic_holdings_from_holding_rows(self, primary_failed: bool) -> Dict[str, Any]:
+        """국내 보유 — 보유주식(`SSQM1801`) 경로. 계좌자산평가가 국내 행을 주지 않았을 때만 쓴다. 결과의 `read` 는 국내 보유를 빠짐없이 읽었는가다.
+        `primary_failed` 는 계좌자산평가가 실패(예외)했는가다. 그때 이 경로마저 비면 "보유 없음"이라고 말할 근거가 없다."""
+        fetched = await self._fetch_holding_rows()
+        holding_rows: List[Dict[str, Any]] = fetched['rows']
+        truncated = fetched['truncated']
+        dropped = 0
+        # 결제대기 매도 보정은 `gnrl_q > ordr_psbl_q` 인 행이 하나라도 있을 때만 조회한다. 그 부등호가 성립할 때에만 `max()` 가 `gnrl_q` 를
+        # 채택하고, 그 값에만 아직 결제되지 않은 매도분이 섞일 수 있다.
+        needs_settlement_adjust = any(pick_num(row, 'gnrl_q') > pick_num(row, 'ordr_psbl_q') for row in holding_rows)
+        sold_pending = await self._fetch_pending_sold_qty() if needs_settlement_adjust else None
+
+        out: List[Dict[str, Any]] = []
+        for row in holding_rows:
+            # `A` 접두를 벗기지 않으면 해외 종목으로 오판해 원화 평가액이 달러로 읽힌다. 조회계 TR 은 종목코드를 `shrt_cd` 로 주는 전례가 있어
+            # 1순위로 둔다.
+            code = kbsec_normalize_code(pick_str(row, 'shrt_cd', 'is_cd', 'is_no', 'stnd_is_cd'))
+            quantity = self._adjust_for_pending_sale(code, row, sold_pending)
+            if code == '' or quantity <= 0:
+                # 행이 조용히 사라지면 호출하는 쪽에서 "외부에서 팔렸다"와 구분되지 않는다(목록에 없음 = 보유 0). 버릴 때는 흔적을 남긴다.
+                logger.warning('[kbsec] 보유 행을 버렸다 — 종목코드 없음 또는 수량 0: code=%s keys=%s', code or None, list(row)[:12])
+                if code == '':
+                    dropped += 1
+                continue
+            average_price = pick_num(row, 'pchs_avg_prc', 'avg_prc') or None
+            out.append({
+                'code': code,
+                'quantity': quantity,
+                'orderableQuantity': kbsec_number_of(row.get('ordr_psbl_q')),
+                'quoteCurrency': 'KRW' if kbsec_market_of(code) == 'KR' else 'USD',
+                'averagePrice': average_price,
+                # 수량을 평가금액 자리에 넣으면 보유가 통째로 사라진다. 평가금액은 수량 × 현재가다.
+                'marketValue': await self._evaluate_holding(code, quantity, average_price),
+                # KB 가 종목명을 직접 준다(`is_nm`). 표시하는 쪽이 마스터를 역조회할 필요가 없다.
+                'name': pick_str(row, 'is_nm') or None,
+            })
+        self._log_holding_fields_once(holding_rows[0] if holding_rows else None)
+        # 행은 왔는데 전부 걸러진 경우 — 필드명 불일치가 원인일 가능성이 높다. 값이 아니라 키만 남긴다.
+        all_filtered = len(holding_rows) > 0 and len(out) == 0
+        if all_filtered:
+            logger.warning('[kbsec] 보유주식 행은 있으나 전부 걸러짐 — 종목코드/수량 필드명 불일치: rows=%s rowKeys=%s',
+                           len(holding_rows), list(holding_rows[0])[:40])
+        read = not truncated and dropped == 0 and not all_filtered and not (primary_failed and len(holding_rows) == 0)
+        if not read:
+            logger.warning('[kbsec] 국내 보유를 다 읽지 못했다 — readStatus PARTIAL, unreadMarkets 에 KR: primaryFailed=%s rows=%s kept=%s dropped=%s '
+                           'truncated=%s', primary_failed, len(holding_rows), len(out), dropped, truncated)
+        return {'rows': out, 'read': read}
+
+    async def _fetch_overseas_holdings(self) -> Dict[str, Any]:
+        """해외 보유 종목과 USD 예수금 — `SPQM2226`(잔고평가조회). 결과는 `{'rows', 'usdCash', 'noForeignCash', 'read'}` 다.
+        `noForeignCash` 는 통화별 예수금 그리드가 왔고 그 행이 모두 빈 행이며 알아보지 못한 배열이 없다는 뜻(외화 예수금 없음)이고,
+        `read` 는 이번 조회가 성공했고 응답 모양을 알아봤는가다.
+
+        이 TR 은 배열이 둘이다. 통화별 예수금이 앞에 오고 종목별 보유가 뒤에 오므로 첫 배열을 집으면 보유가 0 건이 된다. 종목코드가 있는 배열을
+        명시적으로 고른다. 수량(`frgn_hld_q_p6`)과 현재가(`now_prc_p4`)가 한 행에 있어 수량 × 현재가가 외화 평가금액이다(`krw_val_amt` 는
+        원화 환산이라 `quoteCurrency: 'USD'` 와 단위가 어긋나서 쓰지 않는다).
+
+        권한이 없거나 업무 오류면 그 뒤로 부르지 않는다. 국내 잔고는 그대로 반환하므로 이 실패가 잔고 조회 전체를 실패시키지 않는다.
+        """
+        unread: Dict[str, Any] = {'rows': [], 'usdCash': None, 'noForeignCash': False, 'read': False}
+        if self._overseas_holdings_unavailable:
+            return unread
+        # 일시 오류 직후에는 호출 빈도를 제한한다. 이 구간의 빈 결과는 "보유 없음"이 아니라 "안 물어봤다"이며, `read: False` 가 그 사실을 전한다.
+        if self.milliseconds() < self._overseas_holdings_retry_at:
+            return unread
+        try:
+            body = await self._call_tr(KBSEC_TR['HOLDINGS_US'], {
+                'std_crncy_f': KBSEC_STD_CURRENCY_FOREIGN,
+                'exch_r_aplc_f': KBSEC_EXCH_RATE_MARKET,
+                'fee_clsf': KBSEC_FEE_EXCLUDED,
+                'srt_clsf': '1',
+                'cn_f': '',
+                'nxt_key': '',
+            })
+            grid = pick_holding_grid(body)
+            rows: List[Dict[str, Any]] = grid['rows']
+            seen = grid['seen']
+            cash_rows = pick_cash_grid(body)
+            usd_cash = next((row for row in cash_rows if is_usd_cash_row(row)), None)
+            empty_rows = len([row for row in cash_rows if is_empty_cash_row(row)])
+            # 빈 행만 왔으면 가릴 달러 행이 없는 것이다. 외화 예수금이 없는 계좌는 조회할 때마다 이 모양이라 경고하지 않는다.
+            no_foreign_cash = len(cash_rows) > 0 and empty_rows == len(cash_rows)
+            if len(cash_rows) > 0 and usd_cash is None and not no_foreign_cash:
+                # 통화구분명과 행별 기준환율(공개 환율)은 금액이 아니라 남긴다. 예수금과 주문가능금액은 남기지 않고 빈 행의 수만 센다.
+                # 달러 예수금이 있을 때 행 모양을 보고 `is_usd_cash_row` 를 고치려는 진단이다.
+                logger.warning('[kbsec] 해외 예수금 그리드에 USD 행이 없다 — currencyNames 가 받은 통화구분명이다: trCode=%s currencyNames=%s '
+                               'standardRates=%s emptyRows=%s', KBSEC_TR['HOLDINGS_US'], [row.get('crncy_clsf_nm') for row in cash_rows],
+                               [row.get('std_exch_r') for row in cash_rows], empty_rows)
+            out: List[Dict[str, Any]] = []
+            # 버린 이유를 세어서 남긴다. "종목코드가 비었다", "수량을 못 읽었다", "수량이 0 이다"는 원인도 조치도 다르다.
+            dropped_no_code = 0
+            dropped_no_quantity = 0
+            dropped_zero_qty = 0
+            # 보유를 잃은 행의 수. 이 행이 있으면 다 읽었다고 하지 않는다.
+            dropped_holdings = 0
+            # 수량 후보 중 실제로 0 이 아니었던 필드 이름만 모은다. 알아야 하는 것은 보유 수량이 아니라 어느 필드가 보유수량인가다.
+            non_zero_qty_fields: List[str] = []
+            for row in rows:
+                code = kbsec_normalize_code(pick_str(row, 'is_cd'))
+                quantity = kbsec_number_of(row.get('frgn_hld_q_p6'))
+                if code == '' or quantity is None or quantity <= 0:
+                    if code == '':
+                        dropped_no_code += 1
+                    elif quantity is None:
+                        dropped_no_quantity += 1
+                    else:
+                        dropped_zero_qty += 1
+                    for key in OVERSEAS_QTY_CANDIDATES:
+                        if pick_num(row, key) > 0 and key not in non_zero_qty_fields:
+                            non_zero_qty_fields.append(key)
+                    # 종목코드 없이 수량이 있는 행, 종목코드는 있는데 수량을 숫자로 못 읽은 행(필드 없음, 빈 값)은 보유를 잃은 것이다.
+                    # 뒤의 행을 수량 0 으로 두면 수량 필드 이름이 어긋났을 때 보유가 0 건으로 읽힌다. 수량이 숫자 0 인 행은 보유 0 이다.
+                    if (any(pick_num(row, key) > 0 for key in OVERSEAS_QTY_CANDIDATES) if code == '' else quantity is None):
+                        dropped_holdings += 1
+                    continue
+                price = pick_num(row, 'now_prc_p4')
+                out.append({
+                    'code': code,
+                    'quantity': quantity,
+                    'quoteCurrency': 'USD',
+                    'averagePrice': pick_num(row, 'byng_avr_prc_p4') or None,
+                    'marketValue': quantity * price if price > 0 else 0,
+                    'name': pick_str(row, 'is_nm') or None,
+                })
+            if dropped_holdings > 0 or (len(out) == 0 and dropped_zero_qty > 0):
+                logger.warning('[kbsec] 해외 보유 행에서 종목코드나 수량을 읽지 못했다 — 해외를 못 읽은 시장으로 표시: rows=%s droppedNoCode=%s '
+                               'droppedNoQuantity=%s droppedZeroQty=%s nonZeroQtyFields=%s arrays=%s rowKeys=%s' if dropped_holdings > 0
+                               else '[kbsec] 해외 보유 행이 전부 수량 0 이다 — nonZeroQtyFields 로 수량 필드 확인: rows=%s droppedNoCode=%s '
+                               'droppedNoQuantity=%s droppedZeroQty=%s nonZeroQtyFields=%s arrays=%s rowKeys=%s',
+                               len(rows), dropped_no_code, dropped_no_quantity, dropped_zero_qty, non_zero_qty_fields, seen,
+                               list(rows[0])[:40] if rows else [])
+            if len(out) > 0:
+                # 보유 행을 실제로 읽었다. 이 이력은 뒤의 응답이 종목 그리드 없이 와도 미보유로 읽게 한다.
+                self._overseas_grid_seen = True
+                logger.info('[kbsec] 해외 보유 조회 완료: trCode=%s holdings=%s', KBSEC_TR['HOLDINGS_US'], len(out))
+            # 응답 모양을 알아봤으면 보유 0 건도 읽은 것이다. 뽑은 두 그리드 밖에 배열이 있으면 이름이 어긋난 종목 그리드일 수 있어
+            # 이력이 있어도 못 읽은 것이다. `crncy_clsf_nm` 은 종목 그리드에도 있어서, 예수금 그리드는 그 그리드에만 있는 `tfnd` 로 알아본다.
+            unknown = unknown_grids(body, [rows, cash_rows])
+            cash_grid_read = 'tfnd' in (cash_rows[0] if cash_rows else {})
+            read = dropped_holdings == 0 and len(unknown) == 0 and (len(rows) > 0 or self._overseas_grid_seen or cash_grid_read)
+            if len(unknown) > 0:
+                logger.warning('[kbsec] 해외 잔고 응답에 알아보지 못한 배열이 있다 — 필드명 불일치일 수 있어 해외를 못 읽은 시장으로 표시'
+                               '(unknownArrays 로 확인): trCode=%s unknownArrays=%s', KBSEC_TR['HOLDINGS_US'], unknown)
+            elif not read and len(rows) == 0:
+                logger.warning('[kbsec] 해외 잔고 응답에 배열이 없다 — 권한/파라미터 확인: trCode=%s arrays=%s' if len(seen) == 0
+                               else '[kbsec] 해외 잔고에서 종목 그리드도 예수금 그리드(tfnd)도 알아보지 못했다 — arrays 로 확인: trCode=%s arrays=%s',
+                               KBSEC_TR['HOLDINGS_US'], seen)
+            # 호출이 예외 없이 끝났다. 직전의 실패 상태를 푼다(자가 치유).
+            self._overseas_holdings_retry_at = 0
+            # 알아보지 못한 배열이 있으면 이름이 어긋난 예수금 그리드일 수 있어 외화 예수금이 없다고 하지 않는다.
+            return {'rows': out, 'usdCash': usd_cash, 'noForeignCash': no_foreign_cash and len(unknown) == 0, 'read': read}
+        except Exception as err:
+            permanent = self._is_permanent_failure(err)
+            if permanent:
+                self._overseas_holdings_unavailable = True
+            else:
+                self._overseas_holdings_retry_at = self.milliseconds() + self.options['transientRetryCooldown']
+            logger.warning('[kbsec] 해외 잔고 조회 실패(업무 오류) — 이 인스턴스에서 재시도하지 않는다(반복 실패는 계정 제한 사유): trCode=%s latched=%s err=%s'
+                           if permanent else '[kbsec] 해외 잔고 조회 실패(일시 오류) — 냉각 후 재시도한다: trCode=%s latched=%s err=%s',
+                           KBSEC_TR['HOLDINGS_US'], permanent, err)
+            return unread
+
+    def _log_holding_fields_once(self, row: Optional[Dict[str, Any]]) -> None:
+        """보유주식 응답의 키 목록을 인스턴스당 한 번 남긴다. 값이 아니라 키만 찍는 것은 보유 종목·수량이 민감 정보이기 때문이다."""
+        if self._holding_fields_logged or row is None:
+            return
+        self._holding_fields_logged = True
+        logger.info('[kbsec] 보유주식 응답 필드 목록 — 평가금액 필드 확정용 프로브: trCode=%s rowKeys=%s', KBSEC_TR['HOLDINGS'], list(row)[:40])
+
+    async def _evaluate_holding(self, code: str, quantity: float, average_price: Optional[float] = None) -> float:
+        """보유 종목의 평가금액(수량 × 현재가, `quoteCurrency` 단위). 현재가를 못 얻으면 매입평균가로 대체하고(과거 원가 기준임을 로그로 남긴다),
+        그것도 없으면 0 이다. 수량을 금액 자리에 넣는 것은 틀린 값이라 값이 없다고 말하는 편이 낫다."""
+        price = await self._holding_price(code)
+        if price > 0:
+            return quantity * price
+        if average_price is not None and average_price > 0:
+            logger.debug('[kbsec] 현재가 미확보 — 평가금액을 매입원가로 대체: code=%s', code)
+            return quantity * average_price
+        logger.warning('[kbsec] 평가금액 산출 불가 — 현재가·매입평균가 모두 없음: code=%s', code)
+        return 0
+
+    async def _holding_price(self, code: str) -> float:
+        """평가용 현재가. 잔고 조회를 잇달아 불러도 종목마다 TR 을 다시 부르지 않도록 TTL(`options['holdingPriceTtl']`) 동안 캐시한다."""
+        cached = self._holding_price_cache.get(code)
+        if cached is not None and self.milliseconds() - cached['at'] < self.options['holdingPriceTtl']:
+            return cached['price']
+        price: float = 0
+        try:
+            price = (await self.fetch_ticker(code))['last'] or 0
+        except Exception as err:
+            logger.debug('[kbsec] 평가용 현재가 조회 실패: code=%s err=%s', code, err)
+        if price > 0:
+            self._holding_price_cache[code] = {'price': price, 'at': self.milliseconds()}
+        return price
+
+    async def _fetch_holding_rows(self) -> Dict[str, Any]:
+        """보유주식(`SSQM1801`) 행을 연속조회로 끝까지 읽는다. 결과는 `{'rows', 'truncated'}` 이고, 0건이면 근거를 남긴다.
+
+        이 TR 이 0건인 원인은 확정하지 못했다. 후보는 `inq_clsf` 값(`1=주식` 은 체결조회 TR 기준이고 이 TR 의 뜻은 미확인)과 `mkt_tm_ccd` 다.
+        그래서 후보 조합을 순서대로 시도하고 무엇이 통했는지 로그로 남긴다.
+
+        연속조회(`nxt_key`)를 끝까지 따라간다. 첫 페이지만 보면 2페이지 이후 보유가 목록에서 사라지고, 목록에서 빠진 종목은 "보유 0"이라
+        호출하는 쪽이 외부 청산으로 읽는다.
+        """
+        attempts = [
+            {'inq_clsf': KBSEC_INQ_STOCK, 'mkt_tm_ccd': KBSEC_SESSION_REGULAR},
+            {'inq_clsf': KBSEC_INQ_ALL, 'mkt_tm_ccd': KBSEC_SESSION_REGULAR},
+        ]
+        max_pages = self.options['holdingsMaxPages']
+        # 0건일 때 남길 근거로 마지막 응답을 기억한다.
+        last_raw: Dict[str, Any] = {}
+
+        def rows_of(body: Dict[str, Any]) -> List[Dict[str, Any]]:
+            nonlocal last_raw
+            last_raw = body
+            return pick_array(body)
+
+        for i, attempt in enumerate(attempts):
+            result = await self._collect_tr_pages(KBSEC_TR['HOLDINGS'], attempt, lambda row: row, max_pages, rows_of)
+            rows = result['rows']
+            if result['truncated']:
+                # 상한에 걸려 중단했다. 조용히 자르면 그 종목들이 청산으로 읽힌다.
+                logger.error('[kbsec] 보유주식 연속조회 상한 도달 — 목록이 잘렸다(청산 오판 위험): pages=%s rows=%s', max_pages, len(rows))
+            if len(rows) > 0:
+                if i > 0:
+                    logger.warning('[kbsec] 보유주식 — 기본 조합은 0건, 대체 조합에서 조회됨 (조합 고정 필요): attempt=%s params=%s rows=%s',
+                                   i, attempt, len(rows))
+                return result
+        logger.warning('[kbsec] 보유주식 0건 — 응답에 배열이 없거나 비어 있다(파라미터/필드명 확인 필요): attempts=%s topLevelKeys=%s',
+                       len(attempts), list(last_raw)[:20])
+        return {'rows': [], 'truncated': False}
+
+    def _adjust_for_pending_sale(self, code: str, row: Dict[str, Any], sold_pending: Optional[Dict[str, float]]) -> float:
+        """보유수량에서 결제대기 매도분을 뺀 값. `qty = max(ordr_psbl_q, max(gnrl_q, ordr_psbl_q) - 결제대기매도)` 다.
+
+        `ordr_psbl_q`(매도가능)를 하한으로 두는 것이 이 식의 안전성 전부다. 브로커가 지금 팔 수 있다고 말한 수량보다 적게 보고하는 일은
+        없다. 조회 창이 실제 결제 지연보다 넓어 이미 결제된 매도를 한 번 더 빼더라도 수량이 음수가 되지 않는다.
+
+        ======================== ======== =========== ============ ====
+        상황                     gnrl_q   ordr_psbl_q 결제대기매도 결과
+        ======================== ======== =========== ============ ====
+        미결제 매수              0        21          0            21
+        전량 매도 후 결제대기    5        0           5            0
+        일부 매도(8 중 3)        8        5           3            5
+        대용담보/미체결 매도주문 10       0           0            10
+        ======================== ======== =========== ============ ====
+
+        마지막 행이 `max()` 를 유지해야 하는 이유다. 매도 체결이 없으면 아무것도 빼지 않는다.
+        """
+        raw = kbsec_holding_quantity(row)
+        sold = (sold_pending or {}).get(code, 0) if code != '' else 0
+        if not sold > 0:
+            return raw
+        sellable = pick_num(row, 'ordr_psbl_q')
+        adjusted = max(sellable, raw - sold)
+        if adjusted != raw:
+            logger.warning('[kbsec] 결제대기 매도분 차감 — 보유수량 보정(T+2): code=%s name=%s gnrlQ=%s ordrPsblQ=%s pendingSold=%s before=%s after=%s',
+                           code, pick_str(row, 'is_nm') or None, pick_num(row, 'gnrl_q'), sellable, sold, raw, adjusted)
+        return adjusted
+
+    async def _fetch_pending_sold_qty(self) -> Optional[Dict[str, float]]:
+        """결제대기 매도 수량(종목코드별 합계). 보유수량에서 빼기 위한 제3의 축이다.
+
+        보유주식 TR 의 두 필드로는 뜻이 다른 두 상태가 같은 모양으로 온다. `gnrl_q>0 · ordr_psbl_q=0` 은 (1) 대용담보·미체결 매도주문이면
+        보유가 있고 (2) 매도 체결 뒤 결제대기면 보유가 0 이다. 구분할 축이 이 TR 안에 없어 체결내역(`SSQM2341`)에서 가져온다.
+
+        조회 실패는 `None` 이다. 호출부가 보정을 포기하고 종전 값을 쓴다. 과다보고(판 것을 있다고 함)는 표시 오류로 끝나지만 과소보고
+        (있는 것을 없다고 함)는 외부 청산 오판과 재매수라는 실손실을 낸다. 실패는 언제나 안전한 쪽으로 처리한다.
+        """
+        try:
+            out: Dict[str, float] = {}
+            for steps in range(self.options['settlementLookbackDays']):
+                ordr_dt = kbsec_business_date_kst(steps, self.milliseconds())
+                try:
+                    result = await self._collect_tr_pages(KBSEC_TR['TRADES_KR'], {
+                        'inq_clsf': KBSEC_INQ_STOCK,  # 주식
+                        'ccls_clsf': KBSEC_CCLS_FILLED,  # 체결만. 비우면 거부된다(8654)
+                        'ordr_dt': ordr_dt,
+                        'cn_clsf': KBSEC_CONT_FIRST,
+                    }, lambda row: row)
+                    # 잘리면 빼야 할 매도가 덜 빠진다. 과다보고 쪽이라 보정은 계속하고 기록만 남긴다.
+                    if result['truncated']:
+                        logger.warning('[kbsec] 결제대기 매도 조회가 페이지 상한에서 잘렸다: ordrDt=%s rows=%s', ordr_dt, len(result['rows']))
+                    rows: List[Dict[str, Any]] = result['rows']
+                except ExchangeError as err:
+                    # `kbsec_business_date_kst` 의 휴장일 표에 없는 휴장일에는 조회일자가 KB 영업일보다 앞서 거부된다. 그 날짜 하나만
+                    # 건너뛰고 나머지 영업일은 계속 본다. 통째로 포기하면 공휴일마다 보정이 조용히 꺼진다.
+                    if err.detail == KBSEC_ERROR_DETAIL['FUTURE_QUERY_DATE']:
+                        logger.debug('[kbsec] 결제대기 매도 조회 — 휴장일 건너뜀: ordrDt=%s', ordr_dt)
+                        continue
+                    raise
+                parsed = [parse_kbsec_domestic_fill_row(row) for row in rows]
+                # 한 행 = 한 체결이라 그대로 더한다. 분할체결 연속 행은 식별자가 비어 오므로 먼저 헤더 행에 귀속시킨다.
+                warn_if_fill_totals_inconsistent(parsed, rows, '결제대기 매도 조회')
+                fills = kbsec_resolve_fills(parsed)
+                for fill in fills:
+                    # 귀속에 실패한 행(헤더 없이 온 연속 행)은 남의 주문에 붙이느니 빼지 않는다.
+                    if fill['orderId'] == '':
+                        continue
+                    # 방향이 확실히 매도인 것만 뺀다. 빼는 쪽으로 틀리면 과소보고다.
+                    if fill['side'] != 'sell':
+                        continue
+                    if fill['symbol'] == '' or not fill['qty'] > 0:
+                        continue
+                    out[fill['symbol']] = out.get(fill['symbol'], 0) + fill['qty']
+                # 방향 판독 여부는 귀속 뒤로 센다. 연속 행은 원래 방향이 비어 오므로 원본 행으로 세면 정상 응답에도 경고가 뜬다.
+                warn_if_fill_side_unreadable(rows, len([fill for fill in fills if fill['side'] is not None]), '결제대기 매도 조회')
+            return out
+        except Exception as err:
+            logger.warning('[kbsec] 결제대기 매도 조회 실패 — 보유수량 보정 생략(종전값 사용): err=%s', err)
+            return None
+
+    async def _usd_krw_rate(self) -> float:
+        """1달러당 원화. `options['usdKrwRate']` 가 없으면 환율을 알 수 없어 던진다. 조회가 실패해도 던진다."""
+        source = self.options.get('usdKrwRate')
+        if source is None:
+            raise ArgumentsRequired(f'{self.id} 원마켓 환산에는 options.usdKrwRate 가 필요하다')
+        return await maybe_await(source())
+
+    async def fetch_one_market_margin(self) -> Optional[Dict[str, Any]]:
+        """원마켓 계좌증거금(`SPQM3390`) — 원화·원화환산 외화 예수금과 주문증거금 현황. 통합증거금 계좌의 실제 여력을 보려면 예수금 TR 만으로는 부족하다.
+        결과는 `{'krwDeposit', 'krwEquivalentForeign', 'orderMarginSum', 'totalDeposit', 'withdrawable'}` 다.
+
+        이 조회는 잔고 조회를 돕는 보조 조회라 실패해도 던지지 않고 `None` 을 돌려준다. 영구 실패(미신청 계좌 등)는 이 인스턴스에서 다시
+        부르지 않는다. 잔고 조회가 종목마다 불릴 수 있어 래치가 없으면 실패가 종목 수만큼 곱해지고, 미신청 계좌는 다시 물어도 답이 같다.
+        """
+        if self._one_market_unavailable or self.milliseconds() < self._one_market_retry_at:
+            return None
+        try:
+            body = await self._call_tr(KBSEC_TR['ONEMARKET_MARGIN'], {})
+            return {
+                'krwDeposit': pick_num(body, 'krw_tfnd'),
+                'krwEquivalentForeign': pick_num(body, 'krw_exch_fcrncy_tfnd'),
+                'orderMarginSum': pick_num(body, 'ordr_mgn_sum'),
+                'totalDeposit': pick_num(body, 'tfnd_tl_amt'),
+                'withdrawable': pick_num(body, 'do_psbl_amt'),
+            }
+        except Exception as err:
+            permanent = self._is_permanent_failure(err)
+            if permanent:
+                self._one_market_unavailable = True
+            else:
+                self._one_market_retry_at = self.milliseconds() + self.options['transientRetryCooldown']
+            logger.warning('[kbsec] 원마켓 증거금 조회 실패 — 영구 실패면 이 인스턴스에서 재시도하지 않는다(반복 실패는 계정 제한 사유): latched=%s err=%s',
+                           permanent, err)
+            return None
+
     # 생성자가 붙이는 camelCase 별칭을 타입 검사기에 알린다. 빠지거나 남는 줄은 test_base.py 가 잡는다.
     if TYPE_CHECKING:
         handleErrors = handle_errors
@@ -1406,3 +1974,6 @@ class kbsec(Exchange, ImplicitAPI):
         fetchOverseasOrderStatus = fetch_overseas_order_status
         fetchMyTrades = fetch_my_trades
         parseTrade = parse_trade
+        fetchBalance = fetch_balance
+        parseBalance = parse_balance
+        fetchOneMarketMargin = fetch_one_market_margin

@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### 추가
+
+- Python 판 KB증권에 `fetch_balance`를 옮겼습니다. TypeScript 판과 같게 예수금(`SSQM0004`), 계좌자산평가(`SSQM2952`, 실패하면 보유주식 `SSQM1801`), 해외 잔고평가(`SPQM2226`)를 읽고, 보유를 일부만 읽었으면 `info['readStatus']`가 `PARTIAL`이며 읽지 못한 시장이 `info['unreadMarkets']`에 있습니다. `options['krwIntegratedMargin']`과 `options['usdKrwRate']`, 원마켓 계좌증거금(`fetch_one_market_margin`)도 함께 옮겼습니다. 두 판은 요청 픽스처의 잔고 케이스를 함께 돌립니다.
+
 ## [0.6.0] - 2026-11-02
 
 ### 바뀜(호환되지 않음)
