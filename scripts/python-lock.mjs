@@ -4,7 +4,7 @@
  *
  * 잠금 파일은 CI 전용이다. 사용하는 쪽의 설치(`pip install kr-broker @ git+…`)는 `pyproject.toml` 의 하한을 따르고 이 파일을 읽지 않는다.
  * 파일마다 `.in`(직접 요구하는 것)과 `.txt`(`uv pip compile --universal --generate-hashes` 로 푼 판과 해시)가 짝이다.
- * `--universal` 이라 파일 하나가 환경 마커로 Python 3.10 과 3.13 을 함께 덮는다. Dependabot(`uv` 생태계)도 `.txt` 머리말의 명령으로 다시 만든다.
+ * `--universal` 이라 파일 하나가 환경 마커로 Python 3.11 과 3.13 을 함께 덮는다. Dependabot(`uv` 생태계)도 `.txt` 머리말의 명령으로 다시 만든다.
  *
  * - `runtime`: `[project] dependencies`. pip-audit 가 감사하는 운영 의존성이다.
  * - `ci`: `runtime.txt` 로 묶은 운영 의존성, `dev` extra, `[build-system] requires`. CI 는 이 파일로 설치하고 패키지 자신을 `--no-build-isolation` 으로 빌드한다.
@@ -34,7 +34,7 @@ const PYPROJECT = path.join(ROOT, 'python', 'pyproject.toml');
 const LOCKS = ['runtime', 'ci', 'pip-audit'];
 
 /** 모든 잠금 파일을 만드는 옵션. 지원하는 가장 낮은 Python 을 기준으로 푼다. */
-const COMPILE_OPTIONS = ['--universal', '--generate-hashes', '--python-version', '3.10'];
+const COMPILE_OPTIONS = ['--universal', '--generate-hashes', '--python-version', '3.11'];
 
 function fail(message) {
     process.stderr.write(`${message}\n`);

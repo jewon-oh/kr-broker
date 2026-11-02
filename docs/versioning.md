@@ -113,9 +113,9 @@ Node.js 22 미만에서는 동작을 확인하지 않았습니다.
 
 | 항목 | 값 |
 |---|---|
-| `pyproject.toml`의 `requires-python` | Python 3.10 이상 |
-| CI 검사 | Linux의 Python 3.10과 3.13 |
+| `pyproject.toml`의 `requires-python` | Python 3.11 이상 |
+| CI 검사 | Linux의 Python 3.11과 3.13 |
 
 Python 판은 동기 판(`kr_broker`), 비동기 판(`kr_broker.async_support`), 실시간 판(`kr_broker.pro`)을 TypeScript 판과 같은 버전 번호로 냅니다. 동기 판 증권사 파일은 비동기 판에서 만들므로 두 판의 공개 API는 같습니다.
 
-Python 3.10 미만에서는 동작을 확인하지 않았습니다. 지원하는 Python 최소 버전을 올리는 변경은 파괴적 변경입니다.
+Python 3.10 지원은 0.6.0에서 끝났습니다. 3.10은 2026년 10월에 보안 지원이 끝났습니다. 지원하는 Python 최소 버전을 올리는 변경은 파괴적 변경입니다.

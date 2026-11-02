@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/jewon-oh/kr-broker/actions/workflows/ci.yaml/badge.svg)](https://github.com/jewon-oh/kr-broker/actions/workflows/ci.yaml)
 ![Node](https://img.shields.io/badge/node-%3E%3D22-brightgreen)
-![Python](https://img.shields.io/badge/python-%3E%3D3.10-blue)
+![Python](https://img.shields.io/badge/python-%3E%3D3.11-blue)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 [![증권사](https://img.shields.io/badge/증권사-3-blue)](#지원-증권사)
 
@@ -123,7 +123,7 @@ pnpm은 의존성의 빌드 스크립트를 기본으로 막습니다. pnpm 10�
 
 Node.js 22 이상이 필요합니다.
 
-Python 판도 PyPI 대신 GitHub 주소로 설치합니다. Python 3.10 이상이 필요합니다.
+Python 판도 PyPI 대신 GitHub 주소로 설치합니다. Python 3.11 이상이 필요합니다.
 
 ```bash
 pip install "kr-broker @ git+https://github.com/jewon-oh/kr-broker.git@v0.6.0#subdirectory=python"

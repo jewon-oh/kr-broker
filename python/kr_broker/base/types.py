@@ -1,8 +1,8 @@
 """타입 별칭, 통합 구조와 암묵 API 선언(`Entry`). ccxt 의 `ccxt/base/types.py` 와 같은 자리다.
 
 통합 구조(`Order`, `Trade`, `Ticker` 등)는 ccxt 처럼 `TypedDict` 이고 필드는 TypeScript 판 `ts/src/base/types.ts` 와 같다. 실행 중에는
-보통의 `dict` 다. 값이 없으면 키를 두고 `None` 을 넣으므로 필드는 대부분 필수 키다. 키가 빠질 수 있는 필드만 선택 키이고, Python 3.10 의
-`typing` 에는 `NotRequired` 가 없어 `total=False` 부모 클래스에 둔다.
+보통의 `dict` 다. 값이 없으면 키를 두고 `None` 을 넣으므로 필드는 대부분 필수 키다. 키가 빠질 수 있는 필드만 선택 키이고,
+`total=False` 부모 클래스에 둔다. Python 3.10 을 지원하던 때 `typing` 에 `NotRequired` 가 없어서 정한 모양이다.
 """
 
 import types
