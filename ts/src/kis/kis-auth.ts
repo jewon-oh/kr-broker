@@ -208,13 +208,27 @@ export class KisAuth {
         return key;
     }
 
-    /** 토큰 캐시를 프로세스 메모리와 저장소에서 모두 지운다. 다음 호출이 새 토큰을 발급받는다. */
-    async invalidate(): Promise<void> {
-        this.cachedToken = null;
+    /**
+     * 토큰 캐시를 프로세스 메모리와 저장소에서 지운다. 다음 호출이 새 토큰을 발급받는다.
+     *
+     * `failedToken`(거절된 요청이 실제로 쓴 토큰)을 주면 **그 토큰일 때만** 지운다(compare-and-delete). 요청이 거절되는 사이 다른 프로세스가 새 토큰을
+     * 발급해 저장소에 넣었다면 그 새 토큰을 지우지 않는다. 무조건 지우면 상대가 방금 발급한 멀쩡한 토큰이 사라져 다시 발급하게 되고, KIS 는 발급을
+     * 분당 1회로 제한한다. 저장소의 비교 삭제(`BrokerTokenStore.deleteIfAccessTokenEquals`)는 원자적이어야 한다(Redis 는 Lua).
+     * 메모리 캐시도 같은 토큰일 때만 비운다.
+     *
+     * 인자 없이 부르면 종전처럼 무조건 지운다(강제 재인증).
+     */
+    async invalidate(failedToken?: string): Promise<void> {
+        if (failedToken === undefined || this.cachedToken?.accessToken === failedToken) this.cachedToken = null;
         const store = this.storeOf();
         if (store) {
             try {
-                await store.delete(this.storeKey);
+                if (failedToken === undefined) {
+                    await store.delete(this.storeKey);
+                } else if (!await store.deleteIfAccessTokenEquals(this.storeKey, failedToken)) {
+                    logger.info('[KISAuth] 메모리 캐시만 무효화 — 토큰 저장소에는 이미 다른(더 새) 토큰이 있거나 토큰이 없다');
+                    return;
+                }
             } catch (err) {
                 logger.debug({ err }, '[KISAuth] 토큰 저장소 삭제 실패 (프로세스 메모리 무효화는 완료)');
             }
