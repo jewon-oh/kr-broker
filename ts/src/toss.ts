@@ -112,7 +112,7 @@ import {
 } from './base';
 import { TOSS_API_TREE, type TossImplicitApi } from './abstract/toss';
 import { confirmExecutionDetailed, type ExecutionConfirmation, type ExecutionSnapshot } from './execution-confirm';
-import { buildExtendedSessionLimit } from './extended-session-limit';
+import { buildExtendedSessionLimit, type ExtendedSessionDuplicate, type ExtendedSessionLimit } from './extended-session-limit';
 import { symbolBaseCode, type StockMarketGroup } from './broker-market-group';
 import { KST_OFFSET_MS, candlePeriodUtcMs, isDailyOrLongerTimeframe } from './broker-time';
 import { logger } from './logger';
@@ -591,6 +591,12 @@ export class toss extends Exchange {
                 nxtRouting: undefined,
                 /** 미국 확장세션에서 시장가를 지정가로 바꿔 낸다. */
                 usExtendedLimit: undefined,
+                /**
+                 * 확장세션 시장가를 지정가로 바꿀 때 같은 종목·같은 방향의 낡은 미체결이 있으면 건너뛰지 않고 현재가로 바꾼다(정정하고, 정정할 수 없으면 취소를
+                 * 확인한 뒤 새로 낸다). 직전에 이 전환으로 낸 지정가가 첫 기준가에 묶여 청산이 밀리는 것을 막는다. 같은 방향 미체결이 하나이고 남은 수량이 이번
+                 * 주문 수량과 같을 때만 바꾸며, 그 밖에는 종전처럼 건너뛴다. 기본은 꺼짐이다(남이 낸 주문을 건드릴 수 있어서).
+                 */
+                extendedSessionReplaceOpen: undefined,
                 /** 정규장 종가 동시호가(국내 15:20~15:30, 미국 15:50~16:00 ET)의 신규 매수를 막는다. 시장이 받는 주문이라 기본은 꺼짐이다. */
                 blockAuctionBuys: undefined,
                 /** 토큰과 발급 락을 여러 프로세스가 나눠 쓰는 저장소(`BrokerTokenStore`). 없으면 프로세스 메모리 캐시만 쓴다. */
@@ -1704,15 +1710,22 @@ export class toss extends Exchange {
         let effectiveType: OrderType = type;
         let effectivePrice = price;
         let extendedSession: string | undefined;
+        let replacedOrderId: string | undefined;
         if (isMarket && !useAmountBased) {
             const conversion = country === 'US'
                 ? await this.usExtendedSessionConversion(symbol, side, quantity)
-                : await this.krExtendedSessionConversion(symbol, side);
+                : await this.krExtendedSessionConversion(symbol, side, quantity);
             if (conversion !== null) {
                 if (conversion.error !== undefined) {
                     logger.warn({ symbol, side, session: conversion.session, reason: conversion.error }, '[toss] 확장세션 지정가 전환을 보류한다');
                     throw new OrderNotSent(conversion.error, { detail: 'extended-session-limit-unavailable' });
                 }
+                // 낡은 미체결을 현재가로 정정했다. 새 주문을 내지 않고 정정된 주문이 이 호출의 결과다.
+                if (conversion.replaced?.action === 'edited' && conversion.replaced.order !== undefined) {
+                    const edited = conversion.replaced.order;
+                    return { ...edited, info: { ...edited.info, replacedOrderId: conversion.replaced.orderId, extendedSession: conversion.session, orderOpen: true } };
+                }
+                if (conversion.replaced !== undefined) replacedOrderId = conversion.replaced.orderId;
                 effectiveType = 'limit';
                 effectivePrice = conversion.price;
                 extendedSession = conversion.session;
@@ -1754,7 +1767,7 @@ export class toss extends Exchange {
             throw new OrderOutcomeUnknown(`${this.id} 주문 접수 응답에 orderId 가 없다. 접수 여부를 주문 조회로 확인해야 한다`);
         }
 
-        const draft = { market, type: effectiveType, side, price: effectivePrice, quantity, useAmountBased, cost, orderId, clientOrderId, timeInForce, response, extendedSession };
+        const draft = { market, type: effectiveType, side, price: effectivePrice, quantity, useAmountBased, cost, orderId, clientOrderId, timeInForce, response, extendedSession, replacedOrderId };
 
         // 확장세션 지정가는 즉시 체결이 보장되지 않으므로 체결을 가정하지 않는다. 접수 직후 미체결 장부에 남아 있으면 미체결 주문으로 돌려준다.
         if (extendedSession !== undefined) {
@@ -1993,29 +2006,87 @@ export class toss extends Exchange {
      * 확장세션 시장가를 지정가로 바꿀 때 쓸 지정가를 구한다. 불변식이 둘이다.
      * 1. 같은 종목·같은 방향의 미체결이 있으면 다시 내지 않는다(호가가 쌓이지 않게). 조회에 실패해도 내지 않는다(중복이 미발주보다 나쁘다).
      * 2. 기준가(최종가)를 구하지 못하면 내지 않는다(지정가를 지어내지 않는다). 최종가는 실제로 체결된 가격이라 호가 단위가 항상 맞다.
+     *
+     * `options.extendedSessionReplaceOpen` 이 켜져 있으면 1번의 "다시 내지 않는다"가 "낡은 미체결을 현재가로 바꾼 뒤에만 낸다"로 바뀐다(`replaceOpenExtendedLimit`).
      */
-    private async extendedSessionLimit(symbol: string, side: OrderSide): Promise<{ price?: number; error?: string }> {
+    private async extendedSessionLimit(symbol: string, side: OrderSide, quantity: number): Promise<ExtendedSessionLimit> {
+        const replace = await this.isOptionEnabled('extendedSessionReplaceOpen');
         return buildExtendedSessionLimit(
             this,
             { symbol, side },
             '[toss]',
             (err, message) => logger.warn({ err, symbol }, message),
+            replace ? (duplicate) => this.replaceOpenExtendedLimit(symbol, side, quantity, duplicate) : undefined,
         );
     }
 
+    /**
+     * 같은 방향의 낡은 미체결을 현재 기준가로 바꾼다. 이중 주문이 생기지 않는 경우에만 바꾸고, 아니면 종전처럼 보류한다.
+     *
+     * 바꾸는 조건(모두): 같은 방향 미체결이 정확히 하나이고, 그 남은 수량이 이번 주문 수량과 같고, 가격이 현재 기준가와 다르다.
+     * 남이 낸 주문이거나 이번 주문과 다른 의도의 주문일 수 있어서, 하나라도 어긋나면 건드리지 않는다.
+     *
+     * 바꾸는 순서: ① 정정(`editOrder`)을 먼저 시도한다. 정정은 증권사에서 원자적이라 두 주문이 동시에 서는 순간이 없다. 정정을 지원하지 않는 주문
+     * (일부 체결된 국내 주문)이면 `NotSupported` 가 오고, 그때만 ② 취소한다. 취소는 **확정**(`canceled`)을 본 뒤에만 새 주문을 낸다. 확정하지 못했거나
+     * 취소 도중 체결됐으면 새 주문을 내지 않는다(이중 주문과 초과 수량을 막는다). 정정이나 취소가 `NotSupported` 밖의 오류로 실패해도 새 주문을 내지 않는다.
+     */
+    private async replaceOpenExtendedLimit(symbol: string, side: OrderSide, quantity: number, duplicate: ExtendedSessionDuplicate): Promise<ExtendedSessionLimit> {
+        const { open, price } = duplicate;
+        if (open.length !== 1) return { error: `확장세션 같은 방향 미체결이 ${open.length}건이라 어느 주문을 바꿀지 정하지 못해 보류` };
+        const stale = open[0] as (typeof open)[number];
+        const staleId = stale.id;
+        if (staleId === undefined) return { error: '확장세션 미체결의 주문번호를 알 수 없어 보류' };
+        const remaining = stale.remaining ?? (stale.amount !== undefined ? stale.amount - (stale.filled ?? 0) : undefined);
+        if (remaining === undefined || remaining !== quantity) {
+            return { error: `확장세션 미체결(${staleId})의 남은 수량(${remaining ?? '모름'})이 이번 주문 수량(${quantity})과 달라 같은 주문으로 보지 않고 보류` };
+        }
+        if (stale.price === price) return { error: `확장세션 지정가 미체결(${staleId})이 이미 현재가(${price})에 걸려 있어 대기` };
+
+        try {
+            const edited = await this.editOrder(staleId, symbol, 'limit', side, undefined, price);
+            logger.info({ symbol, side, staleOrderId: staleId, newOrderId: edited.id, price, stalePrice: stale.price }, '[toss] 확장세션 낡은 지정가를 현재가로 정정했다');
+            return { price, replaced: { orderId: staleId, action: 'edited', order: edited } };
+        } catch (err) {
+            if (!(err instanceof NotSupported)) {
+                logger.warn({ err, symbol, staleOrderId: staleId }, '[toss] 확장세션 낡은 지정가 정정 실패 — 새 주문을 내지 않는다');
+                return { error: `확장세션 미체결(${staleId}) 정정에 실패해 새 주문을 보류(기존 주문의 상태를 확인해야 한다): ${err instanceof Error ? err.message : String(err)}` };
+            }
+        }
+
+        // 정정할 수 없는 주문이다. 취소를 확정한 뒤에만 새로 낸다. 확정 조회는 사용자 옵션과 무관하게 켠다.
+        try {
+            const canceled = await this.cancelOrder(staleId, symbol, { confirmExecution: true });
+            if (canceled.status !== 'canceled') {
+                logger.warn({ symbol, staleOrderId: staleId, status: canceled.status }, '[toss] 확장세션 낡은 지정가의 취소가 확정되지 않아 새 주문을 내지 않는다');
+                return { error: `확장세션 미체결(${staleId})의 취소를 확정하지 못해(status=${canceled.status ?? '모름'}) 새 주문을 보류(이중 주문 방지)` };
+            }
+            // 취소한 원주문의 체결 수량(누적)에서 취소 전에 이미 있던 체결을 빼면 취소하는 사이 새로 체결된 수량이다.
+            const filledAtCancel = this.safeNumber(this.safeDict(this.safeDict(canceled.info, 'order'), 'execution'), 'filledQuantity', 0) as number;
+            const newlyFilled = filledAtCancel - (stale.filled ?? 0);
+            if (newlyFilled > 0) {
+                return { error: `확장세션 미체결(${staleId})을 취소하는 사이 ${newlyFilled}주가 체결돼 새 주문을 보류(수량이 달라졌다)` };
+            }
+        } catch (err) {
+            logger.warn({ err, symbol, staleOrderId: staleId }, '[toss] 확장세션 낡은 지정가 취소 실패 — 새 주문을 내지 않는다');
+            return { error: `확장세션 미체결(${staleId}) 취소에 실패해 새 주문을 보류(기존 주문의 상태를 확인해야 한다): ${err instanceof Error ? err.message : String(err)}` };
+        }
+        logger.info({ symbol, side, staleOrderId: staleId, price, stalePrice: stale.price }, '[toss] 확장세션 낡은 지정가를 취소했다. 현재가로 새로 낸다');
+        return { price, replaced: { orderId: staleId, action: 'canceled' } };
+    }
+
     /** 국내 확장세션(프리·애프터) 전환 판정. 전환 대상이 아니면 `null`(정규장·휴장·옵션 꺼짐). */
-    private async krExtendedSessionConversion(symbol: string, side: OrderSide): Promise<{ session: string; price?: number; error?: string } | null> {
+    private async krExtendedSessionConversion(symbol: string, side: OrderSide, quantity: number): Promise<({ session: string } & ExtendedSessionLimit) | null> {
         if (!(await this.isOptionEnabled('nxtRouting'))) return null;
         const session = await this.currentKrSession();
         if (session !== 'preMarket' && session !== 'afterMarket') return null;
-        return { session, ...(await this.extendedSessionLimit(symbol, side)) };
+        return { session, ...(await this.extendedSessionLimit(symbol, side, quantity)) };
     }
 
     /**
      * 미국 확장세션(주간거래·프리·애프터) 전환 판정. 정수 수량만 전환한다. 소수점 수량은 정규장 밖에서 주문 형태와 상관없이 접수되지 않으므로
      * 지정가로 바꿔도 소용없어 전환하지 않고 세션 검사가 막게 둔다.
      */
-    private async usExtendedSessionConversion(symbol: string, side: OrderSide, quantity: number): Promise<{ session: string; price?: number; error?: string } | null> {
+    private async usExtendedSessionConversion(symbol: string, side: OrderSide, quantity: number): Promise<({ session: string } & ExtendedSessionLimit) | null> {
         if (!(await this.isOptionEnabled('usExtendedLimit'))) return null;
         const session = await this.currentUsSession();
         if (session !== 'dayMarket' && session !== 'preMarket' && session !== 'afterMarket') return null;
@@ -2023,7 +2094,7 @@ export class toss extends Exchange {
             logger.warn({ symbol, side, session, quantity }, '[toss] 미국 확장세션의 소수점 수량은 정규장 전용이라 지정가로 바꿀 수 없다');
             return null;
         }
-        return { session, ...(await this.extendedSessionLimit(symbol, side)) };
+        return { session, ...(await this.extendedSessionLimit(symbol, side, quantity)) };
     }
 
     /** 접수한 주문의 체결을 확정한다. 주문 상세를 예산 안에서 조회하고, 마지막으로 본 주문 원본도 함께 돌려준다. */
@@ -2063,6 +2134,8 @@ export class toss extends Exchange {
         timeInForce: Str;
         response: TossOrderCreateResponse;
         extendedSession: Str;
+        /** 이 주문을 내기 전에 취소를 확인한 같은 방향 낡은 미체결(`extendedSessionReplaceOpen`). `info.replacedOrderId` 가 된다. */
+        replacedOrderId?: string | undefined;
         status: string;
         /** 접수 직후 미체결 장부에 그대로 남아 있다(확장세션 지정가). */
         stillOpen?: boolean | undefined;
@@ -2082,6 +2155,7 @@ export class toss extends Exchange {
                 execution: snapshot ?? undefined,
                 order: raw,
                 extendedSession: args.extendedSession,
+                replacedOrderId: args.replacedOrderId,
                 stillOpen: args.stillOpen,
                 orderOpen: args.orderOpen,
                 remainingQuantity: args.remainingQuantity,

@@ -75,3 +75,59 @@ describe('확장세션 지정가 산출', () => {
         expect(r.error).toContain('기준가');
     });
 });
+
+describe('onDuplicate — 낡은 미체결을 바꾸는 선택 동작', () => {
+    it('같은 방향 미체결이 있으면 건너뛰는 대신 훅이 정한다 — 훅은 미체결 목록과 현재 기준가를 받는다', async () => {
+        const hook = vi.fn().mockResolvedValue({ price: 231.5, replaced: { orderId: 'O1', action: 'canceled' } });
+        const open = [{ id: 'O1', side: 'BUY', price: 230, amount: 3, remaining: 3 }, { id: 'O2', side: 'sell' }];
+
+        const r = await buildExtendedSessionLimit(svc({ open }), params, '[T]', undefined, hook);
+
+        expect(hook).toHaveBeenCalledWith({ open: [open[0]], price: 231.5 });
+        expect(r).toEqual({ price: 231.5, replaced: { orderId: 'O1', action: 'canceled' } });
+    });
+
+    it('훅이 보류 사유를 돌려주면 그대로 전한다', async () => {
+        const hook = vi.fn().mockResolvedValue({ error: '보류' });
+
+        const r = await buildExtendedSessionLimit(svc({ open: [{ id: 'O1', side: 'buy' }] }), params, '[T]', undefined, hook);
+
+        expect(r).toEqual({ error: '보류' });
+    });
+
+    it('같은 방향 미체결이 없으면 훅을 부르지 않고 종전처럼 기준가를 준다', async () => {
+        const hook = vi.fn();
+
+        const r = await buildExtendedSessionLimit(svc({ open: [{ id: 'O1', side: 'sell' }] }), params, '[T]', undefined, hook);
+
+        expect(hook).not.toHaveBeenCalled();
+        expect(r).toEqual({ price: 231.5 });
+    });
+
+    it('기준가를 못 구하면 훅을 부르지 않는다 — 바꿀 가격이 없다', async () => {
+        const hook = vi.fn();
+
+        const r = await buildExtendedSessionLimit(svc({ open: [{ id: 'O1', side: 'buy' }], ticker: null }), params, '[T]', undefined, hook);
+
+        expect(hook).not.toHaveBeenCalled();
+        expect(r.error).toContain('기준가');
+    });
+
+    it('미체결 조회가 실패하면 훅이 있어도 보류한다', async () => {
+        const hook = vi.fn();
+
+        const r = await buildExtendedSessionLimit(svc({ openThrows: true }), params, '[T]', vi.fn(), hook);
+
+        expect(hook).not.toHaveBeenCalled();
+        expect(r.error).toContain('조회 실패');
+    });
+
+    it('★훅을 주지 않으면 종전 동작이다 — 건너뛰고 시세도 조회하지 않는다', async () => {
+        const source = svc({ open: [{ id: 'O1', side: 'buy' }] });
+
+        const r = await buildExtendedSessionLimit(source, params, '[T]');
+
+        expect(r.error).toContain('중복 발주 스킵');
+        expect(source.fetchTicker).not.toHaveBeenCalled();
+    });
+});
