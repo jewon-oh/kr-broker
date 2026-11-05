@@ -66,7 +66,7 @@ from kr_broker.abstract.kbsec import ImplicitAPI
 from kr_broker.base.exchange import Exchange
 from kr_broker.base.runtime import maybe_await, new_lock
 from kr_broker.base.token_store import refresh_token_with_lock
-from kr_broker.execution_confirm import confirm_execution, fill_deviation_bps, trade_list_probe
+from kr_broker.execution_confirm import confirm_execution_detailed, fill_deviation_bps, trade_list_probe
 from kr_broker.market_calendar import refresh_market_calendar as refresh_shared_market_calendar
 from kr_broker.base import functions as fn
 from kr_broker.base.decimal_to_precision import NO_PADDING, ROUND, TICK_SIZE, decimal_to_precision
@@ -1665,7 +1665,11 @@ class kbsec(Exchange, ImplicitAPI):
     def _confirmed_order(self, order_id: str, market: MarketInterface, side: str, type: str, quantity: float, price: Optional[float],
                                response: Dict[str, Any]) -> Order:
         """접수된 주문의 실체결을 확정해 주문으로 만든다. 접수 응답에는 체결 정보가 없어 계좌 체결내역에서 주문번호로 찾는다.
-        확정하지 못하면 `filled`·`average` 를 비워 둔다(주문 자체는 접수됐다). 값을 지어내지 않고 `info['fillConfirmed']` 를 `False` 로 둔다."""
+        확정하지 못하면 `filled`·`average` 를 비워 둔다(주문 자체는 접수됐다). 값을 지어내지 않고 `info['fillConfirmed']` 를 `False` 로 둔다.
+
+        확정 폴링이 전량 체결(종료 상태)을 보지 못하고 예산을 다 쓰면 `info['orderOpen']` 이 `True` 다. 주문이 증권사에 아직 열려 있을 수 있다는 뜻이고
+        `filled` 가 일부여도 그렇다. 체결을 일부 확정했으면 `info['remainingQuantity']` 가 남은 수량이다. 확정하지 못했으면 남은 수량을 모르므로 비운다.
+        전량 체결을 확인했으면 두 필드 모두 없다. 취소하거나 추적하는 것은 호출한 쪽이다."""
         is_kr = not self._is_us(market)
         fee_currency = 'KRW' if is_kr else 'USD'
         draft: Dict[str, Any] = {
@@ -1681,7 +1685,7 @@ class kbsec(Exchange, ImplicitAPI):
         }
 
         def unconfirmed() -> Order:
-            return self.safe_order(self.extend(draft, {'info': self.extend(response, {'fillConfirmed': False})}), market)
+            return self.safe_order(self.extend(draft, {'info': self.extend(response, {'fillConfirmed': False, 'orderOpen': True})}), market)
 
         if order_id == NO_ORDER_ID:
             return unconfirmed()
@@ -1691,7 +1695,9 @@ class kbsec(Exchange, ImplicitAPI):
 
         # 국내만 드물고 긴 예산을 쓴다. 해외는 공용 기본값이다. `options['confirmBudget']` 이 있으면 둘 다 이긴다.
         budget = self.get_confirm_budget(self.options.get('domesticConfirmBudget') if is_kr else None)
-        matched = confirm_execution('[kbsec]', order_id, 'kbsec', trade_list_probe(fetch_trades, order_id, quantity, fee_currency), budget=budget)
+        confirmation = confirm_execution_detailed('[kbsec]', order_id, 'kbsec', trade_list_probe(fetch_trades, order_id, quantity, fee_currency),
+                                                        budget=budget, requested_qty=quantity)
+        matched = confirmation['snapshot']
         if matched is None:
             return unconfirmed()
 
@@ -1721,7 +1727,9 @@ class kbsec(Exchange, ImplicitAPI):
             'cost': cost,
             'fee': {'cost': matched['fee'], 'currency': fee_currency if matched.get('feeCurrency') is None else matched['feeCurrency']}
             if matched['fee'] is not None else None,
-            'info': self.extend(response, {'fillConfirmed': True}),
+            # 예산이 끝날 때까지 전량 체결을 보지 못했으면 남은 수량은 아직 증권사에 걸려 있을 수 있다(`orderOpen`, `remainingQuantity`).
+            'info': self.extend(response, {'fillConfirmed': True}) if confirmation['settled']
+            else self.extend(response, {'fillConfirmed': True, 'orderOpen': True, 'remainingQuantity': max(0, quantity - filled)}),
         }), market)
 
     def create_market_buy_order_with_cost(self, symbol: str, cost: float, params: Optional[Dict[str, Any]] = None) -> Order:

@@ -2011,7 +2011,7 @@
                 }
             ],
             "output": {
-                "info": { "orderId": "ORD-0002", "extendedSession": "afterMarket", "stillOpen": true },
+                "info": { "orderId": "ORD-0002", "extendedSession": "afterMarket", "stillOpen": true, "orderOpen": true },
                 "id": "ORD-0002",
                 "timestamp": 1774425600000,
                 "datetime": "2026-03-25T08:00:00.000Z",
@@ -3070,7 +3070,7 @@
                 }
             ],
             "output": {
-                "info": { "orderId": "ORD-0006" },
+                "info": { "orderId": "ORD-0006", "orderOpen": true },
                 "id": "ORD-0006",
                 "timestamp": 1774400400000,
                 "datetime": "2026-03-25T01:00:00.000Z",
@@ -3158,7 +3158,7 @@
                 }
             ],
             "output": {
-                "info": { "orderId": "ORD-0033" },
+                "info": { "orderId": "ORD-0033", "orderOpen": true },
                 "id": "ORD-0033",
                 "timestamp": 1774400400000,
                 "datetime": "2026-03-25T01:00:00.000Z",

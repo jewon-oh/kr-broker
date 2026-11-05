@@ -62,32 +62,60 @@ def confirm_execution(label: str, order_id: str, exchange: str, probe: Callable[
 
     `probe(attempt)` 가 `terminal` 을 돌려주면(완전체결·취소·거부) 그때까지 가장 많이 채워진 스냅샷으로 끝내고, 예산을 다 쓰면 그때까지의 스냅샷을 돌려준다.
     `probe` 는 던져도 된다(조회 실패로 보고 다음 시도로 넘어간다). 주문은 이미 접수됐으므로 이 함수는 던지지 않는다. 확정하지 못하면 `None` 이고,
-    호출부는 `filled` 를 비운다.
+    호출부는 `filled` 를 비운다. 폴링이 어떻게 끝났는지(주문이 아직 열려 있는지)도 필요하면 `confirm_execution_detailed` 를 쓴다. 폴링은 같다.
+    """
+    return (confirm_execution_detailed(label, order_id, exchange, probe, defaults, budget))['snapshot']
+
+
+def confirm_execution_detailed(label: str, order_id: str, exchange: str, probe: Callable[[int], Dict[str, Any]],
+                                     defaults: Optional[Dict[str, Any]] = None, budget: Optional[Dict[str, Any]] = None,
+                                     requested_qty: Optional[float] = None) -> Dict[str, Any]:
+    """`confirm_execution` 과 같은 폴링을 하고, 어떻게 끝났는지까지 `{'snapshot', 'settled', 'observed', 'attempts', 'remaining'?}` 로 돌려준다.
+
+    `settled` 는 종료 상태(완전체결·취소·거부)를 보고 끝났는가다. `False` 면 예산을 다 쓰도록 종료 상태를 보지 못했고, 그 주문은 증권사에 아직 열려 있을 수 있다.
+    조회가 전부 실패한 경우도 `False` 다. `observed` 는 조회가 한 번이라도 성공했는가, `attempts` 는 실제로 쓴 조회 횟수다. `remaining` 은 `requested_qty` 를
+    줬고 알 수 있을 때만 있는 아직 열려 있는 수량이다(종료 상태를 봤으면 0, 못 봤으면 요청 수량 - 확정 체결 수량, 체결도 못 봤으면 비운다). 이 함수는 취소하지 않는다.
     """
     resolved = resolve_confirm_budget(defaults, budget)
     attempts, interval_ms = resolved['attempts'], resolved['intervalMs']
+    requested = requested_qty if requested_qty is not None and requested_qty > 0 else None
     best: Optional[Dict[str, Any]] = None
+    observed = False
+    used = 0
+
+    def done(settled: bool) -> Dict[str, Any]:
+        result: Dict[str, Any] = {'snapshot': best, 'settled': settled, 'observed': observed, 'attempts': used}
+        if requested is not None:
+            if settled:
+                result['remaining'] = 0
+            elif best is not None:
+                result['remaining'] = max(0, requested - best['filled'])
+        return result
+
     for attempt in range(1, attempts + 1):
         if attempt > 1 and interval_ms > 0:
             sleep_seconds(interval_ms / 1000)
+        used = attempt
         try:
             result = probe(attempt)
         except Exception:
             logger.warning('%s 체결 조회 실패, 다시 시도한다(주문 %s, %s, %d/%d)', label, order_id, exchange, attempt, attempts, exc_info=True)
             continue
+        observed = True
         snap = result.get('snapshot')
         if snap is not None and snap['filled'] > 0 and (best is None or snap['filled'] > best['filled']):
             best = snap
         if result.get('terminal'):
             if best is None:
                 logger.warning('%s 주문이 체결 없이 끝났다. 체결 기록 없음(주문 %s, %s, %d회째)', label, order_id, exchange, attempt)
-            return best
+            return done(True)
     if best is None:
         logger.warning('%s 체결 미확인: filled 를 비운 주문을 돌려준다(주문 %s, %s, %d회 %dms)',
                        label, order_id, exchange, attempts, (attempts - 1) * interval_ms)
     else:
-        logger.warning('%s 부분체결 상태로 예산을 다 썼다. 관측된 체결분을 돌려준다(주문 %s, %s, 체결 %s)', label, order_id, exchange, best['filled'])
-    return best
+        logger.warning('%s 부분체결 상태로 예산을 다 썼다. 관측된 체결분을 돌려준다. 주문이 아직 열려 있을 수 있다(주문 %s, %s, 체결 %s)',
+                       label, order_id, exchange, best['filled'])
+    return done(False)
 
 
 def _num(value: Any) -> float:

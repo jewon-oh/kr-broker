@@ -111,7 +111,7 @@ import {
     type TradingFeeInterface,
 } from './base';
 import { TOSS_API_TREE, type TossImplicitApi } from './abstract/toss';
-import { confirmExecution, type ExecutionSnapshot } from './execution-confirm';
+import { confirmExecutionDetailed, type ExecutionConfirmation, type ExecutionSnapshot } from './execution-confirm';
 import { buildExtendedSessionLimit } from './extended-session-limit';
 import { symbolBaseCode, type StockMarketGroup } from './broker-market-group';
 import { KST_OFFSET_MS, candlePeriodUtcMs, isDailyOrLongerTimeframe } from './broker-time';
@@ -1761,7 +1761,7 @@ export class toss extends Exchange {
             const stillOpen = await this.fetchOpenOrders(symbol).then((list) => list.some((o) => o.id === orderId)).catch(() => true);
             if (stillOpen) {
                 logger.info({ orderId, symbol, price: effectivePrice }, '[toss] 확장세션 지정가가 접수됐고 아직 체결되지 않았다');
-                return this.buildCreatedOrder({ ...draft, status: 'open', stillOpen: true });
+                return this.buildCreatedOrder({ ...draft, status: 'open', stillOpen: true, orderOpen: true });
             }
         }
 
@@ -1769,9 +1769,17 @@ export class toss extends Exchange {
         if (this.safeBool(params, 'confirmExecution', this.options.confirmExecution !== false) === false) {
             return this.buildCreatedOrder({ ...draft, status: 'open' });
         }
-        const { snapshot, last } = await this.confirmOrderExecution(orderId, country);
+        const { snapshot, last, confirmation } = await this.confirmOrderExecution(orderId, country, useAmountBased ? undefined : quantity);
         // 마지막 조회의 `result` 가 `null` 이면 조회하지 못한 것과 같다. 주문은 이미 접수됐으므로 던지지 않고 미체결로 돌려준다.
-        return this.buildCreatedOrder({ ...draft, snapshot, raw: last ?? undefined, status: last != null ? this.parseOrderStatus(last.status) : 'open' });
+        // 예산이 끝날 때까지 종료 상태를 보지 못했으면(`orderOpen`) 주문이 아직 열려 있을 수 있다. 남은 수량은 호출한 쪽이 취소하거나 추적한다.
+        // 체결이 없다고 읽은 조회가 있었다면(`last` 가 있고 `snapshot` 이 없다) 남은 수량은 주문 수량 전부다.
+        const remainingQuantity = useAmountBased || confirmation.settled ? undefined
+            : snapshot !== null ? Math.max(0, quantity - snapshot.filled)
+                : last != null ? quantity : undefined;
+        return this.buildCreatedOrder({
+            ...draft, snapshot, raw: last ?? undefined, status: last != null ? this.parseOrderStatus(last.status) : 'open',
+            orderOpen: confirmation.settled ? undefined : true, remainingQuantity,
+        });
     }
 
     /**
@@ -2019,12 +2027,15 @@ export class toss extends Exchange {
     }
 
     /** 접수한 주문의 체결을 확정한다. 주문 상세를 예산 안에서 조회하고, 마지막으로 본 주문 원본도 함께 돌려준다. */
-    private async confirmOrderExecution(orderId: string, country: StockMarketGroup): Promise<{ snapshot: ExecutionSnapshot | null; last: TossOrder | null | undefined }> {
+    private async confirmOrderExecution(orderId: string, country: StockMarketGroup, requestedQty: number | undefined): Promise<{
+        snapshot: ExecutionSnapshot | null; last: TossOrder | null | undefined; confirmation: ExecutionConfirmation;
+    }> {
         let last: TossOrder | null | undefined;
-        const snapshot = await confirmExecution({
+        const confirmation = await confirmExecutionDetailed({
             label: '[toss]',
             orderId,
             exchange: 'toss',
+            requestedQty,
             budget: this.getConfirmBudget(),
             probe: async () => {
                 const raw = this.unwrap<TossOrder | null>(await this.privateAccountGetOrdersOrderId({ orderId }));
@@ -2035,7 +2046,7 @@ export class toss extends Exchange {
                 };
             },
         });
-        return { snapshot, last };
+        return { snapshot: confirmation.snapshot, last, confirmation };
     }
 
     /** 접수 결과로 `Order` 를 만든다. 체결을 확정하지 못했으면 `filled` 를 비운다. */
@@ -2055,6 +2066,10 @@ export class toss extends Exchange {
         status: string;
         /** 접수 직후 미체결 장부에 그대로 남아 있다(확장세션 지정가). */
         stillOpen?: boolean | undefined;
+        /** 체결을 확인했으나 종료 상태(전량 체결·취소·거부)를 보지 못했다. 주문이 증권사에 아직 열려 있을 수 있다. `info.orderOpen` 이 된다. */
+        orderOpen?: true | undefined;
+        /** 주문이 아직 열려 있고(`orderOpen`) 남은 수량을 알 때만. `info.remainingQuantity` 가 된다. */
+        remainingQuantity?: number | undefined;
         snapshot?: ExecutionSnapshot | null | undefined;
         raw?: TossOrder | undefined;
     }): Order {
@@ -2068,6 +2083,8 @@ export class toss extends Exchange {
                 order: raw,
                 extendedSession: args.extendedSession,
                 stillOpen: args.stillOpen,
+                orderOpen: args.orderOpen,
+                remainingQuantity: args.remainingQuantity,
             },
             id: args.orderId,
             clientOrderId: args.clientOrderId,

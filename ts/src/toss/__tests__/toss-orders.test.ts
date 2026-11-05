@@ -423,6 +423,37 @@ describe('체결 확정', () => {
         expect(order.cost).toBe(456400);
     });
 
+    it('★예산이 끝날 때까지 부분체결 상태면 info.orderOpen 과 남은 수량을 알린다 — 잔량은 나중에 체결될 수 있다', async () => {
+        fill(() => orderDetail({ status: 'PARTIAL_FILLED', filledQuantity: '1', averageFilledPrice: '114000', filledAmount: '114000' }));
+        const order = await makeToss({ options: { confirmBudget: { attempts: 3, intervalMs: 0 } } }).createOrder('051910', 'limit', 'buy', 4, 114200);
+        expect(order.status).toBe('open');
+        expect(order.filled).toBe(1);
+        expect(order.info).toMatchObject({ orderOpen: true, remainingQuantity: 3 });
+    });
+
+    it('체결이 없다고 읽은 채 예산이 끝나면 남은 수량은 주문 수량 전부다', async () => {
+        fill(() => orderDetail({ status: 'PENDING', filledQuantity: '0' }));
+        const order = await makeToss({ options: { confirmBudget: { attempts: 2, intervalMs: 0 } } }).createOrder('051910', 'limit', 'buy', 4, 114200);
+        expect(order.info).toMatchObject({ orderOpen: true, remainingQuantity: 4 });
+    });
+
+    it('종료 상태를 확인했으면 info 에 orderOpen·remainingQuantity 가 없다 — 전량 체결과 취소 모두 종전 출력 그대로', async () => {
+        fill(() => orderDetail({ filledQuantity: '4', averageFilledPrice: '114100', filledAmount: '456400' }));
+        const full = await makeToss().createOrder('051910', 'market', 'buy', 4, 114200);
+        expect(full.info.orderOpen).toBeUndefined();
+        expect(full.info.remainingQuantity).toBeUndefined();
+        fill(() => orderDetail({ status: 'CANCELED', filledQuantity: '1', averageFilledPrice: '114000', filledAmount: '114000' }));
+        const cancelled = await makeToss().createOrder('051910', 'market', 'buy', 4, 114200);
+        expect(cancelled.info.orderOpen).toBeUndefined();
+    });
+
+    it('금액 주문은 남은 수량을 계산하지 않지만 열려 있으면 orderOpen 은 true 다', async () => {
+        installFakeToss({ 'POST /api/v1/orders': jsonOk({ orderId: 'OID-C' }), 'GET /api/v1/orders/*': orderDetail({ status: 'PENDING', filledQuantity: '0' }) });
+        const order = await makeToss({ options: { confirmBudget: { attempts: 2, intervalMs: 0 } } }).createMarketBuyOrderWithCost('AAPL', 100);
+        expect(order.info).toMatchObject({ orderOpen: true });
+        expect((order.info as { remainingQuantity?: number }).remainingQuantity).toBeUndefined();
+    });
+
     it('체결 없이 취소되면 즉시 끝내고 체결을 채우지 않는다', async () => {
         const { polls } = fill(() => orderDetail({ status: 'CANCELED', filledQuantity: '0' }));
         const order = await makeToss().createOrder('051910', 'market', 'buy', 4, 114200);

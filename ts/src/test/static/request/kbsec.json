@@ -7462,7 +7462,8 @@
                 "trades": [],
                 "info": {
                     "ordr_no": "0000000042",
-                    "fillConfirmed": false
+                    "fillConfirmed": false,
+                    "orderOpen": true
                 },
                 "fees": [],
                 "datetime": "2026-09-22T01:00:00.000Z",
@@ -8050,7 +8051,8 @@
                 "trades": [],
                 "info": {
                     "ordr_no": "0000000061",
-                    "fillConfirmed": false
+                    "fillConfirmed": false,
+                    "orderOpen": true
                 },
                 "fees": [],
                 "datetime": "2026-09-22T14:00:00.000Z"
@@ -8263,7 +8265,8 @@
                 "trades": [],
                 "info": {
                     "ordr_no": "0000000054",
-                    "fillConfirmed": false
+                    "fillConfirmed": false,
+                    "orderOpen": true
                 },
                 "fees": [],
                 "datetime": "2026-09-22T01:00:00.000Z"

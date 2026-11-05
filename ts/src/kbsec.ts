@@ -77,7 +77,7 @@ import type {
 } from './base';
 import { assertSecureUrl, implicitMethodName, kstTradeTimestamps } from './base/Exchange';
 import { KBSEC_API_TREE, type KbsecImplicitApi } from './abstract/kbsec';
-import { confirmExecution, fillDeviationBps, tradeListProbe } from './execution-confirm';
+import { confirmExecutionDetailed, fillDeviationBps, tradeListProbe } from './execution-confirm';
 import { expandBusinessDays, refreshMarketCalendar as refreshSharedMarketCalendar, type CalendarDay } from './market-calendar';
 import { marketSessionBlockReason } from './trading-hours';
 import { KbsecAuth } from './kbsec/kbsec-auth';
@@ -4662,6 +4662,10 @@ export class kbsec extends Exchange {
      *
      * 접수 응답에는 체결 정보가 없으므로 계좌 체결내역에서 주문번호로 찾아 확정한다.
      * 확정하지 못하면 `filled`·`average` 를 **비워 둔다**(주문 자체는 접수 성공이다). 값을 지어내지 않고 `info.fillConfirmed: false` 로 알린다.
+     *
+     * 확정 폴링이 전량 체결(종료 상태)을 보지 못하고 예산을 다 쓰면 `info.orderOpen` 이 `true` 다. 주문이 증권사에 아직 열려 있을 수 있다는 뜻이고,
+     * `filled` 가 일부여도 그렇다. 체결을 일부 확정했으면 `info.remainingQuantity` 가 남은 수량이다. 확정하지 못했으면 남은 수량을 모르므로 비운다.
+     * 전량 체결을 확인했으면 두 필드 모두 없다. 취소하거나 추적하는 것은 호출한 쪽이다.
      */
     private async confirmedOrder(
         orderId: string, market: MarketInterface, side: 'buy' | 'sell', type: string, quantity: number, price: Num, response: Dict,
@@ -4679,13 +4683,15 @@ export class kbsec extends Exchange {
             status: 'open',
             trades: [],
         };
-        const unconfirmed = (): Order => this.safeOrder({ ...draft, info: { ...response, fillConfirmed: false } }, market);
+        // `orderOpen` 은 종료 상태(전량 체결·취소·거부)를 보지 못했다는 뜻이다. 체결을 확정하지 못한 주문은 증권사에 아직 열려 있을 수 있다.
+        const unconfirmed = (): Order => this.safeOrder({ ...draft, info: { ...response, fillConfirmed: false, orderOpen: true } }, market);
         if (orderId === NO_ORDER_ID) return unconfirmed();
 
-        const matched = await confirmExecution({
+        const confirmation = await confirmExecutionDetailed({
             label: '[kbsec]',
             orderId,
             exchange: 'kbsec',
+            requestedQty: quantity,
             // 국내만 드물고 긴 예산을 쓴다. 해외는 공용 기본값이다. `options.confirmBudget` 이 있으면 둘 다 이긴다.
             budget: this.getConfirmBudget(isKr ? (this.options.domesticConfirmBudget as { attempts: number; intervalMs: number }) : undefined),
             probe: tradeListProbe({
@@ -4695,6 +4701,7 @@ export class kbsec extends Exchange {
                 feeCurrency,
             }),
         });
+        const matched = confirmation.snapshot;
         if (matched === null) return unconfirmed();
 
         // 체결수량은 주문수량을 넘을 수 없다. 물리적으로 불가능한 값은 받지 않는다. 넘는다면 체결 행 해석이 틀린 것이다(같은 체결을 두 번 셌거나
@@ -4720,7 +4727,12 @@ export class kbsec extends Exchange {
             average: matched.average ?? price,
             cost,
             fee: matched.fee !== undefined ? { cost: matched.fee, currency: matched.feeCurrency ?? feeCurrency } : undefined,
-            info: { ...response, fillConfirmed: true },
+            // 예산이 끝날 때까지 전량 체결을 보지 못했으면(`orderOpen`) 남은 수량(`remainingQuantity`)은 아직 증권사에 걸려 있을 수 있고,
+            // 나중에 체결되면 이 주문이 돌려준 `filled` 보다 포지션이 커진다. 취소하거나 추적하는 것은 호출한 쪽이다.
+            info: {
+                ...response, fillConfirmed: true,
+                ...(confirmation.settled ? {} : { orderOpen: true, remainingQuantity: Math.max(0, quantity - filled) }),
+            },
         }, market);
     }
 
