@@ -9,7 +9,7 @@ import {
     AccountNotEnabled, AccountSuspended, ArgumentsRequired, AuthenticationError, BadRequest, BadResponse, BadSymbol, BaseError, DDoSProtection, ExchangeClosedByUser,
     DuplicateOrderId, ExchangeError, ExchangeNotAvailable, InsufficientFunds, InvalidOrder, ManualInteractionNeeded, MarketClosed, NetworkError,
     NoChange, NotSupported, NullResponse, OnMaintenance, OperationFailed, OperationRejected, OrderNotFound, OrderOutcomeUnknown, PermissionDenied,
-    RateLimitExceeded, RequestTimeout,
+    OrderTokenNotReady, RateLimitExceeded, RequestTimeout,
 } from '../errors';
 
 type ErrorCtor = new (message: string) => BaseError;
@@ -39,6 +39,7 @@ const TREE: Array<[ErrorCtor, ErrorCtor]> = [
     [RateLimitExceeded, NetworkError],
     [ExchangeNotAvailable, NetworkError],
     [OnMaintenance, ExchangeNotAvailable],
+    [OrderTokenNotReady, ExchangeNotAvailable],
     [MarketClosed, OperationRejected],
     [RequestTimeout, NetworkError],
     [OrderOutcomeUnknown, RequestTimeout],
@@ -93,6 +94,16 @@ describe('오류 계층', () => {
         expect(new MarketClosed('x').retryable).toBe(false);
         expect(new OrderOutcomeUnknown('x').retryable).toBe(false);
         expect(new NetworkError('x').retryable).toBeUndefined();
+    });
+
+    it('OrderTokenNotReady 는 주문을 보내지 않았다는 오류다 — 결과 불명(OrderOutcomeUnknown·RequestTimeout)이 아니고 다시 내도 된다', () => {
+        const error = new OrderTokenNotReady('x');
+        expect(error.retryable).toBe(true);
+        expect(error.detail).toBe('order-token-not-ready');
+        expect(error).toBeInstanceOf(ExchangeNotAvailable);
+        expect(error).not.toBeInstanceOf(OrderOutcomeUnknown);
+        expect(error).not.toBeInstanceOf(RequestTimeout);
+        expect(new OrderTokenNotReady('x', { retryable: false, detail: 'custom' }).detail).toBe('custom');
     });
 
     it('MarketClosed·OrderOutcomeUnknown 의 retryable 은 호출한 쪽이 바꿀 수 있다', () => {

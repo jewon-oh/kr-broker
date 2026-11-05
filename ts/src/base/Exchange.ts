@@ -49,6 +49,7 @@ import {
     NullResponse,
     OperationFailed,
     OrderOutcomeUnknown,
+    OrderTokenNotReady,
     RateLimitExceeded,
     RequestTimeout,
     type BaseErrorOptions,
@@ -252,6 +253,11 @@ export interface EndpointConfig {
     order?: boolean;
     /** `rateLimitBuckets` 에 적은 이름. 없으면 기본 버킷을 쓴다. */
     bucket?: string;
+    /**
+     * 내부용. 주문 앞의 토큰 준비를 끝내야 하는 시각(epoch ms). 토큰 거절 뒤 재발급해 다시 보내는 증권사 클래스가 첫 시도의 마감을 이어받게 해서,
+     * 재시도가 마감을 새로 받지 않고 전체가 한 마감 안에 들게 한다. 비우면 `fetch2` 가 호출 시점부터 센다. `withOrderTokenUntil` 이 채운다.
+     */
+    orderTokenUntil?: number;
 }
 
 const HTTP_METHOD_KEY = /^(?:get|post|put|delete|head|patch)$/i;
@@ -259,6 +265,18 @@ const CAPITALIZE = (s: string): string => (s.length ? s.charAt(0).toUpperCase() 
 /** 암묵 메서드 이름을 만들 때 경로를 자르는 문자. */
 const PATH_DELIMITER = /[^a-zA-Z0-9]/;
 const DEFAULT_TIMEOUT_MS = 10_000;
+/**
+ * 주문 요청을 보내기 전에 인증 토큰을 준비하는 데 줄 수 있는 기본 시간(밀리초). 넘으면 주문을 보내지 않고 `OrderTokenNotReady` 로 끝낸다.
+ *
+ * 15초로 잡은 이유:
+ * - 주문 요청의 시간 상한(`orderTimeout`)은 요청이 나간 **뒤**부터 센다. 토큰 준비는 그 앞이라 어떤 상한에도 걸리지 않았고, 토큰 저장소(Redis)
+ *   장애와 토큰 만료가 겹치면 저장소 명령 상한(호스트 설정에서 10초)이 겹겹이 쌓여 주문이 몇 분 뒤에 나갔다. 호출한 쪽의 주문 실행 상한
+ *   (sbih 는 30초)이 지난 뒤에 나간 주문은 아무도 결과를 보지 않는다.
+ * - 정상 갱신은 이 안에 끝난다. 발급 요청의 상한이 10초이고 저장소 왕복은 밀리초 단위다. 락을 쥔 다른 프로세스를 기다리는 시간(12초)이 길어지는
+ *   경우는 그 프로세스가 발급 도중 죽었을 때뿐이고, 그때 주문을 보내지 않는 것이 뒤늦게 보내는 것보다 안전하다.
+ * - 호출하는 쪽의 상한(30초)의 절반이다. 마감을 넘기는 주문은 늦게 나가지 않고 아예 나가지 않는다.
+ */
+export const ORDER_TOKEN_READY_DEADLINE_MS = 15_000;
 const DEFAULT_RATE_LIMIT_MS = 50;
 const DEFAULT_CURRENCY_TICK = '1e-8';
 const DEFAULT_CURRENCY_DECIMALS = 8;
@@ -302,6 +320,11 @@ export class Exchange {
     timeout = DEFAULT_TIMEOUT_MS;
     /** 주문 요청의 시간 상한. 없으면 `timeout` 을 쓴다. */
     orderTimeout: Num = undefined;
+    /**
+     * 주문 요청을 보내기 전에 인증 토큰을 준비하는 데 줄 수 있는 시간 상한(밀리초). 없으면 `ORDER_TOKEN_READY_DEADLINE_MS` 를 쓴다.
+     * 넘으면 주문을 보내지 않고 `OrderTokenNotReady` 로 끝낸다. 호출하는 쪽의 주문 실행 상한보다 짧아야 의미가 있다.
+     */
+    orderTokenDeadline: Num = undefined;
     verbose = false;
     userAgent: Str = undefined;
     headers: Dictionary<string> = {};
@@ -583,7 +606,11 @@ export class Exchange {
             if (this.enableRateLimit) {
                 await this.throttle(this.calculateRateLimiterCost(api, method, path, params, config), safeString(config, 'bucket'));
             }
-            if (isPrivate) await this.authenticate(path, api, method, params, headers, body);
+            if (isPrivate) {
+                // 주문은 토큰 준비에도 마감을 둔다. 마감을 넘기면 요청을 만들기 전이므로 주문은 나가지 않았다(결과 불명이 아니다).
+                if (isOrder) await this.withinOrderTokenDeadline(this.authenticate(path, api, method, params, headers, body), `${method} ${path}`, safeNumber(config, 'orderTokenUntil'));
+                else await this.authenticate(path, api, method, params, headers, body);
+            }
             try {
                 this.lastRestRequestTimestamp = now();
                 const request = this.sign(path, api, method, params, headers, body);
@@ -609,6 +636,39 @@ export class Exchange {
                 const waitMs = Math.max(retryDelay, retryAfterMs);
                 if (waitMs > 0) await sleep(waitMs);
             }
+        }
+    }
+
+    /**
+     * 주문 요청(`config.order`)이면 토큰 준비 마감 시각(`orderTokenUntil`)을 지금부터 `orderTokenDeadline` 뒤로 채운 설정을 돌려준다. 이미 있으면 그대로다.
+     * 토큰이 거절되면 다시 발급해 한 번 더 보내는 증권사 클래스(`fetch2` 재정의)가 첫 시도 앞에서 부르고, 두 시도에 같은 설정을 넘긴다.
+     */
+    protected withOrderTokenUntil<C extends Dict>(config: C): C {
+        if (safeBool(config, 'order', false) !== true || safeNumber(config, 'orderTokenUntil') !== undefined) return config;
+        return { ...config, orderTokenUntil: Date.now() + (this.orderTokenDeadline ?? ORDER_TOKEN_READY_DEADLINE_MS) };
+    }
+
+    /**
+     * 주문 전에 하는 토큰 준비(`work`)를 마감 안에 마치게 한다. 마감(`orderTokenDeadline`, 기본 `ORDER_TOKEN_READY_DEADLINE_MS`)을 넘기면
+     * 기다리지 않고 `OrderTokenNotReady` 를 던진다. 밀린 준비는 취소하지 못하므로 백그라운드에서 끝나게 두고, 그 실패는 삼킨다(프로세스의 처리 안 된 거부가 되지 않게).
+     * 증권사 클래스가 주문 앞에서 토큰을 되살리는 다른 길(401 뒤의 재발급 등)에도 쓸 수 있다.
+     */
+    protected async withinOrderTokenDeadline<T>(work: Promise<T>, label: string, until: Num = undefined): Promise<T> {
+        // `until` 은 앞 시도가 정한 절대 마감이다. 없으면 지금부터 마감 시간을 준다.
+        const deadlineMs = until !== undefined ? Math.max(0, until - Date.now()) : (this.orderTokenDeadline ?? ORDER_TOKEN_READY_DEADLINE_MS);
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const expired = new Promise<never>((_resolve, reject) => {
+            timer = setTimeout(() => {
+                reject(new OrderTokenNotReady(`${this.id} ${label} 주문 전에 토큰을 ${deadlineMs}ms 안에 준비하지 못해 주문을 보내지 않았다. 접수되지 않았으므로 다시 내도 중복이 아니다`));
+            }, deadlineMs);
+        });
+        try {
+            return await Promise.race([work, expired]);
+        } catch (error) {
+            if (error instanceof OrderTokenNotReady) work.catch(() => undefined);
+            throw error;
+        } finally {
+            if (timer !== undefined) clearTimeout(timer);
         }
     }
 

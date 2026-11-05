@@ -25,7 +25,8 @@
  *    │  ├─ DDoSProtection
  *    │  ├─ RateLimitExceeded
  *    │  ├─ ExchangeNotAvailable
- *    │  │  └─ OnMaintenance
+ *    │  │  ├─ OnMaintenance
+ *    │  │  └─ OrderTokenNotReady (추가) 토큰을 마감 안에 준비하지 못해 주문을 보내지 않았다
  *    │  └─ RequestTimeout
  *    │     └─ OrderOutcomeUnknown (추가) 주문이 접수됐는지 모른다
  *    └─ BadResponse
@@ -124,6 +125,23 @@ export class OrderOutcomeUnknown extends RequestTimeout {
 
     constructor(message: string, options: BaseErrorOptions = {}) {
         super(message, { retryable: false, ...options });
+    }
+}
+
+/**
+ * 주문을 보내기 전에 인증 토큰을 마감(`Exchange.orderTokenDeadline`) 안에 준비하지 못해 **주문 요청을 증권사에 보내지 않았다.**
+ *
+ * `OrderOutcomeUnknown` 과 반대로 결과가 불명이 아니다. 요청이 나가지 않았음이 확정이라 접수됐을 가능성이 없고, 같은 주문을 다시 내도 중복이 아니다.
+ * 토큰 저장소(Redis 등) 장애와 토큰 만료가 겹치면 발급 대기가 길어지는데, 그 뒤에 주문이 뒤늦게 나가면 호출한 쪽이 이미 포기한 주문이 체결된다.
+ * 그래서 마감을 넘기면 기다리지 않고 이 오류로 끝낸다. 밀린 토큰 준비는 백그라운드에서 끝나므로 다음 호출은 준비된 토큰을 쓸 수 있다.
+ *
+ * `retryable` 은 `true` 이고 `detail` 은 `order-token-not-ready` 다.
+ */
+export class OrderTokenNotReady extends ExchangeNotAvailable {
+    override name = 'OrderTokenNotReady';
+
+    constructor(message: string, options: BaseErrorOptions = {}) {
+        super(message, { retryable: true, detail: 'order-token-not-ready', ...options });
     }
 }
 

@@ -1899,7 +1899,8 @@ export class kbsec extends Exchange {
         path: string, api: string | string[] = 'private', method = 'POST', params: Dict = {},
         headers: Dictionary<string> | undefined = undefined, body: string | undefined = undefined, config: Dict = {},
     ): Promise<any> {
-        return this.fetchWithTokenRecovery(path, api, method, params, headers, body, config, true);
+        // 주문이면 첫 시도와 재시도가 한 토큰 준비 마감을 나눠 쓴다. I445 뒤의 회전이 길어져 주문이 뒤늦게 나가지 않게 한다.
+        return this.fetchWithTokenRecovery(path, api, method, params, headers, body, this.withOrderTokenUntil(config), true);
     }
 
     private async fetchWithTokenRecovery(
@@ -1928,7 +1929,8 @@ export class kbsec extends Exchange {
                 logger.warn({ trCode }, '[kbsec] 토큰 실패 — 재발급 후 1회 재시도');
                 // 무효화만으로는 부족한 경우가 있다. KB 가 재발급에 같은 토큰을 돌려주면 폐기·회전까지 해야 한다.
                 // 무효화가 끝나기 전에 재시도가 캐시를 읽으면 방금 무효로 판정한 토큰을 다시 쓰므로 반드시 기다린다.
-                await this.getAuth().rotateAfterTokenFailure(failedToken);
+                const rotation = this.getAuth().rotateAfterTokenFailure(failedToken);
+                await (config.order === true ? this.withinOrderTokenDeadline(rotation, `${method} ${path}`, config.orderTokenUntil as number) : rotation);
                 return this.fetchWithTokenRecovery(path, api, method, params, headers, body, config, false);
             }
             // 폐기·회전까지 하고도 토큰 실패면 우리 쪽에서 쓸 수단이 다 떨어진 상태다.

@@ -739,13 +739,18 @@ export class toss extends Exchange {
         body: string | undefined = undefined,
         config: Dict = {},
     ): Promise<any> {
+        // 주문이면 두 시도가 한 토큰 준비 마감을 나눠 쓴다. 401 뒤의 무효화와 재발급이 길어져 주문이 뒤늦게 나가지 않게 한다.
+        const orderConfig = this.withOrderTokenUntil(config);
         try {
-            return await this.fetchOnce(path, api, method, params, headers, body, config);
+            return await this.fetchOnce(path, api, method, params, headers, body, orderConfig);
         } catch (error) {
             if (!(error instanceof TossTokenRejected)) throw error;
             logger.warn({ path }, '[toss] 401 을 받아 토큰을 무효화하고 한 번 다시 시도한다');
-            await this.tokenAuthFor().invalidate(error.failedToken);
-            return this.fetchOnce(path, api, method, params, headers, body, config);
+            const invalidation = this.tokenAuthFor().invalidate(error.failedToken);
+            await (orderConfig.order === true
+                ? this.withinOrderTokenDeadline(invalidation, `${method} ${path}`, orderConfig.orderTokenUntil as number)
+                : invalidation);
+            return this.fetchOnce(path, api, method, params, headers, body, orderConfig);
         }
     }
 
