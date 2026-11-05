@@ -601,6 +601,11 @@ export class toss extends Exchange {
                 blockAuctionBuys: undefined,
                 /** 토큰과 발급 락을 여러 프로세스가 나눠 쓰는 저장소(`BrokerTokenStore`). 없으면 프로세스 메모리 캐시만 쓴다. */
                 tokenStore: undefined,
+                /**
+                 * 호출 한도를 같은 계정의 다른 프로세스와 나눈다. `true` 면 주문 그룹(`order`)을, 문자열 배열이면 그 그룹들을 나눈다(함수도 된다). 기본은 꺼짐이라 한도를 프로세스 안에서만 센다.
+                 * `tokenStore` 의 기존 연산(`tryLock`·`get`·`set`)을 쓰므로 저장소가 없으면 켜도 나누지 않는다. 저장소가 느리거나 실패하면 그 호출은 프로세스 메모리 한도로 간다.
+                 */
+                sharedRateLimit: undefined,
                 /** 토스의 환율 조회가 실패했을 때 쓰는 환율 조회 함수. 1달러당 원화를 돌려주는 `() => Promise<number>` 다. */
                 usdKrwRate: undefined,
                 /** 접수 뒤 체결 확정 조회와 취소 뒤 확정 조회의 예산 `{ attempts, intervalMs }`. 객체이거나 객체를 돌려주는 함수다. */
@@ -774,7 +779,10 @@ export class toss extends Exchange {
         } catch (error) {
             if (error instanceof TossRateLimited) {
                 const wait = Math.min(error.retryAfterMs ?? DEFAULT_BACKOFF_MS, MAX_BACKOFF_MS);
-                this.blockedUntil.set(this.safeString(config, 'bucket') ?? '', this.milliseconds() + wait);
+                const bucket = this.safeString(config, 'bucket');
+                this.blockedUntil.set(bucket ?? '', this.milliseconds() + wait);
+                // 같은 계정의 다른 프로세스도 쉬게 한다(`options.sharedRateLimit` 이 켠 버킷만). 저장소가 느려도 오류를 가리지 않게 짧은 마감 안에서 한다.
+                if (bucket !== undefined && this.options.sharedRateLimit) await this.shareBlocked(bucket, Date.now() + wait);
             }
             throw error;
         }
@@ -785,9 +793,14 @@ export class toss extends Exchange {
         return config.peak === true && isOrderInfoPeakWindow(new Date(this.milliseconds())) ? cost * PEAK_COST_FACTOR : cost;
     }
 
-    /** 그룹 한도에 더해 계정 전체 상한(`rateLimit`)도 지키고, 429 뒤에 쉬라고 한 시간이 남았으면 기다린다. */
+    /**
+     * 그룹 한도에 더해 계정 전체 상한(`rateLimit`)도 지키고, 429 뒤에 쉬라고 한 시간이 남았으면 기다린다.
+     * `options.sharedRateLimit` 이 켠 버킷은 다른 프로세스가 적어 둔 휴식도 지키고, 그룹 한도의 슬롯을 같은 계정의 다른 프로세스와 나눈다.
+     */
     override async throttle(cost: Num = undefined, bucket: Str = undefined): Promise<void> {
-        const blockedFor = (this.blockedUntil.get(bucket ?? '') ?? 0) - this.milliseconds();
+        const localBlockedFor = (this.blockedUntil.get(bucket ?? '') ?? 0) - this.milliseconds();
+        // 꺼져 있으면(기본) `await` 없이 종전 동작이다.
+        const blockedFor = bucket === undefined || !this.options.sharedRateLimit ? localBlockedFor : Math.max(localBlockedFor, await this.sharedBlockedFor(bucket));
         if (blockedFor > 0) await this.sleep(blockedFor);
         await super.throttle(cost, bucket);
         if (bucket !== undefined) await super.throttle(1, undefined);

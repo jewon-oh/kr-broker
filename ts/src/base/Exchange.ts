@@ -34,6 +34,8 @@ import { KST_OFFSET_MS } from '../broker-time';
 import { logger } from '../logger';
 import { resolveFlag, resolveTokenStore, type BrokerTokenStore } from '../options';
 import { resolveConfirmBudget, type ConfirmBudget } from '../execution-confirm';
+import { SharedRateGate } from '../shared-rate-gate';
+import { tokenStoreKey } from '../token-store-key';
 import {
     ArgumentsRequired,
     AuthenticationError,
@@ -926,6 +928,55 @@ export class Exchange {
         }
         const throttler = bucket === undefined ? this.throttler : this.bucketThrottlers[bucket];
         await throttler?.throttle(cost);
+        // 프로세스 안의 간격을 지킨 뒤, 켜져 있으면 같은 계정의 다른 프로세스와도 간격을 나눈다.
+        // 꺼져 있으면(기본) 기다림 없이 지나간다. 요청이 서로 앞서는 순서가 종전과 달라지지 않게 `await` 도 하지 않는다.
+        if (bucket !== undefined && this.options.sharedRateLimit) await this.shareBucketSlot(bucket, cost);
+    }
+
+    // ---- 프로세스 사이의 한도 공유(선택) ----
+
+    private sharedRateGateOf: { store: BrokerTokenStore; gate: SharedRateGate } | undefined;
+
+    /**
+     * `options.sharedRateLimit` 이 켜 둔 버킷 이름들. 값이 `true` 면 `['order']`, 문자열 배열이면 그 버킷들, 함수면 부를 때마다 그 결과를 같은 규칙으로 읽는다.
+     * 비었으면(기본) 한도를 프로세스 안에서만 센다. 토큰 저장소(`options.tokenStore`)가 없어도 공유하지 않는다.
+     */
+    private async sharedRateBuckets(): Promise<string[]> {
+        const raw = this.options.sharedRateLimit;
+        const value: unknown = typeof raw === 'function' ? await (raw as () => unknown)() : raw;
+        if (value === true) return ['order'];
+        return Array.isArray(value) ? value.filter((name): name is string => typeof name === 'string') : [];
+    }
+
+    /** 이 버킷을 프로세스 사이에 나누는가. 나누면 그 게이트를, 아니면 `undefined` 를 돌려준다. 게이트는 계정(자격증명 해시)과 저장소마다 하나다. */
+    protected async sharedRateGate(bucket: string): Promise<SharedRateGate | undefined> {
+        const store = this.getTokenStore();
+        if (store === null || typeof this.apiKey !== 'string' || this.apiKey === '') return undefined;
+        if (!(await this.sharedRateBuckets()).includes(bucket)) return undefined;
+        if (this.sharedRateGateOf === undefined || this.sharedRateGateOf.store !== store) {
+            this.sharedRateGateOf = { store, gate: new SharedRateGate(() => this.getTokenStore(), tokenStoreKey(`rate:${this.id}:`, this.apiKey) + ':') };
+        }
+        return this.sharedRateGateOf.gate;
+    }
+
+    /** 공유하는 버킷이면 다른 프로세스와 나눠 쓰는 슬롯 하나를 얻을 때까지 기다린다. 한 요청이 차지하는 시간은 `rateLimit × cost` 다. */
+    private async shareBucketSlot(bucket: string, cost: Num): Promise<void> {
+        const gate = await this.sharedRateGate(bucket);
+        const rateLimit = this.rateLimitBuckets[bucket]?.rateLimit;
+        if (gate === undefined || rateLimit === undefined) return;
+        await gate.acquire(bucket, rateLimit * (cost ?? 1));
+    }
+
+    /** 다른 프로세스가 이 버킷에 적어 둔 휴식이 끝날 때까지 남은 시간(ms). 공유하지 않거나 휴식이 없으면 0. */
+    protected async sharedBlockedFor(bucket: string): Promise<number> {
+        const gate = await this.sharedRateGate(bucket);
+        if (gate === undefined) return 0;
+        return Math.max(0, (await gate.blockedUntil(bucket)) - Date.now());
+    }
+
+    /** 이 버킷이 `untilMs`(epoch ms)까지 쉬어야 한다고 다른 프로세스에도 알린다. 공유하지 않으면 아무것도 하지 않는다. */
+    protected async shareBlocked(bucket: string, untilMs: number): Promise<void> {
+        await (await this.sharedRateGate(bucket))?.markBlocked(bucket, untilMs);
     }
 
     // ============ 설정 ============
