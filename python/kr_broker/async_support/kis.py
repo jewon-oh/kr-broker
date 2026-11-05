@@ -761,21 +761,28 @@ class KISAuth:
                     logger.warning('[KISAuth] approval_key 저장소 저장 실패(프로세스 메모리 캐시는 유효)', exc_info=True)
             return key
 
-    async def invalidate(self) -> None:
-        """토큰 캐시를 프로세스 메모리와 저장소에서 모두 지운다. 다음 호출이 새 토큰을 발급받는다."""
-        self.forget_local_token()
-        await self.delete_stored_token()
+    async def invalidate(self, failed_token: Optional[str] = None) -> None:
+        """토큰 캐시를 프로세스 메모리와 저장소에서 지운다. 다음 호출이 새 토큰을 발급받는다.
 
-    def forget_local_token(self) -> None:
-        """프로세스 메모리의 토큰 캐시만 비운다."""
-        self.cached_token = None
+        `failed_token`(거절된 요청이 실제로 쓴 토큰)을 주면 그 토큰일 때만 지운다(compare-and-delete). 그사이 다른 프로세스가 새 토큰을 저장소에 넣었다면
+        지우지 않는다. 인자 없이 부르면 무조건 지운다(강제 재인증)."""
+        self.forget_local_token(failed_token)
+        await self.delete_stored_token(failed_token)
 
-    async def delete_stored_token(self) -> None:
-        """토큰 저장소의 토큰을 지운다. 실패해도 던지지 않는다."""
+    def forget_local_token(self, failed_token: Optional[str] = None) -> None:
+        """프로세스 메모리의 토큰 캐시를 비운다. `failed_token` 을 주면 캐시가 그 토큰일 때만 비운다."""
+        if failed_token is None or (self.cached_token is not None and self.cached_token.get('accessToken') == failed_token):
+            self.cached_token = None
+
+    async def delete_stored_token(self, failed_token: Optional[str] = None) -> None:
+        """토큰 저장소의 토큰을 지운다. `failed_token` 을 주면 저장된 토큰이 그 토큰일 때만 지운다(저장소의 원자적 비교 삭제). 실패해도 던지지 않는다."""
         store = self.store_of()
         if store is not None:
             try:
-                await maybe_await(store.delete(self.store_key))
+                if failed_token is None:
+                    await maybe_await(store.delete(self.store_key))
+                elif not await maybe_await(store.delete_if_access_token_equals(self.store_key, failed_token)):
+                    logger.info('[KISAuth] 메모리 캐시만 무효화한다. 토큰 저장소에는 이미 다른(더 새) 토큰이 있거나 토큰이 없다')
             except Exception:
                 logger.debug('[KISAuth] 토큰 저장소 삭제 실패(프로세스 메모리 무효화는 완료)', exc_info=True)
 
@@ -989,11 +996,13 @@ class kis(Exchange, ImplicitAPI):
             raise AuthenticationError(f'{self.id} approval_key 응답에 approval_key 가 없다')
         return approval_key
 
-    async def invalidate_token(self) -> None:
-        """토큰 캐시를 프로세스와 토큰 저장소에서 모두 지운다(재인증 강제)."""
-        self.token = None
+    async def invalidate_token(self, failed_token: Optional[str] = None) -> None:
+        """토큰 캐시를 프로세스와 토큰 저장소에서 지운다(재인증 강제). `failed_token` 을 주면 그 토큰일 때만 지운다.
+        요청이 거절되는 사이 다른 프로세스가 새 토큰을 저장소에 넣었다면 그것을 지우지 않는다(compare-and-delete)."""
+        if failed_token is None or self.token == failed_token:
+            self.token = None
         if self._auth is not None:
-            await self._auth.invalidate()
+            await self._auth.invalidate(failed_token)
 
     async def get_approval_key(self) -> str:
         """실시간 시세 WebSocket 에 접속할 때 쓰는 접속키."""
@@ -1010,7 +1019,7 @@ class kis(Exchange, ImplicitAPI):
         msg_cd = self.safe_string_2(response, 'msg_cd', 'error_code')
         # 인증 실패가 확실할 때만 토큰 캐시를 버린다. 아무 500 에나 붙이면 발급이 남발되고, 토큰 발급은 분당 1회 제한이다.
         if not is_auth_request and (code in (401, 403) or msg_cd == 'EGW00123'):
-            self._drop_token(code, msg_cd)
+            self._drop_token(code, msg_cd, request_headers)
         if not isinstance(response, dict):
             return None
         rt_cd = self.safe_string(response, 'rt_cd')
@@ -1061,13 +1070,20 @@ class kis(Exchange, ImplicitAPI):
             for key in keys:
                 params[key] = self.safe_string(response, key.lower(), '')
 
-    def _drop_token(self, code: int, msg_cd: Str) -> None:
-        logger.warning('[kis] 인증 실패(%s %s). 토큰 캐시를 무효화하고 다음 호출에서 재발급한다', code, msg_cd)
+    def _drop_token(self, code: int, msg_cd: Str, request_headers: Optional[Dict[str, str]] = None) -> None:
+        """인증 실패 뒤 토큰 캐시를 무효화한다. 거절된 요청이 실제로 쓴 토큰(`authorization` 헤더)을 알면 그 토큰일 때만 지운다.
+        그사이 다른 프로세스가 새 토큰을 저장소에 넣었다면 지우지 않는다. 헤더에서 읽지 못하면 무조건 지운다."""
+        failed_token: Optional[str] = None
+        for key, value in (request_headers or {}).items():
+            if key.lower() == 'authorization' and isinstance(value, str):
+                failed_token = re.sub(r'^bearer\s+', '', value, flags=re.IGNORECASE).strip() or None
+        logger.warning('[kis] 인증 실패(%s %s). 토큰 캐시를 무효화하고 다음 호출에서 재발급한다(compareAndDelete=%s)', code, msg_cd, failed_token is not None)
         # 메모리 캐시는 바로 비워 다음 호출이 새 토큰을 받게 한다. 저장소의 토큰은 `spawn` 이 지운다.
-        self.token = None
+        if failed_token is None or self.token == failed_token:
+            self.token = None
         if self._auth is not None:
-            self._auth.forget_local_token()
-            self.spawn(self._auth.delete_stored_token)
+            self._auth.forget_local_token(failed_token)
+            self.spawn(self._auth.delete_stored_token, failed_token)
 
     # ============ 종목 ============
 

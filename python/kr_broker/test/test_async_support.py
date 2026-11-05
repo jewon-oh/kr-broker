@@ -549,6 +549,52 @@ def test_kis_auth_failure_clears_memory_token_at_once_and_store_in_background() 
     asyncio.run(main())
 
 
+class _CasDictStore(_DictStore):
+    """저장된 값의 accessToken 이 같을 때만 지우는 원자적 비교 삭제를 갖춘 저장소(Redis Lua 의 흉내)."""
+
+    def delete_if_access_token_equals(self, key: str, access_token: str) -> bool:
+        raw = self.values.get(key)
+        if raw is None or json.loads(raw).get('accessToken') != access_token:
+            return False
+        del self.values[key]
+        return True
+
+
+def test_kis_invalidate_deletes_only_the_failed_token() -> None:
+    """TypeScript 판처럼 거절된 토큰을 알면 그 토큰일 때만 지운다(compare-and-delete). 그사이 다른 프로세스가 넣은 새 토큰은 남는다."""
+    async def main() -> None:
+        broker = kr_broker.async_support.kis({'apiKey': 'kis-app-key-abcdefgh', 'secret': 's', 'uid': '12345678-01'})
+        auth = broker.auth_manager()
+        auth.cached_token = {'accessToken': 'old', 'expiresAt': 2 ** 60}
+        store = _CasDictStore({auth.store_key: json.dumps({'accessToken': 'peer', 'expiresAt': 2 ** 60})})
+        broker.options['tokenStore'] = store
+        broker.token = 'old'
+
+        await broker.invalidate_token('old')  # 낡은 토큰으로 보낸 요청이 거절됐다
+
+        assert broker.token is None and auth.cached_token is None  # 이 프로세스의 낡은 토큰은 버렸다
+        assert json.loads(store.values[auth.store_key])['accessToken'] == 'peer'  # 다른 프로세스가 넣은 새 토큰은 남았다
+
+        store.values[auth.store_key] = json.dumps({'accessToken': 'old', 'expiresAt': 2 ** 60})
+        await broker.invalidate_token('old')  # 같은 토큰이면 지운다
+        assert auth.store_key not in store.values
+
+        store.values[auth.store_key] = json.dumps({'accessToken': 'peer', 'expiresAt': 2 ** 60})
+        await broker.invalidate_token()  # 인자 없이 부르면 무조건 지운다
+        assert auth.store_key not in store.values
+
+        # 거절된 요청의 authorization 헤더에서 토큰을 읽어 같은 규칙을 건다.
+        auth.cached_token = {'accessToken': 'new', 'expiresAt': 2 ** 60}
+        store.values[auth.store_key] = json.dumps(auth.cached_token)
+        broker.token = 'new'
+        broker._drop_token(401, None, {'authorization': 'Bearer old'})
+        await broker.close()
+        assert broker.token == 'new' and auth.cached_token is not None  # 낡은 토큰의 거절이 새 토큰을 지우지 않는다
+        assert json.loads(store.values[auth.store_key])['accessToken'] == 'new'
+
+    asyncio.run(main())
+
+
 class _RawResponse:
     def __init__(self, status: int, content: bytes) -> None:
         self.status_code = status

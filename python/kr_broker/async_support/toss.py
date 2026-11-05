@@ -47,7 +47,7 @@ from kr_broker.abstract.toss import ImplicitAPI
 from kr_broker.async_support.base.exchange import Exchange
 from kr_broker.async_support.base.runtime import maybe_await, new_lock
 from kr_broker.async_support.base.token_store import refresh_token_with_lock
-from kr_broker.async_support.execution_confirm import confirm_execution
+from kr_broker.async_support.execution_confirm import confirm_execution_detailed
 from kr_broker.async_support.extended_session_limit import build_extended_session_limit
 from kr_broker.base import functions as fn
 from kr_broker.base.decimal_to_precision import DECIMAL_PLACES, NO_PADDING, ROUND, TICK_SIZE, TRUNCATE, decimal_to_precision
@@ -1387,15 +1387,24 @@ class toss(Exchange, ImplicitAPI):
                 still_open = True
             if still_open:
                 logger.info('[toss] 확장세션 지정가가 접수됐고 아직 체결되지 않았다(%s %s %s)', order_id, symbol, effective_price)
-                return self._build_created_order(draft, 'open', still_open=True)
+                return self._build_created_order(draft, 'open', still_open=True, order_open=True)
 
         logger.info('[toss] 주문이 접수됐다(%s %s %s %s)', order_id, symbol, side, effective_type)
         if self.safe_bool(params, 'confirmExecution', self.options.get('confirmExecution') is not False) is False:
             return self._build_created_order(draft, 'open')
-        snapshot, last = await self._confirm_order_execution(order_id, country)
+        snapshot, last, confirmation = await self._confirm_order_execution(order_id, country, None if use_amount_based else quantity)
         # 마지막 조회의 `result` 가 `None` 이면 조회하지 못한 것과 같다. 주문은 이미 접수됐으므로 던지지 않고 미체결로 돌려준다.
         status = self.parse_order_status(self.safe_string(last, 'status')) if last is not None else 'open'
-        return self._build_created_order(draft, status, snapshot=snapshot, raw=last)
+        # 예산이 끝날 때까지 종료 상태를 보지 못했으면(`orderOpen`) 주문이 아직 열려 있을 수 있다. 남은 수량은 호출한 쪽이 취소하거나 추적한다.
+        # 체결이 없다고 읽은 조회가 있었다면(`last` 가 있고 `snapshot` 이 없다) 남은 수량은 주문 수량 전부다.
+        remaining_quantity: Optional[float] = None
+        if not use_amount_based and not confirmation['settled']:
+            if snapshot is not None:
+                remaining_quantity = max(0, quantity - snapshot['filled'])
+            elif last is not None:
+                remaining_quantity = quantity
+        return self._build_created_order(draft, status, snapshot=snapshot, raw=last,
+                                         order_open=None if confirmation['settled'] else True, remaining_quantity=remaining_quantity)
 
     async def edit_order(self, id: str, symbol: str, type: str, side: str, amount: Num = None, price: Num = None,
                    params: Optional[Dict[str, Any]] = None) -> Order:
@@ -1598,8 +1607,8 @@ class toss(Exchange, ImplicitAPI):
             return None
         return self.extend({'session': session}, await self._extended_session_limit(symbol, side))
 
-    async def _confirm_order_execution(self, order_id: str, country: str) -> Tuple[Optional[Dict[str, Any]], Any]:
-        """접수한 주문의 체결을 확정한다. 주문 상세를 예산 안에서 조회하고, 마지막으로 본 주문 원본도 함께 돌려준다."""
+    async def _confirm_order_execution(self, order_id: str, country: str, requested_qty: Optional[float]) -> Tuple[Optional[Dict[str, Any]], Any, Dict[str, Any]]:
+        """접수한 주문의 체결을 확정한다. 주문 상세를 예산 안에서 조회하고, 마지막으로 본 주문 원본과 폴링이 끝난 모습(`confirm_execution_detailed` 의 결과)도 함께 돌려준다."""
         last: Dict[str, Any] = {'raw': None}
 
         async def probe(attempt: int) -> Dict[str, Any]:
@@ -1611,11 +1620,12 @@ class toss(Exchange, ImplicitAPI):
                 'terminal': isinstance(status, str) and status in TERMINAL_ORDER_STATUSES,
             }
 
-        snapshot = await confirm_execution('[toss]', order_id, 'toss', probe, budget=self.get_confirm_budget())
-        return snapshot, last['raw']
+        confirmation = await confirm_execution_detailed('[toss]', order_id, 'toss', probe, budget=self.get_confirm_budget(), requested_qty=requested_qty)
+        return confirmation['snapshot'], last['raw'], confirmation
 
     def _build_created_order(self, draft: Dict[str, Any], status: Str, still_open: Optional[bool] = None,
-                             snapshot: Optional[Dict[str, Any]] = None, raw: Any = None) -> Order:
+                             snapshot: Optional[Dict[str, Any]] = None, raw: Any = None,
+                             order_open: Optional[bool] = None, remaining_quantity: Optional[float] = None) -> Order:
         """접수 결과로 주문 구조를 만든다. 체결을 확정하지 못했으면 `filled` 를 비운다(요청값으로 추정해 채우지 않는다)."""
         timestamp = self.parse8601(self.safe_value(raw, 'orderedAt'))
         if timestamp is None:
@@ -1629,6 +1639,8 @@ class toss(Exchange, ImplicitAPI):
             'order': raw,
             'extendedSession': draft['extendedSession'],
             'stillOpen': still_open,
+            'orderOpen': order_open,
+            'remainingQuantity': remaining_quantity,
         })
         return self.safe_order({
             'info': info,

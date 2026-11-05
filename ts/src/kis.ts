@@ -3893,10 +3893,15 @@ export class kis extends Exchange {
         return approvalKey;
     }
 
-    /** 토큰 캐시를 프로세스와 토큰 저장소에서 모두 지운다(재인증 강제). */
-    async invalidateToken(): Promise<void> {
-        this.token = undefined;
-        await this.authState?.auth.invalidate();
+    /**
+     * 토큰 캐시를 프로세스와 토큰 저장소에서 지운다(재인증 강제).
+     *
+     * `failedToken` 을 주면 그 토큰일 때만 지운다. 요청이 거절되는 사이 다른 프로세스가 새 토큰을 저장소에 넣었다면 그것을 지우지 않는다(compare-and-delete).
+     * 인자 없이 부르면 종전처럼 무조건 지운다.
+     */
+    async invalidateToken(failedToken?: string): Promise<void> {
+        if (failedToken === undefined || this.token === failedToken) this.token = undefined;
+        await this.authState?.auth.invalidate(failedToken);
     }
 
     /**
@@ -4186,7 +4191,7 @@ export class kis extends Exchange {
         responseHeaders: Dictionary<string>,
         responseBody: string,
         response: unknown,
-        _requestHeaders: Dictionary<string> | undefined,
+        requestHeaders: Dictionary<string> | undefined,
         _requestBody: string | undefined,
     ): boolean | undefined {
         const isAuthRequest = url.includes('/oauth2/');
@@ -4194,7 +4199,7 @@ export class kis extends Exchange {
         if (trCont !== undefined && response !== null && typeof response === 'object') this.trContOf.set(response, trCont);
         const msgCd = this.safeString2(response, 'msg_cd', 'error_code');
         // 인증 실패가 확실할 때만 토큰 캐시를 버린다. 아무 500 에나 붙이면 발급이 남발되고, 토큰 발급은 분당 1회 제한이다.
-        if (!isAuthRequest && (statusCode === 401 || statusCode === 403 || msgCd === 'EGW00123')) this.dropToken(statusCode, msgCd);
+        if (!isAuthRequest && (statusCode === 401 || statusCode === 403 || msgCd === 'EGW00123')) this.dropToken(statusCode, msgCd, requestHeaders);
         if (response === null || typeof response !== 'object' || Array.isArray(response)) return undefined;
         const rtCd = this.safeString(response, 'rt_cd');
         const msg = this.safeString2(response, 'msg1', 'error_description');
@@ -4213,9 +4218,15 @@ export class kis extends Exchange {
         throw new ExchangeError(feedback, options);
     }
 
-    private dropToken(statusCode: number, msgCd: Str): void {
-        logger.warn({ statusCode, msgCd }, '[kis] 인증 실패 — 토큰 캐시를 무효화한다. 다음 호출에서 재발급한다');
-        this.invalidateToken().catch((err: unknown) => logger.warn({ err }, '[kis] 토큰 캐시 무효화 실패'));
+    /**
+     * 인증 실패 뒤 토큰 캐시를 무효화한다. 거절된 요청이 실제로 쓴 토큰(`authorization` 헤더)을 알면 **그 토큰일 때만** 지운다. 그사이 다른 프로세스가
+     * 새 토큰을 저장소에 넣었다면 지우지 않는다. 헤더에서 읽지 못하면 종전처럼 무조건 지운다.
+     */
+    private dropToken(statusCode: number, msgCd: Str, requestHeaders: Dictionary<string> | undefined): void {
+        const authorization = Object.entries(requestHeaders ?? {}).find(([key]) => key.toLowerCase() === 'authorization')?.[1];
+        const failedToken = authorization?.replace(/^bearer\s+/i, '').trim() || undefined;
+        logger.warn({ statusCode, msgCd, compareAndDelete: failedToken !== undefined }, '[kis] 인증 실패 — 토큰 캐시를 무효화한다. 다음 호출에서 재발급한다');
+        this.invalidateToken(failedToken).catch((err: unknown) => logger.warn({ err }, '[kis] 토큰 캐시 무효화 실패'));
     }
 
     // ============ 종목 ============

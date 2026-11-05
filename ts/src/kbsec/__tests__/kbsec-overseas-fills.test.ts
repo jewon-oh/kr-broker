@@ -101,3 +101,89 @@ describe('체결내역 조회는 시장으로 갈린다', () => {
         await expect(svc.fetchMyTrades('AAPL/USD', undefined, undefined, { date: '20260922' })).resolves.toEqual([]);
     });
 });
+
+/** 업무 오류 봉투 응답. `status` 로 HTTP 상태를 고른다(KB 는 업무 오류를 200 으로도 500 으로도 준다). */
+function bizEnvelope(processCode: string, processMessage: string, status = 200) {
+    const text = JSON.stringify({ dataHeader: { processFlag: 'B', processCode, processMessage }, dataBody: {} });
+    return { ok: status < 400, status, json: async () => JSON.parse(text), text: async () => text };
+}
+
+/** 토큰은 정상 발급하고, 체결 조회(SPQM2103)에는 `respond()` 의 응답을 준다. */
+function mockOrdersUs(respond: () => unknown) {
+    mockFetch.mockImplementation(async (url: string) =>
+        (String(url).includes('/oauth2/token') ? tokenOk() : respond()));
+}
+
+describe('U-11 — 해외 체결 조회의 영구 래치는 계정 상태를 뜻하는 코드에만 건다', () => {
+    it('★I742(아직 체결내역 없음)는 오류가 아니라 빈 결과다 — 던지지 않고 래치도 걸지 않는다', async () => {
+        mockOrdersUs(() => bizEnvelope('I742', '체결내역이 없습니다'));
+        const svc = makeService();
+
+        await expect(svc.fetchMyTrades('AAPL/USD', undefined, undefined, { date: '20260922' })).resolves.toEqual([]);
+        const afterFirst = calledTrs().length;
+        await expect(svc.fetchMyTrades('AAPL/USD', undefined, undefined, { date: '20260922' })).resolves.toEqual([]);
+
+        expect(calledTrs().length).toBeGreaterThan(afterFirst); // 두 번째 호출도 KB 를 실제로 불렀다(래치 없음)
+    });
+
+    it('I742 가 HTTP 500 으로 와도 빈 결과다 — 봉투가 정본이고 상태 표(5xx → 서비스 불가)가 덮어쓰지 않는다', async () => {
+        mockOrdersUs(() => bizEnvelope('I742', '체결내역이 없습니다', 500));
+
+        await expect(makeService().fetchMyTrades('AAPL/USD', undefined, undefined, { date: '20260922' })).resolves.toEqual([]);
+    });
+
+    it('I742 가 지나간 뒤 같은 인스턴스가 체결을 정상적으로 읽는다 — 주문 직후 첫 확인이 비어 있어도 다음 확인이 산다', async () => {
+        let first = true;
+        mockOrdersUs(() => {
+            if (first) { first = false; return bizEnvelope('I742', '체결내역이 없습니다'); }
+            return jsonOk({ grid: [] });
+        });
+        const svc = makeService();
+
+        await svc.fetchMyTrades('AAPL/USD', undefined, undefined, { date: '20260922' });
+        await expect(svc.fetchMyTrades('AAPL/USD', undefined, undefined, { date: '20260922' })).resolves.toEqual([]);
+        expect(calledTrs().filter(t => t === KBSEC_TR.ORDERS_US.toLowerCase()).length).toBe(2);
+    });
+
+    it('미분류 업무 오류(표에 없는 코드)는 이번 호출만 실패하고 다음 호출은 KB 를 다시 부른다', async () => {
+        mockOrdersUs(() => bizEnvelope('9999', '알 수 없는 업무 오류'));
+        const svc = makeService();
+
+        await expect(svc.fetchMyTrades('AAPL/USD', undefined, undefined, { date: '20260922' })).rejects.toThrow(/9999/);
+        const afterFirst = calledTrs().length;
+        const second = await svc.fetchMyTrades('AAPL/USD', undefined, undefined, { date: '20260922' }).catch((e: unknown) => e);
+
+        expect(String(second)).not.toMatch(/다시 부르지 않는다/);
+        expect(calledTrs().length).toBeGreaterThan(afterFirst);
+    });
+
+    it('조회일자 거절(2854)이 영구 래치를 걸지 않는다 — 휴장일 한 번이 그 프로세스의 체결 확정을 끄면 안 된다', async () => {
+        mockOrdersUs(() => bizEnvelope('2854', '주문일자가 현재일자보다 큽니다'));
+        const svc = makeService();
+
+        await expect(svc.fetchMyTrades('AAPL/USD', undefined, undefined, { date: '20260926' })).rejects.toThrow();
+        const afterFirst = calledTrs().length;
+        await svc.fetchMyTrades('AAPL/USD', undefined, undefined, { date: '20260926' }).catch(() => undefined);
+
+        expect(calledTrs().length).toBeGreaterThan(afterFirst);
+    });
+
+    it('미신청 계좌(H049)는 영구 래치를 건다 — 가입 전에는 다시 물어도 답이 같다', async () => {
+        mockOrdersUs(() => bizEnvelope('H049', '글로벌원마켓 미신청계좌입니다'));
+        const svc = makeService();
+
+        await expect(svc.fetchMyTrades('AAPL/USD')).rejects.toThrow();
+        const afterFirst = calledTrs().length;
+        await expect(svc.fetchMyTrades('AAPL/USD')).rejects.toThrow(/다시 부르지 않는다/);
+
+        expect(calledTrs().length).toBe(afterFirst);
+    });
+
+    it('권한 없음(I446)은 영구 래치를 건다 — 기존 동작을 코드 목록으로 옮겨도 그대로다', async () => {
+        mockOrdersUs(() => bizEnvelope('I446', 'API 사용 권한이 없습니다.', 500));
+        const svc = makeService();
+
+        await expect(svc.fetchMyTrades('AAPL/USD')).rejects.toThrow();
+        await expect(svc.fetchMyTrades('AAPL/USD')).rejects.toThrow(/다시 부르지 않는다/);
+    });
+});

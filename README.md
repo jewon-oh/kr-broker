@@ -103,7 +103,7 @@ TypeScript 판과 Python 판이 있습니다. Python 판은 ccxt처럼 동기(`k
 
 기반 클래스에 없는 확장 메서드도 `has`가 `true`면 ccxt처럼 세 증권사에서 같은 인자로 부르고 같은 모양을 받습니다. `fetchMarketCalendar`는 세 증권사 모두 날짜별 개장 여부를 반환하고, 시장은 `params.market`으로 고릅니다. 토스증권의 세션 시각 원본은 `fetchMarketSessions`로 받습니다.
 
-한국투자증권과 토스증권에서 정규장 밖 국내 주문을 내려면 `options.nxtRouting`을 켜야 합니다. 이때 두 증권사는 시장가 주문을 현재가 기준의 지정가 주문으로 바꿔 냅니다. 같은 방향의 미체결 주문이 있거나 기준가를 구하지 못하면 주문을 보내지 않고 오류를 던집니다. 토스증권은 미국도 정규장 밖에는 정수 수량의 지정가 주문만 받습니다. `options.usExtendedLimit`을 켜면 미국 정규장 밖의 시장가 주문을 지정가 주문으로 변환해 냅니다.
+한국투자증권과 토스증권에서 정규장 밖 국내 주문을 내려면 `options.nxtRouting`을 켜야 합니다. 이때 두 증권사는 시장가 주문을 현재가 기준의 지정가 주문으로 바꿔 냅니다. 같은 방향의 미체결 주문이 있거나 기준가를 구하지 못하면 주문을 보내지 않고 오류를 던집니다. 토스증권은 `options.extendedSessionReplaceOpen`을 켜면 같은 방향의 낡은 미체결을 현재가로 정정하거나(정정할 수 없으면 취소가 확정된 뒤) 바꿔서 냅니다. 토스증권은 미국도 정규장 밖에는 정수 수량의 지정가 주문만 받습니다. `options.usExtendedLimit`을 켜면 미국 정규장 밖의 시장가 주문을 지정가 주문으로 변환해 냅니다.
 
 ```ts
 new kis({}).has.fetchOHLCV; // true, false, 'emulated' 중 하나
@@ -307,11 +307,14 @@ await broker.close();
 | `timeout` | 조회 상한 | 조회 요청 시간 상한(ms) |
 | `options.maxRetriesOnFailure` | `0` | 조회 재시도 횟수입니다. 한국투자증권은 기본 `3`이고, 시간 초과는 재시도하지 않습니다. 주문 요청은 재시도하지 않습니다 |
 | `orderTimeout` | 주문 상한 | 주문 요청 시간 상한(ms). 넘으면 `OrderOutcomeUnknown` |
+| `orderTokenDeadline` | `15000` | 주문 요청을 보내기 전에 인증 토큰을 준비하는 데 줄 수 있는 시간(ms). 넘으면 주문을 보내지 않고 `OrderTokenNotReady`를 던집니다. 요청이 나가지 않았으므로 결과 불명이 아니고 같은 주문을 다시 내도 중복이 아닙니다 |
 | `options.tokenStore` | 없음 | 접근 토큰과 발급 잠금을 여러 프로세스가 나눠 쓰는 저장소(`BrokerTokenStore`)입니다. 없으면 프로세스 메모리 캐시만 사용합니다. 함수를 전달하면 사용할 때마다 호출합니다 |
 | `options.nxtRouting` | `false` | 정규장 밖(넥스트레이드 프리마켓과 애프터마켓) 국내 주문을 허용합니다(한국투자증권과 토스증권). 시장가 주문은 현재가 지정가로 바꿔 냅니다. KB증권에서는 정규장 안에서 주문을 SOR로 보내는 데만 사용하고 정규장 밖은 허용하지 않습니다. 불리언이거나 불리언을 반환하는 함수입니다 |
 | `options.blockAuctionBuys` | `false` | 종가 동시호가(국내 15:20~15:30, 미국 15:50~16:00 ET)의 신규 매수를 요청 전에 `MarketClosed`로 막습니다(세 증권사). 시장은 이 시간에도 주문을 받으므로 기본은 꺼져 있습니다. 불리언이거나 불리언을 반환하는 함수입니다 |
 | `options.krwIntegratedMargin` | `false` | 통합증거금 계좌의 미국 주식 매수여력을 원화 예수금 환산분으로 보강합니다(토스증권과 KB증권) |
 | `options.usExtendedLimit` | `false` | 미국 정규장 밖에서 시장가 주문을 지정가 주문으로 변환해 냅니다(토스증권) |
+| `options.extendedSessionReplaceOpen` | `false` | 확장세션 시장가를 지정가로 바꿀 때 같은 종목·같은 방향의 낡은 미체결을 건너뛰지 않고 현재가로 바꿉니다(토스증권). 같은 방향 미체결이 하나이고 남은 수량이 이번 주문 수량과 같을 때만 바꿉니다. 정정이 먼저이고, 정정할 수 없으면 취소가 확정된 뒤에만 새로 냅니다 |
+| `options.sharedRateLimit` | `false` | 호출 한도를 같은 계정의 다른 프로세스와 나눕니다(토스증권). `true`면 주문 그룹(`order`)을, 문자열 배열이면 그 그룹들을 나눕니다. `options.tokenStore`가 있어야 하고 저장소가 느리거나 실패하면 그 호출은 프로세스 메모리 한도로 갑니다. 함수도 받습니다 |
 | `options.usdKrwRate` | 없음 | 1달러당 원화를 반환하는 `() => Promise<number>`입니다. 원화 환산에 사용합니다(토스증권과 KB증권) |
 | `options.masterData` | 빈 데이터 | 한국투자증권 종목 마스터 파일을 옮긴 `KisMasterData`입니다. 종목 검색과 해외 거래소 판별에 사용합니다(한국투자증권과 KB증권). KB증권 미국 주문은 이 데이터로 상장 거래소를 판별하므로, 없으면 `MarketClosed`입니다 |
 | `options.stockDirectory` | 없음 | 국내 종목이 코스피인지 코스닥인지 알려 주는 `BrokerStockDirectory`입니다. 없으면 마스터 데이터로 판별합니다(한국투자증권) |

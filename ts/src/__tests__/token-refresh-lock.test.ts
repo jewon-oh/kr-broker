@@ -135,3 +135,61 @@ describe('refreshTokenWithLock — 락을 잡은 채 발급이 실패할 때', (
         expect(store.unlock).toHaveBeenCalledTimes(1);
     });
 });
+
+describe('refreshTokenWithLock — 대기는 횟수가 아니라 벽시계 마감으로 센다', () => {
+    /** 저장소 읽기가 `readMs` 걸리는 락 미획득 상황(저장소 장애처럼 읽기마다 오래 매달린다). */
+    function slowReads(readMs: number, value: string | null = null) {
+        return vi.fn(() => new Promise<string | null>((resolve) => setTimeout(() => resolve(value), readMs)));
+    }
+
+    it('★읽기마다 오래 매달려도 총 대기는 waitMs 를 크게 넘지 않는다 — 횟수로 세면 (간격+읽기) × 횟수만큼 걸렸다', async () => {
+        const store = fakeStore({ tryLock: vi.fn().mockResolvedValue(false) });
+        // 옛 구현: ceil(300 / 20) = 15번 × (20ms + 100ms) = 1800ms. 새 구현: 마감 300ms 에 읽기 하나가 잘려 ≈ 300ms.
+        const p = params({ store, waitMs: 300, pollMs: 20, readCached: slowReads(100) });
+
+        const startedAt = Date.now();
+        await expect(refreshTokenWithLock(p)).resolves.toBe('issued');
+        const elapsed = Date.now() - startedAt;
+
+        expect(elapsed).toBeLessThan(900);
+        expect(p.issueAndCache).toHaveBeenCalledTimes(1);
+    });
+
+    it('★영원히 끝나지 않는 읽기도 마감에서 잘리고 직접 발급으로 넘어간다', async () => {
+        const store = fakeStore({ tryLock: vi.fn().mockResolvedValue(false) });
+        const p = params({ store, waitMs: 120, pollMs: 20, readCached: vi.fn(() => new Promise<string | null>(() => undefined)) });
+
+        const startedAt = Date.now();
+        await expect(refreshTokenWithLock(p)).resolves.toBe('issued');
+
+        expect(Date.now() - startedAt).toBeLessThan(800);
+        expect(p.issueAndCache).toHaveBeenCalledTimes(1);
+    });
+
+    it('마감 안에 다른 프로세스가 넣은 토큰을 읽으면 그것을 쓴다', async () => {
+        const store = fakeStore({ tryLock: vi.fn().mockResolvedValue(false) });
+        let calls = 0;
+        const readCached = vi.fn(async () => (++calls >= 3 ? 'from-peer' : null));
+        const p = params({ store, waitMs: 500, pollMs: 10, readCached });
+
+        await expect(refreshTokenWithLock(p)).resolves.toBe('from-peer');
+
+        expect(p.issueAndCache).not.toHaveBeenCalled();
+        expect(readCached).toHaveBeenCalledTimes(3);
+    });
+
+    it('마감 뒤에 늦게 실패하는 읽기가 처리 안 된 거부를 만들지 않는다', async () => {
+        const rejections: unknown[] = [];
+        const onRejection = (reason: unknown): void => { rejections.push(reason); };
+        process.on('unhandledRejection', onRejection);
+        try {
+            const store = fakeStore({ tryLock: vi.fn().mockResolvedValue(false) });
+            const readCached = vi.fn(() => new Promise<string | null>((_resolve, reject) => setTimeout(() => reject(new Error('late')), 150)));
+            await refreshTokenWithLock(params({ store, waitMs: 40, pollMs: 10, readCached }));
+            await new Promise((resolve) => setTimeout(resolve, 250));
+        } finally {
+            process.off('unhandledRejection', onRejection);
+        }
+        expect(rejections).toEqual([]);
+    });
+});

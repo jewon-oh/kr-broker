@@ -7,6 +7,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
     confirmExecution,
+    confirmExecutionDetailed,
     resolveConfirmBudget,
     fillDeviationBps,
     tradeListProbe,
@@ -87,6 +88,62 @@ describe('confirmExecution', () => {
         await expect(
             confirmExecution({ label: '[T]', orderId: 'o7', exchange: 'toss', probe, budget: { attempts: 2, intervalMs: 0 } }),
         ).resolves.toBeNull();
+    });
+});
+
+describe('confirmExecutionDetailed — 폴링이 어떻게 끝났는가(주문이 아직 열려 있는가)', () => {
+    const base = { label: '[T]', orderId: 'd1', exchange: 'kbsec', budget: { attempts: 3, intervalMs: 0 } } as const;
+
+    it('★예산이 끝날 때까지 종료 상태를 못 봤으면 settled=false 이고 남은 수량을 알린다 — 부분체결 값만으로는 최종처럼 읽힌다', async () => {
+        const { probe } = probeSeq([{ snapshot: { filled: 2, average: 100 }, terminal: false }]);
+
+        const r = await confirmExecutionDetailed({ ...base, probe, requestedQty: 5 });
+
+        expect(r.snapshot?.filled).toBe(2);
+        expect(r.settled).toBe(false);
+        expect(r.remaining).toBe(3);
+        expect(r.observed).toBe(true);
+        expect(r.attempts).toBe(3);
+    });
+
+    it('종료 상태를 보고 끝나면 settled=true 이고 남은 수량은 0 이다(취소·거부로 끝나도 더 열려 있지 않다)', async () => {
+        const full = await confirmExecutionDetailed({ ...base, probe: probeSeq([filled(5, 100)]).probe, requestedQty: 5 });
+        expect(full).toMatchObject({ settled: true, remaining: 0, attempts: 1 });
+
+        const cancelled = await confirmExecutionDetailed({
+            ...base, probe: probeSeq([{ snapshot: { filled: 2, average: 100 }, terminal: true }]).probe, requestedQty: 5,
+        });
+        expect(cancelled).toMatchObject({ settled: true, remaining: 0 });
+        expect(cancelled.snapshot?.filled).toBe(2);
+    });
+
+    it('체결을 하나도 못 보고 예산이 끝나면 남은 수량을 모른다 — 비운다', async () => {
+        const r = await confirmExecutionDetailed({ ...base, probe: probeSeq([pending]).probe, requestedQty: 5 });
+
+        expect(r.snapshot).toBeNull();
+        expect(r.settled).toBe(false);
+        expect(r.remaining).toBeUndefined();
+        expect(r.observed).toBe(true);
+    });
+
+    it('조회가 전부 실패하면 observed=false 이고 settled=false 다 — 모르는 것을 닫힌 것으로 읽지 않는다', async () => {
+        const r = await confirmExecutionDetailed({ ...base, probe: probeSeq([new Error('down')]).probe, requestedQty: 5 });
+
+        expect(r).toMatchObject({ snapshot: null, settled: false, observed: false, attempts: 3 });
+        expect(r.remaining).toBeUndefined();
+    });
+
+    it('requestedQty 를 주지 않으면 remaining 을 계산하지 않는다', async () => {
+        const r = await confirmExecutionDetailed({ ...base, probe: probeSeq([{ snapshot: { filled: 2, average: 100 }, terminal: false }]).probe });
+        expect(r.remaining).toBeUndefined();
+        expect(r.settled).toBe(false);
+    });
+
+    it('confirmExecution 은 같은 폴링의 snapshot 만 돌려준다 — 종전 계약 그대로', async () => {
+        const seq = [{ snapshot: { filled: 2, average: 100 }, terminal: false }];
+        const detailed = await confirmExecutionDetailed({ ...base, probe: probeSeq(seq).probe, requestedQty: 5 });
+        const plain = await confirmExecution({ ...base, probe: probeSeq(seq).probe });
+        expect(plain).toEqual(detailed.snapshot);
     });
 });
 

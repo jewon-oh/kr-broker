@@ -8,8 +8,8 @@ import pytest
 from kr_broker import us_market_hours
 from kr_broker.krx_sell_tax import krx_sell_tax_rate
 from kr_broker.krx_trading_hours import (
-    check_krx_trading_hours_at, get_krx_market_phase, get_nxt_session, get_time_until_krx_open, is_krx_business_day_kst,
-    is_nxt_extended_tradable, krx_order_block_reason,
+    KRX_SPECIAL_SESSION_DAYS, check_krx_trading_hours_at, get_krx_market_phase, get_nxt_session, get_time_until_krx_open, is_krx_business_day_kst,
+    is_nxt_extended_tradable, krx_auction_buy_block_reason, krx_order_block_reason, krx_regular_session_of,
 )
 from kr_broker.market_calendar import (
     expand_business_days, is_market_closed_day, market_calendar_status, market_day_status, refresh_market_calendar,
@@ -17,7 +17,8 @@ from kr_broker.market_calendar import (
 from kr_broker.testing import apply_market_calendar, reset_market_calendar
 from kr_broker.trading_hours import get_time_until_market_open, is_trading_hours, market_session_block_reason, trading_hours_block_reason
 from kr_broker.us_market_hours import (
-    et_wall_clock_to_utc_ms, format_et_wall_clock, get_time_until_us_market_open, get_us_market_phase, us_order_block_reason,
+    US_EARLY_CLOSE_DAYS, et_wall_clock_to_utc_ms, format_et_wall_clock, get_time_until_us_market_open, get_us_market_phase,
+    us_auction_buy_block_reason, us_order_block_reason, us_regular_session_of,
 )
 
 HOUR = 60 * 60 * 1000
@@ -251,3 +252,79 @@ def test_market_session_block_reason_auction_policy() -> None:
     assert market_session_block_reason('kbsec', '005930/KRW', _kst(15, 25), side='buy') is None
     assert '종가 동시호가' in (market_session_block_reason('kbsec', '005930/KRW', _kst(15, 25), side='buy', block_auction_buys=True) or '')
 
+
+# ============ 특수 거래일(TypeScript 판의 같은 테스트에서 옮겼다) ============
+
+def _csat(hour: int, minute: int = 0) -> int:
+    """2026-11-19(목) 수능일 KST 시:분."""
+    return utc(2026, 11, 19, hour - 9, minute)
+
+
+def _normal_kr(hour: int, minute: int = 0) -> int:
+    return utc(2026, 11, 18, hour - 9, minute)
+
+
+def test_krx_csat_day_session_is_shifted_by_one_hour() -> None:
+    assert '20261119' in KRX_SPECIAL_SESSION_DAYS
+    session = krx_regular_session_of('20261119')
+    assert (session['preAuctionMin'], session['openMin'], session['closingAuctionMin'], session['closeMin']) == (9 * 60 + 30, 10 * 60, 16 * 60 + 20, 16 * 60 + 30)
+    assert '수학능력' in session['special']
+    assert krx_regular_session_of('20261118') == {'preAuctionMin': 8 * 60 + 30, 'openMin': 9 * 60, 'closingAuctionMin': 15 * 60 + 20, 'closeMin': 15 * 60 + 30}
+    assert check_krx_trading_hours_at(_csat(9, 0))['tradable'] is False
+    assert check_krx_trading_hours_at(_csat(9, 59))['reason'] == '장 개장 전 (현재: 9:59 KST, 개장: 10:00)'
+    assert check_krx_trading_hours_at(_csat(10, 0)) == {'tradable': True}
+    assert check_krx_trading_hours_at(_normal_kr(9, 0)) == {'tradable': True}
+    assert check_krx_trading_hours_at(_csat(15, 30)) == {'tradable': True}
+    assert check_krx_trading_hours_at(_csat(16, 30))['reason'] == '장 마감 (현재: 16:30 KST, 마감: 16:30)'
+    assert check_krx_trading_hours_at(_normal_kr(15, 30))['reason'] == '장 마감 (현재: 15:30 KST, 마감: 15:30)'
+
+
+def test_krx_csat_day_phase_and_time_until_open() -> None:
+    assert get_krx_market_phase(_csat(9, 29)) == 'closed'
+    assert get_krx_market_phase(_csat(9, 30)) == 'pre-auction'
+    assert get_krx_market_phase(_csat(10, 0)) == 'open'
+    assert get_krx_market_phase(_csat(16, 19)) == 'open'
+    assert get_krx_market_phase(_csat(16, 20)) == 'closing-auction'
+    assert get_krx_market_phase(_csat(16, 30)) == 'closed'
+    assert get_krx_market_phase(_normal_kr(15, 20)) == 'closing-auction'
+    assert get_time_until_krx_open(_normal_kr(20, 0)) == 14 * HOUR  # 수능일 전날 마감 뒤: 다음 개장은 10:00
+    assert get_time_until_krx_open(_csat(8, 0)) == 2 * HOUR
+    assert get_time_until_krx_open(_csat(9, 30)) == HOUR // 2
+    assert get_time_until_krx_open(_csat(13, 0)) == 0
+    assert get_time_until_krx_open(_csat(17, 0)) == 16 * HOUR  # 수능일 마감 뒤: 다음 영업일은 평소 09:00
+
+
+def test_krx_csat_day_order_gate_and_auction_reason() -> None:
+    assert krx_order_block_reason(_csat(9, 30)) == '거래시간 외: 장 개장 전 (현재: 9:30 KST, 개장: 10:00)'
+    assert krx_order_block_reason(_csat(10, 0)) is None
+    assert krx_order_block_reason(_csat(16, 0)) is None
+    assert krx_order_block_reason(_csat(16, 30)) == '거래시간 외: 장 마감 (현재: 16:30 KST, 마감: 16:30)'
+    assert krx_auction_buy_block_reason(_csat(15, 25), 'buy') is None
+    assert krx_auction_buy_block_reason(_csat(16, 20), 'buy') == '종가 동시호가 (16:20-16:30) — 신규 매수 진입 금지 (options.blockAuctionBuys)'
+    assert krx_auction_buy_block_reason(_normal_kr(15, 25), 'buy') == '종가 동시호가 (15:20-15:30) — 신규 매수 진입 금지 (options.blockAuctionBuys)'
+    # NXT 세션은 바꾸지 않았다(수능일의 NXT 시각은 공지로 확인하지 못했다).
+    assert get_nxt_session(_csat(8, 30)) == 'pre-market'
+    assert get_nxt_session(_csat(15, 30)) == 'after-market'
+
+
+def test_us_early_close_days() -> None:
+    assert sorted(US_EARLY_CLOSE_DAYS) == ['20261127', '20261224']
+    session = us_regular_session_of('20261127')
+    assert (session['openMin'], session['closingAuctionMin'], session['closeMin']) == (9 * 60 + 30, 12 * 60 + 50, 13 * 60)
+    assert 'earlyClose' in session
+    assert us_regular_session_of('20261125') == {'preAuctionMin': 9 * 60 + 25, 'openMin': 9 * 60 + 30, 'closingAuctionMin': 15 * 60 + 50, 'closeMin': 16 * 60}
+    for month, day in ((11, 27), (12, 24)):  # 두 날 모두 EST(UTC-5): 13:00 ET = 18:00 UTC
+        assert get_us_market_phase(utc(2026, month, day, 17, 49)) == 'open'
+        assert get_us_market_phase(utc(2026, month, day, 17, 50)) == 'closing-auction'
+        assert get_us_market_phase(utc(2026, month, day, 17, 59)) == 'closing-auction'
+        assert get_us_market_phase(utc(2026, month, day, 18, 0)) == 'closed'
+        assert get_us_market_phase(utc(2026, month, day, 20, 55)) == 'closed'
+        assert get_us_market_phase(utc(2026, month, day, 14, 30)) == 'open'
+    assert us_order_block_reason(utc(2026, 11, 27, 17, 30)) is None
+    assert 'phase=closed' in (us_order_block_reason(utc(2026, 11, 27, 18, 5)) or '')
+    assert us_order_block_reason(utc(2026, 11, 25, 18, 5)) is None
+    assert us_auction_buy_block_reason(utc(2026, 11, 27, 17, 49), 'buy') is None
+    assert (us_auction_buy_block_reason(utc(2026, 11, 27, 17, 50), 'buy') or '').startswith('종가 동시호가 (12:50-13:00 ET, 2026-11-27 12:50 ET)')
+    assert (us_auction_buy_block_reason(utc(2026, 11, 25, 20, 50), 'buy') or '').startswith('종가 동시호가 (15:50-16:00 ET')
+    assert us_auction_buy_block_reason(utc(2026, 11, 25, 17, 50), 'buy') is None
+    assert get_time_until_us_market_open(utc(2026, 11, 27, 18, 30)) == 68 * HOUR

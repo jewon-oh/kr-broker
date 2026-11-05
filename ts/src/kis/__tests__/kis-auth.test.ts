@@ -169,6 +169,118 @@ describe('invalidateToken', () => {
     });
 });
 
+/** 저장된 값의 accessToken 이 같을 때만 지우는 원자적 비교 삭제를 갖춘 가짜 저장소(Redis Lua 의 흉내). */
+function casStore(initial: Record<string, string> = {}) {
+    const base = fakeStore(initial);
+    base.store.deleteIfAccessTokenEquals = vi.fn(async (key: string, accessToken: string) => {
+        base.calls.push(`cad ${key} ${accessToken}`);
+        const raw = base.data.get(key);
+        if (raw === undefined || (JSON.parse(raw) as { accessToken?: string }).accessToken !== accessToken) return false;
+        base.data.delete(key);
+        return true;
+    });
+    return base;
+}
+
+const cached = (accessToken: string): string => JSON.stringify({ accessToken, expiresAt: Date.now() + 3_600_000 });
+
+describe('invalidateToken — 거절된 토큰일 때만 지운다(compare-and-delete)', () => {
+    it('★거절된 토큰을 알면 무조건 삭제가 아니라 비교 삭제를 부른다', async () => {
+        const { store, calls, data } = casStore({ [TOKEN_KEY]: cached('t1') });
+        mockFetch.mockResolvedValueOnce(tokenOk('unused'));
+        const broker = newKis({ options: { tokenStore: store } });
+        await broker.authenticate(); // 저장소의 t1 을 복원한다
+        expect(broker.token).toBe('t1');
+
+        await broker.invalidateToken('t1');
+
+        expect(calls).toContain(`cad ${TOKEN_KEY} t1`);
+        expect(calls.some((c) => c === `delete ${TOKEN_KEY}`)).toBe(false);
+        expect(data.has(TOKEN_KEY)).toBe(false); // 같은 토큰이라 지웠다
+        expect(broker.token).toBeUndefined();
+    });
+
+    it('★그사이 다른 프로세스가 저장소에 넣은 새 토큰은 지우지 않는다 — 상대가 방금 발급한 멀쩡한 토큰이다', async () => {
+        const { store, data } = casStore({ [TOKEN_KEY]: cached('t1') });
+        const broker = newKis({ options: { tokenStore: store } });
+        await broker.authenticate(); // 이 프로세스의 토큰은 t1
+        data.set(TOKEN_KEY, cached('t2')); // 다른 프로세스가 t2 를 발급해 저장소에 넣었다
+
+        await broker.invalidateToken('t1'); // t1 로 보낸 요청이 거절됐다
+
+        expect(JSON.parse(data.get(TOKEN_KEY) as string).accessToken).toBe('t2'); // 새 토큰이 살아 있다
+        expect(broker.token).toBeUndefined(); // 이 프로세스의 낡은 t1 은 버렸다
+        await broker.authenticate();
+        expect(broker.token).toBe('t2'); // 저장소의 t2 를 쓴다
+        expect(mockFetch).not.toHaveBeenCalled(); // 다시 발급하지 않았다(KIS 는 발급이 분당 1회)
+    });
+
+    it('이 프로세스가 이미 새 토큰으로 바뀌었으면 메모리의 새 토큰도 지우지 않는다', async () => {
+        const { store } = casStore();
+        mockFetch.mockResolvedValueOnce(tokenOk('t2'));
+        const broker = newKis({ options: { tokenStore: store } });
+        await broker.authenticate(); // t2 를 발급해 저장소에도 넣었다
+
+        await broker.invalidateToken('t1'); // 동시 요청 중 낡은 t1 으로 나갔다 거절된 요청
+
+        expect(broker.token).toBe('t2');
+        await broker.authenticate();
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('인자 없이 부르면 종전처럼 무조건 지운다(강제 재인증)', async () => {
+        const { store, calls } = casStore({ [TOKEN_KEY]: cached('t1') });
+        const broker = newKis({ options: { tokenStore: store } });
+        await broker.authenticate();
+
+        await broker.invalidateToken();
+
+        expect(calls).toContain(`delete ${TOKEN_KEY}`);
+        expect(calls.some((c) => c.startsWith('cad '))).toBe(false);
+        expect(broker.token).toBeUndefined();
+    });
+
+    it('비교 삭제가 실패해도 던지지 않고 메모리 캐시는 비운다', async () => {
+        const { store } = casStore({ [TOKEN_KEY]: cached('t1') });
+        store.deleteIfAccessTokenEquals = vi.fn().mockRejectedValue(new Error('redis down'));
+        const broker = newKis({ options: { tokenStore: store } });
+        await broker.authenticate();
+
+        await expect(broker.invalidateToken('t1')).resolves.toBeUndefined();
+        expect(broker.token).toBeUndefined();
+    });
+
+    it('★401 을 받으면 그 요청이 쓴 토큰으로 비교 삭제한다 — 헤더의 토큰이 거절된 토큰이다', async () => {
+        const { store, calls, data } = casStore();
+        mockFetch.mockImplementation(async (url: string) => (String(url).includes('/oauth2/tokenP')
+            ? tokenOk('old-token')
+            : jsonResponse({ rt_cd: '1', msg_cd: 'X', msg1: 'unauthorized' }, 401)));
+        const broker = newKis({ options: { tokenStore: store } });
+
+        await broker.privateGetUapiDomesticStockV1QuotationsInquirePrice({ tr_id: 'X' }).catch(() => undefined);
+        // 거절 처리의 무효화는 응답을 기다리지 않고 돈다. 마이크로태스크를 비운다.
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(calls).toContain(`cad ${TOKEN_KEY} old-token`);
+        expect(data.has(TOKEN_KEY)).toBe(false);
+    });
+
+    it('★401 이 오는 사이 다른 프로세스가 저장소에 새 토큰을 넣었다면 그 토큰은 남는다', async () => {
+        const { store, data } = casStore();
+        mockFetch.mockImplementation(async (url: string) => {
+            if (String(url).includes('/oauth2/tokenP')) return tokenOk('old-token');
+            data.set(TOKEN_KEY, cached('peer-token')); // 응답이 오는 사이 다른 프로세스가 발급해 넣었다
+            return jsonResponse({ rt_cd: '1', msg_cd: 'X', msg1: 'unauthorized' }, 401);
+        });
+        const broker = newKis({ options: { tokenStore: store } });
+
+        await broker.privateGetUapiDomesticStockV1QuotationsInquirePrice({ tr_id: 'X' }).catch(() => undefined);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(JSON.parse(data.get(TOKEN_KEY) as string).accessToken).toBe('peer-token');
+    });
+});
+
 describe('실시간 접속키(approval_key)', () => {
     it('secretkey 로 발급하고(접근토큰의 appsecret 이 아니다) 캐시한다', async () => {
         mockFetch.mockResolvedValueOnce(jsonResponse({ approval_key: 'approval-1' }));

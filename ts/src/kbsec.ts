@@ -77,15 +77,15 @@ import type {
 } from './base';
 import { assertSecureUrl, implicitMethodName, kstTradeTimestamps } from './base/Exchange';
 import { KBSEC_API_TREE, type KbsecImplicitApi } from './abstract/kbsec';
-import { confirmExecution, fillDeviationBps, tradeListProbe } from './execution-confirm';
+import { confirmExecutionDetailed, fillDeviationBps, tradeListProbe } from './execution-confirm';
 import { expandBusinessDays, refreshMarketCalendar as refreshSharedMarketCalendar, type CalendarDay } from './market-calendar';
 import { marketSessionBlockReason } from './trading-hours';
 import { KbsecAuth } from './kbsec/kbsec-auth';
 import { kbsecBarMs, kbsecCandleTimestamp, kbsecChartParams, KBSEC_CHART_MAX, KBSEC_TIMEFRAMES, kbsecUsCandleTimestamp } from './kbsec/kbsec-chart';
 import {
-    isKbsecBusinessError, isKbsecTokenFailure, kbsecHostAddr, type KbsecResponseHeader,
+    isKbsecBusinessError, isKbsecEmptyResult, isKbsecTokenFailure, kbsecHostAddr, type KbsecResponseHeader,
 } from './kbsec/kbsec-envelope';
-import { KBSEC_ERROR_DETAIL, kbsecErrorDetail, kbsecExactExceptions } from './kbsec/kbsec-error-codes';
+import { KBSEC_ERROR_DETAIL, KBSEC_PERMANENT_FAILURE_CODES, kbsecErrorDetail, kbsecExactExceptions } from './kbsec/kbsec-error-codes';
 import { kbsecEstimatedFeeRate } from './kbsec/kbsec-fee';
 import {
     kbsecResolveFills, parseKbsecDomesticFillRow, parseKbsecOverseasFillRow, type KbsecFill,
@@ -1899,7 +1899,8 @@ export class kbsec extends Exchange {
         path: string, api: string | string[] = 'private', method = 'POST', params: Dict = {},
         headers: Dictionary<string> | undefined = undefined, body: string | undefined = undefined, config: Dict = {},
     ): Promise<any> {
-        return this.fetchWithTokenRecovery(path, api, method, params, headers, body, config, true);
+        // 주문이면 첫 시도와 재시도가 한 토큰 준비 마감을 나눠 쓴다. I445 뒤의 회전이 길어져 주문이 뒤늦게 나가지 않게 한다.
+        return this.fetchWithTokenRecovery(path, api, method, params, headers, body, this.withOrderTokenUntil(config), true);
     }
 
     private async fetchWithTokenRecovery(
@@ -1928,7 +1929,8 @@ export class kbsec extends Exchange {
                 logger.warn({ trCode }, '[kbsec] 토큰 실패 — 재발급 후 1회 재시도');
                 // 무효화만으로는 부족한 경우가 있다. KB 가 재발급에 같은 토큰을 돌려주면 폐기·회전까지 해야 한다.
                 // 무효화가 끝나기 전에 재시도가 캐시를 읽으면 방금 무효로 판정한 토큰을 다시 쓰므로 반드시 기다린다.
-                await this.getAuth().rotateAfterTokenFailure(failedToken);
+                const rotation = this.getAuth().rotateAfterTokenFailure(failedToken);
+                await (config.order === true ? this.withinOrderTokenDeadline(rotation, `${method} ${path}`, config.orderTokenUntil as number) : rotation);
                 return this.fetchWithTokenRecovery(path, api, method, params, headers, body, config, false);
             }
             // 폐기·회전까지 하고도 토큰 실패면 우리 쪽에서 쓸 수단이 다 떨어진 상태다.
@@ -1947,7 +1949,7 @@ export class kbsec extends Exchange {
     ): boolean | undefined {
         const header = safeDict(response, 'dataHeader') as KbsecResponseHeader | undefined;
         const trCode = (url.split('/').pop() ?? '').toUpperCase();
-        if (isKbsecBusinessError(header)) {
+        if (isKbsecBusinessError(header, trCode)) {
             const processCode = String(header?.processCode ?? '').trim();
             const processMessage = String(header?.processMessage ?? '').trim();
             const feedback = `KB증권 업무 오류 (${trCode}): ${processMessage} [processCode=${processCode}]`;
@@ -1955,6 +1957,8 @@ export class kbsec extends Exchange {
             this.throwExactlyMatchedException((this.exceptions as Dict).exact, processCode, feedback, { detail: kbsecErrorDetail(processCode), brokerCode });
             throw new ExchangeError(feedback, { brokerCode });
         }
+        // 그 TR 에서만 빈 결과인 코드(`I742`)는 HTTP 상태와 무관하게 빈 결과다. 봉투가 정본이므로 상태 표(5xx → ExchangeNotAvailable)가 덮어쓰지 못하게 한다.
+        if (statusCode >= 400 && isKbsecEmptyResult(header, trCode) && !isKbsecEmptyResult(header)) return true;
         if (isKbsecTokenFailure(statusCode, header)) {
             const brokerCode = String(header?.processCode ?? '').trim() || undefined;
             throw new AuthenticationError(`${this.id} ${method} ${url} ${statusCode} 토큰이 무효다`, { detail: KBSEC_ERROR_DETAIL.TOKEN_INVALID, brokerCode });
@@ -3410,6 +3414,15 @@ export class kbsec extends Exchange {
         return err instanceof ExchangeError && !(err instanceof AuthenticationError && err.detail === KBSEC_ERROR_DETAIL.TOKEN_INVALID);
     }
 
+    /**
+     * 이 인스턴스에서 해외 체결 조회를 영구히 멈출 실패인가. 계정 상태를 뜻하는 코드(`KBSEC_PERMANENT_FAILURE_CODES`: I446, H049)만 해당한다.
+     * 그 밖의 실패는 이번 확인만 실패로 둔다. 코드 없는 업무 오류, 조회일자 거절(2854), 페이지 상한 초과(`BadResponse`)도 영구가 아니다.
+     * 보유 조회와 원마켓 증거금이 쓰는 `isPermanentFailure` 와 달리 `ExchangeError` 전체를 영구로 보지 않는다.
+     */
+    private isPermanentFillsFailure(err: unknown): boolean {
+        return err instanceof ExchangeError && err.brokerCode !== undefined && KBSEC_PERMANENT_FAILURE_CODES.has(err.brokerCode.trim());
+    }
+
     /** 1달러당 원화. `options.usdKrwRate` 가 없으면 환율을 알 수 없어 던진다. 조회가 실패해도 던진다. */
     private usdKrwRate(): Promise<number> {
         const source = this.options.usdKrwRate as UsdKrwRateOption | undefined;
@@ -4649,6 +4662,10 @@ export class kbsec extends Exchange {
      *
      * 접수 응답에는 체결 정보가 없으므로 계좌 체결내역에서 주문번호로 찾아 확정한다.
      * 확정하지 못하면 `filled`·`average` 를 **비워 둔다**(주문 자체는 접수 성공이다). 값을 지어내지 않고 `info.fillConfirmed: false` 로 알린다.
+     *
+     * 확정 폴링이 전량 체결(종료 상태)을 보지 못하고 예산을 다 쓰면 `info.orderOpen` 이 `true` 다. 주문이 증권사에 아직 열려 있을 수 있다는 뜻이고,
+     * `filled` 가 일부여도 그렇다. 체결을 일부 확정했으면 `info.remainingQuantity` 가 남은 수량이다. 확정하지 못했으면 남은 수량을 모르므로 비운다.
+     * 전량 체결을 확인했으면 두 필드 모두 없다. 취소하거나 추적하는 것은 호출한 쪽이다.
      */
     private async confirmedOrder(
         orderId: string, market: MarketInterface, side: 'buy' | 'sell', type: string, quantity: number, price: Num, response: Dict,
@@ -4666,13 +4683,15 @@ export class kbsec extends Exchange {
             status: 'open',
             trades: [],
         };
-        const unconfirmed = (): Order => this.safeOrder({ ...draft, info: { ...response, fillConfirmed: false } }, market);
+        // `orderOpen` 은 종료 상태(전량 체결·취소·거부)를 보지 못했다는 뜻이다. 체결을 확정하지 못한 주문은 증권사에 아직 열려 있을 수 있다.
+        const unconfirmed = (): Order => this.safeOrder({ ...draft, info: { ...response, fillConfirmed: false, orderOpen: true } }, market);
         if (orderId === NO_ORDER_ID) return unconfirmed();
 
-        const matched = await confirmExecution({
+        const confirmation = await confirmExecutionDetailed({
             label: '[kbsec]',
             orderId,
             exchange: 'kbsec',
+            requestedQty: quantity,
             // 국내만 드물고 긴 예산을 쓴다. 해외는 공용 기본값이다. `options.confirmBudget` 이 있으면 둘 다 이긴다.
             budget: this.getConfirmBudget(isKr ? (this.options.domesticConfirmBudget as { attempts: number; intervalMs: number }) : undefined),
             probe: tradeListProbe({
@@ -4682,6 +4701,7 @@ export class kbsec extends Exchange {
                 feeCurrency,
             }),
         });
+        const matched = confirmation.snapshot;
         if (matched === null) return unconfirmed();
 
         // 체결수량은 주문수량을 넘을 수 없다. 물리적으로 불가능한 값은 받지 않는다. 넘는다면 체결 행 해석이 틀린 것이다(같은 체결을 두 번 셌거나
@@ -4707,7 +4727,12 @@ export class kbsec extends Exchange {
             average: matched.average ?? price,
             cost,
             fee: matched.fee !== undefined ? { cost: matched.fee, currency: matched.feeCurrency ?? feeCurrency } : undefined,
-            info: { ...response, fillConfirmed: true },
+            // 예산이 끝날 때까지 전량 체결을 보지 못했으면(`orderOpen`) 남은 수량(`remainingQuantity`)은 아직 증권사에 걸려 있을 수 있고,
+            // 나중에 체결되면 이 주문이 돌려준 `filled` 보다 포지션이 커진다. 취소하거나 추적하는 것은 호출한 쪽이다.
+            info: {
+                ...response, fillConfirmed: true,
+                ...(confirmation.settled ? {} : { orderOpen: true, remainingQuantity: Math.max(0, quantity - filled) }),
+            },
         }, market);
     }
 
@@ -5244,8 +5269,9 @@ export class kbsec extends Exchange {
      * 체결구분은 비우면 거부되므로 명시한다. 조회일자는 미국 현지 날짜이고, 날짜를 주지 않으면 미국 날짜 기준 가장 최근 영업일이다.
      * 모든 페이지를 읽고, 페이지 상한에서 잘리면 던진다.
      *
-     * 영구 실패(`isPermanentFailure`)면 이 인스턴스에서는 다시 부르지 않는다(반복 실패는 계정 제한 사유). 해외 체결 확정이 실패해도 주문
-     * 자체는 접수된 상태다.
+     * 영구 실패(`isPermanentFillsFailure`: I446, H049)면 이 인스턴스에서는 다시 부르지 않는다(반복 실패는 계정 제한 사유). 그 밖의 실패는 이번
+     * 호출만 던지고 다음 호출은 다시 부른다. `I742`(아직 체결내역 없음)는 오류가 아니라 빈 결과다(`kbsec-envelope.ts`). 해외 체결 확정이
+     * 실패해도 주문 자체는 접수된 상태다.
      */
     private async fetchOverseasTrades(market: MarketInterface, dates: string[] | undefined, limit: Int): Promise<Trade[]> {
         if (this.overseasFillsUnavailable) {
@@ -5274,10 +5300,10 @@ export class kbsec extends Exchange {
             }
             return trades;
         } catch (err) {
-            const permanent = this.isPermanentFailure(err);
+            const permanent = this.isPermanentFillsFailure(err);
             if (permanent) this.overseasFillsUnavailable = true;
             logger.warn({ err, symbol: market.symbol, trCode: KBSEC_TR.ORDERS_US, latched: permanent },
-                '[kbsec] 해외 체결 조회 실패 — 영구 실패면 이 인스턴스에서 재시도하지 않는다(반복 실패는 계정 제한 사유)');
+                '[kbsec] 해외 체결 조회 실패 — 권한 없음(I446)·미신청(H049)이면 이 인스턴스에서 재시도하지 않고, 그 밖의 실패는 이번 확인만 실패로 둔다');
             throw err;
         }
     }

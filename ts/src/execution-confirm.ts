@@ -50,6 +50,31 @@ export interface ConfirmExecutionParams {
     defaults?: Partial<ConfirmBudget>;
     /** 사용자가 정한 예산(`options.confirmBudget`). 있는 값이 `defaults` 와 공용 기본값을 이긴다. */
     budget?: Partial<ConfirmBudget>;
+    /**
+     * 주문 수량. 주면 `confirmExecutionDetailed` 가 아직 열려 있는 수량(`remaining`)을 계산한다. 비우거나 0 이하면 계산하지 않는다.
+     * 수량 기준이 아닌 주문(금액 주문)은 비운다.
+     */
+    requestedQty?: number | undefined;
+}
+
+/** 체결 확정 폴링이 어떻게 끝났는지. `confirmExecution` 은 이 가운데 `snapshot` 만 돌려준다. */
+export interface ExecutionConfirmation {
+    /** 확정된 체결. 예산 안에 체결을 하나도 보지 못했으면 `null`. */
+    snapshot: ExecutionSnapshot | null;
+    /**
+     * 종료 상태(완전체결·취소·거부)를 보고 끝났는가. `false` 면 예산을 다 쓰도록 종료 상태를 보지 못했다. 그 주문은 증권사에 아직 열려 있을 수 있고,
+     * 나중에 더 체결될 수 있다. 조회가 전부 실패한 경우도 `false` 다(모르는 것을 닫힌 것으로 읽지 않는다).
+     */
+    settled: boolean;
+    /** 조회가 한 번이라도 성공했는가. `false` 면 주문의 상태를 한 번도 읽지 못했다. */
+    observed: boolean;
+    /** 실제로 쓴 조회 횟수. */
+    attempts: number;
+    /**
+     * 아직 열려 있는 수량(`requestedQty - 확정 체결 수량`). `requestedQty` 를 줬을 때만, 그리고 알 수 있을 때만 있다.
+     * 종료 상태를 봤으면 0 이다. 종료 상태를 못 봤고 체결도 하나도 못 봤으면 얼마가 남았는지 모르므로 비운다.
+     */
+    remaining?: number | undefined;
 }
 
 export interface ConfirmBudget {
@@ -98,22 +123,45 @@ export function resolveConfirmBudget(defaults?: Partial<ConfirmBudget>, override
 }
 
 /**
- * 체결이 확정될 때까지 짧게 폴링한다.
+ * 체결이 확정될 때까지 짧게 폴링한다. 결과의 체결값만 필요하면 이 함수를, 폴링이 어떻게 끝났는지(주문이 아직 열려 있는지)도 필요하면
+ * `confirmExecutionDetailed` 를 쓴다. 둘의 폴링은 같다.
  *
  * 종료 조건:
  * - `terminal` — 완전체결이면 그 값, 취소·거부면 그때까지의 부분체결(있으면)이 최종값.
- * - 예산 소진 — 그때까지 **가장 많이 채워진** 스냅샷.
+ * - 예산 소진 — 그때까지 **가장 많이 채워진** 스냅샷. 이때 주문은 아직 열려 있을 수 있다(`confirmExecutionDetailed` 의 `settled: false`).
  *
  * 부분체결에서 곧바로 끝내지 않는다. 시장가는 잔량이 곧이어 체결되는 일이 흔해서, 첫 조각만 돌려주면 체결 수량이 실제보다 작다.
  *
  * **주문 자체는 이미 접수 성공**이므로 절대 throw 하지 않는다. 확정하지 못하면 `null` 이고, 호출부는 `filled` 를 비운다.
  */
 export async function confirmExecution(p: ConfirmExecutionParams): Promise<ExecutionSnapshot | null> {
+    return (await confirmExecutionDetailed(p)).snapshot;
+}
+
+/**
+ * `confirmExecution` 과 같은 폴링을 하고, 어떻게 끝났는지까지 돌려준다.
+ *
+ * 예산이 끝날 때까지 종료 상태를 보지 못했으면 `settled` 가 `false` 이고 주문은 아직 열려 있을 수 있다. 얇은 호가의 부분체결은 나중에 남은 수량이
+ * 체결되는데, 체결값(`snapshot`)만 보면 그때까지의 부분체결이 최종처럼 읽힌다. 호출한 쪽이 `settled` 와 `remaining` 으로 남은 주문을
+ * 취소하거나 추적할 수 있다. 이 함수는 취소하지 않는다.
+ */
+export async function confirmExecutionDetailed(p: ConfirmExecutionParams): Promise<ExecutionConfirmation> {
     const { attempts, intervalMs } = resolveConfirmBudget(p.defaults, p.budget);
+    const requested = p.requestedQty !== undefined && p.requestedQty > 0 ? p.requestedQty : undefined;
     let best: ExecutionSnapshot | null = null;
+    let observed = false;
+    let used = 0;
+
+    const done = (settled: boolean): ExecutionConfirmation => {
+        const remaining = requested === undefined ? undefined
+            : settled ? 0
+                : best !== null ? Math.max(0, requested - best.filled) : undefined;
+        return { snapshot: best, settled, observed, attempts: used, ...(remaining !== undefined ? { remaining } : {}) };
+    };
 
     for (let attempt = 1; attempt <= attempts; attempt++) {
         if (attempt > 1 && intervalMs > 0) await sleep(intervalMs);
+        used = attempt;
 
         let probe: ExecutionProbe;
         try {
@@ -123,6 +171,7 @@ export async function confirmExecution(p: ConfirmExecutionParams): Promise<Execu
                 `${p.label} 체결 조회 실패 — 재시도`);
             continue;
         }
+        observed = true;
 
         const snap = probe.snapshot;
         if (snap && snap.filled > 0 && (best === null || snap.filled > best.filled)) best = snap;
@@ -132,17 +181,18 @@ export async function confirmExecution(p: ConfirmExecutionParams): Promise<Execu
                 logger.warn({ orderId: p.orderId, exchange: p.exchange, attempt },
                     `${p.label} 주문이 체결 없이 종료 — 체결 기록 없음`);
             }
-            return best;
+            return done(true);
         }
     }
 
     logger.warn({
         orderId: p.orderId, exchange: p.exchange,
         attempts, waitedMs: (attempts - 1) * intervalMs, filled: best?.filled ?? 0,
+        ...(requested !== undefined && best !== null ? { remaining: Math.max(0, requested - best.filled) } : {}),
     }, best === null
         ? `${p.label} ⚠️ 체결 미확인 — filled 를 비운 주문을 돌려준다`
-        : `${p.label} ⚠️ 부분체결 상태로 예산 소진 — 관측된 체결분을 돌려준다`);
-    return best;
+        : `${p.label} ⚠️ 부분체결 상태로 예산 소진 — 관측된 체결분을 돌려준다. 주문이 아직 열려 있을 수 있다`);
+    return done(false);
 }
 
 /** 체결내역 1행의 최소 형태. 증권사 클래스의 `fetchMyTrades` 가 돌려주는 ccxt `Trade` 를 그대로 받는다. */

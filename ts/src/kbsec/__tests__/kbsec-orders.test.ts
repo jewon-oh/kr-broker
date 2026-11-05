@@ -110,6 +110,32 @@ describe('createOrder — 국내', () => {
         expect(order).toMatchObject({ status: 'open', filled: 1, remaining: 2 });
     });
 
+    it('★예산이 끝날 때까지 전량 체결을 못 봤으면 info.orderOpen 과 남은 수량을 알린다 — 나중에 체결될 잔량을 호출한 쪽이 취소·추적한다', async () => {
+        routeTr(mockFetch, { [TR_BUY]: { ordr_no: 'A123' }, [KBSEC_TR.TRADES_KR]: { Record1: [fill({ tl_ccls_q: '1', nccls_q: '2' })] } });
+
+        const order = await newExchange().createOrder('005930/KRW', 'limit', 'buy', 3, 70000);
+
+        expect(order.info).toMatchObject({ fillConfirmed: true, orderOpen: true, remainingQuantity: 2 });
+    });
+
+    it('체결 확정에 실패해도 주문이 열려 있을 수 있다 — info.orderOpen 은 true 이고 남은 수량은 모른다', async () => {
+        routeTr(mockFetch, { [TR_BUY]: { ordr_no: 'A123' } });
+
+        const order = await newExchange().createOrder('005930/KRW', 'limit', 'buy', 3, 70000);
+
+        expect(order.info).toMatchObject({ fillConfirmed: false, orderOpen: true });
+        expect((order.info as { remainingQuantity?: number }).remainingQuantity).toBeUndefined();
+    });
+
+    it('전량 체결을 확인했으면 info 에 orderOpen·remainingQuantity 가 없다 — 종전 출력 그대로', async () => {
+        routeTr(mockFetch, { [TR_BUY]: { ordr_no: 'A123' }, [KBSEC_TR.TRADES_KR]: { Record1: [fill()] } });
+
+        const order = await newExchange().createOrder('005930/KRW', 'limit', 'buy', 3, 70000);
+
+        expect(order.info).not.toHaveProperty('orderOpen');
+        expect(order.info).not.toHaveProperty('remainingQuantity');
+    });
+
     it('체결수량은 주문수량을 넘을 수 없다 — 넘으면 상한으로 자르고 금액도 같이 자른다', async () => {
         routeTr(mockFetch, { [TR_BUY]: { ordr_no: 'A123' }, [KBSEC_TR.TRADES_KR]: { Record1: [fill({ tl_ccls_q: '9', nccls_q: '0' })] } });
 

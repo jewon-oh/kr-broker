@@ -9,7 +9,7 @@ import pytest
 
 import kr_broker
 from kr_broker.base import functions as fn
-from kr_broker.execution_confirm import confirm_execution, fill_deviation_bps, resolve_confirm_budget, trade_list_probe
+from kr_broker.execution_confirm import confirm_execution, confirm_execution_detailed, fill_deviation_bps, resolve_confirm_budget, trade_list_probe
 from kr_broker.extended_session_limit import build_extended_session_limit
 from kr_broker.krx_sell_tax import krx_sell_tax_rate
 from kr_broker.testing import reset_market_calendar
@@ -229,6 +229,27 @@ def test_confirm_execution_polls_until_terminal() -> None:
     assert confirm_execution('[t]', 'o1', 't', partial, budget={'attempts': 3, 'intervalMs': 0}) == {'filled': 2}
     flaky = poller([RuntimeError('x'), RuntimeError('y'), filled])
     assert confirm_execution('[t]', 'o1', 't', flaky, budget={'intervalMs': 0})['filled'] == 4
+
+
+def test_confirm_execution_detailed_reports_whether_the_order_is_still_open() -> None:
+    budget = {'attempts': 3, 'intervalMs': 0}
+    # 예산이 끝날 때까지 종료 상태를 못 봤으면 settled 가 False 이고 남은 수량을 알린다.
+    partial = confirm_execution_detailed('[t]', 'o1', 't', poller([{'snapshot': {'filled': 2}, 'terminal': False}]), budget=budget, requested_qty=5)
+    assert partial == {'snapshot': {'filled': 2}, 'settled': False, 'observed': True, 'attempts': 3, 'remaining': 3}
+    # 종료 상태를 보고 끝나면 settled 가 True 이고 남은 수량은 0 이다(취소·거부로 끝나도 더 열려 있지 않다).
+    full = confirm_execution_detailed('[t]', 'o1', 't', poller([{'snapshot': {'filled': 5}, 'terminal': True}]), budget=budget, requested_qty=5)
+    assert full['settled'] is True and full['remaining'] == 0 and full['attempts'] == 1
+    cancelled = confirm_execution_detailed('[t]', 'o1', 't', poller([{'snapshot': {'filled': 2}, 'terminal': True}]), budget=budget, requested_qty=5)
+    assert cancelled['settled'] is True and cancelled['remaining'] == 0 and cancelled['snapshot'] == {'filled': 2}
+    # 체결을 하나도 못 보면 남은 수량을 모른다.
+    nothing = confirm_execution_detailed('[t]', 'o1', 't', poller([{'snapshot': None, 'terminal': False}]), budget=budget, requested_qty=5)
+    assert nothing['snapshot'] is None and nothing['settled'] is False and 'remaining' not in nothing and nothing['observed'] is True
+    # 조회가 전부 실패하면 observed 도 settled 도 False 다. 모르는 것을 닫힌 것으로 읽지 않는다.
+    down = confirm_execution_detailed('[t]', 'o1', 't', poller([RuntimeError('down')]), budget=budget, requested_qty=5)
+    assert down['observed'] is False and down['settled'] is False and down['attempts'] == 3 and 'remaining' not in down
+    # requested_qty 를 주지 않으면 계산하지 않고, confirm_execution 은 같은 폴링의 snapshot 만 돌려준다.
+    assert 'remaining' not in confirm_execution_detailed('[t]', 'o1', 't', poller([{'snapshot': {'filled': 2}, 'terminal': False}]), budget=budget)
+    assert confirm_execution('[t]', 'o1', 't', poller([{'snapshot': {'filled': 2}, 'terminal': False}]), budget=budget) == {'filled': 2}
 
 
 def test_resolve_confirm_budget_layers() -> None:

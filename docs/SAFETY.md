@@ -67,6 +67,8 @@ const broker = new kis({ apiKey, secret, uid, sandbox: true });
 
 토스증권은 장 운영 캘린더를 받지 못하면 정적 시간표로 판정합니다. 국내는 KRX 정규장, 미국은 정규장만 엽니다.
 
+개장·마감이 평소와 다른 날은 표가 압니다. 국내는 `KRX_SPECIAL_SESSION_DAYS`(`kr-broker/krx-trading-hours`)이고 2026-11-19 수능일은 정규장이 10:00~16:30입니다. 미국은 `US_EARLY_CLOSE_DAYS`(`kr-broker/us-market-hours`)이고 2026-11-27과 2026-12-24는 13:00 ET에 닫습니다. 표에 없는 날은 평소 시각이고, 연도마다 거래소 공지를 보고 손으로 더합니다. 넥스트레이드 세션 판정(`getNxtSession`)은 수능일에도 평소 시각 그대로입니다. 그날의 넥스트레이드 시각은 공지로 확인하지 못했습니다.
+
 KRX 15:20~15:30은 종가 단일가 매매 시간이고, 이 시간에도 호가를 받습니다. 단일가라서 시장가의 체결가가 예상과 크게 다를 수 있습니다. 진입을 피하려면 `blockAuctionBuys`를 켭니다. 매도(청산)는 옵션을 켜도 막지 않습니다.
 
 ### 한국투자증권의 경로별 장 시간 게이트
@@ -83,6 +85,12 @@ KRX 15:20~15:30은 종가 단일가 매매 시간이고, 이 시간에도 호가
 | `cancelOrder`, `cancelAllOrders` | 없음 |
 | `createDaytimeOrder`, `createDerivativeOrder`, `createBondOrder`, `createOverseasDerivativeOrder` | 없음. 이 시장들의 시간표는 라이브러리에 없습니다 |
 | 예약주문(`createReservedOrder`, `createOverseasReservedOrder`) | 없음. 장 밖에 내는 주문입니다 |
+
+## 체결 확정이 끝나도 주문이 열려 있을 수 있습니다
+
+토스증권과 KB증권의 `createOrder`는 접수 뒤 짧게 조회해 체결을 확정합니다. 조회 예산(`options.confirmBudget`)이 끝날 때까지 전량 체결·취소·거부를 보지 못하면 돌려주는 `filled`는 그때까지 관측한 값입니다. 얇은 호가의 부분체결은 나중에 남은 수량이 체결될 수 있습니다.
+
+그런 주문은 `order.info.orderOpen`이 `true`입니다. 체결을 일부 확정했으면 `order.info.remainingQuantity`가 남은 수량입니다. 전량 체결을 확인한 주문과 `confirmExecution`을 끈 주문에는 두 필드가 없습니다. 라이브러리는 남은 주문을 취소하지 않습니다. 호출하는 코드가 `cancelOrder(order.id)`로 취소하거나, 주문번호를 기록해 두고 `fetchOrder`로 추적합니다. 추적하지 않으면 나중에 체결된 수량이 기록에 없는 보유가 됩니다.
 
 ## cancelAllOrders는 항목의 status로 확인합니다
 
@@ -101,6 +109,12 @@ KRX 15:20~15:30은 종가 단일가 매매 시간이고, 이 시간에도 호가
 `OrderOutcomeUnknown`은 주문 요청이 시간 초과나 연결 끊김으로 끝났거나, 증권사 오류 코드 없는 5xx 나 해석할 수 없는 응답을 받았다는 뜻입니다. 증권사가 주문을 접수했는지 알 수 없습니다.
 
 `OrderOutcomeUnknown`의 `retryable`은 `false`이고 라이브러리는 주문 요청을 다시 보내지 않습니다. 호출하는 코드도 같은 주문을 다시 내지 마십시오. 접수됐다면 같은 주문이 두 번 들어갑니다.
+
+### OrderTokenNotReady는 주문이 나가지 않은 오류입니다
+
+주문 요청을 보내기 전에 인증 토큰을 `orderTokenDeadline`(기본 15초) 안에 준비하지 못하면 `OrderTokenNotReady`를 던집니다. 토큰 저장소(Redis 등) 장애와 토큰 만료가 겹치면 토큰 준비가 몇 분 걸리는데, 그 뒤에 주문이 나가면 호출한 쪽이 이미 포기한 주문이 체결됩니다. 그래서 마감을 넘기면 기다리지 않고 요청 없이 끝냅니다.
+
+`OrderOutcomeUnknown`과 반대로 요청이 나가지 않았음이 확정입니다. `retryable`은 `true`이고 `detail`은 `order-token-not-ready`입니다. 접수 여부를 확인할 필요 없이 같은 주문을 다시 내도 중복이 아닙니다. 밀린 토큰 준비는 백그라운드에서 끝나므로 다음 호출은 준비된 토큰을 쓸 수 있습니다.
 
 ### 접수 여부 확인 방법
 
