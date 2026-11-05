@@ -8,7 +8,7 @@
 import calendar
 import datetime
 import logging
-from typing import NamedTuple, Optional, Sequence
+from typing import Any, Dict, NamedTuple, Optional, Sequence
 
 from kr_broker.base import functions as fn
 from kr_broker.market_calendar import is_market_closed_day
@@ -24,6 +24,18 @@ PRE_AUCTION_OPEN_HOUR_ET = 9
 PRE_AUCTION_OPEN_MINUTE_ET = 25
 CLOSING_AUCTION_OPEN_HOUR_ET = 15
 CLOSING_AUCTION_OPEN_MINUTE_ET = 50
+
+# 종가 동시호가는 마감 10분 전에 시작한다(평소 15:50 ET).
+CLOSING_AUCTION_LEAD_MIN = 10
+
+# 조기 폐장일(정규장이 13:00 ET 에 끝나는 날)과 마감 시각(자정부터의 분). 키는 ET 달력 날짜 `YYYYMMDD` 다. 표에 없는 날은 16:00 ET 마감이다.
+# 연도마다 거래소 공지를 보고 손으로 더한다. 종가 동시호가는 이 날도 마감 10분 전(12:50 ET)에 시작하는 것으로 본다.
+# 출처: NYSE Group «2026, 2027 and 2028 Holiday and Early Closings Calendar»(2025-12-23 공개). 같은 날 Nasdaq 도 13:00 ET 에 닫는다.
+# 20261127(금) 추수감사절 다음 날, 20261224(목) 크리스마스 이브. 2026-07-03(금)은 독립기념일 대체 휴장이라 조기 폐장이 아니다.
+US_EARLY_CLOSE_DAYS: Dict[str, Dict[str, Any]] = {
+    '20261127': {'closeMin': 13 * 60, 'note': '추수감사절 다음 날(13:00 ET 조기 폐장)'},
+    '20261224': {'closeMin': 13 * 60, 'note': '크리스마스 이브(13:00 ET 조기 폐장)'},
+}
 
 _ET_ZONE_NAME = 'America/New_York'
 _EPOCH_UTC = datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc)
@@ -87,6 +99,30 @@ def _is_us_holiday(et: EtWallClock) -> bool:
     return is_market_closed_day('US', f'{et.year}{et.month:02d}{et.day:02d}')
 
 
+def us_regular_session_of(ymd: str) -> Dict[str, Any]:
+    """ET 날짜 `YYYYMMDD` 의 정규장 시각 `{'preAuctionMin', 'openMin', 'closingAuctionMin', 'closeMin', 'earlyClose'?}`(자정부터의 분).
+    표(`US_EARLY_CLOSE_DAYS`)에 있으면 그 날의 마감 시각이고 없으면 평소 시각이다. 휴장 여부는 보지 않는다."""
+    early = US_EARLY_CLOSE_DAYS.get(ymd)
+    close_min = early['closeMin'] if early is not None else MARKET_CLOSE_HOUR_ET * 60 + MARKET_CLOSE_MINUTE_ET
+    session: Dict[str, Any] = {
+        'preAuctionMin': PRE_AUCTION_OPEN_HOUR_ET * 60 + PRE_AUCTION_OPEN_MINUTE_ET,
+        'openMin': MARKET_OPEN_HOUR_ET * 60 + MARKET_OPEN_MINUTE_ET,
+        'closingAuctionMin': close_min - CLOSING_AUCTION_LEAD_MIN,
+        'closeMin': close_min,
+    }
+    if early is not None:
+        session['earlyClose'] = early['note']
+    return session
+
+
+def _et_ymd_of(et: EtWallClock) -> str:
+    return f'{et.year:04d}{et.month:02d}{et.day:02d}'
+
+
+def _hhmm(minutes: int) -> str:
+    return f'{minutes // 60:02d}:{minutes % 60:02d}'
+
+
 def get_us_market_phase(now_ms: Optional[int] = None) -> str:
     """미국 시장 단계: `'pre-auction'`(09:25~09:30 ET), `'open'`(09:30~15:50), `'closing-auction'`(15:50~16:00), `'closed'`.
     프리·애프터마켓은 `'closed'` 다."""
@@ -96,15 +132,12 @@ def get_us_market_phase(now_ms: Optional[int] = None) -> str:
     if _is_us_holiday(et):
         return 'closed'
     minutes = et.hour * 60 + et.minute
-    pre_auction_start = PRE_AUCTION_OPEN_HOUR_ET * 60 + PRE_AUCTION_OPEN_MINUTE_ET
-    open_min = MARKET_OPEN_HOUR_ET * 60 + MARKET_OPEN_MINUTE_ET
-    closing_auction_start = CLOSING_AUCTION_OPEN_HOUR_ET * 60 + CLOSING_AUCTION_OPEN_MINUTE_ET
-    close_min = MARKET_CLOSE_HOUR_ET * 60 + MARKET_CLOSE_MINUTE_ET
-    if minutes < pre_auction_start or minutes >= close_min:
+    session = us_regular_session_of(_et_ymd_of(et))
+    if minutes < session['preAuctionMin'] or minutes >= session['closeMin']:
         return 'closed'
-    if minutes < open_min:
+    if minutes < session['openMin']:
         return 'pre-auction'
-    if minutes < closing_auction_start:
+    if minutes < session['closingAuctionMin']:
         return 'open'
     return 'closing-auction'
 
@@ -114,7 +147,9 @@ def us_auction_buy_block_reason(now_ms: int, side: Optional[str]) -> Optional[st
     `options['blockAuctionBuys']` 가 켜졌을 때만 쓴다."""
     if side != 'buy' or get_us_market_phase(now_ms) != 'closing-auction':
         return None
-    return f'종가 동시호가 (15:50-16:00 ET, {format_et_wall_clock(now_ms)}) — 신규 매수 진입 금지 (options.blockAuctionBuys)'
+    session = us_regular_session_of(_et_ymd_of(_to_et_wall_clock(now_ms)))
+    return (f"종가 동시호가 ({_hhmm(session['closingAuctionMin'])}-{_hhmm(session['closeMin'])} ET, {format_et_wall_clock(now_ms)})"
+            ' — 신규 매수 진입 금지 (options.blockAuctionBuys)')
 
 
 def us_order_block_reason(now_ms: int, side: Optional[str] = None, block_auction_buys: bool = False,

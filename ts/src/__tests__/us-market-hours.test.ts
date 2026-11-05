@@ -6,7 +6,9 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { applyMarketCalendar, resetMarketCalendar } from '../testing';
-import { getUsMarketPhase, formatEtWallClock, getTimeUntilUsMarketOpen, usOrderBlockReason } from '../us-market-hours';
+import {
+    US_EARLY_CLOSE_DAYS, getUsMarketPhase, formatEtWallClock, getTimeUntilUsMarketOpen, usAuctionBuyBlockReason, usOrderBlockReason, usRegularSessionOf,
+} from '../us-market-hours';
 
 /** 증권사 캘린더 API 가 알려 준 2026년 평일 휴장일(Memorial Day, 독립기념일 관측일, 크리스마스). */
 const US_CLOSED_DAYS = ['20260525', '20260703', '20261225'];
@@ -208,5 +210,46 @@ describe('usOrderBlockReason — 세 증권사 공용 주문 게이트', () => {
         expect(usOrderBlockReason({ now: et(15, 49, 59), side: 'buy', blockAuctionBuys: true })).toBeNull();
         expect(usOrderBlockReason({ now: et(15, 50), side: 'buy', blockAuctionBuys: true })).toMatch(/종가 동시호가/);
         expect(usOrderBlockReason({ now: et(15, 50), side: 'sell', blockAuctionBuys: true })).toBeNull();
+    });
+});
+
+describe('조기 폐장일 — 2026-11-27(금)·2026-12-24(목)은 13:00 ET 에 닫는다', () => {
+    // 두 날 모두 EST(UTC-5)다. 13:00 ET = 18:00 UTC.
+    it('표에 두 날이 있고 평소 날은 16:00 마감이다', () => {
+        expect(Object.keys(US_EARLY_CLOSE_DAYS).sort()).toEqual(['20261127', '20261224']);
+        expect(usRegularSessionOf('20261127')).toMatchObject({ openMin: 9 * 60 + 30, closingAuctionMin: 12 * 60 + 50, closeMin: 13 * 60 });
+        expect(usRegularSessionOf('20261127').earlyClose).toBeDefined();
+        expect(usRegularSessionOf('20261125')).toEqual({ preAuctionMin: 9 * 60 + 25, openMin: 9 * 60 + 30, closingAuctionMin: 15 * 60 + 50, closeMin: 16 * 60 });
+    });
+
+    it.each([
+        ['2026-11-27(금)', 11, 27],
+        ['2026-12-24(목)', 12, 24],
+    ])('★%s 13:00 ET 부터는 닫힌 것으로 본다 — 고정 시각이면 16:00 까지 열린 것으로 읽었다', (_label, month, day) => {
+        expect(getUsMarketPhase(utc(2026, month, day, 17, 49))).toBe('open'); // 12:49 EST
+        expect(getUsMarketPhase(utc(2026, month, day, 17, 50))).toBe('closing-auction'); // 12:50 EST
+        expect(getUsMarketPhase(utc(2026, month, day, 17, 59))).toBe('closing-auction');
+        expect(getUsMarketPhase(utc(2026, month, day, 18, 0))).toBe('closed'); // 13:00 EST
+        expect(getUsMarketPhase(utc(2026, month, day, 20, 55))).toBe('closed'); // 평소의 종가 동시호가 시각(15:55 EST)
+        expect(getUsMarketPhase(utc(2026, month, day, 14, 30))).toBe('open'); // 09:30 EST 개장은 그대로
+    });
+
+    it('주문 게이트는 13:00 ET 부터 정규장 외로 막고 사유에 phase 가 실린다', () => {
+        expect(usOrderBlockReason({ now: utc(2026, 11, 27, 17, 30) })).toBeNull();
+        expect(usOrderBlockReason({ now: utc(2026, 11, 27, 18, 5) })).toMatch(/미국장 정규장 외 .*phase=closed/);
+        // 평소 날은 같은 시각(13:05 EST)에 열려 있다.
+        expect(usOrderBlockReason({ now: utc(2026, 11, 25, 18, 5) })).toBeNull();
+    });
+
+    it('종가 동시호가 신규 매수 차단은 12:50 ET 부터이고 사유 문구도 그 시각이다', () => {
+        expect(usAuctionBuyBlockReason(utc(2026, 11, 27, 17, 49), 'buy')).toBeNull();
+        expect(usAuctionBuyBlockReason(utc(2026, 11, 27, 17, 50), 'buy')).toMatch(/^종가 동시호가 \(12:50-13:00 ET, 2026-11-27 12:50 ET\)/);
+        expect(usAuctionBuyBlockReason(utc(2026, 11, 25, 20, 50), 'buy')).toMatch(/^종가 동시호가 \(15:50-16:00 ET/);
+        expect(usAuctionBuyBlockReason(utc(2026, 11, 25, 17, 50), 'buy')).toBeNull(); // 평소 날 12:50 은 정규 매매 중
+    });
+
+    it('다음 개장까지의 시간은 조기 폐장의 영향을 받지 않는다(개장은 09:30 그대로)', () => {
+        // 2026-11-27(금) 13:30 EST(폐장 뒤) → 11-30(월) 09:30 EST = 68시간 뒤
+        expect(getTimeUntilUsMarketOpen(utc(2026, 11, 27, 18, 30)) / 3_600_000).toBeCloseTo(68, 5);
     });
 });

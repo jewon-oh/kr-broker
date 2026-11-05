@@ -2,7 +2,7 @@
  * @fileoverview KRX 거래시간 유틸리티(세 증권사 공용)
  * @description 한국 주식시장(KRX) 정규장 시간 체크
  *
- * KRX 정규장: 09:00 ~ 15:30 (KST)
+ * KRX 정규장: 09:00 ~ 15:30 (KST). 대학수학능력시험일처럼 개장·마감이 달라지는 날은 `KRX_SPECIAL_SESSION_DAYS` 표가 안다(표에 없는 날은 평소 시각이다)
  * - 시간외 단일가: 16:00 ~ 18:00 (미구현)
  * - 주말/휴장일: 휴장. 휴장일은 공용 캘린더(`market-calendar.ts`)가 아는 날만 막는다
  *
@@ -24,7 +24,66 @@ const MARKET_CLOSE_HOUR = 15;
 /** 정규장 종료 시간 (분) */
 const MARKET_CLOSE_MINUTE = 30;
 
-// ============ 유틸리티 ============
+// ============ 특수 거래일 ============
+
+/** 하루의 KRX 정규장 시각(자정부터의 분). */
+export interface KrxRegularSession {
+    /** 시초가 결정 동시호가 시작. */
+    preAuctionMin: number;
+    /** 정규장 개장. */
+    openMin: number;
+    /** 종가 결정 동시호가 시작. */
+    closingAuctionMin: number;
+    /** 정규장 마감. */
+    closeMin: number;
+    /** 평소와 다른 날이면 그 사유. 평소 시각이면 비어 있다. */
+    special?: string | undefined;
+}
+
+/** 시초가 동시호가는 개장 30분 전, 종가 동시호가는 마감 10분 전에 시작한다(평소 08:30·15:20). */
+const PRE_AUCTION_LEAD_MIN = 30;
+const CLOSING_AUCTION_LEAD_MIN = 10;
+
+/**
+ * 정규장 개장·마감 시각이 평소(09:00~15:30)와 다른 날. 키는 KST 달력 날짜 `YYYYMMDD` 다.
+ *
+ * 표에 없는 날은 평소 시각이다. 연도마다 거래소 공지를 보고 손으로 더한다(규칙으로 계산하지 않는다).
+ *
+ * - `20261119` 2027학년도 대학수학능력시험일(2026-11-19 목). 정규장이 10:00~16:30 으로 한 시간씩 늦다.
+ *   출처: 한국거래소 보도자료 «수능일 증시 거래시간 변경» (2026-11-05 공개) — 유가증권·코스닥·코넥스 정규장 10:00~16:30,
+ *   장 개시 전 시간외 종가매매 09:30~09:40(평소 08:30~08:40). 이 표는 동시호가를 개장·마감과 같은 폭(한 시간)으로 늦춘다.
+ *   시초가 동시호가 09:30~10:00, 종가 동시호가 16:20~16:30 으로 읽는다. 공지가 동시호가 시각을 따로 적었는지는 확인하지 못했다.
+ *   NXT(넥스트레이드)의 수능일 시각은 여기서 다루지 않는다. 아래 `getNxtSession` 은 평소 시각 그대로다.
+ */
+export const KRX_SPECIAL_SESSION_DAYS: Readonly<Record<string, { openMin: number; closeMin: number; note: string }>> = {
+    '20261119': { openMin: 10 * 60, closeMin: 16 * 60 + 30, note: '대학수학능력시험일(개장·마감 1시간 연기)' },
+};
+
+/** KST 달력 날짜 `YYYYMMDD` 의 정규장 시각. 표(`KRX_SPECIAL_SESSION_DAYS`)에 있으면 그 시각이고 없으면 평소 시각이다. 휴장 여부는 보지 않는다. */
+export function krxRegularSessionOf(ymd: string): KrxRegularSession {
+    const special = Object.prototype.hasOwnProperty.call(KRX_SPECIAL_SESSION_DAYS, ymd) ? KRX_SPECIAL_SESSION_DAYS[ymd] : undefined;
+    const openMin = special?.openMin ?? MARKET_OPEN_HOUR * 60 + MARKET_OPEN_MINUTE;
+    const closeMin = special?.closeMin ?? MARKET_CLOSE_HOUR * 60 + MARKET_CLOSE_MINUTE;
+    return {
+        preAuctionMin: openMin - PRE_AUCTION_LEAD_MIN,
+        openMin,
+        closingAuctionMin: closeMin - CLOSING_AUCTION_LEAD_MIN,
+        closeMin,
+        ...(special !== undefined ? { special: special.note } : {}),
+    };
+}
+
+/** `now+KST_OFFSET` 으로 만든 KST-shifted Date 의 달력 날짜 `YYYYMMDD`. */
+function kstYmd(kstShiftedDate: Date): string {
+    return String(kstShiftedDate.getUTCFullYear())
+        + String(kstShiftedDate.getUTCMonth() + 1).padStart(2, '0')
+        + String(kstShiftedDate.getUTCDate()).padStart(2, '0');
+}
+
+/** 자정부터의 분을 `H:MM` 으로. 사유 문자열에 쓴다. */
+function clockOf(minutes: number): string {
+    return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
+}
 
 // ============ 공개 API ============
 
@@ -34,7 +93,7 @@ const MARKET_CLOSE_MINUTE = 30;
  * 체크 항목:
  * 1. 주말 여부 (토/일 = 휴장)
  * 2. 휴장일 여부 (공용 캘린더의 `isMarketClosedDay`)
- * 3. 정규장 시간 (09:00 ~ 15:30 KST)
+ * 3. 정규장 시간 (09:00 ~ 15:30 KST. 수능일처럼 표(`KRX_SPECIAL_SESSION_DAYS`)에 있는 날은 그 날의 시각)
  *
  * @returns { tradable, reason } — 거래 가능 여부 + 사유
  *
@@ -57,10 +116,7 @@ export function checkKRXTradingHours(): { tradable: boolean; reason?: string } {
  */
 export type KrxMarketPhase = 'pre-auction' | 'open' | 'closing-auction' | 'closed';
 
-/** 시초가 결정 동시호가 시작 (08:30 KST) */
-const PRE_AUCTION_OPEN_HOUR = 8;
-const PRE_AUCTION_OPEN_MINUTE = 30;
-/** 종가 결정 동시호가 시작 (15:20 KST) */
+/** 종가 결정 동시호가 시작 (15:20 KST). 평소 시각이고 NXT 세션(`getNxtSession`)이 쓴다. 정규장 판정은 `krxRegularSessionOf` 가 날짜별로 정한다. */
 const CLOSING_AUCTION_OPEN_HOUR = 15;
 const CLOSING_AUCTION_OPEN_MINUTE = 20;
 
@@ -76,14 +132,11 @@ export function getKrxMarketPhase(now: Date = new Date()): KrxMarketPhase {
     if (isKRXHolidayUTC(kstWall)) return 'closed';
 
     const minutes = kstWall.getUTCHours() * 60 + kstWall.getUTCMinutes();
-    const preAuctionStart = PRE_AUCTION_OPEN_HOUR * 60 + PRE_AUCTION_OPEN_MINUTE;
-    const openMin = MARKET_OPEN_HOUR * 60 + MARKET_OPEN_MINUTE;
-    const closingAuctionStart = CLOSING_AUCTION_OPEN_HOUR * 60 + CLOSING_AUCTION_OPEN_MINUTE;
-    const closeMin = MARKET_CLOSE_HOUR * 60 + MARKET_CLOSE_MINUTE;
+    const session = krxRegularSessionOf(kstYmd(kstWall));
 
-    if (minutes < preAuctionStart || minutes >= closeMin) return 'closed';
-    if (minutes < openMin) return 'pre-auction';
-    if (minutes < closingAuctionStart) return 'open';
+    if (minutes < session.preAuctionMin || minutes >= session.closeMin) return 'closed';
+    if (minutes < session.openMin) return 'pre-auction';
+    if (minutes < session.closingAuctionMin) return 'open';
     return 'closing-auction';
 }
 
@@ -99,30 +152,29 @@ export function getTimeUntilKrxOpen(now: Date = new Date()): number {
     // 현재가 KRX 거래 가능 시간이면 0 — 호출자는 max(intervalMs, 0)로 처리
     if (checkKRXTradingHoursAt(now).tradable) return 0;
 
-    // 1) 오늘 09:00 KST 의 UTC ms 계산
-    const nowKstWall = new Date(now.getTime() + KST_OFFSET_MS);
-    const todayKstY = nowKstWall.getUTCFullYear();
-    const todayKstM = nowKstWall.getUTCMonth();
-    const todayKstD = nowKstWall.getUTCDate();
+    // 날짜(KST 자정의 UTC ms)별 개장 시각. 수능일처럼 개장이 늦은 날은 그 날의 시각이다.
+    const dayMs = 24 * 60 * 60 * 1000;
+    const openMsOf = (dayStartMs: number): number =>
+        dayStartMs + krxRegularSessionOf(kstYmd(new Date(dayStartMs + KST_OFFSET_MS))).openMin * 60_000;
 
-    let candidate = Date.UTC(todayKstY, todayKstM, todayKstD, MARKET_OPEN_HOUR, MARKET_OPEN_MINUTE)
-        - KST_OFFSET_MS;
+    // 1) 오늘 개장 시각의 UTC ms 계산
+    const nowKstWall = new Date(now.getTime() + KST_OFFSET_MS);
+    let dayStart = Date.UTC(nowKstWall.getUTCFullYear(), nowKstWall.getUTCMonth(), nowKstWall.getUTCDate()) - KST_OFFSET_MS;
+    let candidate = openMsOf(dayStart);
 
     // 2) 이미 지났으면 다음 날로
     if (candidate <= now.getTime()) {
-        candidate += 24 * 60 * 60 * 1000;
+        dayStart += dayMs;
+        candidate = openMsOf(dayStart);
     }
 
     // 3) 주말/휴일 skip (최대 14일 안전 루프)
     for (let i = 0; i < 14; i++) {
-        const candKst = new Date(candidate + KST_OFFSET_MS);
+        const candKst = new Date(dayStart + KST_OFFSET_MS);
         const day = candKst.getUTCDay();
-        if (day === 0 || day === 6) {
-            candidate += 24 * 60 * 60 * 1000;
-            continue;
-        }
-        if (isKRXHolidayUTC(candKst)) {
-            candidate += 24 * 60 * 60 * 1000;
+        if (day === 0 || day === 6 || isKRXHolidayUTC(candKst)) {
+            dayStart += dayMs;
+            candidate = openMsOf(dayStart);
             continue;
         }
         break;
@@ -151,19 +203,18 @@ export function checkKRXTradingHoursAt(now: Date): { tradable: boolean; reason?:
     const hours = kstWall.getUTCHours();
     const mins = kstWall.getUTCMinutes();
     const minutes = hours * 60 + mins;
-    const openMin = MARKET_OPEN_HOUR * 60 + MARKET_OPEN_MINUTE;
-    const closeMin = MARKET_CLOSE_HOUR * 60 + MARKET_CLOSE_MINUTE;
+    const { openMin, closeMin } = krxRegularSessionOf(kstYmd(kstWall));
     const clock = `${hours}:${String(mins).padStart(2, '0')} KST`;
     if (minutes < openMin) {
         return {
             tradable: false,
-            reason: `장 개장 전 (현재: ${clock}, 개장: ${MARKET_OPEN_HOUR}:${String(MARKET_OPEN_MINUTE).padStart(2, '0')})`,
+            reason: `장 개장 전 (현재: ${clock}, 개장: ${clockOf(openMin)})`,
         };
     }
     if (minutes >= closeMin) {
         return {
             tradable: false,
-            reason: `장 마감 (현재: ${clock}, 마감: ${MARKET_CLOSE_HOUR}:${String(MARKET_CLOSE_MINUTE).padStart(2, '0')})`,
+            reason: `장 마감 (현재: ${clock}, 마감: ${clockOf(closeMin)})`,
         };
     }
     return { tradable: true };
@@ -285,7 +336,9 @@ export interface KrxOrderGate {
  */
 export function krxAuctionBuyBlockReason(now: Date, side: string | undefined): string | null {
     if (side !== 'buy' || getKrxMarketPhase(now) !== 'closing-auction') return null;
-    return '종가 동시호가 (15:20-15:30) — 신규 매수 진입 금지 (options.blockAuctionBuys)';
+    const { closingAuctionMin, closeMin } = krxRegularSessionOf(kstYmd(new Date(now.getTime() + KST_OFFSET_MS)));
+    const hhmm = (minutes: number): string => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+    return `종가 동시호가 (${hhmm(closingAuctionMin)}-${hhmm(closeMin)}) — 신규 매수 진입 금지 (options.blockAuctionBuys)`;
 }
 
 /**

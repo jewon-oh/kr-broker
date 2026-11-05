@@ -3,8 +3,9 @@
  * @description KRX 동시호가 가드의 미국장 대응.
  *
  * NYSE/NASDAQ 정규장: 09:30 ~ 16:00 ET (월~금, 휴장일 제외). 휴장일은 증권사 캘린더 API 가 알려 준 값을 쓴다.
+ * 조기 폐장일(13:00 ET)은 `US_EARLY_CLOSE_DAYS` 표가 안다(표에 없는 날은 평소 시각이다).
  * - Opening Auction (Cross): 09:25 ~ 09:30 ET — 시초가 결정
- * - Closing Auction (Cross): 15:50 ~ 16:00 ET — 종가 결정
+ * - Closing Auction (Cross): 15:50 ~ 16:00 ET — 종가 결정 (조기 폐장일은 마감 10분 전)
  *
  * ET ↔ UTC 변환은 `Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York' })`
  * 사용 — DST (3월 둘째 일요일 02:00 EST → 03:00 EDT / 11월 첫째 일요일
@@ -26,9 +27,53 @@ const MARKET_CLOSE_MINUTE_ET = 0;
 /** 시초가 동시호가 시작 (09:25 ET) — opening cross window */
 const PRE_AUCTION_OPEN_HOUR_ET = 9;
 const PRE_AUCTION_OPEN_MINUTE_ET = 25;
-/** 종가 동시호가 시작 (15:50 ET) — closing cross window */
-const CLOSING_AUCTION_OPEN_HOUR_ET = 15;
-const CLOSING_AUCTION_OPEN_MINUTE_ET = 50;
+/** 종가 동시호가는 마감 10분 전에 시작한다 (평소 15:50 ET) — closing cross window */
+const CLOSING_AUCTION_LEAD_MIN = 10;
+
+/**
+ * 조기 폐장일(정규장이 13:00 ET 에 끝나는 날)과 마감 시각(자정부터의 분). 키는 ET 달력 날짜 `YYYYMMDD` 다.
+ *
+ * 표에 없는 날은 16:00 ET 마감이다. 연도마다 거래소 공지를 보고 손으로 더한다(규칙으로 계산하지 않는다).
+ * 종가 동시호가는 이 날도 마감 10분 전(12:50 ET)에 시작하는 것으로 본다.
+ *
+ * 출처: NYSE Group «2026, 2027 and 2028 Holiday and Early Closings Calendar» (2025-12-23 공개). 같은 날 Nasdaq 도 13:00 ET 에 닫는다.
+ * - `20261127` (금) 추수감사절 다음 날 — 13:00 ET 폐장.
+ * - `20261224` (목) 크리스마스 이브 — 13:00 ET 폐장.
+ * 2026-07-03(금)은 독립기념일 대체 휴장이라 조기 폐장이 아니라 전일 휴장이다(휴장일은 공용 캘린더가 안다).
+ */
+export const US_EARLY_CLOSE_DAYS: Readonly<Record<string, { closeMin: number; note: string }>> = {
+    '20261127': { closeMin: 13 * 60, note: '추수감사절 다음 날(13:00 ET 조기 폐장)' },
+    '20261224': { closeMin: 13 * 60, note: '크리스마스 이브(13:00 ET 조기 폐장)' },
+};
+
+/** 하루의 미국 정규장 시각(자정부터의 분, ET). */
+export interface UsRegularSession {
+    /** 시초가 동시호가 시작. */
+    preAuctionMin: number;
+    /** 정규장 개장. */
+    openMin: number;
+    /** 종가 동시호가 시작. */
+    closingAuctionMin: number;
+    /** 정규장 마감. */
+    closeMin: number;
+    /** 조기 폐장일이면 그 사유. 평소 시각이면 비어 있다. */
+    earlyClose?: string | undefined;
+}
+
+/** ET 달력 날짜 `YYYYMMDD` 의 정규장 시각. 표(`US_EARLY_CLOSE_DAYS`)에 있으면 그 날의 마감 시각이고 없으면 평소 시각이다. 휴장 여부는 보지 않는다. */
+export function usRegularSessionOf(ymd: string): UsRegularSession {
+    const early = Object.prototype.hasOwnProperty.call(US_EARLY_CLOSE_DAYS, ymd) ? US_EARLY_CLOSE_DAYS[ymd] : undefined;
+    const closeMin = early?.closeMin ?? MARKET_CLOSE_HOUR_ET * 60 + MARKET_CLOSE_MINUTE_ET;
+    return {
+        preAuctionMin: PRE_AUCTION_OPEN_HOUR_ET * 60 + PRE_AUCTION_OPEN_MINUTE_ET,
+        openMin: MARKET_OPEN_HOUR_ET * 60 + MARKET_OPEN_MINUTE_ET,
+        closingAuctionMin: closeMin - CLOSING_AUCTION_LEAD_MIN,
+        closeMin,
+        ...(early !== undefined ? { earlyClose: early.note } : {}),
+    };
+}
+
+const etYmdOf = (et: EtWallClock): string => `${et.year}${String(et.month).padStart(2, '0')}${String(et.day).padStart(2, '0')}`;
 
 // ============ ET 시간 변환 ============
 
@@ -95,7 +140,7 @@ function isUsHoliday(et: EtWallClock): boolean {
  *
  * - `pre-auction`: 09:25-09:30 ET (opening cross window). 주문 가능하나 09:30 시점에 일괄 매칭.
  * - `open`: 09:30-15:50 ET. 정규 매매.
- * - `closing-auction`: 15:50-16:00 ET (closing cross window). 시장가 주문 시
+ * - `closing-auction`: 15:50-16:00 ET (closing cross window. 조기 폐장일은 12:50-13:00). 시장가 주문 시
  * 실제 체결 가격이 예상과 크게 다를 수 있음 — 신규 진입 금지 권장.
  * - `closed`: 주말 / 휴장일 / 정규장 외 시각.
  *
@@ -113,14 +158,11 @@ export function getUsMarketPhase(now: Date = new Date()): UsMarketPhase {
     if (isUsHoliday(et)) return 'closed';
 
     const minutes = et.hour * 60 + et.minute;
-    const preAuctionStart = PRE_AUCTION_OPEN_HOUR_ET * 60 + PRE_AUCTION_OPEN_MINUTE_ET;
-    const openMin = MARKET_OPEN_HOUR_ET * 60 + MARKET_OPEN_MINUTE_ET;
-    const closingAuctionStart = CLOSING_AUCTION_OPEN_HOUR_ET * 60 + CLOSING_AUCTION_OPEN_MINUTE_ET;
-    const closeMin = MARKET_CLOSE_HOUR_ET * 60 + MARKET_CLOSE_MINUTE_ET;
+    const session = usRegularSessionOf(etYmdOf(et));
 
-    if (minutes < preAuctionStart || minutes >= closeMin) return 'closed';
-    if (minutes < openMin) return 'pre-auction';
-    if (minutes < closingAuctionStart) return 'open';
+    if (minutes < session.preAuctionMin || minutes >= session.closeMin) return 'closed';
+    if (minutes < session.openMin) return 'pre-auction';
+    if (minutes < session.closingAuctionMin) return 'open';
     return 'closing-auction';
 }
 
@@ -145,7 +187,9 @@ export interface UsOrderGate {
 /** 종가 동시호가(15:50~16:00 ET)의 신규 매수를 막는 사유. 매수가 아니거나 동시호가가 아니면 `null`. `options.blockAuctionBuys` 가 켜졌을 때만 쓴다. */
 export function usAuctionBuyBlockReason(now: Date, side: string | undefined): string | null {
     if (side !== 'buy' || getUsMarketPhase(now) !== 'closing-auction') return null;
-    return `종가 동시호가 (15:50-16:00 ET, ${formatEtWallClock(now)}) — 신규 매수 진입 금지 (options.blockAuctionBuys)`;
+    const { closingAuctionMin, closeMin } = usRegularSessionOf(etYmdOf(toEtWallClock(now)));
+    const hhmm = (minutes: number): string => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+    return `종가 동시호가 (${hhmm(closingAuctionMin)}-${hhmm(closeMin)} ET, ${formatEtWallClock(now)}) — 신규 매수 진입 금지 (options.blockAuctionBuys)`;
 }
 
 /**
