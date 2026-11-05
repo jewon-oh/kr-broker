@@ -83,9 +83,9 @@ import { marketSessionBlockReason } from './trading-hours';
 import { KbsecAuth } from './kbsec/kbsec-auth';
 import { kbsecBarMs, kbsecCandleTimestamp, kbsecChartParams, KBSEC_CHART_MAX, KBSEC_TIMEFRAMES, kbsecUsCandleTimestamp } from './kbsec/kbsec-chart';
 import {
-    isKbsecBusinessError, isKbsecTokenFailure, kbsecHostAddr, type KbsecResponseHeader,
+    isKbsecBusinessError, isKbsecEmptyResult, isKbsecTokenFailure, kbsecHostAddr, type KbsecResponseHeader,
 } from './kbsec/kbsec-envelope';
-import { KBSEC_ERROR_DETAIL, kbsecErrorDetail, kbsecExactExceptions } from './kbsec/kbsec-error-codes';
+import { KBSEC_ERROR_DETAIL, KBSEC_PERMANENT_FAILURE_CODES, kbsecErrorDetail, kbsecExactExceptions } from './kbsec/kbsec-error-codes';
 import { kbsecEstimatedFeeRate } from './kbsec/kbsec-fee';
 import {
     kbsecResolveFills, parseKbsecDomesticFillRow, parseKbsecOverseasFillRow, type KbsecFill,
@@ -1947,7 +1947,7 @@ export class kbsec extends Exchange {
     ): boolean | undefined {
         const header = safeDict(response, 'dataHeader') as KbsecResponseHeader | undefined;
         const trCode = (url.split('/').pop() ?? '').toUpperCase();
-        if (isKbsecBusinessError(header)) {
+        if (isKbsecBusinessError(header, trCode)) {
             const processCode = String(header?.processCode ?? '').trim();
             const processMessage = String(header?.processMessage ?? '').trim();
             const feedback = `KB증권 업무 오류 (${trCode}): ${processMessage} [processCode=${processCode}]`;
@@ -1955,6 +1955,8 @@ export class kbsec extends Exchange {
             this.throwExactlyMatchedException((this.exceptions as Dict).exact, processCode, feedback, { detail: kbsecErrorDetail(processCode), brokerCode });
             throw new ExchangeError(feedback, { brokerCode });
         }
+        // 그 TR 에서만 빈 결과인 코드(`I742`)는 HTTP 상태와 무관하게 빈 결과다. 봉투가 정본이므로 상태 표(5xx → ExchangeNotAvailable)가 덮어쓰지 못하게 한다.
+        if (statusCode >= 400 && isKbsecEmptyResult(header, trCode) && !isKbsecEmptyResult(header)) return true;
         if (isKbsecTokenFailure(statusCode, header)) {
             const brokerCode = String(header?.processCode ?? '').trim() || undefined;
             throw new AuthenticationError(`${this.id} ${method} ${url} ${statusCode} 토큰이 무효다`, { detail: KBSEC_ERROR_DETAIL.TOKEN_INVALID, brokerCode });
@@ -3408,6 +3410,15 @@ export class kbsec extends Exchange {
      */
     private isPermanentFailure(err: unknown): boolean {
         return err instanceof ExchangeError && !(err instanceof AuthenticationError && err.detail === KBSEC_ERROR_DETAIL.TOKEN_INVALID);
+    }
+
+    /**
+     * 이 인스턴스에서 해외 체결 조회를 영구히 멈출 실패인가. 계정 상태를 뜻하는 코드(`KBSEC_PERMANENT_FAILURE_CODES`: I446, H049)만 해당한다.
+     * 그 밖의 실패는 이번 확인만 실패로 둔다. 코드 없는 업무 오류, 조회일자 거절(2854), 페이지 상한 초과(`BadResponse`)도 영구가 아니다.
+     * 보유 조회와 원마켓 증거금이 쓰는 `isPermanentFailure` 와 달리 `ExchangeError` 전체를 영구로 보지 않는다.
+     */
+    private isPermanentFillsFailure(err: unknown): boolean {
+        return err instanceof ExchangeError && err.brokerCode !== undefined && KBSEC_PERMANENT_FAILURE_CODES.has(err.brokerCode.trim());
     }
 
     /** 1달러당 원화. `options.usdKrwRate` 가 없으면 환율을 알 수 없어 던진다. 조회가 실패해도 던진다. */
@@ -5244,8 +5255,9 @@ export class kbsec extends Exchange {
      * 체결구분은 비우면 거부되므로 명시한다. 조회일자는 미국 현지 날짜이고, 날짜를 주지 않으면 미국 날짜 기준 가장 최근 영업일이다.
      * 모든 페이지를 읽고, 페이지 상한에서 잘리면 던진다.
      *
-     * 영구 실패(`isPermanentFailure`)면 이 인스턴스에서는 다시 부르지 않는다(반복 실패는 계정 제한 사유). 해외 체결 확정이 실패해도 주문
-     * 자체는 접수된 상태다.
+     * 영구 실패(`isPermanentFillsFailure`: I446, H049)면 이 인스턴스에서는 다시 부르지 않는다(반복 실패는 계정 제한 사유). 그 밖의 실패는 이번
+     * 호출만 던지고 다음 호출은 다시 부른다. `I742`(아직 체결내역 없음)는 오류가 아니라 빈 결과다(`kbsec-envelope.ts`). 해외 체결 확정이
+     * 실패해도 주문 자체는 접수된 상태다.
      */
     private async fetchOverseasTrades(market: MarketInterface, dates: string[] | undefined, limit: Int): Promise<Trade[]> {
         if (this.overseasFillsUnavailable) {
@@ -5274,10 +5286,10 @@ export class kbsec extends Exchange {
             }
             return trades;
         } catch (err) {
-            const permanent = this.isPermanentFailure(err);
+            const permanent = this.isPermanentFillsFailure(err);
             if (permanent) this.overseasFillsUnavailable = true;
             logger.warn({ err, symbol: market.symbol, trCode: KBSEC_TR.ORDERS_US, latched: permanent },
-                '[kbsec] 해외 체결 조회 실패 — 영구 실패면 이 인스턴스에서 재시도하지 않는다(반복 실패는 계정 제한 사유)');
+                '[kbsec] 해외 체결 조회 실패 — 권한 없음(I446)·미신청(H049)이면 이 인스턴스에서 재시도하지 않고, 그 밖의 실패는 이번 확인만 실패로 둔다');
             throw err;
         }
     }

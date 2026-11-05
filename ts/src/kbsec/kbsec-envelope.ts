@@ -41,6 +41,18 @@ const EMPTY_RESULT_CODES: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * 특정 TR 에서만 "조회 결과 없음"을 뜻하는 processCode 다. 키는 대문자 TR 코드다.
+ *
+ * 전역 목록(`EMPTY_RESULT_CODES`)에 넣지 않는 이유는 이 코드가 실측된 TR 이 하나뿐이기 때문이다. 다른 TR 의 같은 코드가 빈 결과인지는 모른다.
+ * 주문 TR 이 같은 코드로 거절해도 성공으로 읽히면 안 되므로, 확인된 TR 에만 건다.
+ */
+const EMPTY_RESULT_CODES_BY_TR: Readonly<Record<string, ReadonlySet<string>>> = {
+    // 해외 주문체결내역 조회(SPQM2103). 주문 직후 첫 확인에 체결 행이 아직 없을 때 온다. sbih 가 2026-08-28 에 실측했다(5종 전부).
+    // 이 코드를 오류로 던지면 체결 확정이 영구 실패로 래치돼 이후 미국 주문이 전부 추정 체결이 된다.
+    SPQM2103: new Set(['I742']),
+};
+
+/**
  * **토큰 검증 실패**를 뜻하는 processCode 다. 재발급한 뒤 한 번 다시 보내면 스스로 복구된다.
  *
  * KB 는 이것을 401 로 주지 않고 HTTP 500 과 `processFlag B`, `I445` 로 준다. 아무 500 이나 여기에 넣으면 안 된다.
@@ -57,12 +69,27 @@ export function isKbsecTokenFailure(httpStatus: number, header: KbsecResponseHea
     return TOKEN_FAILURE_CODES.has(String(header?.processCode ?? '').trim());
 }
 
-/** 업무 실패인가. 플래그가 없으면 판정할 수 없으므로 실패로 보지 않고, 빈 결과 코드는 플래그가 `B` 여도 실패가 아니다. */
-export function isKbsecBusinessError(header: KbsecResponseHeader | undefined): boolean {
+/**
+ * 이 응답이 정상적인 빈 결과인가. 전역 빈 결과 코드이거나, `trCode` 가 주어졌을 때 그 TR 에서만 빈 결과인 코드다.
+ * `processFlag` 가 `B` 여도 코드가 빈 결과면 참이다.
+ */
+export function isKbsecEmptyResult(header: KbsecResponseHeader | undefined, trCode?: string): boolean {
+    if (!header) return false;
+    const code = String(header.processCode ?? '').trim();
+    if (EMPTY_RESULT_CODES.has(code)) return true;
+    if (trCode === undefined) return false;
+    return EMPTY_RESULT_CODES_BY_TR[trCode.trim().toUpperCase()]?.has(code) === true;
+}
+
+/**
+ * 업무 실패인가. 플래그가 없으면 판정할 수 없으므로 실패로 보지 않고, 빈 결과 코드는 플래그가 `B` 여도 실패가 아니다.
+ * `trCode`(선택)를 주면 그 TR 에서만 빈 결과인 코드(`EMPTY_RESULT_CODES_BY_TR`)도 실패로 보지 않는다. 주지 않으면 전역 목록만 본다.
+ */
+export function isKbsecBusinessError(header: KbsecResponseHeader | undefined, trCode?: string): boolean {
     if (!header) return false;
     const flag = String(header.processFlag ?? '').trim().toUpperCase();
     if (!flag) return false;
-    if (EMPTY_RESULT_CODES.has(String(header.processCode ?? '').trim())) return false;
+    if (isKbsecEmptyResult(header, trCode)) return false;
     return flag !== PROCESS_FLAG_OK;
 }
 

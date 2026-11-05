@@ -68,6 +68,18 @@ export const KBSEC_PROCESS_CODES: Readonly<Record<string, KbsecErrorMapping>> = 
     2854: { error: ExchangeError, detail: KBSEC_ERROR_DETAIL.FUTURE_QUERY_DATE },
 };
 
+/**
+ * 계정·권한 때문에 다시 불러도 답이 같은 processCode. 호출을 영구히 멈추는 래치(해외 체결 조회 등)는 이 목록의 코드에만 건다.
+ *
+ * 목록 밖의 코드는 이번 호출만 실패로 둔다. 코드를 모르거나(표에 없는 업무 오류), 요청 값 때문에 거절됐거나(조회일자 2854, 페이지 상한),
+ * 일시 사유일 수 있어서다. 영구로 잘못 걸면 그 프로세스의 미국 체결 확정이 재시작까지 꺼진다.
+ * 항목은 위 표에서 계정 상태를 뜻하는 것만 옮긴다.
+ */
+export const KBSEC_PERMANENT_FAILURE_CODES: ReadonlySet<string> = new Set([
+    'I446', // API 사용 권한이 없다 — 권한이 생기기 전에는 같은 답이다.
+    'H049', // 글로벌원마켓 미신청 계좌 — 가입 전에는 같은 답이다.
+]);
+
 /** `Exchange.exceptions.exact` 에 넣는 표. */
 export function kbsecExactExceptions(): Record<string, ErrorClass> {
     const exact: Record<string, ErrorClass> = {};
