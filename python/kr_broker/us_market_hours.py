@@ -30,7 +30,8 @@ CLOSING_AUCTION_LEAD_MIN = 10
 
 # 조기 폐장일(정규장이 13:00 ET 에 끝나는 날)과 마감 시각(자정부터의 분). 키는 ET 달력 날짜 `YYYYMMDD` 다. 표에 없는 날은 16:00 ET 마감이다.
 # 연도마다 거래소 공지를 보고 손으로 더한다. 종가 동시호가는 이 날도 마감 10분 전(12:50 ET)에 시작하는 것으로 본다.
-# 출처: NYSE Group «2026, 2027 and 2028 Holiday and Early Closings Calendar»(2025-12-23 공개). 같은 날 Nasdaq 도 13:00 ET 에 닫는다.
+# 출처: NYSE Group «2026, 2027 and 2028 Holiday and Early Closings Calendar»(2025-12-23 공개). NYSE Group 시장만 다루는 공지다.
+# Nasdaq 의 조기 폐장일은 이 공지에 없다. NYSE 와 같은 날로 보고 같은 표를 쓴다(Nasdaq 공지로 따로 확인하지 못했다).
 # 20261127(금) 추수감사절 다음 날, 20261224(목) 크리스마스 이브. 2026-07-03(금)은 독립기념일 대체 휴장이라 조기 폐장이 아니다.
 US_EARLY_CLOSE_DAYS: Dict[str, Dict[str, Any]] = {
     '20261127': {'closeMin': 13 * 60, 'note': '추수감사절 다음 날(13:00 ET 조기 폐장)'},
