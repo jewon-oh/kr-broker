@@ -8,6 +8,9 @@
 import { logger } from '../logger';
 import { kbsecNumberOf, kbsecString } from './kbsec-number';
 
+/** 같은 종목의 보유 행 합치기 — 구현은 `kbsec-holding-merge.ts` 에 있다(sbih#6718) */
+export { mergeHoldingRows } from './kbsec-holding-merge';
+
 /**
  * 응답에서 숫자를 뽑는다. 후보 필드 이름을 순서대로 시도하고, **값이 있으면 0 이어도 그 키에서 멈춘다.** 공백만 있는 값은 빈 값이다.
  *
