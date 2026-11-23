@@ -57,6 +57,15 @@ const CASH_GRID = OVERSEAS_OK.Record1;
 const EMPTY_CASH_ROW = { crncy_clsf_nm: '          ', std_exch_r: '0000.0000', cnvr_exch_r_p4: '0000.0000', tfnd: '0', ordr_psbl_amt_p2: '0' };
 /** 해외 잔고평가(SPQM2226)가 성공으로 주는 응답 모양들. 모두 해외 보유 행을 읽을 수 있는지가 판정을 가른다. */
 const US_BODIES = {
+    /** 같은 종목이 온주 행과 소수점 주 행으로 따로 온다(sbih#6718 — XLE 11주와 0.1435주) */
+    splitRows: {
+        Record1: CASH_GRID,
+        Record2: [
+            { is_cd: 'XLE', is_nm: 'Energy Select Sector SPDR', frgn_hld_q_p6: '11.000000', now_prc_p4: '61.0000', byng_avr_prc_p4: '60.9000' },
+            { is_cd: 'XLE', is_nm: 'Energy Select Sector SPDR', frgn_hld_q_p6: '0.143500', now_prc_p4: '61.0000', byng_avr_prc_p4: '58.0000' },
+            { is_cd: 'IYT', is_nm: 'iShares Transportation', frgn_hld_q_p6: '7.000000', now_prc_p4: '80.0000', byng_avr_prc_p4: '80.2900' },
+        ],
+    },
     /** 보유 0 건. 예수금 그리드만 온다 */
     cashOnly: { Record1: CASH_GRID },
     /** 보유 0 건. 종목 그리드가 빈 행 50개를 싣고 온다 */
@@ -185,6 +194,21 @@ afterEach(() => {
 const META_KEYS = new Set(['info', 'timestamp', 'datetime', 'free', 'used', 'total', 'debt']);
 /** 잔고 항목의 키(통화와 종목코드). 요약 사전과 `info` 는 뺀다. */
 const codesOf = (b: Balances): string[] => Object.keys(b).filter(k => !META_KEYS.has(k));
+
+describe('KB fetchBalance — 같은 종목이 여러 행으로 올 때', () => {
+    it('★온주 행과 소수점 주 행을 더한다 — 뒤의 행이 앞의 행을 지우지 않는다(sbih#6718)', async () => {
+        usMode = 'splitRows';
+        const b = await makeService().fetchBalance();
+
+        expect(b['XLE']!.total).toBe(11.1435);
+        const info = (b['XLE'] as unknown as { info: { averagePrice: number; marketValue: number } }).info;
+        // 평단은 수량 가중: (60.9 × 11 + 58 × 0.1435) ÷ 11.1435
+        expect(info.averagePrice).toBeCloseTo((60.9 * 11 + 58 * 0.1435) / 11.1435, 6);
+        expect(info.marketValue).toBeCloseTo(11.1435 * 61, 6);
+        expect(b['IYT']!.total).toBe(7);
+        expect(b.info.readStatus).toBe('COMPLETE');
+    });
+});
 
 describe('KB fetchBalance — 완전성 상태', () => {
     it('국내와 해외를 모두 읽으면 COMPLETE 이고 읽지 못한 시장이 없다', async () => {

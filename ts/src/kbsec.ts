@@ -96,7 +96,7 @@ import {
 import { kbsecNumberOf } from './kbsec/kbsec-number';
 import { buildKrOrderBody } from './kbsec/kbsec-order-body';
 import {
-    isEmptyCashRow, isUsdCashRow, kbsecHoldingQuantity, OVERSEAS_QTY_CANDIDATES, pickArray, pickCashGrid, pickGrid, pickHoldingGrid, pickNum,
+    isEmptyCashRow, isUsdCashRow, kbsecHoldingQuantity, mergeHoldingRows, OVERSEAS_QTY_CANDIDATES, pickArray, pickCashGrid, pickGrid, pickHoldingGrid, pickNum,
     pickOptionalNum, pickOverseasSettlementGrid, pickPositiveNum, pickSettlementGrid, pickStr, unknownGrids,
 } from './kbsec/kbsec-pick';
 import {
@@ -2994,8 +2994,8 @@ export class kbsec extends Exchange {
         // 미국 시장을 못 읽었으면 `unreadMarkets` 가 이미 알린다.
         if (overseas.read && result['USD'] === undefined) (result['info'] as { unreadCurrencies: string[] }).unreadCurrencies.push('USD');
         const held: Dict = {};
-        for (const holding of response.holdings as HoldingRow[]) {
-            held[this.commonStockCode(holding.code)] = {
+        for (const holding of mergeHoldingRows(response.holdings as HoldingRow[], (code) => this.commonStockCode(code))) {
+            held[holding.code] = {
                 free: holding.orderableQuantity,
                 used: undefined,
                 total: holding.quantity,
